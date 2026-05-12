@@ -38,6 +38,9 @@ export default function StartExamPage() {
   const blurTimeoutRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
   const focusTimeoutRef = useRef(null);
+  const lastWidthRef = useRef(0);
+  const lastHeightRef = useRef(0);
+  const suspiciousResizeRef = useRef(0);
 
   // =========================
   // LOAD SESSION
@@ -388,88 +391,139 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
-
   // =========================
-  // ANTI OVERLAY STABIL
-  // PC + ANDROID + IPHONE
+  // ANTI SPLIT SCREEN / FLOATING
+  // SUPER STABIL
   // =========================
   useEffect(() => {
-    function handleBlur() {
+    lastWidthRef.current = window.innerWidth;
+    lastHeightRef.current = window.innerHeight;
+
+    function triggerViolation(reason) {
       if (logoutRef.current) return;
       if (ignoreFullscreen) return;
 
+      forceLogout(reason);
+    }
+
+    // ======================
+    // BLUR
+    // ======================
+    function handleBlur() {
       clearTimeout(blurTimeoutRef.current);
 
       blurTimeoutRef.current = setTimeout(() => {
-        // Jika halaman masih tidak fokus
         if (!document.hasFocus()) {
-          setOverlayDetected(true);
-
-          forceLogout("Aplikasi lain / overlay / split screen terdeteksi");
+          triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
-      }, 1800); // Delay agar tidak false detect
+      }, 1200);
     }
 
-    function handleFocus() {
-      clearTimeout(blurTimeoutRef.current);
-
-      setWindowFocused(true);
-
-      setTimeout(() => {
-        setOverlayDetected(false);
-      }, 300);
+    // ======================
+    // VISIBILITY
+    // ======================
+    function handleVisibility() {
+      if (document.hidden) {
+        triggerViolation("Anda keluar dari halaman ujian");
+      }
     }
 
+    // ======================
+    // RESIZE DETECTION
+    // ======================
     function handleResize() {
-      if (logoutRef.current) return;
-      if (ignoreFullscreen) return;
-
       clearTimeout(resizeTimeoutRef.current);
 
       resizeTimeoutRef.current = setTimeout(() => {
-        const widthDiff = Math.abs(window.outerWidth - window.innerWidth);
+        const currentWidth = window.innerWidth;
+        const currentHeight = window.innerHeight;
 
-        const heightDiff = Math.abs(window.outerHeight - window.innerHeight);
+        const widthDiff = Math.abs(currentWidth - lastWidthRef.current);
 
-        // Desktop split screen / floating app
-        if (widthDiff > 250 || heightDiff > 250) {
-          forceLogout("Split screen atau overlay terdeteksi");
+        const heightDiff = Math.abs(currentHeight - lastHeightRef.current);
+
+        // SIMPAN UKURAN TERBARU
+        lastWidthRef.current = currentWidth;
+        lastHeightRef.current = currentHeight;
+
+        // SPLIT SCREEN / FLOATING
+        if (widthDiff > 180 || heightDiff > 180) {
+          suspiciousResizeRef.current++;
+
+          if (suspiciousResizeRef.current >= 1) {
+            triggerViolation("Split screen / floating mode terdeteksi");
+          }
         }
-      }, 1500);
+      }, 800);
     }
 
-    function handleVisibility() {
-      if (logoutRef.current) return;
-      if (ignoreFullscreen) return;
+    // ======================
+    // VISUAL VIEWPORT
+    // Android modern
+    // ======================
+    function handleViewport() {
+      if (!window.visualViewport) return;
 
-      if (document.hidden) {
-        forceLogout("Anda keluar dari halaman ujian");
+      const viewportWidth = window.visualViewport.width;
+
+      const viewportHeight = window.visualViewport.height;
+
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+
+      const widthRatio = viewportWidth / screenWidth;
+
+      const heightRatio = viewportHeight / screenHeight;
+
+      // viewport mengecil drastis
+      if (widthRatio < 0.75 || heightRatio < 0.75) {
+        triggerViolation("Floating window / split screen terdeteksi");
       }
+    }
+
+    // ======================
+    // ORIENTATION CHANGE
+    // ======================
+    function handleOrientation() {
+      setTimeout(() => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        if (w < screen.width * 0.7 || h < screen.height * 0.7) {
+          triggerViolation("Mode layar tidak normal terdeteksi");
+        }
+      }, 1000);
     }
 
     // EVENT
     window.addEventListener("blur", handleBlur);
 
-    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     window.addEventListener("resize", handleResize);
 
-    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("orientationchange", handleOrientation);
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleViewport);
+    }
 
     return () => {
       clearTimeout(blurTimeoutRef.current);
 
       clearTimeout(resizeTimeoutRef.current);
 
-      clearTimeout(focusTimeoutRef.current);
-
       window.removeEventListener("blur", handleBlur);
 
-      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
 
       window.removeEventListener("resize", handleResize);
 
-      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("orientationchange", handleOrientation);
+
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleViewport);
+      }
     };
   }, [ignoreFullscreen, violations]);
 
