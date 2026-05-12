@@ -24,6 +24,7 @@ export default function StartExamPage() {
   const [draftMinimized, setDraftMinimized] = useState(false);
   const [windowFocused, setWindowFocused] = useState(true);
   const [overlayDetected, setOverlayDetected] = useState(false);
+  const [soalLocked, setSoalLocked] = useState(false);
 
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
@@ -308,12 +309,30 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
+  // AUTO LOCK SOAL SETELAH 2 MENIT
+  // =========================
+  useEffect(() => {
+    const lockTimer = setTimeout(
+      () => {
+        setSoalLocked(true);
+
+        showModal(
+          "🔒 Soal dikunci.\n\nSilahkan jawab di lembar draft jawaban.\n\nSetelah waktu 45 menit habis, jawaban dapat disalin kembali ke Google Form lalu tekan tombol Kirim.",
+        );
+      },
+      2 * 60 * 1000,
+    ); // 2 menit
+
+    return () => clearTimeout(lockTimer);
+  }, []);
+
+  // =========================
   // KEYBOARD HANDLER - EFEKTIF & SEDERHANA
   // =========================
   useEffect(() => {
     function handleKeyDown(e) {
       // JIKA WAKTU HABIS, IZINKAN SEMUA
-      if (timeLeft <= 0) {
+      if (timeLeft <= 0 || !soalLocked) {
         return;
       }
 
@@ -636,7 +655,7 @@ export default function StartExamPage() {
             allowFullScreen
             style={{
               height: "5000px",
-              pointerEvents: isTimeRunningOut ? "none" : "auto",
+              pointerEvents: soalLocked && timeLeft > 0 ? "none" : "auto",
             }}
           />
         )}
@@ -803,10 +822,10 @@ export default function StartExamPage() {
 
             <div className="overflow-hidden">
               <h4 className="text-white font-bold text-xs md:text-base leading-none truncate uppercase">
-                🔒 Tombol Kirim Dikunci
+                🔒 Soal Dikunci
               </h4>
               <p className="text-gray-400 text-[9px] md:text-xs mt-1 uppercase tracking-tight font-medium truncate">
-                Selesaikan soal sampai waktu habis
+                Jawab di draft hingga waktu selesai
               </p>
             </div>
           </div>
