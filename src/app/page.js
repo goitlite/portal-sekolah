@@ -152,20 +152,21 @@ export default function Home() {
 
             {/* PRESENSI */}
             <button
+              onClick={() => router.push("/presensi")}
               className="
-        group
-        bg-white/10
-        border
-        border-white/10
-        backdrop-blur-xl
-        rounded-3xl
-        p-6
-        shadow-2xl
-        hover:scale-[1.03]
-        transition-all
-        duration-300
-        text-left
-      "
+    group
+    bg-white/10
+    border
+    border-white/10
+    backdrop-blur-xl
+    rounded-3xl
+    p-6
+    shadow-2xl
+    hover:scale-[1.03]
+    transition-all
+    duration-300
+    text-left
+  "
             >
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-400 flex items-center justify-center text-3xl shadow-lg mb-5">
                 📋
