@@ -543,7 +543,7 @@ export default function StartExamPage() {
   const isTimeRunningOut = timeLeft > 0;
 
   return (
-    <main className="w-full min-h-[100dvh] flex flex-col bg-gray-100 overflow-hidden">
+    <main className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden">
       {/* MODAL INFO */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
@@ -568,13 +568,26 @@ export default function StartExamPage() {
       )}
 
       {/* HEADER */}
-      <div className="bg-white shadow-md border-b p-4">
+      <header
+        className="
+          sticky
+          top-0
+          z-[1000]
+          bg-white
+          shadow-md
+          border-b
+          p-4
+          shrink-0
+        "
+      >
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div>
             <h1 className="text-xl font-bold text-blue-700">Ujian Online</h1>
+
             <p className="text-sm text-gray-600">
               {nama} | {kelas}
             </p>
+
             <p className="text-sm text-red-600 font-semibold">
               Total Pelanggaran: {violations}
             </p>
@@ -583,7 +596,7 @@ export default function StartExamPage() {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => {
-                setIgnoreFullscreen(true); // Mencegah logout saat fokus berpindah ke modal
+                setIgnoreFullscreen(true);
                 setIsModalPengaduanOpen(true);
               }}
               className="bg-orange-500 text-white px-4 py-2 rounded-xl hover:bg-orange-600 transition font-bold"
@@ -614,7 +627,7 @@ export default function StartExamPage() {
             <p>{pesan}</p>
           </div>
         )}
-      </div>
+      </header>
 
       {/* IFRAME CONTAINER - SCROLL BERFUNGSI NORMAL */}
       <div
