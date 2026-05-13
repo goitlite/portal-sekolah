@@ -25,6 +25,7 @@ export default function StartExamPage() {
   const [soalLocked, setSoalLocked] = useState(false);
   const [isModalPengaduanOpen, setIsModalPengaduanOpen] = useState(false);
   const [teksPengaduan, setTeksPengaduan] = useState("");
+  const [isConfirmHapusOpen, setIsConfirmHapusOpen] = useState(false);
 
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
@@ -232,6 +233,15 @@ export default function StartExamPage() {
 
     localStorage.setItem("draftMode", JSON.stringify(updatedMode));
   }
+
+  const handleHapusSemuaDraft = () => {
+    setDraftAnswers({});
+    setDraftMode({});
+    localStorage.removeItem("draftAnswers");
+    localStorage.removeItem("draftMode");
+    setIsConfirmHapusOpen(false); // Tutup konfirmasi setelah hapus
+    showModal("Semua draft jawaban telah dikosongkan.");
+  };
 
   // =========================
   // DETEKSI FULLSCREEN
@@ -688,6 +698,17 @@ export default function StartExamPage() {
                 DRAFT
               </h3>
 
+              {/* Tombol Hapus Data Baru */}
+              <button
+                onClick={() => {
+                  setIgnoreFullscreen(true); // Pastikan ini true agar tidak logout
+                  setIsConfirmHapusOpen(true);
+                }}
+                className="mt-1 mb-2 bg-red-100 hover:bg-red-200 text-red-600 text-[8px] md:text-[9px] font-bold py-1 px-2 rounded-lg border border-red-200"
+              >
+                🗑️ HAPUS
+              </button>
+
               <p className="text-[8px] md:text-[10px] text-gray-500">
                 1x Hijau
               </p>
@@ -878,6 +899,33 @@ export default function StartExamPage() {
                   {loadingPengaduan ? "Proses..." : "Kirim Laporan"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isConfirmHapusOpen && (
+        <div className="fixed inset-0 z- flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-xs rounded-2xl p-6 text-center shadow-2xl border-t-4 border-red-500">
+            <h3 className="text-gray-800 font-bold mb-2">
+              Hapus Semua Jawaban?
+            </h3>
+            <p className="text-gray-500 text-xs mb-6">
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsConfirmHapusOpen(false)}
+                className="flex-1 py-2 text-sm font-bold text-gray-400"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleHapusSemuaDraft}
+                className="flex-1 py-2 bg-red-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200"
+              >
+                Ya, Hapus
+              </button>
             </div>
           </div>
         </div>
