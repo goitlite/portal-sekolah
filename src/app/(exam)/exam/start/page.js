@@ -44,6 +44,8 @@ export default function StartExamPage() {
   const lastHeightRef = useRef(0);
   const suspiciousResizeRef = useRef(0);
   const lastTouchRef = useRef(Date.now());
+  const wakeLockRef = useRef(null);
+  const freezeCheckRef = useRef(Date.now());
 
   // =========================
   // LOAD SESSION
@@ -340,21 +342,86 @@ export default function StartExamPage() {
   // ========================
   useEffect(() => {
     function handleKeyDown(e) {
+      // =========================
+      // BLOCK ESC GLOBAL
+      // =========================
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Jika modal terbuka → tutup modal SAJA
+        if (modalOpen) {
+          setModalOpen(false);
+
+          setTimeout(async () => {
+            try {
+              if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+              }
+            } catch (err) {}
+
+            setIgnoreFullscreen(false);
+          }, 300);
+
+          return;
+        }
+
+        // Jika modal pengaduan terbuka
+        if (isModalPengaduanOpen) {
+          setIsModalPengaduanOpen(false);
+
+          setTimeout(async () => {
+            try {
+              if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+              }
+            } catch (err) {}
+
+            setIgnoreFullscreen(false);
+          }, 300);
+
+          return;
+        }
+
+        // Jika confirm hapus terbuka
+        if (isConfirmHapusOpen) {
+          setIsConfirmHapusOpen(false);
+
+          setTimeout(async () => {
+            try {
+              if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+              }
+            } catch (err) {}
+
+            setIgnoreFullscreen(false);
+          }, 300);
+
+          return;
+        }
+
+        // Jika tidak ada modal
+        forceLogout("Tombol ESC terdeteksi");
+        return;
+      }
+
+      // =========================
+      // LANJUT LOGIC LAMA
+      // =========================
+
       if (timeLeft <= 0 || !soalLocked) return;
 
-      // A. JIKA MODAL PENGADUAN TERBUKA: Izinkan mengetik di Textarea
       if (isModalPengaduanOpen && e.target.tagName === "TEXTAREA") {
-        // Tetap blokir Ctrl+C / Ctrl+V di dalam pengaduan
         if (
           (e.ctrlKey || e.metaKey) &&
           ["c", "v"].includes(e.key.toLowerCase())
         ) {
           e.preventDefault();
         }
-        return; // "Loloskan" tombol lain (huruf/angka) agar bisa mengetik
+
+        return;
       }
 
-      // B. CEK TOMBOL BERBAHAYA (Selalu blokir)
       const isDangerous =
         e.key === "F12" ||
         e.key === "F11" ||
@@ -368,7 +435,6 @@ export default function StartExamPage() {
         return;
       }
 
-      // C. IZINKAN NAVIGASI SCROLL
       const allowedScroll = [
         "ArrowUp",
         "ArrowDown",
@@ -377,15 +443,21 @@ export default function StartExamPage() {
         "Home",
         "End",
       ];
+
       if (allowedScroll.includes(e.key)) return;
 
-      // D. BLOKIR SEMUA TOMBOL LAIN DI AREA UJIAN
       e.preventDefault();
     }
 
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [timeLeft, soalLocked, isModalPengaduanOpen]); // Pastikan isModalPengaduanOpen ada di sini
+  }, [
+    timeLeft,
+    soalLocked,
+    isModalPengaduanOpen,
+    isConfirmHapusOpen,
+    modalOpen,
+  ]);
 
   // =========================
   // DETEKSI DEVTOOLS
@@ -537,6 +609,86 @@ export default function StartExamPage() {
     };
   }, [ignoreFullscreen, violations]);
 
+  // =========================
+  // SCREEN WAKE LOCK
+  // AGAR LAYAR TETAP MENYALA
+  // =========================
+  useEffect(() => {
+    async function enableWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+
+          console.log("Wake Lock aktif");
+        }
+      } catch (err) {
+        console.log("Wake Lock gagal:", err);
+      }
+    }
+
+    enableWakeLock();
+
+    // Android kadang melepas wake lock
+    // saat pindah app / lockscreen
+    async function handleVisibility() {
+      try {
+        if (document.visibilityState === "visible" && "wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+        }
+      } catch (err) {}
+    }
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+    };
+  }, []);
+
+  // =========================
+  // DETEKSI TAB FREEZE
+  // =========================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (logoutRef.current) return;
+
+      if (ignoreFullscreen) return;
+
+      const now = Date.now();
+
+      const diff = now - freezeCheckRef.current;
+
+      // jika timer JS berhenti terlalu lama
+      // kemungkinan app freeze / pindah aplikasi
+      if (diff > 10000) {
+        forceLogout("Aplikasi dibekukan / pindah aplikasi terdeteksi");
+      }
+
+      freezeCheckRef.current = now;
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [ignoreFullscreen]);
+
+  // =========================
+  // BLOCK LONG PRESS MOBILE
+  // =========================
+  useEffect(() => {
+    function preventContextMenu(e) {
+      e.preventDefault();
+    }
+
+    document.addEventListener("contextmenu", preventContextMenu);
+
+    return () => {
+      document.removeEventListener("contextmenu", preventContextMenu);
+    };
+  }, []);
+
   const isTimeRunningOut = timeLeft > 0;
   // =========================
   // TOUCH HEARTBEAT DETECTION
@@ -588,7 +740,14 @@ export default function StartExamPage() {
   }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
 
   return (
-    <main className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden">
+    <main
+      className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden"
+      style={{
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+      }}
+    >
       {/* MODAL INFO */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
@@ -615,63 +774,347 @@ export default function StartExamPage() {
       {/* HEADER */}
       <header
         className="
-          sticky
-          top-0
-          z-[1000]
-          bg-white
-          shadow-md
-          border-b
-          p-4
-          shrink-0
-        "
+    sticky
+    top-0
+    z-[1000]
+    shrink-0
+
+    bg-gradient-to-r
+    from-yellow-400
+    via-amber-300
+    to-yellow-500
+
+    shadow-[0_4px_18px_rgba(0,0,0,0.18)]
+  "
       >
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-blue-700">Ujian Online</h1>
+        {/* GARIS ELEGAN ATAS */}
+        <div
+          className="
+      h-[2px]
 
-            <p className="text-sm text-gray-600">
-              {nama} | {kelas}
-            </p>
+      bg-gradient-to-r
+      from-transparent
+      via-yellow-100
+      to-transparent
 
-            <p className="text-sm text-red-600 font-semibold">
-              Total Pelanggaran: {violations}
-            </p>
+      opacity-80
+    "
+        />
+
+        <div className="relative px-3 md:px-5 py-2.5">
+          {/* SOFT LIGHT */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div
+              className="
+          absolute
+          -top-10
+          right-0
+          w-44
+          h-44
+          bg-white/20
+          rounded-full
+          blur-3xl
+        "
+            />
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => {
-                setIgnoreFullscreen(true);
-                setIsModalPengaduanOpen(true);
-              }}
-              className="bg-orange-500 text-white px-4 py-2 rounded-xl hover:bg-orange-600 transition font-bold"
-            >
-              Pengaduan
-            </button>
+          <div className="relative flex items-center justify-between gap-3">
+            {/* KIRI */}
+            <div className="min-w-0 flex-1">
+              {/* LABEL */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div
+                  className="
+              px-2.5
+              py-1
 
-            <button
-              onClick={handleKeluar}
-              className={`text-white px-4 py-2 rounded-xl transition font-semibold ${
-                timeLeft > 0
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-red-600 hover:bg-red-700"
-              }`}
-              disabled={timeLeft > 0}
-              title={
-                timeLeft > 0 ? "Keluar hanya tersedia setelah waktu habis" : ""
-              }
-            >
-              Keluar
-            </button>
+              rounded-lg
+
+              bg-white/20
+              backdrop-blur-md
+
+              border
+              border-white/30
+
+              text-[9px]
+              md:text-[10px]
+
+              font-black
+              tracking-[1.5px]
+
+              text-yellow-950
+            "
+                >
+                  CBT EXAM SYSTEM
+                </div>
+
+                {/* PELANGGARAN */}
+                <div
+                  className="
+              px-3
+              py-1
+
+              rounded-xl
+
+              bg-gradient-to-r
+              from-red-600
+              to-rose-500
+
+              text-white
+
+              shadow-md
+              shadow-red-500/20
+
+              text-[10px]
+              md:text-[11px]
+
+              font-black
+
+              tracking-wide
+            "
+                >
+                  TOTAL PELANGGARAN : {violations}
+                </div>
+              </div>
+
+              {/* JUDUL */}
+              <h1
+                className="
+            mt-1
+
+            text-sm
+            md:text-lg
+
+            font-black
+
+            uppercase
+
+            tracking-wide
+
+            text-yellow-950
+
+            truncate
+          "
+              >
+                ASESMEN SMKN 1 TELUK KUANTAN
+              </h1>
+
+              {/* GARIS PEMBATAS */}
+              <div
+                className="
+            mt-1
+
+            h-[1px]
+
+            w-full
+            max-w-[280px]
+
+            bg-gradient-to-r
+            from-yellow-900/40
+            via-yellow-950/20
+            to-transparent
+          "
+              />
+
+              {/* IDENTITAS */}
+              {/* IDENTITAS */}
+              <div
+                className="
+    mt-2
+
+    inline-flex
+    items-center
+
+    px-3
+    py-1.5
+
+    rounded-xl
+
+    bg-white/15
+    backdrop-blur-sm
+
+    border
+    border-white/20
+
+    shadow-sm
+  "
+              >
+                <p
+                  className="
+      text-xs
+      md:text-sm
+
+      font-bold
+
+      tracking-wide
+
+      text-yellow-950
+
+      truncate
+    "
+                >
+                  {nama} • {kelas}
+                </p>
+              </div>
+            </div>
+
+            {/* KANAN */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* PENGADUAN */}
+              <button
+                onClick={() => {
+                  setIgnoreFullscreen(true);
+                  setIsModalPengaduanOpen(true);
+                }}
+                className="
+            px-3
+            md:px-4
+
+            h-9
+
+            rounded-xl
+
+            bg-gradient-to-r
+            from-orange-500
+            to-amber-500
+
+            hover:from-orange-600
+            hover:to-amber-600
+
+            active:scale-95
+
+            text-white
+
+            text-[11px]
+            md:text-xs
+
+            font-black
+
+            shadow-lg
+            shadow-orange-500/20
+
+            transition-all
+            duration-200
+          "
+              >
+                Pengaduan
+              </button>
+
+              {/* KELUAR */}
+              <button
+                onClick={handleKeluar}
+                className={`
+            px-3
+            md:px-4
+
+            h-9
+
+            rounded-xl
+
+            text-[11px]
+            md:text-xs
+
+            font-black
+
+            transition-all
+            duration-200
+
+            active:scale-95
+
+            ${
+              timeLeft > 0
+                ? `
+                  bg-gray-400
+                  text-gray-200
+                  cursor-not-allowed
+                `
+                : `
+                  bg-gradient-to-r
+                  from-red-600
+                  to-rose-500
+
+                  hover:from-red-700
+                  hover:to-rose-600
+
+                  text-white
+
+                  shadow-lg
+                  shadow-red-500/20
+                `
+            }
+          `}
+                disabled={timeLeft > 0}
+              >
+                Keluar
+              </button>
+            </div>
           </div>
+
+          {/* PESAN ADMIN */}
+          {pesan && (
+            <div
+              className="
+          mt-2
+
+          rounded-xl
+
+          bg-gradient-to-r
+          from-red-600
+          to-rose-500
+
+          px-3
+          py-2
+
+          text-white
+
+          shadow-lg
+          shadow-red-500/20
+        "
+            >
+              <p
+                className="
+            text-[10px]
+            md:text-xs
+
+            font-black
+
+            uppercase
+
+            tracking-wide
+          "
+              >
+                PESAN ADMIN
+              </p>
+
+              <p
+                className="
+            mt-1
+
+            text-[11px]
+            md:text-sm
+
+            text-red-50
+
+            leading-relaxed
+          "
+              >
+                {pesan}
+              </p>
+            </div>
+          )}
         </div>
 
-        {pesan && (
-          <div className="mt-3 bg-red-100 border border-red-300 text-red-700 rounded-xl p-3">
-            <p className="font-bold">Pesan Admin</p>
-            <p>{pesan}</p>
-          </div>
-        )}
+        {/* GARIS ELEGAN BAWAH */}
+        <div
+          className="
+      h-[1px]
+
+      bg-gradient-to-r
+      from-transparent
+      via-yellow-900/30
+      to-transparent
+    "
+        />
       </header>
 
       {/* IFRAME CONTAINER - SCROLL BERFUNGSI NORMAL */}
@@ -923,7 +1366,7 @@ export default function StartExamPage() {
         </div>
       )}
       {isModalPengaduanOpen && (
-        <div className="fixed inset-0 z- flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
             <div className="bg-orange-500 p-4 text-white text-center">
               <h3 className="font-bold text-lg">⚠️ FORM PENGADUAN</h3>
@@ -962,7 +1405,7 @@ export default function StartExamPage() {
         </div>
       )}
       {isConfirmHapusOpen && (
-        <div className="fixed inset-0 z- flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xs rounded-2xl p-6 text-center shadow-2xl border-t-4 border-red-500">
             <h3 className="text-gray-800 font-bold mb-2">
               Hapus Semua Jawaban?
