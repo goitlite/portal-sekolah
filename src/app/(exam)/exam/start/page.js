@@ -43,6 +43,7 @@ export default function StartExamPage() {
   const lastWidthRef = useRef(0);
   const lastHeightRef = useRef(0);
   const suspiciousResizeRef = useRef(0);
+  const lastTouchRef = useRef(Date.now());
 
   // =========================
   // LOAD SESSION
@@ -404,6 +405,8 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
+  // Ganti section ANTI SPLIT SCREEN dengan ini:
+
   // =========================
   // ANTI SPLIT SCREEN / FLOATING
   // SUPER STABIL
@@ -420,7 +423,7 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // BLUR
+    // BLUR - Deteksi fokus keluar dari window
     // ======================
     function handleBlur() {
       clearTimeout(blurTimeoutRef.current);
@@ -430,6 +433,13 @@ export default function StartExamPage() {
           triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
       }, 1200);
+    }
+
+    // ======================
+    // FOCUS - Deteksi ketika fokus kembali (cegah false positive iframe)
+    // ======================
+    function handleFocus() {
+      clearTimeout(blurTimeoutRef.current);
     }
 
     // ======================
@@ -452,14 +462,11 @@ export default function StartExamPage() {
         const currentHeight = window.innerHeight;
 
         const widthDiff = Math.abs(currentWidth - lastWidthRef.current);
-
         const heightDiff = Math.abs(currentHeight - lastHeightRef.current);
 
-        // SIMPAN UKURAN TERBARU
         lastWidthRef.current = currentWidth;
         lastHeightRef.current = currentHeight;
 
-        // SPLIT SCREEN / FLOATING
         if (widthDiff > 180 || heightDiff > 180) {
           suspiciousResizeRef.current++;
 
@@ -468,30 +475,6 @@ export default function StartExamPage() {
           }
         }
       }, 800);
-    }
-
-    // ======================
-    // VISUAL VIEWPORT
-    // Android modern
-    // ======================
-    function handleViewport() {
-      if (!window.visualViewport) return;
-
-      const viewportWidth = window.visualViewport.width;
-
-      const viewportHeight = window.visualViewport.height;
-
-      const screenWidth = window.screen.width;
-      const screenHeight = window.screen.height;
-
-      const widthRatio = viewportWidth / screenWidth;
-
-      const heightRatio = viewportHeight / screenHeight;
-
-      // viewport mengecil drastis
-      if (widthRatio < 0.75 || heightRatio < 0.75) {
-        triggerViolation("Floating window / split screen terdeteksi");
-      }
     }
 
     // ======================
@@ -508,13 +491,30 @@ export default function StartExamPage() {
       }, 1000);
     }
 
-    // EVENT
+    // ======================
+    // VISUAL VIEWPORT (Android)
+    // ======================
+    function handleViewport() {
+      if (!window.visualViewport) return;
+
+      const viewportWidth = window.visualViewport.width;
+      const viewportHeight = window.visualViewport.height;
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+
+      const widthRatio = viewportWidth / screenWidth;
+      const heightRatio = viewportHeight / screenHeight;
+
+      if (widthRatio < 0.75 || heightRatio < 0.75) {
+        triggerViolation("Floating window / split screen terdeteksi");
+      }
+    }
+
+    // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
-
+    window.addEventListener("focus", handleFocus); // ← TAMBAH INI
     document.addEventListener("visibilitychange", handleVisibility);
-
     window.addEventListener("resize", handleResize);
-
     window.addEventListener("orientationchange", handleOrientation);
 
     if (window.visualViewport) {
@@ -523,15 +523,12 @@ export default function StartExamPage() {
 
     return () => {
       clearTimeout(blurTimeoutRef.current);
-
       clearTimeout(resizeTimeoutRef.current);
 
       window.removeEventListener("blur", handleBlur);
-
+      window.removeEventListener("focus", handleFocus); // ← TAMBAH INI
       document.removeEventListener("visibilitychange", handleVisibility);
-
       window.removeEventListener("resize", handleResize);
-
       window.removeEventListener("orientationchange", handleOrientation);
 
       if (window.visualViewport) {
@@ -541,6 +538,54 @@ export default function StartExamPage() {
   }, [ignoreFullscreen, violations]);
 
   const isTimeRunningOut = timeLeft > 0;
+  // =========================
+  // TOUCH HEARTBEAT DETECTION
+  // =========================
+  useEffect(() => {
+    function updateTouch() {
+      lastTouchRef.current = Date.now();
+    }
+
+    // Deteksi semua sentuhan user
+    window.addEventListener("touchstart", updateTouch, true);
+
+    window.addEventListener("touchmove", updateTouch, true);
+
+    window.addEventListener("click", updateTouch, true);
+
+    // Monitor kehilangan interaksi
+    const interval = setInterval(() => {
+      if (logoutRef.current) return;
+
+      if (ignoreFullscreen) return;
+
+      // jangan cek saat modal aktif
+      if (modalOpen) return;
+
+      if (isModalPengaduanOpen) return;
+
+      if (isConfirmHapusOpen) return;
+
+      const now = Date.now();
+
+      const idleTime = now - lastTouchRef.current;
+
+      // jika tidak fokus + tidak ada touch
+      if (idleTime > 6000 && !document.hasFocus()) {
+        forceLogout("Floating window / aplikasi lain terdeteksi");
+      }
+    }, 1500);
+
+    return () => {
+      clearInterval(interval);
+
+      window.removeEventListener("touchstart", updateTouch, true);
+
+      window.removeEventListener("touchmove", updateTouch, true);
+
+      window.removeEventListener("click", updateTouch, true);
+    };
+  }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
 
   return (
     <main className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden">
