@@ -11,9 +11,7 @@ export default function StartExamPage() {
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("");
   const [pesan, setPesan] = useState("");
-  const [showPengaduan, setShowPengaduan] = useState(false);
   const [timeLeft, setTimeLeft] = useState(45 * 60);
-  const [isiPengaduan, setIsiPengaduan] = useState("");
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,6 +23,8 @@ export default function StartExamPage() {
   const [windowFocused, setWindowFocused] = useState(true);
   const [overlayDetected, setOverlayDetected] = useState(false);
   const [soalLocked, setSoalLocked] = useState(false);
+  const [isModalPengaduanOpen, setIsModalPengaduanOpen] = useState(false);
+  const [teksPengaduan, setTeksPengaduan] = useState("");
 
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
@@ -42,8 +42,6 @@ export default function StartExamPage() {
   const lastWidthRef = useRef(0);
   const lastHeightRef = useRef(0);
   const suspiciousResizeRef = useRef(0);
-  const isClickingRef = useRef(false);
-  const clickIgnoreBlurRef = useRef(false);
 
   // =========================
   // LOAD SESSION
@@ -148,19 +146,17 @@ export default function StartExamPage() {
   // KIRIM PENGADUAN
   // =========================
   async function handleKirimPengaduan() {
-    if (!isiPengaduan) {
-      showModal("Isi pengaduan kosong");
-      return;
-    }
+    if (!teksPengaduan.trim()) return;
 
     setLoadingPengaduan(true);
-    const result = await kirimPengaduan(nama, kelas, isiPengaduan);
+    const result = await kirimPengaduan(nama, kelas, teksPengaduan);
     setLoadingPengaduan(false);
 
     if (result.status === "success") {
-      showModal(result.message);
-      setIsiPengaduan("");
-      setShowPengaduan(false);
+      setTeksPengaduan(""); // Bersihkan input
+      setIsModalPengaduanOpen(false); // Tutup modal
+      setIgnoreFullscreen(false); // Aktifkan kembali proteksi fullscreen
+      showModal("Laporan berhasil dikirim ke admin.");
     } else {
       showModal(result.message || "Gagal kirim pengaduan");
     }
@@ -330,46 +326,39 @@ export default function StartExamPage() {
 
   // =========================
   // KEYBOARD HANDLER - EFEKTIF & SEDERHANA
-  // =========================
+  // ========================
   useEffect(() => {
     function handleKeyDown(e) {
-      // JIKA WAKTU HABIS, IZINKAN SEMUA
-      if (timeLeft <= 0 || !soalLocked) {
-        return;
+      if (timeLeft <= 0 || !soalLocked) return;
+
+      // A. JIKA MODAL PENGADUAN TERBUKA: Izinkan mengetik di Textarea
+      if (isModalPengaduanOpen && e.target.tagName === "TEXTAREA") {
+        // Tetap blokir Ctrl+C / Ctrl+V di dalam pengaduan
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          ["c", "v"].includes(e.key.toLowerCase())
+        ) {
+          e.preventDefault();
+        }
+        return; // "Loloskan" tombol lain (huruf/angka) agar bisa mengetik
       }
 
-      // JIKA INPUT PENGADUAN, IZINKAN INPUT TEXT SAJA
-      if (e.target.closest(".pengaduan-input")) {
-        // BLOK COPY PASTE
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-          e.preventDefault();
-          return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
-          e.preventDefault();
-          return;
-        }
-        // IZINKAN YANG LAIN UNTUK INPUT TEXT
-        return;
-      }
-
-      // ============ BLOK DEVELOPER TOOLS ============
-      if (
+      // B. CEK TOMBOL BERBAHAYA (Selalu blokir)
+      const isDangerous =
         e.key === "F12" ||
         e.key === "F11" ||
-        (e.ctrlKey && e.shiftKey && e.key === "I") ||
-        (e.ctrlKey && e.shiftKey && e.key === "J") ||
-        (e.ctrlKey && e.shiftKey && e.key === "C") ||
-        ((e.ctrlKey || e.metaKey) && e.key === "u") ||
-        (e.altKey && e.key === "Tab")
-      ) {
+        (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key)) ||
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "u") ||
+        (e.altKey && e.key === "Tab");
+
+      if (isDangerous) {
         e.preventDefault();
-        forceLogout("Developer tools atau perpindahan tab terdeteksi");
+        forceLogout("Akses terlarang terdeteksi!");
         return;
       }
 
-      // ============ IZINKAN TOMBOL SCROLL NAVIGATION ============
-      const allowedScrollKeys = [
+      // C. IZINKAN NAVIGASI SCROLL
+      const allowedScroll = [
         "ArrowUp",
         "ArrowDown",
         "PageUp",
@@ -377,22 +366,15 @@ export default function StartExamPage() {
         "Home",
         "End",
       ];
+      if (allowedScroll.includes(e.key)) return;
 
-      if (allowedScrollKeys.includes(e.key)) {
-        // ✅ IZINKAN - JANGAN PREVENTDEFAULT
-        return;
-      }
-
-      // ============ BLOK SEMUA KEYBOARD LAINNYA ============
-      // Ini akan memblok: Enter, Space, Tab, Arrow Left/Right, Character input, dll
+      // D. BLOKIR SEMUA TOMBOL LAIN DI AREA UJIAN
       e.preventDefault();
     }
 
     document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [timeLeft, violations, soalLocked]);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [timeLeft, soalLocked, isModalPengaduanOpen]); // Pastikan isModalPengaduanOpen ada di sini
 
   // =========================
   // DETEKSI DEVTOOLS
@@ -412,9 +394,9 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
-
   // =========================
-  // ANTI SPLIT SCREEN / FLOATING - PERBAIKAN DENGAN GRACE PERIOD HANYA UNTUK BLUR
+  // ANTI SPLIT SCREEN / FLOATING
+  // SUPER STABIL
   // =========================
   useEffect(() => {
     lastWidthRef.current = window.innerWidth;
@@ -428,47 +410,29 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // BLUR - DENGAN GRACE PERIOD KHUSUS UNTUK KLIK
+    // BLUR
     // ======================
     function handleBlur() {
-      // JANGAN TRIGGER JIKA SEDANG DALAM GRACE PERIOD KLIK
-      if (clickIgnoreBlurRef.current) {
-        clearTimeout(blurTimeoutRef.current);
-        return;
-      }
-
       clearTimeout(blurTimeoutRef.current);
 
       blurTimeoutRef.current = setTimeout(() => {
-        // CEK LAGI SEBELUM TRIGGER
-        if (clickIgnoreBlurRef.current) {
-          return;
-        }
-
         if (!document.hasFocus()) {
           triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
       }, 1200);
     }
 
-    function handleFocus() {
-      clearTimeout(blurTimeoutRef.current);
-    }
-
     // ======================
-    // VISIBILITY - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
+    // VISIBILITY
     // ======================
     function handleVisibility() {
-      if (logoutRef.current) return;
-      if (ignoreFullscreen) return;
-
       if (document.hidden) {
         triggerViolation("Anda keluar dari halaman ujian");
       }
     }
 
     // ======================
-    // RESIZE DETECTION - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
+    // RESIZE DETECTION
     // ======================
     function handleResize() {
       clearTimeout(resizeTimeoutRef.current);
@@ -485,7 +449,7 @@ export default function StartExamPage() {
         lastWidthRef.current = currentWidth;
         lastHeightRef.current = currentHeight;
 
-        // SPLIT SCREEN / FLOATING - LANGSUNG TRIGGER
+        // SPLIT SCREEN / FLOATING
         if (widthDiff > 180 || heightDiff > 180) {
           suspiciousResizeRef.current++;
 
@@ -497,7 +461,7 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISUAL VIEWPORT - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
+    // VISUAL VIEWPORT
     // Android modern
     // ======================
     function handleViewport() {
@@ -514,14 +478,14 @@ export default function StartExamPage() {
 
       const heightRatio = viewportHeight / screenHeight;
 
-      // viewport mengecil drastis - LANGSUNG TRIGGER
+      // viewport mengecil drastis
       if (widthRatio < 0.75 || heightRatio < 0.75) {
         triggerViolation("Floating window / split screen terdeteksi");
       }
     }
 
     // ======================
-    // ORIENTATION CHANGE - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
+    // ORIENTATION CHANGE
     // ======================
     function handleOrientation() {
       setTimeout(() => {
@@ -534,33 +498,14 @@ export default function StartExamPage() {
       }, 1000);
     }
 
-    // ======================
-    // MOUSE DOWN / TOUCH START - AKTIFKAN GRACE PERIOD BLUR
-    // ======================
-    function handleMouseDown(e) {
-      // CEK JIKA KLIK DI AREA PENGADUAN ATAU TOMBOL
-      if (e.target.closest(".pengaduan-input") || e.target.closest("button")) {
-        clickIgnoreBlurRef.current = true;
-
-        setTimeout(() => {
-          clickIgnoreBlurRef.current = false;
-        }, 500);
-      }
-    }
-
     // EVENT
     window.addEventListener("blur", handleBlur);
-
-    window.addEventListener("focus", handleFocus);
 
     document.addEventListener("visibilitychange", handleVisibility);
 
     window.addEventListener("resize", handleResize);
 
     window.addEventListener("orientationchange", handleOrientation);
-
-    document.addEventListener("mousedown", handleMouseDown, true);
-    document.addEventListener("touchstart", handleMouseDown, true);
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewport);
@@ -573,17 +518,11 @@ export default function StartExamPage() {
 
       window.removeEventListener("blur", handleBlur);
 
-      window.removeEventListener("focus", handleFocus);
-
       document.removeEventListener("visibilitychange", handleVisibility);
 
       window.removeEventListener("resize", handleResize);
 
       window.removeEventListener("orientationchange", handleOrientation);
-
-      document.removeEventListener("mousedown", handleMouseDown, true);
-
-      document.removeEventListener("touchstart", handleMouseDown, true);
 
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleViewport);
@@ -633,8 +572,11 @@ export default function StartExamPage() {
 
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => setShowPengaduan(!showPengaduan)}
-              className="bg-orange-500 text-white px-4 py-2 rounded-xl hover:bg-orange-600 transition"
+              onClick={() => {
+                setIgnoreFullscreen(true); // Mencegah logout saat fokus berpindah ke modal
+                setIsModalPengaduanOpen(true);
+              }}
+              className="bg-orange-500 text-white px-4 py-2 rounded-xl hover:bg-orange-600 transition font-bold"
             >
               Pengaduan
             </button>
@@ -660,26 +602,6 @@ export default function StartExamPage() {
           <div className="mt-3 bg-red-100 border border-red-300 text-red-700 rounded-xl p-3">
             <p className="font-bold">Pesan Admin</p>
             <p>{pesan}</p>
-          </div>
-        )}
-
-        {showPengaduan && (
-          <div className="mt-3 flex gap-2 flex-wrap">
-            <input
-              type="text"
-              placeholder="Tulis pengaduan..."
-              value={isiPengaduan}
-              onChange={(e) => setIsiPengaduan(e.target.value)}
-              className="border p-3 rounded-xl flex-1 pengaduan-input"
-            />
-
-            <button
-              onClick={handleKirimPengaduan}
-              disabled={loadingPengaduan}
-              className="bg-blue-600 text-white px-4 rounded-xl hover:bg-blue-700 transition"
-            >
-              {loadingPengaduan ? "Mengirim..." : "Kirim"}
-            </button>
           </div>
         )}
       </div>
@@ -918,6 +840,45 @@ export default function StartExamPage() {
             <span className="text-xl md:text-3xl font-mono font-black text-white leading-none">
               00:00
             </span>
+          </div>
+        </div>
+      )}
+      {isModalPengaduanOpen && (
+        <div className="fixed inset-0 z- flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
+            <div className="bg-orange-500 p-4 text-white text-center">
+              <h3 className="font-bold text-lg">⚠️ FORM PENGADUAN</h3>
+              <p className="text-[10px] opacity-80">
+                Input keyboard hanya aktif di kotak ini
+              </p>
+            </div>
+            <div className="p-5">
+              <textarea
+                autoFocus
+                className="w-full h-32 p-3 border-2 border-gray-100 rounded-xl focus:border-orange-400 focus:outline-none text-gray-700 text-sm"
+                placeholder="Tuliskan kendala Anda di sini..."
+                value={teksPengaduan}
+                onChange={(e) => setTeksPengaduan(e.target.value)}
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setIsModalPengaduanOpen(false);
+                    setIgnoreFullscreen(false);
+                  }}
+                  className="flex-1 py-2 font-bold text-gray-400 hover:text-gray-600"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleKirimPengaduan}
+                  disabled={loadingPengaduan || !teksPengaduan.trim()}
+                  className="flex-1 py-2 rounded-xl font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300"
+                >
+                  {loadingPengaduan ? "Proses..." : "Kirim Laporan"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
