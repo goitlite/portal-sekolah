@@ -42,6 +42,8 @@ export default function StartExamPage() {
   const lastWidthRef = useRef(0);
   const lastHeightRef = useRef(0);
   const suspiciousResizeRef = useRef(0);
+  const isClickingRef = useRef(false);
+  const clickIgnoreBlurRef = useRef(false);
 
   // =========================
   // LOAD SESSION
@@ -390,7 +392,7 @@ export default function StartExamPage() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [timeLeft, violations]);
+  }, [timeLeft, violations, soalLocked]);
 
   // =========================
   // DETEKSI DEVTOOLS
@@ -410,9 +412,9 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
+
   // =========================
-  // ANTI SPLIT SCREEN / FLOATING
-  // SUPER STABIL
+  // ANTI SPLIT SCREEN / FLOATING - PERBAIKAN DENGAN GRACE PERIOD HANYA UNTUK BLUR
   // =========================
   useEffect(() => {
     lastWidthRef.current = window.innerWidth;
@@ -426,29 +428,47 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // BLUR
+    // BLUR - DENGAN GRACE PERIOD KHUSUS UNTUK KLIK
     // ======================
     function handleBlur() {
+      // JANGAN TRIGGER JIKA SEDANG DALAM GRACE PERIOD KLIK
+      if (clickIgnoreBlurRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+        return;
+      }
+
       clearTimeout(blurTimeoutRef.current);
 
       blurTimeoutRef.current = setTimeout(() => {
+        // CEK LAGI SEBELUM TRIGGER
+        if (clickIgnoreBlurRef.current) {
+          return;
+        }
+
         if (!document.hasFocus()) {
           triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
       }, 1200);
     }
 
+    function handleFocus() {
+      clearTimeout(blurTimeoutRef.current);
+    }
+
     // ======================
-    // VISIBILITY
+    // VISIBILITY - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
     // ======================
     function handleVisibility() {
+      if (logoutRef.current) return;
+      if (ignoreFullscreen) return;
+
       if (document.hidden) {
         triggerViolation("Anda keluar dari halaman ujian");
       }
     }
 
     // ======================
-    // RESIZE DETECTION
+    // RESIZE DETECTION - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
     // ======================
     function handleResize() {
       clearTimeout(resizeTimeoutRef.current);
@@ -465,7 +485,7 @@ export default function StartExamPage() {
         lastWidthRef.current = currentWidth;
         lastHeightRef.current = currentHeight;
 
-        // SPLIT SCREEN / FLOATING
+        // SPLIT SCREEN / FLOATING - LANGSUNG TRIGGER
         if (widthDiff > 180 || heightDiff > 180) {
           suspiciousResizeRef.current++;
 
@@ -477,7 +497,7 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISUAL VIEWPORT
+    // VISUAL VIEWPORT - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
     // Android modern
     // ======================
     function handleViewport() {
@@ -494,14 +514,14 @@ export default function StartExamPage() {
 
       const heightRatio = viewportHeight / screenHeight;
 
-      // viewport mengecil drastis
+      // viewport mengecil drastis - LANGSUNG TRIGGER
       if (widthRatio < 0.75 || heightRatio < 0.75) {
         triggerViolation("Floating window / split screen terdeteksi");
       }
     }
 
     // ======================
-    // ORIENTATION CHANGE
+    // ORIENTATION CHANGE - LANGSUNG TRIGGER (TIDAK ADA GRACE PERIOD)
     // ======================
     function handleOrientation() {
       setTimeout(() => {
@@ -514,14 +534,33 @@ export default function StartExamPage() {
       }, 1000);
     }
 
+    // ======================
+    // MOUSE DOWN / TOUCH START - AKTIFKAN GRACE PERIOD BLUR
+    // ======================
+    function handleMouseDown(e) {
+      // CEK JIKA KLIK DI AREA PENGADUAN ATAU TOMBOL
+      if (e.target.closest(".pengaduan-input") || e.target.closest("button")) {
+        clickIgnoreBlurRef.current = true;
+
+        setTimeout(() => {
+          clickIgnoreBlurRef.current = false;
+        }, 500);
+      }
+    }
+
     // EVENT
     window.addEventListener("blur", handleBlur);
+
+    window.addEventListener("focus", handleFocus);
 
     document.addEventListener("visibilitychange", handleVisibility);
 
     window.addEventListener("resize", handleResize);
 
     window.addEventListener("orientationchange", handleOrientation);
+
+    document.addEventListener("mousedown", handleMouseDown, true);
+    document.addEventListener("touchstart", handleMouseDown, true);
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewport);
@@ -534,11 +573,17 @@ export default function StartExamPage() {
 
       window.removeEventListener("blur", handleBlur);
 
+      window.removeEventListener("focus", handleFocus);
+
       document.removeEventListener("visibilitychange", handleVisibility);
 
       window.removeEventListener("resize", handleResize);
 
       window.removeEventListener("orientationchange", handleOrientation);
+
+      document.removeEventListener("mousedown", handleMouseDown, true);
+
+      document.removeEventListener("touchstart", handleMouseDown, true);
 
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleViewport);
