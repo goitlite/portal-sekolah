@@ -26,6 +26,38 @@ export default function StartExamPage() {
   const [isModalPengaduanOpen, setIsModalPengaduanOpen] = useState(false);
   const [teksPengaduan, setTeksPengaduan] = useState("");
   const [isConfirmHapusOpen, setIsConfirmHapusOpen] = useState(false);
+  const safeActionRef = useRef(false);
+
+  const [browserBlocked, setBrowserBlocked] = useState(false);
+
+  function isChromeBrowser() {
+    const ua = navigator.userAgent;
+
+    // WAJIB ADA CHROME
+    const hasChrome = ua.includes("Chrome");
+
+    // WAJIB BROWSER ASLI GOOGLE
+    const isGoogleVendor =
+      navigator.vendor && navigator.vendor.includes("Google");
+
+    // BLOK SEMUA BROWSER TURUNAN
+    const blockedBrowsers = [
+      "Edg", // Microsoft Edge
+      "OPR", // Opera
+      "SamsungBrowser", // Samsung Internet
+      "Firefox", // Firefox
+      "CriOS", // Chrome iOS
+      "FxiOS",
+      "DuckDuckGo",
+      "Brave",
+      "Vivaldi",
+      "YaBrowser",
+    ];
+
+    const isBlocked = blockedBrowsers.some((b) => ua.includes(b));
+
+    return hasChrome && isGoogleVendor && !isBlocked;
+  }
 
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
@@ -52,6 +84,17 @@ export default function StartExamPage() {
   // =========================
   useEffect(() => {
     async function init() {
+      // =========================
+      // VALIDASI GOOGLE CHROME
+      // =========================
+      if (!isChromeBrowser()) {
+        console.log("USER AGENT:", navigator.userAgent);
+        console.log("VENDOR:", navigator.vendor);
+
+        setBrowserBlocked(true);
+        return;
+      }
+
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
       try {
@@ -104,9 +147,22 @@ export default function StartExamPage() {
     setModalOpen(true);
   }
 
+  function startSafeAction(duration = 3000) {
+    safeActionRef.current = true;
+
+    setIgnoreFullscreen(true);
+
+    setTimeout(() => {
+      safeActionRef.current = false;
+
+      setIgnoreFullscreen(false);
+    }, duration);
+  }
+
   function forceLogout(reason = "Pelanggaran ujian") {
     if (logoutRef.current) return;
-    logoutRef.current = true;
+
+    if (safeActionRef.current) return;
 
     const totalViolation = violations + 1;
     localStorage.setItem("violations", totalViolation.toString());
@@ -143,6 +199,67 @@ export default function StartExamPage() {
       }
     }, 5000);
 
+    if (browserBlocked) {
+      return (
+        <main className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+            {/* HEADER */}
+            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
+              <div className="text-5xl mb-3">⚠️</div>
+
+              <h1 className="text-white text-2xl font-black uppercase tracking-wide">
+                Browser Tidak Didukung
+              </h1>
+
+              <p className="text-orange-100 text-sm mt-2">
+                Gunakan Google Chrome untuk memulai asesmen
+              </p>
+            </div>
+
+            {/* CONTENT */}
+            <div className="p-6 text-center">
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-5">
+                <p className="text-gray-700 text-sm leading-relaxed">
+                  Sistem ujian hanya dapat dibuka menggunakan
+                  <span className="font-black text-orange-600">
+                    {" "}
+                    Google Chrome
+                  </span>{" "}
+                  agar keamanan asesmen berjalan dengan baik.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.location.href = "https://www.google.com/chrome/";
+                }}
+                className="
+              w-full
+              py-3
+              rounded-2xl
+              bg-gradient-to-r
+              from-orange-500
+              to-red-500
+              hover:from-orange-600
+              hover:to-red-600
+              text-white
+              font-black
+              shadow-lg
+              transition
+            "
+              >
+                Download Google Chrome
+              </button>
+
+              <p className="text-[11px] text-gray-400 mt-4">
+                Android • Windows • Mac • Linux
+              </p>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return () => clearInterval(interval);
   }, [nama, kelas]);
 
@@ -152,17 +269,30 @@ export default function StartExamPage() {
   async function handleKirimPengaduan() {
     if (!teksPengaduan.trim()) return;
 
-    setLoadingPengaduan(true);
-    const result = await kirimPengaduan(nama, kelas, teksPengaduan);
-    setLoadingPengaduan(false);
+    startSafeAction(5000);
 
-    if (result.status === "success") {
-      setTeksPengaduan(""); // Bersihkan input
-      setIsModalPengaduanOpen(false); // Tutup modal
-      setIgnoreFullscreen(false); // Aktifkan kembali proteksi fullscreen
-      showModal("Laporan berhasil dikirim ke admin.");
-    } else {
-      showModal(result.message || "Gagal kirim pengaduan");
+    setLoadingPengaduan(true);
+
+    try {
+      const result = await kirimPengaduan(nama, kelas, teksPengaduan);
+
+      setLoadingPengaduan(false);
+
+      if (result.status === "success") {
+        setTeksPengaduan("");
+
+        setIsModalPengaduanOpen(false);
+
+        setTimeout(() => {
+          showModal("Laporan berhasil dikirim ke admin.");
+        }, 300);
+      } else {
+        showModal(result.message || "Gagal kirim pengaduan");
+      }
+    } catch (err) {
+      setLoadingPengaduan(false);
+
+      showModal("Terjadi kesalahan jaringan.");
     }
   }
 
@@ -489,7 +619,10 @@ export default function StartExamPage() {
 
     function triggerViolation(reason) {
       if (logoutRef.current) return;
+
       if (ignoreFullscreen) return;
+
+      if (safeActionRef.current) return;
 
       forceLogout(reason);
     }
@@ -502,6 +635,15 @@ export default function StartExamPage() {
 
       blurTimeoutRef.current = setTimeout(() => {
         if (!document.hasFocus()) {
+          if (
+            modalOpen ||
+            isModalPengaduanOpen ||
+            isConfirmHapusOpen ||
+            safeActionRef.current
+          ) {
+            return;
+          }
+
           triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
       }, 1200);
@@ -519,6 +661,8 @@ export default function StartExamPage() {
     // ======================
     function handleVisibility() {
       if (document.hidden) {
+        if (safeActionRef.current) return;
+
         triggerViolation("Anda keluar dari halaman ujian");
       }
     }
@@ -527,6 +671,11 @@ export default function StartExamPage() {
     // RESIZE DETECTION
     // ======================
     function handleResize() {
+      if (safeActionRef.current) return;
+
+      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+        return;
+      }
       clearTimeout(resizeTimeoutRef.current);
 
       resizeTimeoutRef.current = setTimeout(() => {
@@ -576,6 +725,12 @@ export default function StartExamPage() {
 
       const widthRatio = viewportWidth / screenWidth;
       const heightRatio = viewportHeight / screenHeight;
+
+      const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+
+      if (keyboardOpen) return;
+
+      if (safeActionRef.current) return;
 
       if (widthRatio < 0.75 || heightRatio < 0.75) {
         triggerViolation("Floating window / split screen terdeteksi");
@@ -650,29 +805,58 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
+  // =========================
   // DETEKSI TAB FREEZE
+  // SUPER STABIL
   // =========================
   useEffect(() => {
+    freezeCheckRef.current = Date.now();
+
     const interval = setInterval(() => {
       if (logoutRef.current) return;
 
-      if (ignoreFullscreen) return;
+      if (ignoreFullscreen) {
+        freezeCheckRef.current = Date.now();
+        return;
+      }
+
+      // abaikan saat modal aktif
+      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+        freezeCheckRef.current = Date.now();
+        return;
+      }
+
+      // abaikan safe action
+      if (safeActionRef.current) {
+        freezeCheckRef.current = Date.now();
+        return;
+      }
+
+      // abaikan jika textarea sedang fokus
+      const activeEl = document.activeElement;
+
+      if (
+        activeEl &&
+        (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT")
+      ) {
+        freezeCheckRef.current = Date.now();
+        return;
+      }
 
       const now = Date.now();
 
       const diff = now - freezeCheckRef.current;
 
-      // jika timer JS berhenti terlalu lama
-      // kemungkinan app freeze / pindah aplikasi
-      if (diff > 10000) {
+      // naikkan threshold agar Android tidak false positive
+      if (diff > 20000) {
         forceLogout("Aplikasi dibekukan / pindah aplikasi terdeteksi");
       }
 
       freezeCheckRef.current = now;
-    }, 2000);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [ignoreFullscreen]);
+  }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
 
   // =========================
   // BLOCK LONG PRESS MOBILE
