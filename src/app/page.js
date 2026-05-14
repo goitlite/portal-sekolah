@@ -65,11 +65,6 @@ export default function Home() {
                 ONLINE
               </h1>
 
-              <p className="text-gray-200 text-base md:text-xl mt-6 leading-relaxed max-w-2xl mx-auto">
-                Platform asesmen digital profesional untuk mendukung
-                pembelajaran modern, aman, cepat, dan responsif di semua device.
-              </p>
-
               <div className="mt-10 flex flex-wrap gap-4 justify-center">
                 <button
                   onClick={handleMasukAsesmen}

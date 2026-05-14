@@ -11,7 +11,7 @@ export default function StartExamPage() {
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("");
   const [pesan, setPesan] = useState("");
-  const [timeLeft, setTimeLeft] = useState(45 * 60);
+  const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,6 +29,8 @@ export default function StartExamPage() {
   const safeActionRef = useRef(false);
 
   const [browserBlocked, setBrowserBlocked] = useState(false);
+
+  const [showPanduanModal, setShowPanduanModal] = useState(true);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
@@ -130,6 +132,7 @@ export default function StartExamPage() {
       if (savedDraft) {
         setDraftAnswers(JSON.parse(savedDraft));
       }
+      startSafeAction(15000);
     }
 
     const savedDraftMode = localStorage.getItem("draftMode");
@@ -199,67 +202,6 @@ export default function StartExamPage() {
       }
     }, 5000);
 
-    if (browserBlocked) {
-      return (
-        <main className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
-            {/* HEADER */}
-            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
-              <div className="text-5xl mb-3">⚠️</div>
-
-              <h1 className="text-white text-2xl font-black uppercase tracking-wide">
-                Browser Tidak Didukung
-              </h1>
-
-              <p className="text-orange-100 text-sm mt-2">
-                Gunakan Google Chrome untuk memulai asesmen
-              </p>
-            </div>
-
-            {/* CONTENT */}
-            <div className="p-6 text-center">
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-5">
-                <p className="text-gray-700 text-sm leading-relaxed">
-                  Sistem ujian hanya dapat dibuka menggunakan
-                  <span className="font-black text-orange-600">
-                    {" "}
-                    Google Chrome
-                  </span>{" "}
-                  agar keamanan asesmen berjalan dengan baik.
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  window.location.href = "https://www.google.com/chrome/";
-                }}
-                className="
-              w-full
-              py-3
-              rounded-2xl
-              bg-gradient-to-r
-              from-orange-500
-              to-red-500
-              hover:from-orange-600
-              hover:to-red-600
-              text-white
-              font-black
-              shadow-lg
-              transition
-            "
-              >
-                Download Google Chrome
-              </button>
-
-              <p className="text-[11px] text-gray-400 mt-4">
-                Android • Windows • Mac • Linux
-              </p>
-            </div>
-          </div>
-        </main>
-      );
-    }
-
     return () => clearInterval(interval);
   }, [nama, kelas]);
 
@@ -299,7 +241,7 @@ export default function StartExamPage() {
   function handleKeluar() {
     if (timeLeft > 0) {
       showModal(
-        "⏱️ Anda tidak bisa keluar sampai waktu habis!\n\nTombol Keluar akan tersedia setelah 45 menit.",
+        "⏱️ Anda tidak bisa keluar sampai waktu habis!\n\nTombol Keluar akan tersedia setelah 30 menit.",
       );
       return;
     }
@@ -458,11 +400,17 @@ export default function StartExamPage() {
         setSoalLocked(true);
 
         showModal(
-          "🔒 Soal dikunci.\n\nSilahkan jawab di lembar draft jawaban.\n\nSetelah waktu 45 menit habis, jawaban dapat disalin kembali ke Google Form lalu tekan tombol Kirim.",
+          "🔒 Waktu pengisian data telah selesai.\n\n" +
+            "Soal sekarang dikunci otomatis.\n\n" +
+            "Silahkan kerjakan jawaban pada panel DRAFT di samping layar.\n\n" +
+            "Setelah waktu asesmen 30 menit selesai:\n" +
+            "1. Salin kembali jawaban draft ke Google Form\n" +
+            "2. Periksa jawaban\n" +
+            "3. Tekan tombol Kirim/Submit",
         );
       },
-      2 * 60 * 1000,
-    ); // 2 menit
+      1 * 60 * 1000,
+    ); // 1 menit
 
     return () => clearTimeout(lockTimer);
   }, []);
@@ -923,6 +871,70 @@ export default function StartExamPage() {
     };
   }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
 
+  // =========================
+  // BLOCK NON CHROME
+  // =========================
+  if (browserBlocked) {
+    return (
+      <main className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+          {/* HEADER */}
+          <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
+            <div className="text-5xl mb-3">⚠️</div>
+
+            <h1 className="text-white text-2xl font-black uppercase tracking-wide">
+              Browser Tidak Didukung
+            </h1>
+
+            <p className="text-orange-100 text-sm mt-2">
+              Gunakan Google Chrome untuk memulai asesmen
+            </p>
+          </div>
+
+          {/* CONTENT */}
+          <div className="p-6 text-center">
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-5">
+              <p className="text-gray-700 text-sm leading-relaxed">
+                Sistem ujian hanya dapat dibuka menggunakan
+                <span className="font-black text-orange-600">
+                  {" "}
+                  Google Chrome
+                </span>{" "}
+                agar keamanan asesmen berjalan dengan baik.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                window.location.href = "https://www.google.com/chrome/";
+              }}
+              className="
+              w-full
+              py-3
+              rounded-2xl
+              bg-gradient-to-r
+              from-orange-500
+              to-red-500
+              hover:from-orange-600
+              hover:to-red-600
+              text-white
+              font-black
+              shadow-lg
+              transition
+            "
+            >
+              Download Google Chrome
+            </button>
+
+            <p className="text-[11px] text-gray-400 mt-4">
+              Android • Windows • Mac • Linux
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden"
@@ -955,7 +967,6 @@ export default function StartExamPage() {
         </div>
       )}
 
-      {/* HEADER */}
       <header
         className="
     sticky
@@ -968,24 +979,21 @@ export default function StartExamPage() {
     via-amber-300
     to-yellow-500
 
-    shadow-[0_4px_18px_rgba(0,0,0,0.18)]
+    shadow-md
   "
       >
-        {/* GARIS ELEGAN ATAS */}
+        {/* GARIS ATAS */}
         <div
           className="
       h-[2px]
-
       bg-gradient-to-r
       from-transparent
       via-yellow-100
       to-transparent
-
-      opacity-80
     "
         />
 
-        <div className="relative px-3 md:px-5 py-2.5">
+        <div className="relative px-3 md:px-5 py-2">
           {/* SOFT LIGHT */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div
@@ -993,8 +1001,8 @@ export default function StartExamPage() {
           absolute
           -top-10
           right-0
-          w-44
-          h-44
+          w-36
+          h-36
           bg-white/20
           rounded-full
           blur-3xl
@@ -1005,11 +1013,11 @@ export default function StartExamPage() {
           <div className="relative flex items-center justify-between gap-3">
             {/* KIRI */}
             <div className="min-w-0 flex-1">
-              {/* LABEL */}
+              {/* BADGE */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div
                   className="
-              px-2.5
+              px-2
               py-1
 
               rounded-lg
@@ -1020,11 +1028,11 @@ export default function StartExamPage() {
               border
               border-white/30
 
-              text-[9px]
-              md:text-[10px]
+              text-[8px]
+              md:text-[9px]
 
               font-black
-              tracking-[1.5px]
+              tracking-[1.2px]
 
               text-yellow-950
             "
@@ -1035,10 +1043,10 @@ export default function StartExamPage() {
                 {/* PELANGGARAN */}
                 <div
                   className="
-              px-3
+              px-2.5
               py-1
 
-              rounded-xl
+              rounded-lg
 
               bg-gradient-to-r
               from-red-600
@@ -1046,18 +1054,15 @@ export default function StartExamPage() {
 
               text-white
 
-              shadow-md
-              shadow-red-500/20
-
-              text-[10px]
-              md:text-[11px]
+              text-[9px]
+              md:text-[10px]
 
               font-black
 
-              tracking-wide
+              shadow-md
             "
                 >
-                  TOTAL PELANGGARAN : {violations}
+                  PELANGGARAN : {violations}
                 </div>
               </div>
 
@@ -1066,7 +1071,7 @@ export default function StartExamPage() {
                 className="
             mt-1
 
-            text-sm
+            text-[13px]
             md:text-lg
 
             font-black
@@ -1083,59 +1088,41 @@ export default function StartExamPage() {
                 ASESMEN SMKN 1 TELUK KUANTAN
               </h1>
 
-              {/* GARIS PEMBATAS */}
+              {/* IDENTITAS */}
               <div
                 className="
-            mt-1
+            mt-1.5
 
-            h-[1px]
+            inline-flex
+            items-center
 
-            w-full
-            max-w-[280px]
+            px-2.5
+            py-1
 
-            bg-gradient-to-r
-            from-yellow-900/40
-            via-yellow-950/20
-            to-transparent
+            rounded-xl
+
+            bg-white/15
+            backdrop-blur-sm
+
+            border
+            border-white/20
+
+            shadow-sm
           "
-              />
-
-              {/* IDENTITAS */}
-              {/* IDENTITAS */}
-              <div
-                className="
-    mt-2
-
-    inline-flex
-    items-center
-
-    px-3
-    py-1.5
-
-    rounded-xl
-
-    bg-white/15
-    backdrop-blur-sm
-
-    border
-    border-white/20
-
-    shadow-sm
-  "
               >
                 <p
                   className="
-      text-xs
-      md:text-sm
+              text-[10px]
+              md:text-xs
 
-      font-bold
+              font-bold
 
-      tracking-wide
+              tracking-wide
 
-      text-yellow-950
+              text-yellow-950
 
-      truncate
-    "
+              truncate
+            "
                 >
                   {nama} • {kelas}
                 </p>
@@ -1143,60 +1130,18 @@ export default function StartExamPage() {
             </div>
 
             {/* KANAN */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* PENGADUAN */}
-              <button
-                onClick={() => {
-                  setIgnoreFullscreen(true);
-                  setIsModalPengaduanOpen(true);
-                }}
-                className="
-            px-3
-            md:px-4
-
-            h-9
-
-            rounded-xl
-
-            bg-gradient-to-r
-            from-orange-500
-            to-amber-500
-
-            hover:from-orange-600
-            hover:to-amber-600
-
-            active:scale-95
-
-            text-white
-
-            text-[11px]
-            md:text-xs
-
-            font-black
-
-            shadow-lg
-            shadow-orange-500/20
-
-            transition-all
-            duration-200
-          "
-              >
-                Pengaduan
-              </button>
-
+            <div className="flex flex-col gap-2 shrink-0">
               {/* KELUAR */}
               <button
                 onClick={handleKeluar}
                 className={`
-            px-3
-            md:px-4
-
+            w-[88px]
             h-9
 
             rounded-xl
 
-            text-[11px]
-            md:text-xs
+            text-[10px]
+            md:text-[11px]
 
             font-black
 
@@ -1223,13 +1168,49 @@ export default function StartExamPage() {
                   text-white
 
                   shadow-lg
-                  shadow-red-500/20
                 `
             }
           `}
                 disabled={timeLeft > 0}
               >
                 Keluar
+              </button>
+
+              {/* PENGADUAN */}
+              <button
+                onClick={() => {
+                  setIgnoreFullscreen(true);
+                  setIsModalPengaduanOpen(true);
+                }}
+                className="
+            w-[88px]
+            h-9
+
+            rounded-xl
+
+            bg-gradient-to-r
+            from-orange-500
+            to-amber-500
+
+            hover:from-orange-600
+            hover:to-amber-600
+
+            active:scale-95
+
+            text-white
+
+            text-[10px]
+            md:text-[11px]
+
+            font-black
+
+            shadow-lg
+
+            transition-all
+            duration-200
+          "
+              >
+                Pengaduan
               </button>
             </div>
           </div>
@@ -1251,14 +1232,13 @@ export default function StartExamPage() {
 
           text-white
 
-          shadow-lg
-          shadow-red-500/20
+          shadow-md
         "
             >
               <p
                 className="
-            text-[10px]
-            md:text-xs
+            text-[9px]
+            md:text-[10px]
 
             font-black
 
@@ -1275,7 +1255,7 @@ export default function StartExamPage() {
             mt-1
 
             text-[11px]
-            md:text-sm
+            md:text-xs
 
             text-red-50
 
@@ -1288,7 +1268,7 @@ export default function StartExamPage() {
           )}
         </div>
 
-        {/* GARIS ELEGAN BAWAH */}
+        {/* GARIS BAWAH */}
         <div
           className="
       h-[1px]
@@ -1610,6 +1590,241 @@ export default function StartExamPage() {
                 className="flex-1 py-2 bg-red-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200"
               >
                 Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PANDUAN ASESMEN */}
+      {showPanduanModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div
+            className="
+        w-full
+        max-w-2xl
+
+        bg-white
+
+        rounded-3xl
+
+        overflow-hidden
+
+        shadow-[0_20px_80px_rgba(0,0,0,0.45)]
+
+        border
+        border-gray-200
+      "
+          >
+            {/* HEADER */}
+            <div
+              className="
+          bg-gradient-to-r
+          from-blue-700
+          via-cyan-600
+          to-blue-800
+
+          px-6
+          py-5
+
+          text-white
+        "
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="
+              w-14
+              h-14
+
+              rounded-2xl
+
+              bg-white/15
+
+              flex
+              items-center
+              justify-center
+
+              text-3xl
+            "
+                >
+                  📝
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-black uppercase tracking-wide">
+                    Tata Cara Asesmen
+                  </h2>
+
+                  <p className="text-cyan-100 text-sm mt-1">
+                    Bacalah petunjuk sebelum memulai ujian
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* CONTENT */}
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-4">
+                {/* STEP 1 */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                    1
+                  </div>
+
+                  <div>
+                    <h3 className="font-black text-gray-800 text-lg">
+                      Isi Data dan Jawaban Awal
+                    </h3>
+
+                    <p className="text-gray-600 leading-relaxed mt-1">
+                      Setelah ujian dimulai, silahkan isi identitas dan jawaban
+                      langsung pada Google Form selama
+                      <span className="font-black text-blue-700">
+                        {" "}
+                        1 menit pertama
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+
+                {/* STEP 2 */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-red-600 text-white flex items-center justify-center font-black">
+                    2
+                  </div>
+
+                  <div>
+                    <h3 className="font-black text-gray-800 text-lg">
+                      Soal Akan Dikunci
+                    </h3>
+
+                    <p className="text-gray-600 leading-relaxed mt-1">
+                      Setelah 1 menit, Google Form otomatis terkunci dan tidak
+                      dapat disentuh lagi hingga waktu asesmen selesai.
+                    </p>
+                  </div>
+                </div>
+
+                {/* STEP 3 */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-green-600 text-white flex items-center justify-center font-black">
+                    3
+                  </div>
+
+                  <div>
+                    <h3 className="font-black text-gray-800 text-lg">
+                      Gunakan Draft Jawaban
+                    </h3>
+
+                    <p className="text-gray-600 leading-relaxed mt-1">
+                      Selama soal terkunci, silahkan jawab menggunakan panel
+                      <span className="font-black text-green-700">
+                        {" "}
+                        Draft Jawaban
+                      </span>{" "}
+                      di samping layar.
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-4 h-4 rounded bg-green-500"></div>
+                        <span className="text-gray-700">
+                          Klik 1x = Jawaban yakin
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-4 h-4 rounded bg-yellow-400"></div>
+                        <span className="text-gray-700">
+                          Klik 2x = Jawaban ragu-ragu
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-4 h-4 rounded bg-gray-300"></div>
+                        <span className="text-gray-700">
+                          Klik 3x = Menghapus jawaban
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 4 */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black">
+                    4
+                  </div>
+
+                  <div>
+                    <h3 className="font-black text-gray-800 text-lg">
+                      Setelah 30 Menit
+                    </h3>
+
+                    <p className="text-gray-600 leading-relaxed mt-1">
+                      Setelah timer mencapai 00:00:
+                    </p>
+
+                    <ul className="mt-2 space-y-2 text-sm text-gray-700">
+                      <li>• Form akan aktif kembali</li>
+                      <li>• Salin jawaban dari Draft ke Google Form</li>
+                      <li>• Periksa kembali jawaban Anda</li>
+                      <li>• Tekan tombol Kirim / Submit</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* STEP 5 */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black">
+                    !
+                  </div>
+
+                  <div>
+                    <h3 className="font-black text-gray-800 text-lg">
+                      Peraturan Keamanan
+                    </h3>
+
+                    <ul className="mt-2 space-y-2 text-sm text-gray-700">
+                      <li>• Jangan keluar dari fullscreen</li>
+                      <li>• Jangan membuka aplikasi lain</li>
+                      <li>• Jangan menggunakan split screen</li>
+                      <li>• Jangan membuka developer tools</li>
+                      <li>• Gunakan Google Chrome</li>
+                      <li>• Pelanggaran akan tercatat otomatis</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* BUTTON */}
+              <button
+                onClick={() => {
+                  setShowPanduanModal(false);
+
+                  setTimeout(() => {
+                    setIgnoreFullscreen(false);
+                  }, 500);
+                }}
+                className="
+            mt-8
+            w-full
+            py-4
+            rounded-2xl
+            bg-gradient-to-r
+            from-blue-600
+            to-cyan-500
+            hover:from-blue-700
+            hover:to-cyan-600
+            text-white
+            font-black
+            text-lg
+            shadow-xl
+            transition
+          "
+              >
+                Saya Mengerti, Mulai Asesmen
               </button>
             </div>
           </div>

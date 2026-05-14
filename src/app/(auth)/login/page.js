@@ -88,7 +88,7 @@ export default function LoginPage() {
           </h1>
 
           <p className="text-gray-300 mt-4 text-sm md:text-base">
-            Silahkan login untuk melanjutkan ke sistem ujian online
+            Akun akan dihapus jika isi data tidak sesuai data asli
           </p>
         </div>
 
@@ -164,6 +164,44 @@ export default function LoginPage() {
                 <option className="text-black">X TPL</option>
                 <option className="text-black">XI TPL</option>
                 <option className="text-black">XII TPL</option>
+
+                <option className="text-black">X TO 1</option>
+                <option className="text-black">X TO 2</option>
+                <option className="text-black">X TO 3</option>
+                <option className="text-black">X TO 4</option>
+
+                <option className="text-black">XI TBSM 1</option>
+                <option className="text-black">XI TBSM 2</option>
+
+                <option className="text-black">XII TBSM 1</option>
+                <option className="text-black">XII TBSM 2</option>
+
+                <option className="text-black">XI TKRO </option>
+                <option className="text-black">XII TKRO </option>
+
+                <option className="text-black">XI TAB </option>
+                <option className="text-black">XII TAB </option>
+
+                <option className="text-black">X GEO</option>
+                <option className="text-black">XI GEO</option>
+                <option className="text-black">XII GEO</option>
+
+                <option className="text-black">X TDPIB</option>
+                <option className="text-black">XI TDPIB</option>
+                <option className="text-black">XII TDPIB</option>
+
+                <option className="text-black">X AV</option>
+                <option className="text-black">XI AV</option>
+                <option className="text-black">XII AV</option>
+
+                <option className="text-black">X TITL 1</option>
+                <option className="text-black">X TITL 2</option>
+
+                <option className="text-black">XI TITL 1</option>
+                <option className="text-black">XI TITL 2</option>
+
+                <option className="text-black">XII TITL 1</option>
+                <option className="text-black">XII TITL 2</option>
               </select>
             </div>
 

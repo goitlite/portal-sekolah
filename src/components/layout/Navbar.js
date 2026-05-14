@@ -2,43 +2,89 @@ import Image from "next/image";
 
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-black/20 border-b border-white/10 shadow-2xl">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+    <header
+      className="
+        fixed
+        top-0
+        left-0
+        right-0
+        z-[2000]
+
+        h-[74px]
+
+        bg-slate-950/65
+        backdrop-blur-2xl
+
+        border-b
+        border-white/10
+
+        shadow-[0_8px_30px_rgba(0,0,0,0.35)]
+      "
+    >
+      {/* SOFT LIGHT EFFECT */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 left-10 w-60 h-60 bg-cyan-500/10 blur-3xl rounded-full"></div>
+
+        <div className="absolute top-0 right-0 w-44 h-44 bg-blue-500/10 blur-3xl rounded-full"></div>
+      </div>
+
+      <div
+        className="
+          relative
+          max-w-7xl
+          mx-auto
+
+          h-full
+
+          px-4
+          md:px-6
+
+          flex
+          items-center
+          justify-between
+        "
+      >
         {/* LOGO + TITLE */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 min-w-0">
           {/* LOGO */}
-          <div className="relative">
-            <div className="absolute inset-0 bg-yellow-400/30 blur-xl rounded-full"></div>
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 bg-yellow-400/20 blur-xl rounded-full"></div>
 
             <Image
               src="/logo.png"
               alt="Logo"
-              width={56}
-              height={56}
+              width={48}
+              height={48}
               className="
                 relative
                 rounded-full
-                border-2
-                border-yellow-400/40
-                shadow-[0_0_25px_rgba(255,215,0,0.35)]
+                border
+                border-yellow-400/30
+                shadow-[0_0_20px_rgba(255,215,0,0.25)]
               "
             />
           </div>
 
           {/* TITLE */}
-          <div>
+          <div className="min-w-0">
             <h1
               className="
-                text-2xl
-                md:text-3xl
+                text-sm
+                sm:text-lg
+                md:text-2xl
+
                 font-black
+
                 bg-gradient-to-r
                 from-yellow-100
                 via-yellow-300
                 to-amber-500
+
                 bg-clip-text
                 text-transparent
-                drop-shadow-[0_0_20px_rgba(255,215,0,0.35)]
+
+                leading-tight
+                truncate
               "
             >
               Portal TJKT SMKN 1 Teluk Kuantan
@@ -46,16 +92,15 @@ export default function Navbar() {
 
             <p
               className="
-                text-xs
-                md:text-sm
+                text-[10px]
+                md:text-xs
+
                 font-semibold
                 tracking-wide
-                bg-gradient-to-r
-                from-yellow-100
-                via-yellow-300
-                to-amber-400
-                bg-clip-text
-                text-transparent
+
+                text-slate-300
+
+                truncate
               "
             >
               Sistem Digital Sekolah
@@ -68,20 +113,25 @@ export default function Navbar() {
           className="
             hidden
             md:flex
+
             items-center
             gap-2
-            bg-white/10
-            border
-            border-white/10
-            backdrop-blur-xl
+
             px-4
             py-2
+
             rounded-2xl
+
+            bg-white/5
+            border
+            border-white/10
+
+            backdrop-blur-xl
           "
         >
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
 
-          <span className="text-sm text-white font-medium">Online</span>
+          <span className="text-sm text-white font-medium">System Online</span>
         </div>
       </div>
     </header>
