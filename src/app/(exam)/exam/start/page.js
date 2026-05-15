@@ -1422,25 +1422,34 @@ export default function StartExamPage() {
   `}
       >
         {/* TOMBOL MINIMIZE / EXPAND */}
-        <div className="flex justify-end mb-1">
-          <button
-            onClick={() => setDraftMinimized(!draftMinimized)}
-            className="
-        bg-blue-700
-        hover:bg-blue-800
-        text-white
-        rounded-l-xl
-        rounded-r-md
-        shadow-lg
-        px-2
-        py-2
-        text-xs
-        font-bold
-      "
-          >
-            {draftMinimized ? "◀" : "▶"}
-          </button>
-        </div>
+        <button
+          onClick={() => setDraftMinimized(!draftMinimized)}
+          className={`
+    absolute
+    top-1/2
+    -translate-y-1/2
+    -left-9
+
+    bg-blue-700
+    hover:bg-blue-800
+    text-white
+
+    rounded-l-xl
+    rounded-r-md
+
+    shadow-lg
+
+    px-2
+    py-3
+
+    text-xs
+    font-bold
+
+    transition-all
+  `}
+        >
+          {draftMinimized ? "▶" : "◀"}
+        </button>
 
         {/* KONTAINER DRAFT */}
         {!draftMinimized && (

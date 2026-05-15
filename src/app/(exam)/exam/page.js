@@ -6,6 +6,20 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function ExamPage() {
+  async function enterFullscreen() {
+    try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+      // iPhone tidak support fullscreen normal
+      if (isIOS) return;
+
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.log("Fullscreen gagal");
+    }
+  }
   const router = useRouter();
 
   // =========================
@@ -29,6 +43,12 @@ export default function ExamPage() {
   const [examLink, setExamLink] = useState("");
 
   const [loadingToken, setLoadingToken] = useState(false);
+  const [tokenModal, setTokenModal] = useState(false);
+  const [tokenMessage, setTokenMessage] = useState("");
+
+  useEffect(() => {
+    enterFullscreen();
+  }, []);
 
   // =========================
   // LOAD SESSION
@@ -153,7 +173,12 @@ export default function ExamPage() {
   async function handleCheckToken(autoStart = false) {
     // VALIDASI
     if (!selectedKelas || !selectedMapel || !token) {
-      alert("Lengkapi data ujian");
+      setTokenMessage("Lengkapi data ujian");
+      setTokenModal(true);
+
+      setTimeout(() => {
+        enterFullscreen();
+      }, 300);
 
       return;
     }
@@ -179,9 +204,7 @@ export default function ExamPage() {
 
             // FULLSCREEN selain iPhone
             if (!isIOS) {
-              await document.documentElement
-                .requestFullscreen()
-                .catch(() => {});
+              await enterFullscreen();
             }
           } catch (err) {}
 
@@ -190,267 +213,319 @@ export default function ExamPage() {
           return;
         }
 
-        alert("Token benar");
+        setTokenMessage("Token benar");
+        setTokenModal(true);
+
+        setTimeout(() => {
+          enterFullscreen();
+        }, 300);
       } else {
         setExamLink("");
 
-        alert(result.message || "Token salah");
+        setTokenMessage(result.message || "Token salah");
+        setTokenModal(true);
+
+        setTimeout(() => {
+          enterFullscreen();
+        }, 300);
       }
     } catch (error) {
       setLoadingToken(false);
 
-      alert("Gagal terhubung ke server");
+      setTokenMessage("Gagal terhubung ke server");
+      setTokenModal(true);
+
+      setTimeout(() => {
+        enterFullscreen();
+      }, 300);
 
       console.log(error);
     }
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white relative overflow-hidden">
-      {/* BACKGROUND EFFECT */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-cyan-500/20 blur-3xl rounded-full"></div>
+    <>
+      {tokenModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/70 flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
+            <h2 className="text-2xl font-black text-blue-700 mb-4">
+              INFORMASI
+            </h2>
 
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-700/20 blur-3xl rounded-full"></div>
-      </div>
+            <p className="text-gray-700 mb-6 whitespace-pre-line">
+              {tokenMessage}
+            </p>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 md:px-6 md:py-10">
-        {/* HEADER */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div>
-              <h1 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                Portal Asesmen
-              </h1>
+            <button
+              onClick={async () => {
+                setTokenModal(false);
 
-              <p className="text-slate-300 mt-3 text-sm md:text-base">
-                Sistem ujian digital sekolah modern
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 rounded-2xl shadow-lg">
-              <p className="text-xs uppercase tracking-widest text-cyan-100">
-                Status
-              </p>
-
-              <p className="font-bold text-lg">Siap Ujian</p>
-            </div>
+                setTimeout(async () => {
+                  await enterFullscreen();
+                }, 300);
+              }}
+              className="
+    w-full
+    py-3
+    rounded-2xl
+    bg-blue-600
+    hover:bg-blue-700
+    text-white
+    font-bold
+  "
+            >
+              OK
+            </button>
           </div>
         </div>
+      )}
 
-        {/* PESERTA */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* KIRI */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* DATA SISWA */}
-            <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
-                  👨‍🎓
-                </div>
+      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white relative overflow-hidden">
+        {/* BACKGROUND EFFECT */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-cyan-500/20 blur-3xl rounded-full"></div>
 
-                <div>
-                  <h2 className="text-xl font-bold">Data Peserta</h2>
+          <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-700/20 blur-3xl rounded-full"></div>
+        </div>
 
-                  <p className="text-slate-300 text-sm">
-                    Informasi siswa aktif
-                  </p>
-                </div>
-              </div>
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 md:px-6 md:py-10">
+          {/* HEADER */}
+          <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 mb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+              <div>
+                <h1 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">
+                  Portal Asesmen
+                </h1>
 
-              <div className="space-y-4">
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                  <p className="text-slate-400 text-sm">Nama</p>
-
-                  <p className="font-bold text-lg break-words">{nama}</p>
-                </div>
-
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                  <p className="text-slate-400 text-sm">Kelas</p>
-
-                  <p className="font-bold text-lg">{kelas}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* PESAN ADMIN */}
-            {pesan && (
-              <div className="bg-red-500/15 backdrop-blur-xl border border-red-400/30 rounded-3xl p-6 shadow-2xl">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-2xl bg-red-500 flex items-center justify-center shadow-lg">
-                    ⚠️
-                  </div>
-
-                  <div>
-                    <h2 className="text-xl font-bold text-red-200">
-                      Pesan Admin
-                    </h2>
-
-                    <p className="text-red-100/80 text-sm">Informasi terbaru</p>
-                  </div>
-                </div>
-
-                <p className="text-red-100 leading-relaxed">{pesan}</p>
-              </div>
-            )}
-          </div>
-
-          {/* KANAN */}
-          <div className="lg:col-span-2">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8">
-              <div className="mb-8">
-                <h2 className="text-2xl md:text-3xl font-black mb-2">
-                  Pilih Ujian
-                </h2>
-
-                <p className="text-slate-300">
-                  Pilih jenjang, kelas, mapel, lalu masukkan token ujian
+                <p className="text-slate-300 mt-3 text-sm md:text-base">
+                  Sistem ujian digital sekolah modern
                 </p>
               </div>
 
-              <div className="grid gap-5">
-                {/* JENJANG */}
-                <div>
-                  <label className="block mb-2 text-sm text-slate-300 font-semibold">
-                    Jenjang
-                  </label>
+              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 rounded-2xl shadow-lg">
+                <p className="text-xs uppercase tracking-widest text-cyan-100">
+                  Status
+                </p>
 
-                  <select
-                    value={jenjang}
-                    onChange={(e) => {
-                      setJenjang(e.target.value);
+                <p className="font-bold text-lg">Siap Ujian</p>
+              </div>
+            </div>
+          </div>
 
-                      setSelectedKelas("");
-                      setSelectedMapel("");
-                      setToken("");
-                      setExamLink("");
-                    }}
-                    className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
-                  >
-                    <option value="">Pilih Jenjang</option>
+          {/* PESERTA */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* KIRI */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* DATA SISWA */}
+              <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
+                    👨‍🎓
+                  </div>
 
-                    {jenjangList.map((j) => (
-                      <option key={j}>{j}</option>
-                    ))}
-                  </select>
+                  <div>
+                    <h2 className="text-xl font-bold">Data Peserta</h2>
+
+                    <p className="text-slate-300 text-sm">
+                      Informasi siswa aktif
+                    </p>
+                  </div>
                 </div>
 
-                {/* KELAS */}
-                <div>
-                  <label className="block mb-2 text-sm text-slate-300 font-semibold">
-                    Kelas
-                  </label>
+                <div className="space-y-4">
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <p className="text-slate-400 text-sm">Nama</p>
 
-                  <select
-                    value={selectedKelas}
-                    onChange={(e) => {
-                      setSelectedKelas(e.target.value);
+                    <p className="font-bold text-lg break-words">{nama}</p>
+                  </div>
 
-                      setSelectedMapel("");
-                      setToken("");
-                      setExamLink("");
-                    }}
-                    className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
-                  >
-                    <option value="">Pilih Kelas</option>
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <p className="text-slate-400 text-sm">Kelas</p>
 
-                    {kelasList.map((kls) => (
-                      <option key={kls}>{kls}</option>
-                    ))}
-                  </select>
+                    <p className="font-bold text-lg">{kelas}</p>
+                  </div>
                 </div>
+              </div>
 
-                {/* MAPEL */}
-                <div>
-                  <label className="block mb-2 text-sm text-slate-300 font-semibold">
-                    Mata Pelajaran
-                  </label>
+              {/* PESAN ADMIN */}
+              {pesan && (
+                <div className="bg-red-500/15 backdrop-blur-xl border border-red-400/30 rounded-3xl p-6 shadow-2xl">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-11 h-11 rounded-2xl bg-red-500 flex items-center justify-center shadow-lg">
+                      ⚠️
+                    </div>
 
-                  <select
-                    value={selectedMapel}
-                    onChange={(e) => {
-                      setSelectedMapel(e.target.value);
+                    <div>
+                      <h2 className="text-xl font-bold text-red-200">
+                        Pesan Admin
+                      </h2>
 
-                      setToken("");
-                      setExamLink("");
-                    }}
-                    className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
-                  >
-                    <option value="">Pilih Mapel</option>
+                      <p className="text-red-100/80 text-sm">
+                        Informasi terbaru
+                      </p>
+                    </div>
+                  </div>
 
-                    {mapelList.map((mpl) => (
-                      <option key={mpl}>{mpl}</option>
-                    ))}
-                  </select>
+                  <p className="text-red-100 leading-relaxed">{pesan}</p>
                 </div>
+              )}
+            </div>
 
-                {/* TOKEN */}
-                <div>
-                  <label className="block mb-2 text-sm text-slate-300 font-semibold">
-                    Token Ujian
-                  </label>
+            {/* KANAN */}
+            <div className="lg:col-span-2">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8">
+                <div className="mb-8">
+                  <h2 className="text-2xl md:text-3xl font-black mb-2">
+                    Pilih Ujian
+                  </h2>
 
-                  <input
-                    type="text"
-                    placeholder="Masukkan Token Ujian"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-
-                        if (!loadingToken) {
-                          handleCheckToken(true);
-                        }
-                      }
-                    }}
-                    autoCapitalize="characters"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500"
-                  />
-                </div>
-
-                {/* BUTTON */}
-                <div className="grid sm:grid-cols-2 gap-4 pt-2">
-                  <button
-                    onClick={() => handleCheckToken(false)}
-                    disabled={loadingToken}
-                    className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl"
-                  >
-                    {loadingToken ? "Memeriksa Token..." : "Cek Token"}
-                  </button>
-
-                  {examLink && (
-                    <button
-                      onClick={() => {
-                        localStorage.setItem("examLink", examLink);
-
-                        document.documentElement
-                          .requestFullscreen()
-                          .catch(() => {});
-
-                        router.push("/exam/start");
-                      }}
-                      className="bg-gradient-to-r from-emerald-500 to-green-600 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl animate-pulse"
-                    >
-                      Mulai Ujian
-                    </button>
-                  )}
-                </div>
-
-                {/* INFO */}
-                <div className="bg-cyan-500/10 border border-cyan-400/20 rounded-2xl p-4 mt-2">
-                  <p className="text-cyan-100 text-sm leading-relaxed">
-                    Tekan <span className="font-bold">ENTER</span> setelah
-                    memasukkan token untuk langsung masuk ujian otomatis.
+                  <p className="text-slate-300">
+                    Pilih jenjang, kelas, mapel, lalu masukkan token ujian
                   </p>
+                </div>
+
+                <div className="grid gap-5">
+                  {/* JENJANG */}
+                  <div>
+                    <label className="block mb-2 text-sm text-slate-300 font-semibold">
+                      Jenjang
+                    </label>
+
+                    <select
+                      value={jenjang}
+                      onChange={(e) => {
+                        setJenjang(e.target.value);
+
+                        setSelectedKelas("");
+                        setSelectedMapel("");
+                        setToken("");
+                        setExamLink("");
+                      }}
+                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
+                    >
+                      <option value="">Pilih Jenjang</option>
+
+                      {jenjangList.map((j) => (
+                        <option key={j}>{j}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* KELAS */}
+                  <div>
+                    <label className="block mb-2 text-sm text-slate-300 font-semibold">
+                      Kelas
+                    </label>
+
+                    <select
+                      value={selectedKelas}
+                      onChange={(e) => {
+                        setSelectedKelas(e.target.value);
+
+                        setSelectedMapel("");
+                        setToken("");
+                        setExamLink("");
+                      }}
+                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
+                    >
+                      <option value="">Pilih Kelas</option>
+
+                      {kelasList.map((kls) => (
+                        <option key={kls}>{kls}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* MAPEL */}
+                  <div>
+                    <label className="block mb-2 text-sm text-slate-300 font-semibold">
+                      Mata Pelajaran
+                    </label>
+
+                    <select
+                      value={selectedMapel}
+                      onChange={(e) => {
+                        setSelectedMapel(e.target.value);
+
+                        setToken("");
+                        setExamLink("");
+                      }}
+                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white"
+                    >
+                      <option value="">Pilih Mapel</option>
+
+                      {mapelList.map((mpl) => (
+                        <option key={mpl}>{mpl}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* TOKEN */}
+                  <div>
+                    <label className="block mb-2 text-sm text-slate-300 font-semibold">
+                      Token Ujian
+                    </label>
+
+                    <input
+                      type="text"
+                      placeholder="Masukkan Token Ujian"
+                      value={token}
+                      onChange={(e) => setToken(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+
+                          if (!loadingToken) {
+                            handleCheckToken(true);
+                          }
+                        }
+                      }}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500"
+                    />
+                  </div>
+
+                  {/* BUTTON */}
+                  <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                    <button
+                      onClick={() => handleCheckToken(false)}
+                      disabled={loadingToken}
+                      className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl"
+                    >
+                      {loadingToken ? "Memeriksa Token..." : "Cek Token"}
+                    </button>
+
+                    {examLink && (
+                      <button
+                        onClick={async () => {
+                          localStorage.setItem("examLink", examLink);
+
+                          await enterFullscreen();
+
+                          router.push("/exam/start");
+                        }}
+                        className="bg-gradient-to-r from-emerald-500 to-green-600 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl animate-pulse"
+                      >
+                        Mulai Ujian
+                      </button>
+                    )}
+                  </div>
+
+                  {/* INFO */}
+                  <div className="bg-cyan-500/10 border border-cyan-400/20 rounded-2xl p-4 mt-2">
+                    <p className="text-cyan-100 text-sm leading-relaxed">
+                      Tekan <span className="font-bold">ENTER</span> setelah
+                      memasukkan token untuk langsung masuk ujian otomatis.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
