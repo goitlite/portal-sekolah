@@ -12,7 +12,7 @@ export default function Home() {
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-      // iPhone Safari tidak stabil fullscreen
+      // fullscreen selain iPhone
       if (!isIOS) {
         await document.documentElement.requestFullscreen().catch(() => {});
       }
@@ -20,6 +20,21 @@ export default function Home() {
       console.log("Fullscreen gagal");
     }
 
+    // =========================
+    // AUTO LOGIN SESSION
+    // =========================
+    const savedNama = localStorage.getItem("nama");
+
+    const savedKelas = localStorage.getItem("kelas");
+
+    // jika pernah login
+    if (savedNama && savedKelas) {
+      router.push("/exam");
+
+      return;
+    }
+
+    // jika belum login
     router.push("/login");
   }
 

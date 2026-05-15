@@ -36,6 +36,18 @@ export default function ExamPage() {
   useEffect(() => {
     const savedNama = localStorage.getItem("nama");
     const savedKelas = localStorage.getItem("kelas");
+    const savedExamLink = localStorage.getItem("examLink");
+
+    // =========================
+    // VALIDASI SESSION
+    // =========================
+    if (!savedNama || !savedKelas) {
+      localStorage.clear();
+
+      router.push("/");
+
+      return;
+    }
 
     // BELUM LOGIN
     if (!savedNama || !savedKelas) {

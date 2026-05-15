@@ -29,6 +29,11 @@ export default function StartExamPage() {
   const safeActionRef = useRef(false);
 
   const [browserBlocked, setBrowserBlocked] = useState(false);
+  const [penaltyOpen, setPenaltyOpen] = useState(false);
+
+  const [penaltyTime, setPenaltyTime] = useState(8 * 60);
+
+  const [penaltyDone, setPenaltyDone] = useState(false);
 
   const [showPanduanModal, setShowPanduanModal] = useState(true);
 
@@ -126,6 +131,16 @@ export default function StartExamPage() {
       const savedViolation = parseInt(
         localStorage.getItem("violations") || "0",
       );
+      const penaltyPassed = localStorage.getItem("penaltyPassed");
+
+      // =========================
+      // HUKUMAN SETELAH 4 PELANGGARAN
+      // =========================
+      if (savedViolation >= 5 && !penaltyPassed) {
+        setPenaltyOpen(true);
+
+        document.body.style.overflow = "hidden";
+      }
       setViolations(savedViolation);
 
       const savedDraft = localStorage.getItem("draftAnswers");
@@ -143,6 +158,41 @@ export default function StartExamPage() {
 
     init();
   }, []);
+
+  // =========================
+  // TIMER HUKUMAN
+  // =========================
+  useEffect(() => {
+    if (!penaltyOpen) return;
+
+    if (penaltyDone) return;
+
+    const interval = setInterval(() => {
+      setPenaltyTime((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+
+          setPenaltyDone(true);
+
+          localStorage.setItem("penaltyPassed", "true");
+
+          document.body.style.overflow = "auto";
+
+          setPenaltyOpen(false);
+
+          showModal(
+            "Waktu hukuman selesai.\n\nSilahkan lanjut mengikuti asesmen.",
+          );
+
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [penaltyOpen, penaltyDone]);
 
   function showModal(message) {
     setIgnoreFullscreen(true);
@@ -170,6 +220,10 @@ export default function StartExamPage() {
     const totalViolation = violations + 1;
     localStorage.setItem("violations", totalViolation.toString());
     setViolations(totalViolation);
+    // reset hukuman agar muncul lagi
+    if (totalViolation >= 5) {
+      localStorage.removeItem("penaltyPassed");
+    }
 
     showModal(reason + "\nTotal pelanggaran: " + totalViolation);
 
@@ -944,6 +998,51 @@ export default function StartExamPage() {
         WebkitTouchCallout: "none",
       }}
     >
+      {/* MODAL HUKUMAN */}
+      {penaltyOpen && (
+        <div className="fixed inset-0 z-[999999] bg-black flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+            {/* HEADER */}
+            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
+              <div className="text-5xl mb-3">⚠️</div>
+
+              <h1 className="text-white text-2xl font-black uppercase">
+                Hukuman Pelanggaran
+              </h1>
+
+              <p className="text-red-100 text-sm mt-2">
+                Anda terlalu banyak melakukan pelanggaran
+              </p>
+            </div>
+
+            {/* CONTENT */}
+            <div className="p-6 text-center">
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5">
+                <p className="text-gray-700 text-sm leading-relaxed">
+                  Karena jumlah pelanggaran telah melewati batas aman, Anda
+                  diwajibkan menunggu selama 8 menit sebelum dapat kembali
+                  memulai asesmen.
+                </p>
+              </div>
+
+              {/* TIMER */}
+              <div className="bg-black rounded-3xl py-6 mb-5">
+                <div className="text-red-500 text-xs font-bold tracking-[3px] mb-2">
+                  WAKTU HUKUMAN
+                </div>
+
+                <div className="text-5xl font-black text-white font-mono">
+                  {formatTime(penaltyTime)}
+                </div>
+              </div>
+
+              <div className="text-[11px] text-gray-400">
+                Tunggu hingga waktu selesai untuk melanjutkan ujian
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* MODAL INFO */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
