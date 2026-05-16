@@ -35,7 +35,9 @@ export default function StartExamPage() {
 
   const [penaltyDone, setPenaltyDone] = useState(false);
 
-  const [showPanduanModal, setShowPanduanModal] = useState(true);
+  const [showPanduanModal, setShowPanduanModal] = useState(false);
+
+  const [examStarted, setExamStarted] = useState(false);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
@@ -131,13 +133,21 @@ export default function StartExamPage() {
       const savedViolation = parseInt(
         localStorage.getItem("violations") || "0",
       );
+
       const penaltyPassed = localStorage.getItem("penaltyPassed");
+
+      // jika tidak sedang hukuman
+      if (!(savedViolation >= 5 && !penaltyPassed)) {
+        setShowPanduanModal(true);
+      }
 
       // =========================
       // HUKUMAN SETELAH 4 PELANGGARAN
       // =========================
       if (savedViolation >= 5 && !penaltyPassed) {
         setPenaltyOpen(true);
+
+        setShowPanduanModal(false);
 
         document.body.style.overflow = "hidden";
       }
@@ -180,9 +190,7 @@ export default function StartExamPage() {
 
           setPenaltyOpen(false);
 
-          showModal(
-            "Waktu hukuman selesai.\n\nSilahkan lanjut mengikuti asesmen.",
-          );
+          showModal("Waktu hukuman selesai.\n\nKlik OK untuk melanjutkan.");
 
           return 0;
         }
@@ -431,24 +439,31 @@ export default function StartExamPage() {
   // COUNTDOWN TIMER
   // =========================
   useEffect(() => {
+    if (!examStarted) return;
+
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+
           showModal("⏰ Waktu ujian habis! Tombol Submit sekarang tersedia.");
+
           return 0;
         }
+
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [examStarted]);
 
   // =========================
   // AUTO LOCK SOAL SETELAH 2 MENIT
   // =========================
   useEffect(() => {
+    if (!examStarted) return;
+
     const lockTimer = setTimeout(
       () => {
         setSoalLocked(true);
@@ -464,10 +479,10 @@ export default function StartExamPage() {
         );
       },
       1 * 60 * 1000,
-    ); // 1 menit
+    );
 
     return () => clearTimeout(lockTimer);
-  }, []);
+  }, [examStarted]);
 
   // =========================
   // KEYBOARD HANDLER - EFEKTIF & SEDERHANA
@@ -1054,6 +1069,12 @@ export default function StartExamPage() {
             <button
               onClick={() => {
                 setModalOpen(false);
+
+                // setelah hukuman selesai
+                if (!showPanduanModal && !examStarted) {
+                  setShowPanduanModal(true);
+                }
+
                 setTimeout(() => {
                   setIgnoreFullscreen(false);
                 }, 500);
@@ -1910,6 +1931,9 @@ export default function StartExamPage() {
               <button
                 onClick={() => {
                   setShowPanduanModal(false);
+
+                  // mulai sistem ujian
+                  setExamStarted(true);
 
                   setTimeout(() => {
                     setIgnoreFullscreen(false);
