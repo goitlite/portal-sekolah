@@ -1452,7 +1452,7 @@ export default function StartExamPage() {
             className="w-full border-none"
             allowFullScreen
             style={{
-              height: "7000px",
+              height: "30000px",
               pointerEvents: soalLocked && timeLeft > 0 ? "none" : "auto",
             }}
           />
