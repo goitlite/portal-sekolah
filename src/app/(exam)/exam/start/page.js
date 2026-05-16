@@ -308,8 +308,16 @@ export default function StartExamPage() {
       return;
     }
 
-    localStorage.removeItem("examLink");
+    // 🔥 RESET PELANGGARAN SAAT KELUAR
+    localStorage.removeItem("violations");
+    localStorage.removeItem("penaltyPassed");
     localStorage.removeItem("draftAnswers");
+    localStorage.removeItem("draftMode");
+
+    setViolations(0);
+
+    localStorage.removeItem("examLink");
+
     router.push("/exam");
   }
 
@@ -1257,46 +1265,53 @@ export default function StartExamPage() {
               {/* KELUAR */}
               <button
                 onClick={handleKeluar}
-                className={`
-            w-[88px]
-            h-9
-
-            rounded-xl
-
-            text-[10px]
-            md:text-[11px]
-
-            font-black
-
-            transition-all
-            duration-200
-
-            active:scale-95
-
-            ${
-              timeLeft > 0
-                ? `
-                  bg-gray-400
-                  text-gray-200
-                  cursor-not-allowed
-                `
-                : `
-                  bg-gradient-to-r
-                  from-red-600
-                  to-rose-500
-
-                  hover:from-red-700
-                  hover:to-rose-600
-
-                  text-white
-
-                  shadow-lg
-                `
-            }
-          `}
                 disabled={timeLeft > 0}
+                className={`
+    relative
+    w-[120px] md:w-[160px]
+    h-10 md:h-11
+
+    rounded-xl
+
+    text-[10px] md:text-[12px]
+    font-black
+
+    transition-all duration-200
+    active:scale-95
+
+    flex items-center justify-center
+    text-center leading-tight
+
+    shadow-lg
+
+    ${
+      timeLeft > 0
+        ? `
+          bg-gray-400
+          text-gray-200
+          cursor-not-allowed
+        `
+        : `
+          bg-gradient-to-r from-red-600 via-red-500 to-rose-500
+          text-white
+          shadow-red-500/40
+          hover:from-red-700 hover:to-rose-600
+          animate-pulse
+        `
+    }
+  `}
               >
-                Keluar
+                <span className="flex flex-col leading-none">
+                  <span>Keluar</span>
+                  <span className="text-[8px] md:text-[10px] opacity-90">
+                    + Hapus Pelanggaran
+                  </span>
+                </span>
+
+                {/* GLOW EFFECT */}
+                {timeLeft <= 0 && (
+                  <span className="absolute inset-0 rounded-xl bg-red-400 opacity-20 blur-md animate-ping"></span>
+                )}
               </button>
 
               {/* PENGADUAN */}
@@ -1306,34 +1321,43 @@ export default function StartExamPage() {
                   setIsModalPengaduanOpen(true);
                 }}
                 className="
-            w-[88px]
-            h-9
+    relative
 
-            rounded-xl
+    w-[120px] md:w-[160px]
+    h-10 md:h-11
 
-            bg-gradient-to-r
-            from-orange-500
-            to-amber-500
+    rounded-xl
 
-            hover:from-orange-600
-            hover:to-amber-600
+    text-[10px] md:text-[12px]
+    font-black
 
-            active:scale-95
+    flex items-center justify-center
 
-            text-white
+    text-center leading-tight
 
-            text-[10px]
-            md:text-[11px]
+    text-white
 
-            font-black
+    bg-gradient-to-r
+    from-orange-500 via-amber-400 to-orange-500
 
-            shadow-lg
+    hover:from-orange-600 hover:to-amber-500
 
-            transition-all
-            duration-200
-          "
+    active:scale-95
+
+    shadow-lg shadow-orange-500/30
+
+    transition-all duration-200
+  "
               >
-                Pengaduan
+                <span className="flex flex-col leading-none">
+                  <span>Pengaduan</span>
+                  <span className="text-[8px] md:text-[10px] opacity-90">
+                    Laporkan Masalah
+                  </span>
+                </span>
+
+                {/* glow halus */}
+                <span className="absolute inset-0 rounded-xl bg-white/10 opacity-0 hover:opacity-100 transition"></span>
               </button>
             </div>
           </div>
