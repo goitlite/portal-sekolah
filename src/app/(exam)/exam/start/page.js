@@ -1006,7 +1006,7 @@ export default function StartExamPage() {
 
   return (
     <main
-      className="w-full h-[100dvh] flex flex-col bg-gray-100 overflow-hidden"
+      className="w-full h-screen bg-gray-100 relative"
       style={{
         userSelect: "none",
         WebkitUserSelect: "none",
@@ -1089,8 +1089,11 @@ export default function StartExamPage() {
 
       <header
         className="
-    sticky
+    fixed
     top-0
+    left-0
+    right-0
+    h-[110px]
     z-[1000]
     shrink-0
 
@@ -1404,9 +1407,18 @@ export default function StartExamPage() {
       {/* IFRAME CONTAINER - SCROLL BERFUNGSI NORMAL */}
       <div
         ref={iframeContainerRef}
-        className="flex-1 relative overflow-y-scroll overflow-x-hidden"
+        className="
+    absolute
+    top-[110px]
+    bottom-[80px]
+    left-0
+    right-0
+    overflow-y-auto
+    overflow-x-hidden
+  "
         style={{
           WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
         }}
       >
         {examLink && (
@@ -1416,7 +1428,7 @@ export default function StartExamPage() {
             className="w-full border-none"
             allowFullScreen
             style={{
-              height: "5000px",
+              height: "7000px",
               pointerEvents: soalLocked && timeLeft > 0 ? "none" : "auto",
             }}
           />
@@ -1580,7 +1592,7 @@ export default function StartExamPage() {
 
       {/* TIMER LOCK */}
       {isTimeRunningOut && (
-        <div className="relative h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="relative shrink-0">
               <div className="absolute inset-0 animate-ping bg-red-500 rounded-full opacity-25"></div>
@@ -1625,7 +1637,7 @@ export default function StartExamPage() {
 
       {/* SUCCESS MESSAGE */}
       {!isTimeRunningOut && (
-        <div className="relative h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[999] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[999] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="bg-green-400 p-2 rounded-lg shadow-lg">
               <svg
