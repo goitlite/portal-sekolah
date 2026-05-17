@@ -42,6 +42,11 @@ export default function StartExamPage() {
   // TRAP LAYER STATE
   const [trapLayerVisible, setTrapLayerVisible] = useState(false);
 
+  //ref viewport
+  const viewportChangeRef = useRef(0);
+
+  const lastViewportHeightRef = useRef(window.innerHeight);
+
   // TRAP LAYER REFS - SINGLETON ONLY
   const trapVisibleRef = useRef(false);
   const trapRunningRef = useRef(false);
@@ -957,7 +962,7 @@ export default function StartExamPage() {
       // trap layer asli
       const isTrapLayer = el.getAttribute("data-trap-layer") === "true";
 
-      // UI internal aplikasi
+      // UI internal
       const isInternalUI = el.closest("[data-app-ui='true']");
 
       // aman
@@ -968,8 +973,27 @@ export default function StartExamPage() {
       invalidPoints++;
     });
 
-    // floating app harus menutupi 4 titik
-    return invalidPoints < 4;
+    // viewport berubah baru-baru ini
+    const viewportRecentlyChanged =
+      Date.now() - viewportChangeRef.current < 2500;
+
+    // halaman tidak fokus
+    const pageNotFocused = document.hidden || !document.hasFocus();
+
+    // VALIDASI FINAL
+    if (invalidPoints >= 3) {
+      return false;
+    }
+
+    if (viewportRecentlyChanged && invalidPoints >= 2) {
+      return false;
+    }
+
+    if (pageNotFocused) {
+      return false;
+    }
+
+    return true;
   }
 
   function handleTrapLayerInteraction(e) {
@@ -996,6 +1020,44 @@ export default function StartExamPage() {
       }
     }, 5000);
   }
+
+  // =========================
+  // VIEWPORT OVERLAY DETECTOR
+  // =========================
+  useEffect(() => {
+    if (!examStarted) return;
+
+    function handleViewportChange() {
+      const currentHeight = window.visualViewport?.height || window.innerHeight;
+
+      const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
+
+      // perubahan besar
+      if (diff > 140) {
+        viewportChangeRef.current = Date.now();
+      }
+
+      lastViewportHeightRef.current = currentHeight;
+    }
+
+    window.addEventListener("resize", handleViewportChange, true);
+
+    window.visualViewport?.addEventListener(
+      "resize",
+      handleViewportChange,
+      true,
+    );
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange, true);
+
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handleViewportChange,
+        true,
+      );
+    };
+  }, [examStarted]);
 
   const isTimeRunningOut = timeLeft > 0;
 
