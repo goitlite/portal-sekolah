@@ -1021,17 +1021,14 @@ export default function StartExamPage() {
     function showTrapLayer() {
       if (shouldSkipTrap()) return;
 
-      const now = Date.now();
-
-      const diff = now - lastInteractionRef.current;
-
-      if (diff < 3500) return;
+      // jangan dobel
+      if (trapVisibleRef.current) return;
 
       trapVisibleRef.current = true;
 
       setTrapLayerVisible(true);
 
-      // mulai validasi overlay
+      // mulai validasi floating
       startOverlayValidation();
     }
 
@@ -1065,12 +1062,12 @@ export default function StartExamPage() {
     function resetUserActivity() {
       lastInteractionRef.current = Date.now();
 
-      // HILANGKAN OVERLAY
+      // sembunyikan overlay
       if (trapVisibleRef.current) {
         hideTrapLayer();
       }
 
-      // clear timer lama
+      // reset timer
       if (trapIdleTimeoutRef.current) {
         clearTimeout(trapIdleTimeoutRef.current);
       }
@@ -1125,6 +1122,10 @@ export default function StartExamPage() {
 
     // start timer pertama
     // start timer pertama
+    // tampil awal saat ujian mulai
+    setTimeout(() => {
+      showTrapLayer();
+    }, 1200);
     resetUserActivity();
 
     return () => {
