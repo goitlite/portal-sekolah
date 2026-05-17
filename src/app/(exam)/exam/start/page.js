@@ -45,7 +45,7 @@ export default function StartExamPage() {
   //ref viewport
   const viewportChangeRef = useRef(0);
 
-  const lastViewportHeightRef = useRef(window.innerHeight);
+  const lastViewportHeightRef = useRef(0);
 
   // TRAP LAYER REFS - SINGLETON ONLY
   const trapVisibleRef = useRef(false);
@@ -1026,6 +1026,9 @@ export default function StartExamPage() {
   // =========================
   useEffect(() => {
     if (!examStarted) return;
+    // init setelah client ready
+    lastViewportHeightRef.current =
+      window.visualViewport?.height || window.innerHeight;
 
     function handleViewportChange() {
       const currentHeight = window.visualViewport?.height || window.innerHeight;
