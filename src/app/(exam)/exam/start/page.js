@@ -57,10 +57,7 @@ export default function StartExamPage() {
 
   // FLOATING APP DETECTION REFS
   const floatingAppCounterRef = useRef(0);
-  const lastScreenSizeRef = useRef({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const lastScreenSizeRef = useRef({ width: 0, height: 0 });
   const notificationPanelDetectedRef = useRef(0);
   const viewportHeightHistoryRef = useRef([]);
 
@@ -80,6 +77,14 @@ export default function StartExamPage() {
     isConfirmHapus: false,
     isPanduan: false,
   });
+
+  // PASTE DI SINI:
+  useEffect(() => {
+    lastScreenSizeRef.current = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  }, []);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
