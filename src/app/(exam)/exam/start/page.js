@@ -849,7 +849,7 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
-  // DETEKSI TAB FREEZE
+  // DETEKSI TAB FREEZE2
   // SUPER STABIL
   // =========================
   useEffect(() => {
