@@ -49,6 +49,7 @@ export default function StartExamPage() {
 
   // TRAP LAYER REFS - SINGLETON ONLY
   const trapVisibleRef = useRef(false);
+  const firstTrapShownRef = useRef(false);
   const trapRunningRef = useRef(false);
   const inactivityTimerRef = useRef(null);
 
@@ -921,6 +922,10 @@ export default function StartExamPage() {
   // =========================
   function validateTrapOverlay() {
     if (!trapVisibleRef.current) return true;
+    // modal internal sedang terbuka
+    if (isInternalModalOpen()) {
+      return true;
+    }
 
     const points = [
       {
@@ -1062,6 +1067,10 @@ export default function StartExamPage() {
     };
   }, [examStarted]);
 
+  function isInternalModalOpen() {
+    return modalOpen || isModalPengaduanOpen || isConfirmHapusOpen;
+  }
+
   const isTimeRunningOut = timeLeft > 0;
 
   // =========================
@@ -1090,17 +1099,22 @@ export default function StartExamPage() {
     // ======================
     // TAMPILKAN LAYER
     // ======================
-    function showTrapLayer() {
+    function showTrapLayer(force = false) {
       if (shouldSkipTrap()) return;
 
-      // jangan dobel
+      // jangan tampil dobel
       if (trapVisibleRef.current) return;
+
+      // trap pertama wajib force
+      if (!force && !firstTrapShownRef.current) {
+        return;
+      }
 
       trapVisibleRef.current = true;
 
       setTrapLayerVisible(true);
 
-      // mulai validasi floating
+      // mulai validator
       startOverlayValidation();
     }
 
@@ -1196,7 +1210,9 @@ export default function StartExamPage() {
     // start timer pertama
     // tampil awal saat ujian mulai
     setTimeout(() => {
-      showTrapLayer();
+      firstTrapShownRef.current = true;
+
+      showTrapLayer(true);
     }, 1200);
     resetUserActivity();
 
