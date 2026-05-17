@@ -922,7 +922,8 @@ export default function StartExamPage() {
   // =========================
   function validateTrapOverlay() {
     if (!trapVisibleRef.current) return true;
-    // modal internal sedang terbuka
+
+    // modal internal aman
     if (isInternalModalOpen()) {
       return true;
     }
@@ -939,11 +940,6 @@ export default function StartExamPage() {
       },
 
       {
-        x: window.innerWidth / 2,
-        y: window.innerHeight * 0.8,
-      },
-
-      {
         x: window.innerWidth * 0.2,
         y: window.innerHeight / 2,
       },
@@ -951,6 +947,11 @@ export default function StartExamPage() {
       {
         x: window.innerWidth * 0.8,
         y: window.innerHeight / 2,
+      },
+
+      {
+        x: window.innerWidth / 2,
+        y: window.innerHeight * 0.8,
       },
     ];
 
@@ -964,41 +965,16 @@ export default function StartExamPage() {
         return;
       }
 
-      // trap layer asli
-      const isTrapLayer = el.getAttribute("data-trap-layer") === "true";
+      // harus validator point asli
+      const isValidatorPoint = el.getAttribute("data-trap-point") === "true";
 
-      // UI internal
-      const isInternalUI = el.closest("[data-app-ui='true']");
-
-      // aman
-      if (isTrapLayer || isInternalUI) {
-        return;
+      if (!isValidatorPoint) {
+        invalidPoints++;
       }
-
-      invalidPoints++;
     });
 
-    // viewport berubah baru-baru ini
-    const viewportRecentlyChanged =
-      Date.now() - viewportChangeRef.current < 2500;
-
-    // halaman tidak fokus
-    const pageNotFocused = document.hidden || !document.hasFocus();
-
-    // VALIDASI FINAL
-    if (invalidPoints >= 3) {
-      return false;
-    }
-
-    if (viewportRecentlyChanged && invalidPoints >= 2) {
-      return false;
-    }
-
-    if (pageNotFocused) {
-      return false;
-    }
-
-    return true;
+    // minimal 4 titik tertutup
+    return invalidPoints < 4;
   }
 
   function handleTrapLayerInteraction(e) {
@@ -2399,31 +2375,84 @@ export default function StartExamPage() {
         </div>
       )}
 
-      {/* TRAP LAYER - VISUAL WARNING */}
+      {/* =========================
+     VALIDATOR LAYER
+========================= */}
       {trapLayerVisible && (
         <div
-          data-trap-layer="true"
-          onClick={handleTrapLayerInteraction}
-          onTouchStart={handleTrapLayerInteraction}
-          onPointerDown={handleTrapLayerInteraction}
-          // Mengubah background menjadi gelap (opacity 60%) agar terlihat
-          className="fixed inset-0 z-[999999] bg-black/60 backdrop-blur-sm pointer-events-auto flex items-center justify-center animate-pulse"
-          style={{
-            userSelect: "none",
-            WebkitUserSelect: "none",
-            WebkitTouchCallout: "none",
-          }}
+          data-trap-validator="true"
+          className="
+      fixed
+      inset-0
+      z-[999999]
+      pointer-events-none
+    "
         >
-          {/* KOTAK PESAN PERINGATAN */}
-          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl border-4 border-blue-500 text-center max-w-sm mx-4 transform transition-all">
-            <div className="text-4xl md:text-5xl mb-4 animate-bounce">👆</div>
-            <h2 className="text-xl md:text-2xl font-black text-gray-800 uppercase tracking-wide">
-              Fokus Asesmen
-            </h2>
-            <p className="text-sm md:text-base text-gray-600 mt-2 font-medium">
-              Ketuk di mana saja untuk melanjutkan ujian.
-            </p>
-          </div>
+          {/* CENTER */}
+          <div
+            data-trap-point="true"
+            className="
+        absolute
+        left-1/2
+        top-1/2
+        w-2
+        h-2
+        -translate-x-1/2
+        -translate-y-1/2
+      "
+          />
+
+          {/* TOP */}
+          <div
+            data-trap-point="true"
+            className="
+        absolute
+        left-1/2
+        top-[20%]
+        w-2
+        h-2
+        -translate-x-1/2
+      "
+          />
+
+          {/* BOTTOM */}
+          <div
+            data-trap-point="true"
+            className="
+        absolute
+        left-1/2
+        top-[80%]
+        w-2
+        h-2
+        -translate-x-1/2
+      "
+          />
+
+          {/* LEFT */}
+          <div
+            data-trap-point="true"
+            className="
+        absolute
+        left-[20%]
+        top-1/2
+        w-2
+        h-2
+        -translate-y-1/2
+      "
+          />
+
+          {/* RIGHT */}
+          <div
+            data-trap-point="true"
+            className="
+        absolute
+        left-[80%]
+        top-1/2
+        w-2
+        h-2
+        -translate-y-1/2
+      "
+          />
         </div>
       )}
     </main>
