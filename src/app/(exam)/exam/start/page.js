@@ -954,15 +954,22 @@ export default function StartExamPage() {
         return;
       }
 
+      // trap layer asli
       const isTrapLayer = el.getAttribute("data-trap-layer") === "true";
 
-      if (!isTrapLayer) {
-        invalidPoints++;
+      // UI internal aplikasi
+      const isInternalUI = el.closest("[data-app-ui='true']");
+
+      // aman
+      if (isTrapLayer || isInternalUI) {
+        return;
       }
+
+      invalidPoints++;
     });
 
-    // minimal 3 titik gagal
-    return invalidPoints < 3;
+    // floating app harus menutupi 4 titik
+    return invalidPoints < 4;
   }
 
   function handleTrapLayerInteraction(e) {
@@ -1312,7 +1319,10 @@ export default function StartExamPage() {
     >
       {/* MODAL HUKUMAN */}
       {penaltyOpen && (
-        <div className="fixed inset-0 z-[999999] bg-black flex items-center justify-center p-6">
+        <div
+          data-app-ui="true"
+          className="fixed inset-0 z-[999999] bg-black flex items-center justify-center p-6"
+        >
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
             {/* HEADER */}
             <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
@@ -1357,7 +1367,10 @@ export default function StartExamPage() {
       )}
       {/* MODAL INFO */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
+        <div
+          data-app-ui="true"
+          className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5"
+        >
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-blue-700 mb-4">Informasi</h2>
             <p className="text-gray-700 whitespace-pre-line mb-6">
@@ -1385,6 +1398,7 @@ export default function StartExamPage() {
       )}
 
       <header
+        data-app-ui="true"
         className="
     fixed
     top-0
@@ -1752,6 +1766,7 @@ export default function StartExamPage() {
 
       {/* FLOATING DRAFT */}
       <div
+        data-app-ui="true"
         className={`
     fixed
     top-1/2
@@ -1905,7 +1920,10 @@ export default function StartExamPage() {
 
       {/* TIMER LOCK */}
       {isTimeRunningOut && (
-        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div
+          data-app-ui="true"
+          className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]"
+        >
           <div className="flex items-center gap-3 md:gap-4">
             <div className="relative shrink-0">
               <div className="absolute inset-0 animate-ping bg-red-500 rounded-full opacity-25"></div>
@@ -1950,7 +1968,10 @@ export default function StartExamPage() {
 
       {/* SUCCESS MESSAGE */}
       {!isTimeRunningOut && (
-        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[999] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div
+          data-app-ui="true"
+          className="fixed bottom-0 left-0 right-0 h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[999] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]"
+        >
           <div className="flex items-center gap-3 md:gap-4">
             <div className="bg-green-400 p-2 rounded-lg shadow-lg">
               <svg
@@ -1984,7 +2005,10 @@ export default function StartExamPage() {
         </div>
       )}
       {isModalPengaduanOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+        <div
+          data-app-ui="true"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+        >
           <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
             <div className="bg-orange-500 p-4 text-white text-center">
               <h3 className="font-bold text-lg">⚠️ FORM PENGADUAN</h3>
@@ -2023,7 +2047,10 @@ export default function StartExamPage() {
         </div>
       )}
       {isConfirmHapusOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div
+          data-app-ui="true"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
           <div className="bg-white w-full max-w-xs rounded-2xl p-6 text-center shadow-2xl border-t-4 border-red-500">
             <h3 className="text-gray-800 font-bold mb-2">
               Hapus Semua Jawaban?
@@ -2052,7 +2079,10 @@ export default function StartExamPage() {
 
       {/* MODAL PANDUAN ASESMEN */}
       {showPanduanModal && (
-        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+          data-app-ui="true"
+          className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+        >
           <div
             className="
         w-full
