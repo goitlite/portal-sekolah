@@ -911,6 +911,60 @@ export default function StartExamPage() {
     };
   }, []);
 
+  // =========================
+  // VALIDASI OVERLAY 5 TITIK
+  // =========================
+  function validateTrapOverlay() {
+    if (!trapVisibleRef.current) return true;
+
+    const points = [
+      {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      },
+
+      {
+        x: window.innerWidth / 2,
+        y: window.innerHeight * 0.2,
+      },
+
+      {
+        x: window.innerWidth / 2,
+        y: window.innerHeight * 0.8,
+      },
+
+      {
+        x: window.innerWidth * 0.2,
+        y: window.innerHeight / 2,
+      },
+
+      {
+        x: window.innerWidth * 0.8,
+        y: window.innerHeight / 2,
+      },
+    ];
+
+    let invalidPoints = 0;
+
+    points.forEach((point) => {
+      const el = document.elementFromPoint(point.x, point.y);
+
+      if (!el) {
+        invalidPoints++;
+        return;
+      }
+
+      const isTrapLayer = el.getAttribute("data-trap-layer") === "true";
+
+      if (!isTrapLayer) {
+        invalidPoints++;
+      }
+    });
+
+    // minimal 3 titik gagal
+    return invalidPoints < 3;
+  }
+
   function handleTrapLayerInteraction(e) {
     e.preventDefault();
 
@@ -952,6 +1006,13 @@ export default function StartExamPage() {
       trapVisibleRef.current = false;
 
       setTrapLayerVisible(false);
+
+      // stop validator
+      if (trapHideTimeoutRef.current) {
+        clearInterval(trapHideTimeoutRef.current);
+
+        trapHideTimeoutRef.current = null;
+      }
     }
 
     // ======================
@@ -960,17 +1021,42 @@ export default function StartExamPage() {
     function showTrapLayer() {
       if (shouldSkipTrap()) return;
 
-      // jangan munculkan saat user sedang scroll
       const now = Date.now();
 
       const diff = now - lastInteractionRef.current;
 
-      // masih aktif interaksi
       if (diff < 3500) return;
 
       trapVisibleRef.current = true;
 
       setTrapLayerVisible(true);
+
+      // mulai validasi overlay
+      startOverlayValidation();
+    }
+
+    // ======================
+    // VALIDASI FLOATING APP
+    // ======================
+    function startOverlayValidation() {
+      if (trapHideTimeoutRef.current) {
+        clearInterval(trapHideTimeoutRef.current);
+      }
+
+      trapHideTimeoutRef.current = setInterval(() => {
+        // hanya cek saat overlay tampil
+        if (!trapVisibleRef.current) return;
+
+        // skip kondisi aman
+        if (shouldSkipTrap()) return;
+
+        const valid = validateTrapOverlay();
+
+        // gagal validasi
+        if (!valid) {
+          forceLogout("Floating window / overlay app terdeteksi");
+        }
+      }, 1200);
     }
 
     // ======================
@@ -1038,15 +1124,22 @@ export default function StartExamPage() {
     }
 
     // start timer pertama
+    // start timer pertama
     resetUserActivity();
 
     return () => {
+      // clear idle timeout
       if (trapIdleTimeoutRef.current) {
         clearTimeout(trapIdleTimeoutRef.current);
+
+        trapIdleTimeoutRef.current = null;
       }
 
+      // clear validator interval
       if (trapHideTimeoutRef.current) {
-        clearTimeout(trapHideTimeoutRef.current);
+        clearInterval(trapHideTimeoutRef.current);
+
+        trapHideTimeoutRef.current = null;
       }
 
       events.forEach((event) => {
