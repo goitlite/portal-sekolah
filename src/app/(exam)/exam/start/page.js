@@ -39,6 +39,21 @@ export default function StartExamPage() {
 
   const [examStarted, setExamStarted] = useState(false);
 
+  // TRAP LAYER STATE
+  const [trapLayerVisible, setTrapLayerVisible] = useState(false);
+
+  // TRAP LAYER REFS - SINGLETON ONLY
+  const trapVisibleRef = useRef(false);
+  const trapRunningRef = useRef(false);
+  const inactivityTimerRef = useRef(null);
+
+  const overlayTimeoutRef = useRef(null);
+  const trapSuspicionRef = useRef(0);
+  const lastInteractionRef = useRef(Date.now());
+
+  const trapIdleTimeoutRef = useRef(null);
+  const trapHideTimeoutRef = useRef(null);
+
   function isChromeBrowser() {
     const ua = navigator.userAgent;
 
@@ -632,7 +647,6 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
-  // Ganti section ANTI SPLIT SCREEN dengan ini:
 
   // =========================
   // ANTI SPLIT SCREEN / FLOATING
@@ -764,7 +778,7 @@ export default function StartExamPage() {
 
     // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus); // ← TAMBAH INI
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleOrientation);
@@ -778,7 +792,7 @@ export default function StartExamPage() {
       clearTimeout(resizeTimeoutRef.current);
 
       window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus); // ← TAMBAH INI
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientation);
@@ -829,7 +843,6 @@ export default function StartExamPage() {
     };
   }, []);
 
-  // =========================
   // =========================
   // DETEKSI TAB FREEZE
   // SUPER STABIL
@@ -898,7 +911,160 @@ export default function StartExamPage() {
     };
   }, []);
 
+  function handleTrapLayerInteraction(e) {
+    e.preventDefault();
+
+    e.stopPropagation();
+
+    lastInteractionRef.current = Date.now();
+
+    trapVisibleRef.current = false;
+
+    setTrapLayerVisible(false);
+
+    // reset timer idle
+    if (trapIdleTimeoutRef.current) {
+      clearTimeout(trapIdleTimeoutRef.current);
+    }
+
+    trapIdleTimeoutRef.current = setTimeout(() => {
+      if (!shouldSkipTrap()) {
+        trapVisibleRef.current = true;
+
+        setTrapLayerVisible(true);
+      }
+    }, 5000);
+  }
+
   const isTimeRunningOut = timeLeft > 0;
+
+  // =========================
+  // TRAP LAYER SYSTEM
+  // STABIL MOBILE + IFRAME
+  // =========================
+  useEffect(() => {
+    if (!examStarted) return;
+
+    // ======================
+    // SEMBUNYIKAN LAYER
+    // ======================
+    function hideTrapLayer() {
+      trapVisibleRef.current = false;
+
+      setTrapLayerVisible(false);
+    }
+
+    // ======================
+    // TAMPILKAN LAYER
+    // ======================
+    function showTrapLayer() {
+      if (shouldSkipTrap()) return;
+
+      // jangan munculkan saat user sedang scroll
+      const now = Date.now();
+
+      const diff = now - lastInteractionRef.current;
+
+      // masih aktif interaksi
+      if (diff < 3500) return;
+
+      trapVisibleRef.current = true;
+
+      setTrapLayerVisible(true);
+    }
+
+    // ======================
+    // RESET AKTIVITAS USER
+    // ======================
+    function resetUserActivity() {
+      lastInteractionRef.current = Date.now();
+
+      // HILANGKAN OVERLAY
+      if (trapVisibleRef.current) {
+        hideTrapLayer();
+      }
+
+      // clear timer lama
+      if (trapIdleTimeoutRef.current) {
+        clearTimeout(trapIdleTimeoutRef.current);
+      }
+
+      // munculkan lagi setelah idle
+      trapIdleTimeoutRef.current = setTimeout(() => {
+        showTrapLayer();
+      }, 5000);
+    }
+
+    // ======================
+    // MUNCUL AWAL
+    // ======================
+    setTimeout(() => {
+      if (!shouldSkipTrap()) {
+        trapVisibleRef.current = true;
+
+        setTrapLayerVisible(true);
+      }
+    }, 1200);
+
+    // ======================
+    // DETEKSI GLOBAL
+    // ======================
+    const events = [
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "pointerdown",
+      "pointermove",
+      "mousemove",
+      "mousedown",
+      "wheel",
+      "scroll",
+      "click",
+    ];
+
+    events.forEach((event) => {
+      window.addEventListener(event, resetUserActivity, true);
+
+      document.addEventListener(event, resetUserActivity, true);
+    });
+
+    // iframe container
+    const iframeContainer = iframeContainerRef.current;
+
+    if (iframeContainer) {
+      events.forEach((event) => {
+        iframeContainer.addEventListener(event, resetUserActivity, true);
+      });
+    }
+
+    // start timer pertama
+    resetUserActivity();
+
+    return () => {
+      if (trapIdleTimeoutRef.current) {
+        clearTimeout(trapIdleTimeoutRef.current);
+      }
+
+      if (trapHideTimeoutRef.current) {
+        clearTimeout(trapHideTimeoutRef.current);
+      }
+
+      events.forEach((event) => {
+        window.removeEventListener(event, resetUserActivity, true);
+
+        document.removeEventListener(event, resetUserActivity, true);
+      });
+
+      if (iframeContainer) {
+        events.forEach((event) => {
+          iframeContainer.removeEventListener(event, resetUserActivity, true);
+        });
+      }
+
+      hideTrapLayer();
+    };
+  }, [examStarted]);
+
   // =========================
   // TOUCH HEARTBEAT DETECTION
   // =========================
@@ -947,6 +1113,35 @@ export default function StartExamPage() {
       window.removeEventListener("click", updateTouch, true);
     };
   }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
+
+  // =========================
+  // TRAP LAYER - UTILITY: CHECK SKIP CONDITIONS
+  // =========================
+  function shouldSkipTrap() {
+    // Safety checks
+    if (!examStarted) return true;
+    if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) return true;
+    if (penaltyOpen || ignoreFullscreen || safeActionRef.current) return true;
+    if (logoutRef.current) return true;
+
+    // Check keyboard visible
+    if (window.visualViewport) {
+      const viewportHeight = window.visualViewport.height;
+      const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+      if (keyboardOpen) return true;
+    }
+
+    // Check input/textarea focused
+    const activeEl = document.activeElement;
+    if (
+      activeEl &&
+      (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT")
+    ) {
+      return true;
+    }
+
+    return false;
+  }
 
   // =========================
   // BLOCK NON CHROME
@@ -1126,7 +1321,7 @@ export default function StartExamPage() {
 
         <div className="relative px-3 md:px-5 py-2">
           {/* SOFT LIGHT */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 overflow-hidden pointer-events-auto">
             <div
               className="
           absolute
@@ -1995,6 +2190,34 @@ export default function StartExamPage() {
                 Saya Mengerti, Mulai Asesmen
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TRAP LAYER - VISUAL WARNING */}
+      {trapLayerVisible && (
+        <div
+          data-trap-layer="true"
+          onClick={handleTrapLayerInteraction}
+          onTouchStart={handleTrapLayerInteraction}
+          onPointerDown={handleTrapLayerInteraction}
+          // Mengubah background menjadi gelap (opacity 60%) agar terlihat
+          className="fixed inset-0 z-[999999] bg-black/60 backdrop-blur-sm pointer-events-auto flex items-center justify-center animate-pulse"
+          style={{
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
+          }}
+        >
+          {/* KOTAK PESAN PERINGATAN */}
+          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl border-4 border-blue-500 text-center max-w-sm mx-4 transform transition-all">
+            <div className="text-4xl md:text-5xl mb-4 animate-bounce">👆</div>
+            <h2 className="text-xl md:text-2xl font-black text-gray-800 uppercase tracking-wide">
+              Fokus Asesmen
+            </h2>
+            <p className="text-sm md:text-base text-gray-600 mt-2 font-medium">
+              Ketuk di mana saja untuk melanjutkan ujian.
+            </p>
           </div>
         </div>
       )}
