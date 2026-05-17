@@ -36,15 +36,33 @@ export default function StartExamPage() {
   const [examStarted, setExamStarted] = useState(false);
 
   // ================================
-  // TRAP LAYER STATE - INVISIBLE MODE
+  // ADVANCED FLOATING APP DETECTION
   // ================================
-  const [trapLayerVisible, setTrapLayerVisible] = useState(false);
-  const [floatingDetected, setFloatingDetected] = useState(false);
-
-  // TRAP LAYER REFS - SINGLETON
   const trapVisibleRef = useRef(false);
   const trapRunningRef = useRef(false);
-  const inactivityTimerRef = useRef(null);
+
+  // METRIC-BASED DETECTION
+  const lastTouchTimeRef = useRef(Date.now());
+  const lastPointerTimeRef = useRef(Date.now());
+  const lastMouseTimeRef = useRef(Date.now());
+  const touchEventCountRef = useRef(0);
+  const pointerEventCountRef = useRef(0);
+  const focusLostCountRef = useRef(0);
+  const visibilityChangeCountRef = useRef(0);
+
+  // TIMING THRESHOLDS
+  const focusLostThresholdRef = useRef(3); // 3x focus lost = violation
+  const visibilityThresholdRef = useRef(2); // 2x visibility change = violation
+  const eventGapThresholdRef = useRef(8000); // 8 detik tanpa event = violation
+
+  // FLOATING APP DETECTION REFS
+  const floatingAppCounterRef = useRef(0);
+  const lastScreenSizeRef = useRef({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  const notificationPanelDetectedRef = useRef(0);
+  const viewportHeightHistoryRef = useRef([]);
 
   const overlayTimeoutRef = useRef(null);
   const trapSuspicionRef = useRef(0);
@@ -54,9 +72,7 @@ export default function StartExamPage() {
   const trapHideTimeoutRef = useRef(null);
   const trapLayerRef = useRef(null);
 
-  // ================================
   // MODAL PRIORITY TRACKING
-  // ================================
   const modalStackRef = useRef({
     isPenalty: false,
     isInfo: false,
@@ -645,29 +661,46 @@ export default function StartExamPage() {
 
       blurTimeoutRef.current = setTimeout(() => {
         if (!document.hasFocus()) {
+          focusLostCountRef.current++;
+
           if (
             modalOpen ||
             isModalPengaduanOpen ||
             isConfirmHapusOpen ||
             safeActionRef.current
           ) {
+            focusLostCountRef.current = 0;
             return;
           }
 
-          triggerViolation("Aplikasi lain / floating window terdeteksi");
+          if (focusLostCountRef.current >= focusLostThresholdRef.current) {
+            triggerViolation("Aplikasi lain / floating window terdeteksi");
+          }
         }
       }, 1200);
     }
 
     function handleFocus() {
       clearTimeout(blurTimeoutRef.current);
+      focusLostCountRef.current = 0;
     }
 
     function handleVisibility() {
       if (document.hidden) {
-        if (safeActionRef.current) return;
+        visibilityChangeCountRef.current++;
 
-        triggerViolation("Anda keluar dari halaman ujian");
+        if (safeActionRef.current) {
+          visibilityChangeCountRef.current = 0;
+          return;
+        }
+
+        if (
+          visibilityChangeCountRef.current >= visibilityThresholdRef.current
+        ) {
+          triggerViolation("Notification panel / aplikasi lain terdeteksi");
+        }
+      } else {
+        visibilityChangeCountRef.current = 0;
       }
     }
 
@@ -728,6 +761,23 @@ export default function StartExamPage() {
 
       if (widthRatio < 0.75 || heightRatio < 0.75) {
         triggerViolation("Floating window / split screen terdeteksi");
+      }
+
+      // ================================
+      // NOTIFICATION PANEL DETECTION
+      // ================================
+      viewportHeightHistoryRef.current.push(viewportHeight);
+      if (viewportHeightHistoryRef.current.length > 5) {
+        viewportHeightHistoryRef.current.shift();
+      }
+
+      // Jika viewport berubah 2-3 kali dalam 500ms = notification pulled down
+      const uniqueHeights = new Set(viewportHeightHistoryRef.current);
+      if (uniqueHeights.size > 3) {
+        notificationPanelDetectedRef.current++;
+        if (notificationPanelDetectedRef.current >= 2) {
+          triggerViolation("Notification panel dibuka - fokus ujian terganggu");
+        }
       }
     }
 
@@ -856,81 +906,64 @@ export default function StartExamPage() {
   }, []);
 
   // ================================
-  // VALIDASI TRAP OVERLAY 5 TITIK
+  // ADVANCED FLOATING APP DETECTION
+  // BERBASIS EVENT & METRIK FISIK
   // ================================
-  function validateTrapOverlay() {
-    if (!trapVisibleRef.current) return true;
+  function detectFloatingApp() {
+    if (shouldSkipTrap()) return false;
 
-    // JANGAN VALIDASI SAAT ADA MODAL ATAU SAFE ACTION
-    if (
-      modalOpen ||
-      isModalPengaduanOpen ||
-      isConfirmHapusOpen ||
-      showPanduanModal ||
-      penaltyOpen ||
-      safeActionRef.current
-    ) {
+    const now = Date.now();
+
+    // CEK 1: EVENT GAP DETECTION
+    const touchGap = now - lastTouchTimeRef.current;
+    const pointerGap = now - lastPointerTimeRef.current;
+    const mouseGap = now - lastMouseTimeRef.current;
+
+    const minEventGap = Math.min(touchGap, pointerGap, mouseGap);
+
+    if (minEventGap > eventGapThresholdRef.current && !document.hasFocus()) {
+      console.log(
+        "🚨 Floating App Detected: No events for",
+        minEventGap / 1000,
+        "seconds",
+      );
       return true;
     }
 
-    const points = [
-      {
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      },
-      {
-        x: window.innerWidth / 2,
-        y: window.innerHeight * 0.2,
-      },
-      {
-        x: window.innerWidth / 2,
-        y: window.innerHeight * 0.8,
-      },
-      {
-        x: window.innerWidth * 0.2,
-        y: window.innerHeight / 2,
-      },
-      {
-        x: window.innerWidth * 0.8,
-        y: window.innerHeight / 2,
-      },
-    ];
+    // CEK 2: VIEWPORT ANOMALY
+    if (window.visualViewport) {
+      const viewportHeight = window.visualViewport.height;
+      const screenHeight = window.screen.height;
+      const viewportRatio = viewportHeight / screenHeight;
 
-    let invalidPoints = 0;
-
-    points.forEach((point) => {
-      const el = document.elementFromPoint(point.x, point.y);
-
-      if (!el) {
-        invalidPoints++;
-        return;
+      // Jika viewport < 60% dari screen = ada sesuatu di atas
+      if (viewportRatio < 0.6 && !document.hasFocus()) {
+        console.log(
+          "🚨 Floating App Detected: Viewport anomaly",
+          viewportRatio,
+        );
+        return true;
       }
+    }
 
-      // CEK APAKAH ELEMEN ADALAH TRAP LAYER ATAU ANAK-ANAKNYA
-      const isTrapLayer =
-        el.getAttribute("data-trap-layer") === "true" ||
-        el.closest("[data-trap-layer='true']") !== null;
+    // CEK 3: FOCUS LOSS PATTERN
+    if (focusLostCountRef.current >= 3) {
+      console.log("🚨 Floating App Detected: Multiple focus losses");
+      focusLostCountRef.current = 0;
+      return true;
+    }
 
-      // CEK JIKA ELEMEN ADALAH BAGIAN DARI MODAL/UI PENTING
-      const isImportantUI =
-        el.closest("[data-modal='true']") !== null ||
-        el.closest("[data-modal-stack='true']") !== null ||
-        el.closest("header") !== null ||
-        el.closest("nav") !== null ||
-        el.closest("[data-draft='true']") !== null ||
-        el.id === "iframeContainer";
+    // CEK 4: VISIBILITY CHANGE PATTERN
+    if (visibilityChangeCountRef.current >= 2) {
+      console.log("🚨 Floating App Detected: Visibility changes");
+      visibilityChangeCountRef.current = 0;
+      return true;
+    }
 
-      if (!isTrapLayer && !isImportantUI) {
-        invalidPoints++;
-      }
-    });
-
-    // JIKA LEBIH DARI 3 TITIK GAGAL = ADA FLOATING APP
-    return invalidPoints < 3;
+    return false;
   }
 
   function handleTrapLayerInteraction(e) {
-    // HANYA TANGANI JIKA EVENT LANGSUNG DI TRAP LAYER
     if (e.target !== trapLayerRef.current) {
       return;
     }
@@ -940,99 +973,57 @@ export default function StartExamPage() {
 
     lastInteractionRef.current = Date.now();
     trapVisibleRef.current = false;
-    setTrapLayerVisible(false);
 
-    // RESET TIMER IDLE
     if (trapIdleTimeoutRef.current) {
       clearTimeout(trapIdleTimeoutRef.current);
     }
 
-    // TAMPILKAN LAGI SETELAH 5 DETIK IDLE
     trapIdleTimeoutRef.current = setTimeout(() => {
       if (!shouldSkipTrap()) {
         trapVisibleRef.current = true;
-        setTrapLayerVisible(true);
       }
     }, 5000);
   }
 
   // ================================
-  // TRAP LAYER SYSTEM - INVISIBLE WITH BLUR
+  // ADVANCED TRAP LAYER SYSTEM
   // ================================
   useEffect(() => {
     if (!examStarted) return;
 
-    // SEMBUNYIKAN LAYER
-    function hideTrapLayer() {
-      trapVisibleRef.current = false;
-      setTrapLayerVisible(false);
-
-      if (trapHideTimeoutRef.current) {
-        clearInterval(trapHideTimeoutRef.current);
-        trapHideTimeoutRef.current = null;
-      }
-    }
-
-    // TAMPILKAN LAYER
-    function showTrapLayer() {
-      if (shouldSkipTrap()) return;
-
-      if (trapVisibleRef.current) return;
-
-      trapVisibleRef.current = true;
-      setTrapLayerVisible(true);
-
-      startOverlayValidation();
-    }
-
-    // VALIDASI FLOATING APP
-    function startOverlayValidation() {
+    function startFloatingAppMonitor() {
       if (trapHideTimeoutRef.current) {
         clearInterval(trapHideTimeoutRef.current);
       }
 
       trapHideTimeoutRef.current = setInterval(() => {
-        // HANYA CEK SAAT OVERLAY TAMPIL
-        if (!trapVisibleRef.current) return;
-
-        // SKIP KONDISI AMAN
         if (shouldSkipTrap()) return;
 
-        const valid = validateTrapOverlay();
+        const detected = detectFloatingApp();
 
-        // GAGAL VALIDASI = ADA FLOATING APP
-        if (!valid) {
-          forceLogout("Floating window / overlay app terdeteksi");
+        if (detected) {
+          forceLogout(
+            "Floating window / notification panel / overlay app terdeteksi",
+          );
         }
-      }, 1200);
+      }, 800);
     }
 
-    // RESET AKTIVITAS USER
     function resetUserActivity() {
       lastInteractionRef.current = Date.now();
 
-      // SEMBUNYIKAN OVERLAY
-      if (trapVisibleRef.current) {
-        hideTrapLayer();
-      }
-
-      // RESET TIMER
       if (trapIdleTimeoutRef.current) {
         clearTimeout(trapIdleTimeoutRef.current);
       }
 
-      // MUNCULKAN LAGI SETELAH IDLE
       trapIdleTimeoutRef.current = setTimeout(() => {
-        showTrapLayer();
+        startFloatingAppMonitor();
       }, 5000);
     }
 
-    // MUNCUL AWAL SETELAH 1.2 DETIK
+    // START MONITORING
     setTimeout(() => {
-      if (!shouldSkipTrap()) {
-        trapVisibleRef.current = true;
-        setTrapLayerVisible(true);
-      }
+      startFloatingAppMonitor();
     }, 1200);
 
     // DETEKSI GLOBAL INTERAKSI
@@ -1049,6 +1040,28 @@ export default function StartExamPage() {
       "click",
     ];
 
+    function recordTouchEvent() {
+      lastTouchTimeRef.current = Date.now();
+      touchEventCountRef.current++;
+    }
+
+    function recordPointerEvent() {
+      lastPointerTimeRef.current = Date.now();
+      pointerEventCountRef.current++;
+    }
+
+    function recordMouseEvent() {
+      lastMouseTimeRef.current = Date.now();
+    }
+
+    window.addEventListener("touchstart", recordTouchEvent, true);
+    window.addEventListener("touchmove", recordTouchEvent, true);
+    window.addEventListener("touchend", recordTouchEvent, true);
+    window.addEventListener("pointerdown", recordPointerEvent, true);
+    window.addEventListener("pointermove", recordPointerEvent, true);
+    window.addEventListener("mousemove", recordMouseEvent, true);
+    window.addEventListener("mousedown", recordMouseEvent, true);
+
     events.forEach((event) => {
       window.addEventListener(event, resetUserActivity, true);
       document.addEventListener(event, resetUserActivity, true);
@@ -1062,7 +1075,7 @@ export default function StartExamPage() {
       });
     }
 
-    // START SISTEM
+    // INITIAL
     resetUserActivity();
 
     return () => {
@@ -1076,6 +1089,14 @@ export default function StartExamPage() {
         trapHideTimeoutRef.current = null;
       }
 
+      window.removeEventListener("touchstart", recordTouchEvent, true);
+      window.removeEventListener("touchmove", recordTouchEvent, true);
+      window.removeEventListener("touchend", recordTouchEvent, true);
+      window.removeEventListener("pointerdown", recordPointerEvent, true);
+      window.removeEventListener("pointermove", recordPointerEvent, true);
+      window.removeEventListener("mousemove", recordMouseEvent, true);
+      window.removeEventListener("mousedown", recordMouseEvent, true);
+
       events.forEach((event) => {
         window.removeEventListener(event, resetUserActivity, true);
         document.removeEventListener(event, resetUserActivity, true);
@@ -1086,66 +1107,13 @@ export default function StartExamPage() {
           iframeContainer.removeEventListener(event, resetUserActivity, true);
         });
       }
-
-      hideTrapLayer();
     };
   }, [examStarted]);
 
   // =========================
-  // TOUCH HEARTBEAT DETECTION
-  // =========================
-  useEffect(() => {
-    function updateTouch() {
-      lastTouchRef.current = Date.now();
-    }
-
-    window.addEventListener("touchstart", updateTouch, true);
-    window.addEventListener("touchmove", updateTouch, true);
-    window.addEventListener("click", updateTouch, true);
-
-    const interval = setInterval(() => {
-      if (logoutRef.current) return;
-
-      if (ignoreFullscreen) return;
-
-      if (
-        modalOpen ||
-        isModalPengaduanOpen ||
-        isConfirmHapusOpen ||
-        showPanduanModal ||
-        penaltyOpen
-      ) {
-        return;
-      }
-
-      const now = Date.now();
-      const idleTime = now - lastTouchRef.current;
-
-      if (idleTime > 6000 && !document.hasFocus()) {
-        forceLogout("Floating window / aplikasi lain terdeteksi");
-      }
-    }, 1500);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("touchstart", updateTouch, true);
-      window.removeEventListener("touchmove", updateTouch, true);
-      window.removeEventListener("click", updateTouch, true);
-    };
-  }, [
-    ignoreFullscreen,
-    modalOpen,
-    isModalPengaduanOpen,
-    isConfirmHapusOpen,
-    showPanduanModal,
-    penaltyOpen,
-  ]);
-
-  // ================================
   // UTILITY: CHECK SKIP CONDITIONS
-  // ================================
+  // =========================
   function shouldSkipTrap() {
-    // Safety checks
     if (!examStarted) return true;
     if (
       modalOpen ||
@@ -1158,14 +1126,12 @@ export default function StartExamPage() {
     if (ignoreFullscreen || safeActionRef.current) return true;
     if (logoutRef.current) return true;
 
-    // Check keyboard visible
     if (window.visualViewport) {
       const viewportHeight = window.visualViewport.height;
       const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
       if (keyboardOpen) return true;
     }
 
-    // Check input/textarea focused
     const activeEl = document.activeElement;
     if (
       activeEl &&
@@ -1251,25 +1217,21 @@ export default function StartExamPage() {
       }}
     >
       {/* ================================
-          TRAP LAYER - TRANSPARENT WITH BLUR EFFECT
-          5-POINT FLOATING APP DETECTOR
+          TRAP LAYER - INVISIBLE DETECTOR
+          MENGGUNAKAN EVENT & METRIK FISIK
           ================================ */}
-      {trapLayerVisible && (
-        <div
-          ref={trapLayerRef}
-          data-trap-layer="true"
-          onClick={handleTrapLayerInteraction}
-          onTouchStart={handleTrapLayerInteraction}
-          onPointerDown={handleTrapLayerInteraction}
-          className="fixed inset-0 z-[99999] bg-white/5 backdrop-blur-sm pointer-events-auto"
-          style={{
-            userSelect: "none",
-            WebkitUserSelect: "none",
-            WebkitTouchCallout: "none",
-            touchAction: "none",
-          }}
-        />
-      )}
+      {/* Layer ini HANYA untuk visual, deteksi real ada di function */}
+      <div
+        ref={trapLayerRef}
+        data-trap-layer="true"
+        className="fixed inset-0 z-[99999] bg-white/5 backdrop-blur-sm pointer-events-auto"
+        style={{
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          WebkitTouchCallout: "none",
+          touchAction: "none",
+        }}
+      />
 
       {/* MODAL HUKUMAN - HIGHEST PRIORITY */}
       {penaltyOpen && (
