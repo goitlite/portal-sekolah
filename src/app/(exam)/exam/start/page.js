@@ -88,7 +88,6 @@ export default function StartExamPage() {
 
   const lastBlurAtRef = useRef(0);
 
-  const lastInteractionRef = useRef(Date.now());
   const lastViewportHeightRef = useRef(0);
   const blurTimeoutRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
@@ -825,38 +824,6 @@ export default function StartExamPage() {
       }
     }
 
-    // ======================
-    // INTERACTION WATCHER
-    // ======================
-
-    function updateInteraction() {
-      lastInteractionRef.current = Date.now();
-    }
-
-    // pantau sentuhan user
-    window.addEventListener("touchstart", updateInteraction, true);
-
-    window.addEventListener("pointerdown", updateInteraction, true);
-
-    // cek interaksi abnormal
-    const interactionInterval = setInterval(() => {
-      // proteksi state aman
-      if (logoutRef.current) return;
-
-      if (ignoreFullscreen) return;
-
-      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
-        return;
-      }
-
-      const idle = Date.now() - lastInteractionRef.current;
-
-      // user diam terlalu lama
-      // padahal fullscreen aktif
-      if (idle > 15000 && document.fullscreenElement && !document.hidden) {
-        addOverlayRisk(10, "Interaction Pause");
-      }
-    }, 5000);
     // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus); // ← TAMBAH INI
@@ -869,11 +836,6 @@ export default function StartExamPage() {
     }
 
     return () => {
-      clearInterval(interactionInterval);
-
-      window.removeEventListener("touchstart", updateInteraction, true);
-
-      window.removeEventListener("pointerdown", updateInteraction, true);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(resizeTimeoutRef.current);
 
