@@ -30,69 +30,32 @@ export default function StartExamPage() {
 
   const [browserBlocked, setBrowserBlocked] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
+
   const [penaltyTime, setPenaltyTime] = useState(8 * 60);
+
   const [penaltyDone, setPenaltyDone] = useState(false);
+
   const [showPanduanModal, setShowPanduanModal] = useState(false);
+
   const [examStarted, setExamStarted] = useState(false);
-
-  // ================================
-  // ADVANCED FLOATING APP DETECTION
-  // ================================
-  const trapVisibleRef = useRef(false);
-  const trapRunningRef = useRef(false);
-
-  // METRIC-BASED DETECTION
-  const lastTouchTimeRef = useRef(Date.now());
-  const lastPointerTimeRef = useRef(Date.now());
-  const lastMouseTimeRef = useRef(Date.now());
-  const touchEventCountRef = useRef(0);
-  const pointerEventCountRef = useRef(0);
-  const focusLostCountRef = useRef(0);
-  const visibilityChangeCountRef = useRef(0);
-
-  // TIMING THRESHOLDS
-  const focusLostThresholdRef = useRef(3); // 3x focus lost = violation
-  const visibilityThresholdRef = useRef(2); // 2x visibility change = violation
-  const eventGapThresholdRef = useRef(8000); // 8 detik tanpa event = violation
-
-  // FLOATING APP DETECTION REFS
-  const floatingAppCounterRef = useRef(0);
-  const lastScreenSizeRef = useRef({
-    width: 0,
-    height: 0,
-  });
-  const notificationPanelDetectedRef = useRef(0);
-  const viewportHeightHistoryRef = useRef([]);
-
-  const overlayTimeoutRef = useRef(null);
-  const trapSuspicionRef = useRef(0);
-  const lastInteractionRef = useRef(Date.now());
-
-  const trapIdleTimeoutRef = useRef(null);
-  const trapHideTimeoutRef = useRef(null);
-  const trapLayerRef = useRef(null);
-
-  // MODAL PRIORITY TRACKING
-  const modalStackRef = useRef({
-    isPenalty: false,
-    isInfo: false,
-    isPengaduan: false,
-    isConfirmHapus: false,
-    isPanduan: false,
-  });
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
+
+    // WAJIB ADA CHROME
     const hasChrome = ua.includes("Chrome");
+
+    // WAJIB BROWSER ASLI GOOGLE
     const isGoogleVendor =
       navigator.vendor && navigator.vendor.includes("Google");
 
+    // BLOK SEMUA BROWSER TURUNAN
     const blockedBrowsers = [
-      "Edg",
-      "OPR",
-      "SamsungBrowser",
-      "Firefox",
-      "CriOS",
+      "Edg", // Microsoft Edge
+      "OPR", // Opera
+      "SamsungBrowser", // Samsung Internet
+      "Firefox", // Firefox
+      "CriOS", // Chrome iOS
       "FxiOS",
       "DuckDuckGo",
       "Brave",
@@ -101,6 +64,7 @@ export default function StartExamPage() {
     ];
 
     const isBlocked = blockedBrowsers.some((b) => ua.includes(b));
+
     return hasChrome && isGoogleVendor && !isBlocked;
   }
 
@@ -114,6 +78,18 @@ export default function StartExamPage() {
   const logoutRef = useRef(false);
   const iframeRef = useRef(null);
   const iframeContainerRef = useRef(null);
+  // =========================
+  // SAFE OVERLAY ENGINE
+  // =========================
+
+  const overlayRiskRef = useRef(0);
+
+  const overlayTriggeredRef = useRef(false);
+
+  const lastBlurAtRef = useRef(0);
+
+  const lastInteractionRef = useRef(Date.now());
+  const lastViewportHeightRef = useRef(0);
   const blurTimeoutRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
   const focusTimeoutRef = useRef(null);
@@ -129,9 +105,13 @@ export default function StartExamPage() {
   // =========================
   useEffect(() => {
     async function init() {
+      // =========================
+      // VALIDASI GOOGLE CHROME
+      // =========================
       if (!isChromeBrowser()) {
         console.log("USER AGENT:", navigator.userAgent);
         console.log("VENDOR:", navigator.vendor);
+
         setBrowserBlocked(true);
         return;
       }
@@ -168,13 +148,19 @@ export default function StartExamPage() {
 
       const penaltyPassed = localStorage.getItem("penaltyPassed");
 
+      // jika tidak sedang hukuman
       if (!(savedViolation >= 5 && !penaltyPassed)) {
         setShowPanduanModal(true);
       }
 
+      // =========================
+      // HUKUMAN SETELAH 4 PELANGGARAN
+      // =========================
       if (savedViolation >= 5 && !penaltyPassed) {
         setPenaltyOpen(true);
+
         setShowPanduanModal(false);
+
         document.body.style.overflow = "hidden";
       }
       setViolations(savedViolation);
@@ -196,25 +182,6 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
-  // UPDATE MODAL STACK
-  // =========================
-  useEffect(() => {
-    modalStackRef.current = {
-      isPenalty: penaltyOpen,
-      isInfo: modalOpen,
-      isPengaduan: isModalPengaduanOpen,
-      isConfirmHapus: isConfirmHapusOpen,
-      isPanduan: showPanduanModal,
-    };
-  }, [
-    penaltyOpen,
-    modalOpen,
-    isModalPengaduanOpen,
-    isConfirmHapusOpen,
-    showPanduanModal,
-  ]);
-
-  // =========================
   // TIMER HUKUMAN
   // =========================
   useEffect(() => {
@@ -226,11 +193,17 @@ export default function StartExamPage() {
       setPenaltyTime((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+
           setPenaltyDone(true);
+
           localStorage.setItem("penaltyPassed", "true");
+
           document.body.style.overflow = "auto";
+
           setPenaltyOpen(false);
+
           showModal("Waktu hukuman selesai.\n\nKlik OK untuk melanjutkan.");
+
           return 0;
         }
 
@@ -249,22 +222,25 @@ export default function StartExamPage() {
 
   function startSafeAction(duration = 3000) {
     safeActionRef.current = true;
+
     setIgnoreFullscreen(true);
 
     setTimeout(() => {
       safeActionRef.current = false;
+
       setIgnoreFullscreen(false);
     }, duration);
   }
 
   function forceLogout(reason = "Pelanggaran ujian") {
     if (logoutRef.current) return;
+
     if (safeActionRef.current) return;
 
     const totalViolation = violations + 1;
     localStorage.setItem("violations", totalViolation.toString());
     setViolations(totalViolation);
-
+    // reset hukuman agar muncul lagi
     if (totalViolation >= 5) {
       localStorage.removeItem("penaltyPassed");
     }
@@ -310,6 +286,7 @@ export default function StartExamPage() {
     if (!teksPengaduan.trim()) return;
 
     startSafeAction(5000);
+
     setLoadingPengaduan(true);
 
     try {
@@ -319,6 +296,7 @@ export default function StartExamPage() {
 
       if (result.status === "success") {
         setTeksPengaduan("");
+
         setIsModalPengaduanOpen(false);
 
         setTimeout(() => {
@@ -329,6 +307,7 @@ export default function StartExamPage() {
       }
     } catch (err) {
       setLoadingPengaduan(false);
+
       showModal("Terjadi kesalahan jaringan.");
     }
   }
@@ -341,13 +320,16 @@ export default function StartExamPage() {
       return;
     }
 
+    // 🔥 RESET PELANGGARAN SAAT KELUAR
     localStorage.removeItem("violations");
     localStorage.removeItem("penaltyPassed");
     localStorage.removeItem("draftAnswers");
     localStorage.removeItem("draftMode");
 
     setViolations(0);
+
     localStorage.removeItem("examLink");
+
     router.push("/exam");
   }
 
@@ -355,7 +337,9 @@ export default function StartExamPage() {
     const currentAnswer = draftAnswers[soalNo];
     const currentMode = draftMode[soalNo];
 
+    // JIKA JAWABAN SAMA
     if (currentAnswer === answer) {
+      // KLIK KE-2 = RAGU
       if (currentMode === "yakin") {
         const updatedMode = {
           ...draftMode,
@@ -363,10 +347,13 @@ export default function StartExamPage() {
         };
 
         setDraftMode(updatedMode);
+
         localStorage.setItem("draftMode", JSON.stringify(updatedMode));
+
         return;
       }
 
+      // KLIK KE-3 = HAPUS
       if (currentMode === "ragu") {
         const updatedAnswers = { ...draftAnswers };
         const updatedMode = { ...draftMode };
@@ -378,11 +365,14 @@ export default function StartExamPage() {
         setDraftMode(updatedMode);
 
         localStorage.setItem("draftAnswers", JSON.stringify(updatedAnswers));
+
         localStorage.setItem("draftMode", JSON.stringify(updatedMode));
+
         return;
       }
     }
 
+    // KLIK PERTAMA
     const updatedAnswers = {
       ...draftAnswers,
       [soalNo]: answer,
@@ -397,6 +387,7 @@ export default function StartExamPage() {
     setDraftMode(updatedMode);
 
     localStorage.setItem("draftAnswers", JSON.stringify(updatedAnswers));
+
     localStorage.setItem("draftMode", JSON.stringify(updatedMode));
   }
 
@@ -405,7 +396,7 @@ export default function StartExamPage() {
     setDraftMode({});
     localStorage.removeItem("draftAnswers");
     localStorage.removeItem("draftMode");
-    setIsConfirmHapusOpen(false);
+    setIsConfirmHapusOpen(false); // Tutup konfirmasi setelah hapus
     showModal("Semua draft jawaban telah dikosongkan.");
   };
 
@@ -474,7 +465,9 @@ export default function StartExamPage() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+
           showModal("⏰ Waktu ujian habis! Tombol Submit sekarang tersedia.");
+
           return 0;
         }
 
@@ -486,7 +479,7 @@ export default function StartExamPage() {
   }, [examStarted]);
 
   // =========================
-  // AUTO LOCK SOAL SETELAH 1 MENIT
+  // AUTO LOCK SOAL SETELAH 2 MENIT
   // =========================
   useEffect(() => {
     if (!examStarted) return;
@@ -494,6 +487,7 @@ export default function StartExamPage() {
     const lockTimer = setTimeout(
       () => {
         setSoalLocked(true);
+
         showModal(
           "🔒 Waktu pengisian data telah selesai.\n\n" +
             "Soal sekarang dikunci otomatis.\n\n" +
@@ -511,15 +505,18 @@ export default function StartExamPage() {
   }, [examStarted]);
 
   // =========================
-  // KEYBOARD HANDLER
-  // =========================
+  // KEYBOARD HANDLER - EFEKTIF & SEDERHANA
+  // ========================
   useEffect(() => {
     function handleKeyDown(e) {
+      // =========================
       // BLOCK ESC GLOBAL
+      // =========================
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
 
+        // Jika modal terbuka → tutup modal SAJA
         if (modalOpen) {
           setModalOpen(false);
 
@@ -536,6 +533,7 @@ export default function StartExamPage() {
           return;
         }
 
+        // Jika modal pengaduan terbuka
         if (isModalPengaduanOpen) {
           setIsModalPengaduanOpen(false);
 
@@ -552,6 +550,7 @@ export default function StartExamPage() {
           return;
         }
 
+        // Jika confirm hapus terbuka
         if (isConfirmHapusOpen) {
           setIsConfirmHapusOpen(false);
 
@@ -568,9 +567,14 @@ export default function StartExamPage() {
           return;
         }
 
+        // Jika tidak ada modal
         forceLogout("Tombol ESC terdeteksi");
         return;
       }
+
+      // =========================
+      // LANJUT LOGIC LAMA
+      // =========================
 
       if (timeLeft <= 0 || !soalLocked) return;
 
@@ -640,70 +644,110 @@ export default function StartExamPage() {
 
     return () => clearInterval(interval);
   }, [violations]);
+  // Ganti section ANTI SPLIT SCREEN dengan ini:
 
   // =========================
-  // ANTI SPLIT SCREEN
+  // ANTI SPLIT SCREEN / FLOATING
+  // SUPER STABIL
   // =========================
   useEffect(() => {
     lastWidthRef.current = window.innerWidth;
     lastHeightRef.current = window.innerHeight;
+    lastViewportHeightRef.current = window.innerHeight;
 
     function triggerViolation(reason) {
       if (logoutRef.current) return;
+
       if (ignoreFullscreen) return;
+
       if (safeActionRef.current) return;
 
       forceLogout(reason);
     }
+    // ======================
+    // SAFE OVERLAY RISK
+    // ======================
 
+    function addOverlayRisk(score, reason) {
+      if (logoutRef.current) return;
+
+      if (ignoreFullscreen) return;
+
+      if (safeActionRef.current) return;
+
+      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+        return;
+      }
+
+      overlayRiskRef.current += score;
+
+      console.log("[OVERLAY SCORE]", overlayRiskRef.current, reason);
+
+      // auto limit
+      if (overlayRiskRef.current < 0) {
+        overlayRiskRef.current = 0;
+      }
+
+      // trigger hanya jika benar-benar tinggi
+      if (overlayRiskRef.current >= 80 && !overlayTriggeredRef.current) {
+        overlayTriggeredRef.current = true;
+
+        triggerViolation("Floating apps / aktivitas mencurigakan terdeteksi");
+      }
+    }
+
+    // ======================
+    // BLUR - Deteksi fokus keluar dari window
+    // ======================
     function handleBlur() {
+      lastBlurAtRef.current = Date.now();
       clearTimeout(blurTimeoutRef.current);
 
       blurTimeoutRef.current = setTimeout(() => {
         if (!document.hasFocus()) {
-          focusLostCountRef.current++;
-
           if (
             modalOpen ||
             isModalPengaduanOpen ||
             isConfirmHapusOpen ||
             safeActionRef.current
           ) {
-            focusLostCountRef.current = 0;
             return;
           }
 
-          if (focusLostCountRef.current >= focusLostThresholdRef.current) {
-            triggerViolation("Aplikasi lain / floating window terdeteksi");
-          }
+          triggerViolation("Aplikasi lain / floating window terdeteksi");
         }
       }, 1200);
     }
 
+    // ======================
+    // FOCUS - Deteksi ketika fokus kembali (cegah false positive iframe)
+    // ======================
     function handleFocus() {
       clearTimeout(blurTimeoutRef.current);
-      focusLostCountRef.current = 0;
-    }
 
-    function handleVisibility() {
-      if (document.hidden) {
-        visibilityChangeCountRef.current++;
+      const blurDuration = Date.now() - lastBlurAtRef.current;
 
-        if (safeActionRef.current) {
-          visibilityChangeCountRef.current = 0;
-          return;
-        }
-
-        if (
-          visibilityChangeCountRef.current >= visibilityThresholdRef.current
-        ) {
-          triggerViolation("Notification panel / aplikasi lain terdeteksi");
-        }
-      } else {
-        visibilityChangeCountRef.current = 0;
+      // blur cukup lama = mencurigakan
+      if (blurDuration > 1000 && blurDuration < 15000) {
+        addOverlayRisk(20, "Long Blur");
       }
     }
 
+    // ======================
+    // VISIBILITY
+    // ======================
+    function handleVisibility() {
+      if (document.hidden) {
+        if (safeActionRef.current) return;
+        addOverlayRisk(40, "Document Hidden");
+
+        triggerViolation("Anda keluar dari halaman ujian");
+      }
+    }
+
+    // ======================
+    // RESIZE DETECTION
+    // ======================
     function handleResize() {
       if (safeActionRef.current) return;
 
@@ -732,6 +776,9 @@ export default function StartExamPage() {
       }, 800);
     }
 
+    // ======================
+    // ORIENTATION CHANGE
+    // ======================
     function handleOrientation() {
       setTimeout(() => {
         const w = window.innerWidth;
@@ -743,7 +790,20 @@ export default function StartExamPage() {
       }, 1000);
     }
 
+    // ======================
+    // VISUAL VIEWPORT (Android)
+    // ======================
     function handleViewport() {
+      const currentHeight = window.innerHeight;
+
+      const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
+
+      lastViewportHeightRef.current = currentHeight;
+
+      // resize besar lebih mencurigakan
+      if (diff > 160) {
+        addOverlayRisk(20, "Large Viewport Resize");
+      }
       if (!window.visualViewport) return;
 
       const viewportWidth = window.visualViewport.width;
@@ -757,32 +817,49 @@ export default function StartExamPage() {
       const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
 
       if (keyboardOpen) return;
+
       if (safeActionRef.current) return;
 
       if (widthRatio < 0.75 || heightRatio < 0.75) {
         triggerViolation("Floating window / split screen terdeteksi");
       }
-
-      // ================================
-      // NOTIFICATION PANEL DETECTION
-      // ================================
-      viewportHeightHistoryRef.current.push(viewportHeight);
-      if (viewportHeightHistoryRef.current.length > 5) {
-        viewportHeightHistoryRef.current.shift();
-      }
-
-      // Jika viewport berubah 2-3 kali dalam 500ms = notification pulled down
-      const uniqueHeights = new Set(viewportHeightHistoryRef.current);
-      if (uniqueHeights.size > 3) {
-        notificationPanelDetectedRef.current++;
-        if (notificationPanelDetectedRef.current >= 2) {
-          triggerViolation("Notification panel dibuka - fokus ujian terganggu");
-        }
-      }
     }
 
+    // ======================
+    // INTERACTION WATCHER
+    // ======================
+
+    function updateInteraction() {
+      lastInteractionRef.current = Date.now();
+    }
+
+    // pantau sentuhan user
+    window.addEventListener("touchstart", updateInteraction, true);
+
+    window.addEventListener("pointerdown", updateInteraction, true);
+
+    // cek interaksi abnormal
+    const interactionInterval = setInterval(() => {
+      // proteksi state aman
+      if (logoutRef.current) return;
+
+      if (ignoreFullscreen) return;
+
+      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+        return;
+      }
+
+      const idle = Date.now() - lastInteractionRef.current;
+
+      // user diam terlalu lama
+      // padahal fullscreen aktif
+      if (idle > 15000 && document.fullscreenElement && !document.hidden) {
+        addOverlayRisk(10, "Interaction Pause");
+      }
+    }, 5000);
+    // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
+    window.addEventListener("focus", handleFocus); // ← TAMBAH INI
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleOrientation);
@@ -792,11 +869,16 @@ export default function StartExamPage() {
     }
 
     return () => {
+      clearInterval(interactionInterval);
+
+      window.removeEventListener("touchstart", updateInteraction, true);
+
+      window.removeEventListener("pointerdown", updateInteraction, true);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(resizeTimeoutRef.current);
 
       window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focus", handleFocus); // ← TAMBAH INI
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientation);
@@ -809,12 +891,14 @@ export default function StartExamPage() {
 
   // =========================
   // SCREEN WAKE LOCK
+  // AGAR LAYAR TETAP MENYALA
   // =========================
   useEffect(() => {
     async function enableWakeLock() {
       try {
         if ("wakeLock" in navigator) {
           wakeLockRef.current = await navigator.wakeLock.request("screen");
+
           console.log("Wake Lock aktif");
         }
       } catch (err) {
@@ -824,6 +908,8 @@ export default function StartExamPage() {
 
     enableWakeLock();
 
+    // Android kadang melepas wake lock
+    // saat pindah app / lockscreen
     async function handleVisibility() {
       try {
         if (document.visibilityState === "visible" && "wakeLock" in navigator) {
@@ -844,7 +930,9 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
+  // =========================
   // DETEKSI TAB FREEZE
+  // SUPER STABIL
   // =========================
   useEffect(() => {
     freezeCheckRef.current = Date.now();
@@ -857,16 +945,19 @@ export default function StartExamPage() {
         return;
       }
 
+      // abaikan saat modal aktif
       if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
         freezeCheckRef.current = Date.now();
         return;
       }
 
+      // abaikan safe action
       if (safeActionRef.current) {
         freezeCheckRef.current = Date.now();
         return;
       }
 
+      // abaikan jika textarea sedang fokus
       const activeEl = document.activeElement;
 
       if (
@@ -878,8 +969,10 @@ export default function StartExamPage() {
       }
 
       const now = Date.now();
+
       const diff = now - freezeCheckRef.current;
 
+      // naikkan threshold agar Android tidak false positive
       if (diff > 20000) {
         forceLogout("Aplikasi dibekukan / pindah aplikasi terdeteksi");
       }
@@ -905,245 +998,55 @@ export default function StartExamPage() {
     };
   }, []);
 
-  // ================================
-  // ADVANCED FLOATING APP DETECTION
-  // BERBASIS EVENT & METRIK FISIK
-  // ================================
-  function detectFloatingApp() {
-    if (shouldSkipTrap()) return false;
-
-    const now = Date.now();
-
-    // CEK 1: EVENT GAP DETECTION
-    const touchGap = now - lastTouchTimeRef.current;
-    const pointerGap = now - lastPointerTimeRef.current;
-    const mouseGap = now - lastMouseTimeRef.current;
-
-    const minEventGap = Math.min(touchGap, pointerGap, mouseGap);
-
-    if (minEventGap > eventGapThresholdRef.current && !document.hasFocus()) {
-      console.log(
-        "🚨 Floating App Detected: No events for",
-        minEventGap / 1000,
-        "seconds",
-      );
-      return true;
-    }
-
-    // CEK 2: VIEWPORT ANOMALY
-    if (window.visualViewport) {
-      const viewportHeight = window.visualViewport.height;
-      const screenHeight = window.screen.height;
-      const viewportRatio = viewportHeight / screenHeight;
-
-      // Jika viewport < 60% dari screen = ada sesuatu di atas
-      if (viewportRatio < 0.6 && !document.hasFocus()) {
-        console.log(
-          "🚨 Floating App Detected: Viewport anomaly",
-          viewportRatio,
-        );
-        return true;
-      }
-    }
-
-    // CEK 3: FOCUS LOSS PATTERN
-    if (focusLostCountRef.current >= 3) {
-      console.log("🚨 Floating App Detected: Multiple focus losses");
-      focusLostCountRef.current = 0;
-      return true;
-    }
-
-    // CEK 4: VISIBILITY CHANGE PATTERN
-    if (visibilityChangeCountRef.current >= 2) {
-      console.log("🚨 Floating App Detected: Visibility changes");
-      visibilityChangeCountRef.current = 0;
-      return true;
-    }
-
-    return false;
-  }
-
-  function handleTrapLayerInteraction(e) {
-    if (e.target !== trapLayerRef.current) {
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    lastInteractionRef.current = Date.now();
-    trapVisibleRef.current = false;
-
-    if (trapIdleTimeoutRef.current) {
-      clearTimeout(trapIdleTimeoutRef.current);
-    }
-
-    trapIdleTimeoutRef.current = setTimeout(() => {
-      if (!shouldSkipTrap()) {
-        trapVisibleRef.current = true;
-      }
-    }, 5000);
-  }
-
-  // ================================
-  // ADVANCED TRAP LAYER SYSTEM
-  // ================================
+  const isTimeRunningOut = timeLeft > 0;
+  // =========================
+  // TOUCH HEARTBEAT DETECTION
+  // =========================
   useEffect(() => {
-    if (!examStarted) return;
+    function updateTouch() {
+      lastTouchRef.current = Date.now();
+    }
 
-    function startFloatingAppMonitor() {
-      if (trapHideTimeoutRef.current) {
-        clearInterval(trapHideTimeoutRef.current);
+    // Deteksi semua sentuhan user
+    window.addEventListener("touchstart", updateTouch, true);
+
+    window.addEventListener("touchmove", updateTouch, true);
+
+    window.addEventListener("click", updateTouch, true);
+
+    // Monitor kehilangan interaksi
+    const interval = setInterval(() => {
+      if (logoutRef.current) return;
+
+      if (ignoreFullscreen) return;
+
+      // jangan cek saat modal aktif
+      if (modalOpen) return;
+
+      if (isModalPengaduanOpen) return;
+
+      if (isConfirmHapusOpen) return;
+
+      const now = Date.now();
+
+      const idleTime = now - lastTouchRef.current;
+
+      // jika tidak fokus + tidak ada touch
+      if (idleTime > 6000 && !document.hasFocus()) {
+        forceLogout("Floating window / aplikasi lain terdeteksi");
       }
-
-      trapHideTimeoutRef.current = setInterval(() => {
-        if (shouldSkipTrap()) return;
-
-        const detected = detectFloatingApp();
-
-        if (detected) {
-          forceLogout(
-            "Floating window / notification panel / overlay app terdeteksi",
-          );
-        }
-      }, 800);
-    }
-
-    function resetUserActivity() {
-      lastInteractionRef.current = Date.now();
-
-      if (trapIdleTimeoutRef.current) {
-        clearTimeout(trapIdleTimeoutRef.current);
-      }
-
-      trapIdleTimeoutRef.current = setTimeout(() => {
-        startFloatingAppMonitor();
-      }, 5000);
-    }
-
-    // START MONITORING
-    setTimeout(() => {
-      startFloatingAppMonitor();
-    }, 1200);
-
-    // DETEKSI GLOBAL INTERAKSI
-    const events = [
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "pointerdown",
-      "pointermove",
-      "mousemove",
-      "mousedown",
-      "wheel",
-      "scroll",
-      "click",
-    ];
-
-    function recordTouchEvent() {
-      lastTouchTimeRef.current = Date.now();
-      touchEventCountRef.current++;
-    }
-
-    function recordPointerEvent() {
-      lastPointerTimeRef.current = Date.now();
-      pointerEventCountRef.current++;
-    }
-
-    function recordMouseEvent() {
-      lastMouseTimeRef.current = Date.now();
-    }
-
-    window.addEventListener("touchstart", recordTouchEvent, true);
-    window.addEventListener("touchmove", recordTouchEvent, true);
-    window.addEventListener("touchend", recordTouchEvent, true);
-    window.addEventListener("pointerdown", recordPointerEvent, true);
-    window.addEventListener("pointermove", recordPointerEvent, true);
-    window.addEventListener("mousemove", recordMouseEvent, true);
-    window.addEventListener("mousedown", recordMouseEvent, true);
-
-    events.forEach((event) => {
-      window.addEventListener(event, resetUserActivity, true);
-      document.addEventListener(event, resetUserActivity, true);
-    });
-
-    const iframeContainer = iframeContainerRef.current;
-
-    if (iframeContainer) {
-      events.forEach((event) => {
-        iframeContainer.addEventListener(event, resetUserActivity, true);
-      });
-    }
-
-    // INITIAL
-    resetUserActivity();
+    }, 1500);
 
     return () => {
-      if (trapIdleTimeoutRef.current) {
-        clearTimeout(trapIdleTimeoutRef.current);
-        trapIdleTimeoutRef.current = null;
-      }
+      clearInterval(interval);
 
-      if (trapHideTimeoutRef.current) {
-        clearInterval(trapHideTimeoutRef.current);
-        trapHideTimeoutRef.current = null;
-      }
+      window.removeEventListener("touchstart", updateTouch, true);
 
-      window.removeEventListener("touchstart", recordTouchEvent, true);
-      window.removeEventListener("touchmove", recordTouchEvent, true);
-      window.removeEventListener("touchend", recordTouchEvent, true);
-      window.removeEventListener("pointerdown", recordPointerEvent, true);
-      window.removeEventListener("pointermove", recordPointerEvent, true);
-      window.removeEventListener("mousemove", recordMouseEvent, true);
-      window.removeEventListener("mousedown", recordMouseEvent, true);
+      window.removeEventListener("touchmove", updateTouch, true);
 
-      events.forEach((event) => {
-        window.removeEventListener(event, resetUserActivity, true);
-        document.removeEventListener(event, resetUserActivity, true);
-      });
-
-      if (iframeContainer) {
-        events.forEach((event) => {
-          iframeContainer.removeEventListener(event, resetUserActivity, true);
-        });
-      }
+      window.removeEventListener("click", updateTouch, true);
     };
-  }, [examStarted]);
-
-  // =========================
-  // UTILITY: CHECK SKIP CONDITIONS
-  // =========================
-  function shouldSkipTrap() {
-    if (!examStarted) return true;
-    if (
-      modalOpen ||
-      isModalPengaduanOpen ||
-      isConfirmHapusOpen ||
-      showPanduanModal ||
-      penaltyOpen
-    )
-      return true;
-    if (ignoreFullscreen || safeActionRef.current) return true;
-    if (logoutRef.current) return true;
-
-    if (window.visualViewport) {
-      const viewportHeight = window.visualViewport.height;
-      const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
-      if (keyboardOpen) return true;
-    }
-
-    const activeEl = document.activeElement;
-    if (
-      activeEl &&
-      (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT")
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  const isTimeRunningOut = timeLeft > 0;
+  }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
 
   // =========================
   // BLOCK NON CHROME
@@ -1152,6 +1055,7 @@ export default function StartExamPage() {
     return (
       <main className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+          {/* HEADER */}
           <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
             <div className="text-5xl mb-3">⚠️</div>
 
@@ -1164,6 +1068,7 @@ export default function StartExamPage() {
             </p>
           </div>
 
+          {/* CONTENT */}
           <div className="p-6 text-center">
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-5">
               <p className="text-gray-700 text-sm leading-relaxed">
@@ -1216,30 +1121,11 @@ export default function StartExamPage() {
         WebkitTouchCallout: "none",
       }}
     >
-      {/* ================================
-          TRAP LAYER - INVISIBLE DETECTOR (FIXED)
-          ================================ */}
-      <div
-        ref={trapLayerRef}
-        data-trap-layer="true"
-        // HAPUS backdrop-blur-sm dan UBAH pointer-events-auto menjadi pointer-events-none
-        className="fixed inset-0 z- bg-transparent pointer-events-none"
-        style={{
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          WebkitTouchCallout: "none",
-          touchAction: "none",
-        }}
-      />
-
-      {/* MODAL HUKUMAN - HIGHEST PRIORITY */}
+      {/* MODAL HUKUMAN */}
       {penaltyOpen && (
-        <div
-          data-modal="true"
-          data-modal-stack="true"
-          className="fixed inset-0 z-[999998] bg-black flex items-center justify-center p-6"
-        >
+        <div className="fixed inset-0 z-[999999] bg-black flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+            {/* HEADER */}
             <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
               <div className="text-5xl mb-3">⚠️</div>
 
@@ -1252,6 +1138,7 @@ export default function StartExamPage() {
               </p>
             </div>
 
+            {/* CONTENT */}
             <div className="p-6 text-center">
               <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5">
                 <p className="text-gray-700 text-sm leading-relaxed">
@@ -1261,6 +1148,7 @@ export default function StartExamPage() {
                 </p>
               </div>
 
+              {/* TIMER */}
               <div className="bg-black rounded-3xl py-6 mb-5">
                 <div className="text-red-500 text-xs font-bold tracking-[3px] mb-2">
                   WAKTU HUKUMAN
@@ -1278,14 +1166,9 @@ export default function StartExamPage() {
           </div>
         </div>
       )}
-
       {/* MODAL INFO */}
       {modalOpen && (
-        <div
-          data-modal="true"
-          data-modal-stack="true"
-          className="fixed inset-0 z-[99997] bg-black/50 flex items-center justify-center p-5"
-        >
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-blue-700 mb-4">Informasi</h2>
             <p className="text-gray-700 whitespace-pre-line mb-6">
@@ -1295,6 +1178,7 @@ export default function StartExamPage() {
               onClick={() => {
                 setModalOpen(false);
 
+                // setelah hukuman selesai
                 if (!showPanduanModal && !examStarted) {
                   setShowPanduanModal(true);
                 }
@@ -1311,7 +1195,6 @@ export default function StartExamPage() {
         </div>
       )}
 
-      {/* HEADER - ALWAYS VISIBLE */}
       <header
         className="
     fixed
@@ -1330,6 +1213,7 @@ export default function StartExamPage() {
     shadow-md
   "
       >
+        {/* GARIS ATAS */}
         <div
           className="
       h-[2px]
@@ -1341,7 +1225,8 @@ export default function StartExamPage() {
         />
 
         <div className="relative px-3 md:px-5 py-2">
-          <div className="absolute inset-0 overflow-hidden pointer-events-auto">
+          {/* SOFT LIGHT */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div
               className="
           absolute
@@ -1357,7 +1242,9 @@ export default function StartExamPage() {
           </div>
 
           <div className="relative flex items-center justify-between gap-3">
+            {/* KIRI */}
             <div className="min-w-0 flex-1">
+              {/* BADGE */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div
                   className="
@@ -1384,6 +1271,7 @@ export default function StartExamPage() {
                   CBT EXAM SYSTEM
                 </div>
 
+                {/* PELANGGARAN */}
                 <div
                   className="
               px-2.5
@@ -1409,6 +1297,7 @@ export default function StartExamPage() {
                 </div>
               </div>
 
+              {/* JUDUL */}
               <h1
                 className="
             mt-1
@@ -1430,6 +1319,7 @@ export default function StartExamPage() {
                 ASESMEN SMKN 1 TELUK KUANTAN
               </h1>
 
+              {/* IDENTITAS */}
               <div
                 className="
             mt-1.5
@@ -1470,7 +1360,9 @@ export default function StartExamPage() {
               </div>
             </div>
 
+            {/* KANAN */}
             <div className="flex flex-col gap-2 shrink-0">
+              {/* KELUAR */}
               <button
                 onClick={handleKeluar}
                 disabled={timeLeft > 0}
@@ -1516,11 +1408,13 @@ export default function StartExamPage() {
                   </span>
                 </span>
 
+                {/* GLOW EFFECT */}
                 {timeLeft <= 0 && (
                   <span className="absolute inset-0 rounded-xl bg-red-400 opacity-20 blur-md animate-ping"></span>
                 )}
               </button>
 
+              {/* PENGADUAN */}
               <button
                 onClick={() => {
                   setIgnoreFullscreen(true);
@@ -1562,11 +1456,13 @@ export default function StartExamPage() {
                   </span>
                 </span>
 
+                {/* glow halus */}
                 <span className="absolute inset-0 rounded-xl bg-white/10 opacity-0 hover:opacity-100 transition"></span>
               </button>
             </div>
           </div>
 
+          {/* PESAN ADMIN */}
           {pesan && (
             <div
               className="
@@ -1619,6 +1515,7 @@ export default function StartExamPage() {
           )}
         </div>
 
+        {/* GARIS BAWAH */}
         <div
           className="
       h-[1px]
@@ -1631,11 +1528,9 @@ export default function StartExamPage() {
         />
       </header>
 
-      {/* IFRAME CONTAINER - SCROLL WORKS NORMALLY */}
+      {/* IFRAME CONTAINER - SCROLL BERFUNGSI NORMAL */}
       <div
         ref={iframeContainerRef}
-        id="iframeContainer"
-        data-modal="false"
         className="
     absolute
     top-[110px]
@@ -1644,7 +1539,6 @@ export default function StartExamPage() {
     right-0
     overflow-y-auto
     overflow-x-hidden
-    z-[100]
   "
         style={{
           WebkitOverflowScrolling: "touch",
@@ -1663,16 +1557,17 @@ export default function StartExamPage() {
             }}
           />
         )}
+
+        {/* OVERLAY BLOCKER - BLOK CLICK TAPI IZINKAN SCROLL */}
       </div>
 
-      {/* FLOATING DRAFT - ALWAYS ACCESSIBLE */}
+      {/* FLOATING DRAFT */}
       <div
-        data-draft="true"
         className={`
     fixed
     top-1/2
     -translate-y-1/2
-    z-[500]
+    z-[999]
     transition-all
     duration-300
     ease-in-out
@@ -1683,6 +1578,7 @@ export default function StartExamPage() {
     }
   `}
       >
+        {/* TOMBOL MINIMIZE / EXPAND */}
         <button
           onClick={() => setDraftMinimized(!draftMinimized)}
           className={`
@@ -1712,6 +1608,7 @@ export default function StartExamPage() {
           {draftMinimized ? "▶" : "◀"}
         </button>
 
+        {/* KONTAINER DRAFT */}
         {!draftMinimized && (
           <div
             className="
@@ -1731,9 +1628,10 @@ export default function StartExamPage() {
                 DRAFT
               </h3>
 
+              {/* Tombol Hapus Data Baru */}
               <button
                 onClick={() => {
-                  setIgnoreFullscreen(true);
+                  setIgnoreFullscreen(true); // Pastikan ini true agar tidak logout
                   setIsConfirmHapusOpen(true);
                 }}
                 className="mt-1 mb-2 bg-red-100 hover:bg-red-200 text-red-600 text-[8px] md:text-[9px] font-bold py-1 px-2 rounded-lg border border-red-200"
@@ -1816,9 +1714,9 @@ export default function StartExamPage() {
         )}
       </div>
 
-      {/* TIMER LOCK - BOTTOM FIXED */}
+      {/* TIMER LOCK */}
       {isTimeRunningOut && (
-        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[500] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="relative shrink-0">
               <div className="absolute inset-0 animate-ping bg-red-500 rounded-full opacity-25"></div>
@@ -1863,7 +1761,7 @@ export default function StartExamPage() {
 
       {/* SUCCESS MESSAGE */}
       {!isTimeRunningOut && (
-        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[500] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-gradient-to-r from-green-600 to-emerald-500 z-[999] border-t-4 border-green-300 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="bg-green-400 p-2 rounded-lg shadow-lg">
               <svg
@@ -1896,14 +1794,8 @@ export default function StartExamPage() {
           </div>
         </div>
       )}
-
-      {/* MODAL PENGADUAN */}
       {isModalPengaduanOpen && (
-        <div
-          data-modal="true"
-          data-modal-stack="true"
-          className="fixed inset-0 z-[99996] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
-        >
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
             <div className="bg-orange-500 p-4 text-white text-center">
               <h3 className="font-bold text-lg">⚠️ FORM PENGADUAN</h3>
@@ -1941,14 +1833,8 @@ export default function StartExamPage() {
           </div>
         </div>
       )}
-
-      {/* CONFIRM HAPUS */}
       {isConfirmHapusOpen && (
-        <div
-          data-modal="true"
-          data-modal-stack="true"
-          className="fixed inset-0 z-[99996] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        >
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xs rounded-2xl p-6 text-center shadow-2xl border-t-4 border-red-500">
             <h3 className="text-gray-800 font-bold mb-2">
               Hapus Semua Jawaban?
@@ -1977,11 +1863,7 @@ export default function StartExamPage() {
 
       {/* MODAL PANDUAN ASESMEN */}
       {showPanduanModal && (
-        <div
-          data-modal="true"
-          data-modal-stack="true"
-          className="fixed inset-0 z-[99995] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
-        >
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div
             className="
         w-full
@@ -1999,6 +1881,7 @@ export default function StartExamPage() {
         border-gray-200
       "
           >
+            {/* HEADER */}
             <div
               className="
           bg-gradient-to-r
@@ -2044,8 +1927,10 @@ export default function StartExamPage() {
               </div>
             </div>
 
+            {/* CONTENT */}
             <div className="p-6 max-h-[70vh] overflow-y-auto">
               <div className="space-y-4">
+                {/* STEP 1 */}
                 <div className="flex gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
                     1
@@ -2068,6 +1953,7 @@ export default function StartExamPage() {
                   </div>
                 </div>
 
+                {/* STEP 2 */}
                 <div className="flex gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-red-600 text-white flex items-center justify-center font-black">
                     2
@@ -2085,6 +1971,7 @@ export default function StartExamPage() {
                   </div>
                 </div>
 
+                {/* STEP 3 */}
                 <div className="flex gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-green-600 text-white flex items-center justify-center font-black">
                     3
@@ -2129,6 +2016,7 @@ export default function StartExamPage() {
                   </div>
                 </div>
 
+                {/* STEP 4 */}
                 <div className="flex gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black">
                     4
@@ -2152,6 +2040,7 @@ export default function StartExamPage() {
                   </div>
                 </div>
 
+                {/* STEP 5 */}
                 <div className="flex gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black">
                     !
@@ -2174,10 +2063,12 @@ export default function StartExamPage() {
                 </div>
               </div>
 
+              {/* BUTTON */}
               <button
                 onClick={() => {
                   setShowPanduanModal(false);
 
+                  // mulai sistem ujian
                   setExamStarted(true);
 
                   setTimeout(() => {
