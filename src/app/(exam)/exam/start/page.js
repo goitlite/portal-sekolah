@@ -57,7 +57,10 @@ export default function StartExamPage() {
 
   // FLOATING APP DETECTION REFS
   const floatingAppCounterRef = useRef(0);
-  const lastScreenSizeRef = useRef({ width: 0, height: 0 });
+  const lastScreenSizeRef = useRef({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
   const notificationPanelDetectedRef = useRef(0);
   const viewportHeightHistoryRef = useRef([]);
 
@@ -77,14 +80,6 @@ export default function StartExamPage() {
     isConfirmHapus: false,
     isPanduan: false,
   });
-
-  // PASTE DI SINI:
-  useEffect(() => {
-    lastScreenSizeRef.current = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
-  }, []);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
@@ -1222,14 +1217,13 @@ export default function StartExamPage() {
       }}
     >
       {/* ================================
-          TRAP LAYER - INVISIBLE DETECTOR
-          MENGGUNAKAN EVENT & METRIK FISIK
+          TRAP LAYER - INVISIBLE DETECTOR (FIXED)
           ================================ */}
-      {/* Layer ini HANYA untuk visual, deteksi real ada di function */}
       <div
         ref={trapLayerRef}
         data-trap-layer="true"
-        className="fixed inset-0 z-[99999] bg-white/5 backdrop-blur-sm pointer-events-auto"
+        // HAPUS backdrop-blur-sm dan UBAH pointer-events-auto menjadi pointer-events-none
+        className="fixed inset-0 z- bg-transparent pointer-events-none"
         style={{
           userSelect: "none",
           WebkitUserSelect: "none",
