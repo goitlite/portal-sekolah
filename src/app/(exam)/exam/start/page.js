@@ -822,6 +822,17 @@ export default function StartExamPage() {
       const heightRatio = viewportHeight / screenHeight;
 
       const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+      // ======================
+      // RESET KEYBOARD STATE
+      // ======================
+
+      if (!keyboardOpen) {
+        keyboardWarningRef.current = false;
+
+        keyboardViolationRef.current = false;
+
+        clearTimeout(keyboardTimeoutRef.current);
+      }
 
       // ======================
       // KEYBOARD DETECTOR
