@@ -58,8 +58,8 @@ export default function StartExamPage() {
   // FLOATING APP DETECTION REFS
   const floatingAppCounterRef = useRef(0);
   const lastScreenSizeRef = useRef({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 0,
+    height: 0,
   });
   const notificationPanelDetectedRef = useRef(0);
   const viewportHeightHistoryRef = useRef([]);
