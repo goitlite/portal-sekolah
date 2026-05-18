@@ -78,14 +78,6 @@ export default function StartExamPage() {
   const logoutRef = useRef(false);
   const iframeRef = useRef(null);
   const iframeContainerRef = useRef(null);
-
-  // anti keyboard
-  const keyboardWarningRef = useRef(false);
-
-  const keyboardTimeoutRef = useRef(null);
-
-  const keyboardViolationRef = useRef(false);
-
   // =========================
   // SAFE OVERLAY ENGINE
   // =========================
@@ -106,6 +98,10 @@ export default function StartExamPage() {
   const lastTouchRef = useRef(Date.now());
   const wakeLockRef = useRef(null);
   const freezeCheckRef = useRef(Date.now());
+
+  const keyboardCountRef = useRef(0);
+
+  const keyboardOpenedRef = useRef(false);
 
   // =========================
   // LOAD SESSION
@@ -822,16 +818,13 @@ export default function StartExamPage() {
       const heightRatio = viewportHeight / screenHeight;
 
       const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+
       // ======================
-      // RESET KEYBOARD STATE
+      // RESET STATE
       // ======================
 
       if (!keyboardOpen) {
-        keyboardWarningRef.current = false;
-
-        keyboardViolationRef.current = false;
-
-        clearTimeout(keyboardTimeoutRef.current);
+        keyboardOpenedRef.current = false;
       }
 
       // ======================
@@ -839,49 +832,61 @@ export default function StartExamPage() {
       // ======================
 
       if (keyboardOpen) {
-        // IZINKAN keyboard pada modal pengaduan
+        // izinkan modal pengaduan
         if (isModalPengaduanOpen) {
           return;
         }
 
-        // cegah spam warning
-        if (keyboardWarningRef.current) {
+        // cegah spam saat keyboard
+        // masih terbuka
+        if (keyboardOpenedRef.current) {
           return;
         }
 
-        keyboardWarningRef.current = true;
+        keyboardOpenedRef.current = true;
 
-        console.log("KEYBOARD TERDETEKSI");
+        keyboardCountRef.current++;
 
-        // tampilkan warning
-        showModal(
-          "⚠️ Keyboard terdeteksi!\n\n" +
-            "Keyboard tidak diperbolehkan selama ujian.\n\n" +
-            "Tutup keyboard dalam 10 detik.\n\n" +
-            "Jika tidak, sistem akan menganggap pelanggaran.",
-        );
+        console.log("KEYBOARD COUNT:", keyboardCountRef.current);
 
-        // timer 10 detik
-        keyboardTimeoutRef.current = setTimeout(() => {
-          // cek ulang keyboard
-          const stillOpen =
-            Math.abs(window.innerHeight - window.visualViewport.height) > 150;
+        // ======================
+        // PERTAMA
+        // ======================
 
-          if (
-            stillOpen &&
-            !isModalPengaduanOpen &&
-            !keyboardViolationRef.current
-          ) {
-            keyboardViolationRef.current = true;
+        if (keyboardCountRef.current === 1) {
+          showModal(
+            "⚠️ Keyboard terdeteksi.\n\n" +
+              "Keyboard tidak diperlukan saat ujian.\n\n" +
+              "Sistem masih memberikan toleransi.",
+          );
 
-            triggerViolation("Keyboard terdeteksi selama ujian");
-          }
+          return;
+        }
 
-          keyboardWarningRef.current = false;
-        }, 10000);
+        // ======================
+        // KEDUA
+        // ======================
 
-        return;
+        if (keyboardCountRef.current === 2) {
+          showModal(
+            "⚠️ Keyboard kembali terdeteksi.\n\n" +
+              "Mohon tidak menggunakan keyboard selama ujian.\n\n" +
+              "Pelanggaran berikutnya akan menyebabkan ujian dihentikan.",
+          );
+
+          return;
+        }
+
+        // ======================
+        // KETIGA
+        // ======================
+
+        if (keyboardCountRef.current >= 3) {
+          triggerViolation("Keyboard terdeteksi berulang kali");
+        }
       }
+
+      if (keyboardOpen) return;
 
       if (safeActionRef.current) return;
 
@@ -902,7 +907,6 @@ export default function StartExamPage() {
     }
 
     return () => {
-      clearTimeout(keyboardTimeoutRef.current);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(resizeTimeoutRef.current);
 
