@@ -105,7 +105,6 @@ export default function StartExamPage() {
 
   const keyboardTestRef = useRef(null);
 
-  const lastTouchRef = useRef(Date.now());
   const keyboardGraceRef = useRef(true);
 
   // =========================
