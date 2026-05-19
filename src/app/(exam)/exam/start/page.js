@@ -810,22 +810,21 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISUAL VIEWPORT (Android)
+    // VISUAL VIEWPORT (Android) - VERSI BARU: LANGSUNG BLOKIR
     // ======================
     function handleViewport() {
       if (keyboardGraceRef.current) {
         return;
       }
       const currentHeight = window.innerHeight;
-
       const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
-
       lastViewportHeightRef.current = currentHeight;
 
       // resize besar lebih mencurigakan
       if (diff > 160) {
         addOverlayRisk(20, "Large Viewport Resize");
       }
+
       if (!window.visualViewport) return;
 
       const viewportWidth = window.visualViewport.width;
@@ -836,9 +835,15 @@ export default function StartExamPage() {
       const widthRatio = viewportWidth / screenWidth;
       const heightRatio = viewportHeight / screenHeight;
 
-      const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+      // Hitung penyusutan layar akibat keyboard standar android
+      const keyboardDiff = window.innerHeight - viewportHeight;
+      const widthShrink = viewportWidth < window.innerWidth * 0.9;
+
+      // Deteksi jika keyboard normal terbuka
+      const keyboardOpen = keyboardDiff > 150;
+
       // ======================
-      // KEYBOARD AMAN UNTUK MODAL
+      // KEYBOARD AMAN UNTUK INPUT/MODAL PENGADUAN
       // ======================
       if (
         keyboardOpen &&
@@ -850,77 +855,51 @@ export default function StartExamPage() {
       }
 
       // ======================
-      // RESET STATE
+      // LOGIKA DETEKSI BARU: LANGSUNG BLOKIR TANPA TOLERANSI
       // ======================
+      if (keyboardOpen) {
+        // Izinkan jika siswa sedang membuka modal pengaduan resmi
+        if (isModalPengaduanOpen) return;
 
+        // Cegah spam alert berulang saat keyboard masih posisi terbuka
+        if (keyboardOpenedRef.current) return;
+        keyboardOpenedRef.current = true;
+
+        // JIKA KONDISI FLOATING KEYBOARD TERPENUHI (Ukurannya tidak memotong layar standar atau mengecil ke samping)
+        const isFloating = keyboardDiff < 180 || widthShrink;
+
+        if (isFloating) {
+          // LANGSUNG KONCI UJIAN PERMANEN
+          setSoalLocked(true);
+          showModal(
+            "❌ Pelanggaran Berat: Terdeteksi penggunaan Floating Keyboard (Keyboard Mengambang) atau modifikasi tampilan layar standar. Akses ujian langsung dikunci!",
+          );
+          triggerViolation("Floating Keyboard terdeteksi di area ujian");
+          return;
+        } else {
+          // Jika keyboard standar Android tidak sengaja terbuka di luar input pengaduan, langsung kunci juga tanpa toleransi
+          setSoalLocked(true);
+          showModal(
+            "❌ Pelanggaran: Membuka keyboard tidak diizinkan selama ujian berlangsung. Akses ujian langsung dikunci!",
+          );
+          triggerViolation("Membuka keyboard standar tanpa izin");
+          return;
+        }
+      }
+
+      // RESET STATE JIKA KEYBOARD DITUTUP
       if (!keyboardOpen) {
         keyboardOpenedRef.current = false;
       }
 
-      // ======================
-      // KEYBOARD DETECTOR
-      // ======================
-
-      if (keyboardOpen) {
-        // izinkan modal pengaduan
-        if (isModalPengaduanOpen) {
-          return;
-        }
-
-        // cegah spam saat keyboard
-        // masih terbuka
-        if (keyboardOpenedRef.current) {
-          return;
-        }
-
-        keyboardOpenedRef.current = true;
-
-        keyboardCountRef.current++;
-
-        console.log("KEYBOARD COUNT:", keyboardCountRef.current);
-
-        // ======================
-        // PERTAMA
-        // ======================
-
-        if (keyboardCountRef.current === 1) {
-          showModal(
-            "⚠️ Keyboard terdeteksi.\n\n" +
-              "Keyboard tidak diperlukan saat ujian.\n\n" +
-              "Sistem masih memberikan toleransi.",
-          );
-
-          return;
-        }
-
-        // ======================
-        // KEDUA
-        // ======================
-
-        if (keyboardCountRef.current === 2) {
-          showModal(
-            "⚠️ Keyboard kembali terdeteksi.\n\n" +
-              "Mohon tidak menggunakan keyboard selama ujian.\n\n" +
-              "Pelanggaran berikutnya akan menyebabkan ujian dihentikan.",
-          );
-
-          return;
-        }
-
-        // ======================
-        // KETIGA
-        // ======================
-
-        if (keyboardCountRef.current >= 3) {
-          triggerViolation("Keyboard terdeteksi berulang kali");
-        }
-      }
-
-      if (keyboardOpen) return;
-
       if (safeActionRef.current) return;
 
+      // DETEKSI SPLIT SCREEN / FLOATING WINDOW APLIKASI LAIN
       if (widthRatio < 0.75 || heightRatio < 0.75) {
+        setSoalLocked(true);
+        showModal(
+          "❌ Pelanggaran Berat: Split screen atau Floating Window aplikasi lain terdeteksi. Akses ujian langsung dikunci!",
+        );
         triggerViolation("Floating window / split screen terdeteksi");
       }
     }

@@ -464,21 +464,16 @@ export default function ExamPage() {
                     </select>
                   </div>
 
-                  {/* TOKEN */}
-                  <div>
-                    <label className="block mb-2 text-sm text-slate-300 font-semibold">
-                      Token Ujian
-                    </label>
-
+                  {/* CONTAINER INPUT TOKEN */}
+                  <div className="mt-4 relative w-full">
                     <input
                       type="text"
-                      placeholder="Masukkan Token Ujian"
                       value={token}
                       onChange={(e) => setToken(e.target.value.toUpperCase())}
+                      disabled={loadingToken} // Mencegah input ganda saat loading
                       onKeyDown={async (e) => {
                         if (e.key !== "Enter") return;
                         e.preventDefault();
-
                         if (loadingToken) return;
 
                         // =========================
@@ -492,21 +487,12 @@ export default function ExamPage() {
                         let keyboardSafe = true;
 
                         if (!isDesktop && window.visualViewport) {
-                          // 1. HAPUS setTimeout. Kita harus mengukur dimensi secara instan
-                          // tepat saat tombol Enter dtekan, sewaktu keyboard masih terbuka penuh.
                           const viewport = window.visualViewport;
                           const diff = window.innerHeight - viewport.height;
                           const widthShrink =
                             viewport.width < window.innerWidth * 0.9;
 
-                          console.log("KEYBOARD DIFF:", diff);
-
-                          // =========================
-                          // PERBAIKAN LOGIKA:
-                          // Keyboard normal selalu memakan ruang layar besar (diff > 180).
-                          // Jika ruang yang terpotong kurang dari 180 (misal 0 atau 100),
-                          // itu PASTI floating keyboard atau keyboard fisik.
-                          // =========================
+                          // Menggunakan logika deteksi < 180 atau penyusutan lebar
                           const floatingLike = diff < 180 || widthShrink;
 
                           if (floatingLike) {
@@ -520,9 +506,6 @@ export default function ExamPage() {
                           keyboardSafe ? "yes" : "no",
                         );
 
-                        // =========================
-                        // BLOCK FLOATING
-                        // =========================
                         if (!keyboardSafe) {
                           setTokenMessage(
                             "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
@@ -531,16 +514,22 @@ export default function ExamPage() {
                           return;
                         }
 
-                        // =========================
                         // LANJUT UJIAN
-                        // =========================
                         handleCheckToken(true);
                       }}
                       autoCapitalize="characters"
                       autoCorrect="off"
                       spellCheck={false}
-                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500"
+                      placeholder="Masukkan Token Ujian"
+                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 pr-12 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500 disabled:opacity-50"
                     />
+
+                    {/* ANIMASI LOADING SPINNER */}
+                    {loadingToken && (
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-400 border-t-transparent"></div>
+                      </div>
+                    )}
                   </div>
 
                   {/* BUTTON */}
