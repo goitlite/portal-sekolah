@@ -57,6 +57,19 @@ export default function ExamPage() {
     const savedNama = localStorage.getItem("nama");
     const savedKelas = localStorage.getItem("kelas");
     const savedExamLink = localStorage.getItem("examLink");
+    // =========================
+    // VALIDASI KEYBOARD
+    // =========================
+
+    const keyboardSafe = sessionStorage.getItem("keyboardSafe");
+
+    if (keyboardSafe !== "yes") {
+      alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
+
+      router.push("/exam");
+
+      return;
+    }
 
     // =========================
     // VALIDASI SESSION
@@ -506,6 +519,46 @@ export default function ExamPage() {
                         }
 
                         // lanjut cek token
+                        // =========================
+                        // VALIDASI KEYBOARD NORMAL
+                        // =========================
+
+                        const vv = window.visualViewport;
+
+                        let keyboardSafe = true;
+
+                        if (vv) {
+                          await new Promise((resolve) =>
+                            setTimeout(resolve, 250),
+                          );
+
+                          const keyboardHeight =
+                            window.screen.height - vv.height;
+
+                          console.log("KEYBOARD HEIGHT:", keyboardHeight);
+
+                          // keyboard floating:
+                          // tinggi kecil
+                          if (keyboardHeight > 40 && keyboardHeight < 260) {
+                            keyboardSafe = false;
+                          }
+                        }
+
+                        // simpan status keyboard
+                        sessionStorage.setItem(
+                          "keyboardSafe",
+                          keyboardSafe ? "yes" : "no",
+                        );
+
+                        if (!keyboardSafe) {
+                          setTokenMessage(
+                            "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar.",
+                          );
+
+                          setTokenModal(true);
+
+                          return;
+                        }
                         handleCheckToken(true);
                       }}
                       autoCapitalize="characters"
