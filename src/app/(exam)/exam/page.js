@@ -57,17 +57,16 @@ export default function ExamPage() {
     const savedNama = localStorage.getItem("nama");
     const savedKelas = localStorage.getItem("kelas");
     const savedExamLink = localStorage.getItem("examLink");
+
     // =========================
     // VALIDASI KEYBOARD
     // =========================
-
     const keyboardSafe = sessionStorage.getItem("keyboardSafe");
 
-    if (keyboardSafe !== "yes") {
+    // PERBAIKAN: Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no")
+    if (keyboardSafe === "no") {
       alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
-
-      router.push("/exam");
-
+      router.push("/"); // Diarahkan kembali ke login/awal, bukan /exam
       return;
     }
 
@@ -76,15 +75,7 @@ export default function ExamPage() {
     // =========================
     if (!savedNama || !savedKelas) {
       localStorage.clear();
-
       router.push("/");
-
-      return;
-    }
-
-    // BELUM LOGIN
-    if (!savedNama || !savedKelas) {
-      router.push("/exam");
       return;
     }
 
@@ -187,8 +178,6 @@ export default function ExamPage() {
     // VALIDASI
     if (!selectedKelas || !selectedMapel || !token) {
       setTokenMessage("Lengkapi data ujian");
-
-      setLoadingToken(false);
       setTokenModal(true);
 
       setTimeout(() => {
@@ -488,7 +477,6 @@ export default function ExamPage() {
                       onChange={(e) => setToken(e.target.value.toUpperCase())}
                       onKeyDown={async (e) => {
                         if (e.key !== "Enter") return;
-
                         e.preventDefault();
 
                         if (loadingToken) return;
@@ -496,44 +484,31 @@ export default function ExamPage() {
                         // =========================
                         // DETEKSI FLOATING KEYBOARD
                         // =========================
-
                         const isDesktop =
                           window.innerWidth > 900 &&
                           !/Android|iPhone|iPad|iPod/i.test(
                             navigator.userAgent,
                           );
-
                         let keyboardSafe = true;
 
                         if (!isDesktop && window.visualViewport) {
                           await new Promise((resolve) =>
                             setTimeout(resolve, 250),
                           );
-
                           const viewport = window.visualViewport;
-
                           const diff = window.innerHeight - viewport.height;
-
                           const widthShrink =
                             viewport.width < window.innerWidth * 0.9;
 
                           console.log("KEYBOARD DIFF:", diff);
 
                           // =========================
-                          // FLOATING KEYBOARD
+                          // PERBAIKAN: Menggunakan rumus aman Anda (Menggunakan &&)
                           // =========================
-
-                          // =========================
-                          // FLOATING KEYBOARD DETECT
-                          // =========================
-
                           const floatingLike =
-                            (diff > 60 && diff < 200) ||
-                            widthShrink ||
-                            viewport.offsetTop > 0;
+                            diff > 60 && diff < 200 && widthShrink;
 
                           console.log("OFFSET TOP:", viewport.offsetTop);
-
                           if (floatingLike) {
                             keyboardSafe = false;
                           }
@@ -548,21 +523,17 @@ export default function ExamPage() {
                         // =========================
                         // BLOCK FLOATING
                         // =========================
-
                         if (!keyboardSafe) {
                           setTokenMessage(
                             "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
                           );
-
                           setTokenModal(true);
-
                           return;
                         }
 
                         // =========================
                         // LANJUT UJIAN
                         // =========================
-
                         handleCheckToken(true);
                       }}
                       autoCapitalize="characters"
