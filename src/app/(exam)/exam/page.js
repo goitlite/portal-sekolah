@@ -149,13 +149,27 @@ export default function ExamPage() {
   // ======================================
   // FILTER KELAS
   // ======================================
+  // ======================================
+  // FILTER KELAS (SUDAH DIPERBAIKI ANTI BOCOR)
+  // ======================================
   const kelasList = [
     ...new Set(
       examData
-        .filter(
-          (item) =>
-            item?.kls && item.kls.toString().toUpperCase().startsWith(jenjang),
-        )
+        .filter((item) => {
+          if (!item?.kls || !jenjang) return false;
+
+          const namaKelas = item.kls.toString().toUpperCase().trim();
+
+          // Memastikan X tidak membocorkan XI atau XII
+          // Cocok jika sama persis (misal: "X")
+          // ATAU diikuti spasi (misal: "X TJKT")
+          // ATAU diikuti strip (misal: "X-TJKT")
+          return (
+            namaKelas === jenjang ||
+            namaKelas.startsWith(jenjang + " ") ||
+            namaKelas.startsWith(jenjang + "-")
+          );
+        })
         .map((item) => item.kls),
     ),
   ];
