@@ -521,7 +521,18 @@ export default function ExamPage() {
                           // FLOATING KEYBOARD
                           // =========================
 
-                          if (diff < 260 || widthShrink) {
+                          // =========================
+                          // FLOATING KEYBOARD DETECT
+                          // =========================
+
+                          const floatingLike =
+                            (diff > 40 && diff < 180) ||
+                            widthShrink ||
+                            viewport.offsetTop > 0;
+
+                          console.log("OFFSET TOP:", viewport.offsetTop);
+
+                          if (floatingLike) {
                             keyboardSafe = false;
                           }
                         }
