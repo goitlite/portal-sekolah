@@ -495,68 +495,61 @@ export default function ExamPage() {
                         // DETEKSI FLOATING KEYBOARD
                         // =========================
 
-                        const vv = window.visualViewport;
-
-                        if (vv) {
-                          const keyboardOpen =
-                            window.innerHeight - vv.height > 150;
-
-                          const widthShrink =
-                            vv.width < window.innerWidth * 0.9;
-
-                          // keyboard floating:
-                          // tinggi turun sedikit
-                          // lebar ikut mengecil
-                          if (keyboardOpen && widthShrink) {
-                            setTokenMessage(
-                              "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar.",
-                            );
-
-                            setTokenModal(true);
-
-                            return;
-                          }
-                        }
-
-                        // lanjut cek token
-                        // =========================
-                        // VALIDASI KEYBOARD NORMAL
-                        // =========================
+                        const isDesktop =
+                          window.innerWidth > 900 &&
+                          !/Android|iPhone|iPad|iPod/i.test(
+                            navigator.userAgent,
+                          );
 
                         let keyboardSafe = true;
 
-                        if (vv) {
+                        if (!isDesktop && window.visualViewport) {
                           await new Promise((resolve) =>
                             setTimeout(resolve, 250),
                           );
 
-                          const keyboardHeight =
-                            window.screen.height - vv.height;
+                          const viewport = window.visualViewport;
 
-                          console.log("KEYBOARD HEIGHT:", keyboardHeight);
+                          const diff = window.innerHeight - viewport.height;
 
-                          // keyboard floating:
-                          // tinggi kecil
-                          if (keyboardHeight > 40 && keyboardHeight < 260) {
+                          const widthShrink =
+                            viewport.width < window.innerWidth * 0.9;
+
+                          console.log("KEYBOARD DIFF:", diff);
+
+                          // =========================
+                          // FLOATING KEYBOARD
+                          // =========================
+
+                          if (diff < 260 || widthShrink) {
                             keyboardSafe = false;
                           }
                         }
 
-                        // simpan status keyboard
+                        // simpan status
                         sessionStorage.setItem(
                           "keyboardSafe",
                           keyboardSafe ? "yes" : "no",
                         );
 
+                        // =========================
+                        // BLOCK FLOATING
+                        // =========================
+
                         if (!keyboardSafe) {
                           setTokenMessage(
-                            "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar.",
+                            "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
                           );
 
                           setTokenModal(true);
 
                           return;
                         }
+
+                        // =========================
+                        // LANJUT UJIAN
+                        // =========================
+
                         handleCheckToken(true);
                       }}
                       autoCapitalize="characters"
