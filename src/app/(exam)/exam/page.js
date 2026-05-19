@@ -523,8 +523,6 @@ export default function ExamPage() {
                         // VALIDASI KEYBOARD NORMAL
                         // =========================
 
-                        const vv = window.visualViewport;
-
                         let keyboardSafe = true;
 
                         if (vv) {
