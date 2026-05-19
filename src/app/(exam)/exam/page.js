@@ -187,6 +187,8 @@ export default function ExamPage() {
     // VALIDASI
     if (!selectedKelas || !selectedMapel || !token) {
       setTokenMessage("Lengkapi data ujian");
+
+      setLoadingToken(false);
       setTokenModal(true);
 
       setTimeout(() => {
@@ -526,7 +528,7 @@ export default function ExamPage() {
                           // =========================
 
                           const floatingLike =
-                            (diff > 40 && diff < 180) ||
+                            (diff > 60 && diff < 200) ||
                             widthShrink ||
                             viewport.offsetTop > 0;
 

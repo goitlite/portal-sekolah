@@ -74,6 +74,8 @@ export default function StartExamPage() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
+  const startTimeRef = useRef(Date.now());
+
   const fullscreenTimeout = useRef(null);
   const logoutRef = useRef(false);
   const iframeRef = useRef(null);
@@ -855,6 +857,15 @@ export default function StartExamPage() {
 
       if (!keyboardOpen) {
         keyboardOpenedRef.current = false;
+      }
+
+      // ======================
+      // ABAIKAN 3 DETIK PERTAMA
+      // AGAR TRANSISI MASUK NORMAL
+      // ======================
+
+      if (Date.now() - startTimeRef.current < 3000) {
+        return;
       }
 
       // ======================
