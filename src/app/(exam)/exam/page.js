@@ -471,14 +471,42 @@ export default function ExamPage() {
                       placeholder="Masukkan Token Ujian"
                       value={token}
                       onChange={(e) => setToken(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
+                      onKeyDown={async (e) => {
+                        if (e.key !== "Enter") return;
 
-                          if (!loadingToken) {
-                            handleCheckToken(true);
+                        e.preventDefault();
+
+                        if (loadingToken) return;
+
+                        // =========================
+                        // DETEKSI FLOATING KEYBOARD
+                        // =========================
+
+                        const vv = window.visualViewport;
+
+                        if (vv) {
+                          const keyboardOpen =
+                            window.innerHeight - vv.height > 150;
+
+                          const widthShrink =
+                            vv.width < window.innerWidth * 0.9;
+
+                          // keyboard floating:
+                          // tinggi turun sedikit
+                          // lebar ikut mengecil
+                          if (keyboardOpen && widthShrink) {
+                            setTokenMessage(
+                              "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar.",
+                            );
+
+                            setTokenModal(true);
+
+                            return;
                           }
                         }
+
+                        // lanjut cek token
+                        handleCheckToken(true);
                       }}
                       autoCapitalize="characters"
                       autoCorrect="off"
@@ -488,30 +516,7 @@ export default function ExamPage() {
                   </div>
 
                   {/* BUTTON */}
-                  <div className="grid sm:grid-cols-2 gap-4 pt-2">
-                    <button
-                      onClick={() => handleCheckToken(false)}
-                      disabled={loadingToken}
-                      className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl"
-                    >
-                      {loadingToken ? "Memeriksa Token..." : "Cek Token"}
-                    </button>
-
-                    {examLink && (
-                      <button
-                        onClick={async () => {
-                          localStorage.setItem("examLink", examLink);
-
-                          await enterFullscreen();
-
-                          router.push("/exam/start");
-                        }}
-                        className="bg-gradient-to-r from-emerald-500 to-green-600 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-2xl text-white font-bold p-4 rounded-2xl animate-pulse"
-                      >
-                        Mulai Ujian
-                      </button>
-                    )}
-                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4 pt-2"></div>
 
                   {/* INFO */}
                   <div className="bg-cyan-500/10 border border-cyan-400/20 rounded-2xl p-4 mt-2">
