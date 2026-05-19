@@ -105,6 +105,9 @@ export default function StartExamPage() {
 
   const keyboardTestRef = useRef(null);
 
+  const lastTouchRef = useRef(Date.now());
+  const keyboardGraceRef = useRef(true);
+
   // =========================
   // LOAD SESSION
   // =========================
@@ -656,6 +659,18 @@ export default function StartExamPage() {
   // SUPER STABIL
   // =========================
   useEffect(() => {
+    // ======================
+    // GRACE PERIOD
+    // AGAR TRANSISI DARI TOKEN
+    // TIDAK TERDETEKSI
+    // ======================
+
+    keyboardGraceRef.current = true;
+
+    setTimeout(() => {
+      keyboardGraceRef.current = false;
+    }, 4000);
+
     lastWidthRef.current = window.innerWidth;
     lastHeightRef.current = window.innerHeight;
     lastViewportHeightRef.current = window.innerHeight;
@@ -799,6 +814,9 @@ export default function StartExamPage() {
     // VISUAL VIEWPORT (Android)
     // ======================
     function handleViewport() {
+      if (keyboardGraceRef.current) {
+        return;
+      }
       const currentHeight = window.innerHeight;
 
       const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
