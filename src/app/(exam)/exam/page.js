@@ -492,9 +492,8 @@ export default function ExamPage() {
                         let keyboardSafe = true;
 
                         if (!isDesktop && window.visualViewport) {
-                          await new Promise((resolve) =>
-                            setTimeout(resolve, 250),
-                          );
+                          // 1. HAPUS setTimeout. Kita harus mengukur dimensi secara instan
+                          // tepat saat tombol Enter dtekan, sewaktu keyboard masih terbuka penuh.
                           const viewport = window.visualViewport;
                           const diff = window.innerHeight - viewport.height;
                           const widthShrink =
@@ -503,12 +502,13 @@ export default function ExamPage() {
                           console.log("KEYBOARD DIFF:", diff);
 
                           // =========================
-                          // PERBAIKAN: Menggunakan rumus aman Anda (Menggunakan &&)
+                          // PERBAIKAN LOGIKA:
+                          // Keyboard normal selalu memakan ruang layar besar (diff > 180).
+                          // Jika ruang yang terpotong kurang dari 180 (misal 0 atau 100),
+                          // itu PASTI floating keyboard atau keyboard fisik.
                           // =========================
-                          const floatingLike =
-                            diff > 60 && diff < 200 && widthShrink;
+                          const floatingLike = diff < 180 || widthShrink;
 
-                          console.log("OFFSET TOP:", viewport.offsetTop);
                           if (floatingLike) {
                             keyboardSafe = false;
                           }
