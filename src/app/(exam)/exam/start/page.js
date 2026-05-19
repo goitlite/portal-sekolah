@@ -103,6 +103,8 @@ export default function StartExamPage() {
 
   const keyboardOpenedRef = useRef(false);
 
+  const keyboardTestRef = useRef(null);
+
   // =========================
   // LOAD SESSION
   // =========================
@@ -818,6 +820,17 @@ export default function StartExamPage() {
       const heightRatio = viewportHeight / screenHeight;
 
       const keyboardOpen = Math.abs(window.innerHeight - viewportHeight) > 150;
+      // ======================
+      // KEYBOARD AMAN UNTUK MODAL
+      // ======================
+      if (
+        keyboardOpen &&
+        (isModalPengaduanOpen ||
+          document.activeElement?.tagName === "TEXTAREA" ||
+          document.activeElement?.tagName === "INPUT")
+      ) {
+        return;
+      }
 
       // ======================
       // RESET STATE
@@ -921,61 +934,6 @@ export default function StartExamPage() {
       }
     };
   }, [ignoreFullscreen, violations]);
-
-  // =========================
-  // INPUT / KEYBOARD FOCUS DETECTOR
-  // =========================
-
-  useEffect(() => {
-    function handleFocusIn(e) {
-      if (logoutRef.current) return;
-
-      // izinkan textarea pengaduan
-      if (isModalPengaduanOpen) {
-        return;
-      }
-
-      const tag = e.target.tagName;
-
-      const isInput =
-        tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable;
-
-      if (!isInput) return;
-
-      keyboardCountRef.current++;
-
-      console.log("INPUT FOCUS:", keyboardCountRef.current);
-
-      // pertama
-      if (keyboardCountRef.current === 1) {
-        showModal(
-          "⚠️ Input keyboard terdeteksi.\n\n" +
-            "Keyboard tidak diperlukan selama ujian.",
-        );
-
-        return;
-      }
-
-      // kedua
-      if (keyboardCountRef.current === 2) {
-        showModal(
-          "⚠️ Keyboard kembali terdeteksi.\n\n" +
-            "Pelanggaran berikutnya akan menghentikan ujian.",
-        );
-
-        return;
-      }
-
-      // ketiga
-      triggerViolation("Aktivitas keyboard mencurigakan");
-    }
-
-    document.addEventListener("focusin", handleFocusIn, true);
-
-    return () => {
-      document.removeEventListener("focusin", handleFocusIn, true);
-    };
-  }, [isModalPengaduanOpen]);
 
   // =========================
   // SCREEN WAKE LOCK
