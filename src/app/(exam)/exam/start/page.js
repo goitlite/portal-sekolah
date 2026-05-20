@@ -149,9 +149,22 @@ export default function StartExamPage() {
       setNama(savedNama);
       setKelas(savedKelas);
 
-      const savedViolation = parseInt(
-        localStorage.getItem("violations") || "0",
-      );
+      // 🔥 UBAH BAGIAN INI: Cek apakah masa pemulihan 80 menit sudah habis
+      let savedViolation = parseInt(localStorage.getItem("violations") || "0");
+      const violationStartTime = localStorage.getItem("violationStartTime");
+
+      if (violationStartTime) {
+        const timePassed = Date.now() - parseInt(violationStartTime);
+        const cooldownPeriod = 80 * 60 * 1000; // 80 menit dalam milidetik
+
+        if (timePassed >= cooldownPeriod) {
+          // Jika sudah lewat 80 menit, bersihkan status pelanggaran
+          localStorage.removeItem("violations");
+          localStorage.removeItem("violationStartTime");
+          localStorage.removeItem("penaltyPassed");
+          savedViolation = 0; // Set menjadi normal kembali
+        }
+      }
 
       const penaltyPassed = localStorage.getItem("penaltyPassed");
 
@@ -247,6 +260,11 @@ export default function StartExamPage() {
     const totalViolation = violations + 1;
     localStorage.setItem("violations", totalViolation.toString());
     setViolations(totalViolation);
+
+    // 🔥 TAMBAHKAN INI: Simpan waktu pelanggaran pertama kali jika belum ada
+    if (!localStorage.getItem("violationStartTime")) {
+      localStorage.setItem("violationStartTime", Date.now().toString());
+    }
     // reset hukuman agar muncul lagi
     if (totalViolation >= 5) {
       localStorage.removeItem("penaltyPassed");
@@ -259,6 +277,37 @@ export default function StartExamPage() {
       router.push("/exam");
     }, 2000);
   }
+
+  // =========================
+  // LIVE AUTO RESET PELANGGARAN (80 MENIT)
+  // =========================
+  useEffect(() => {
+    const checkAutoResetLive = () => {
+      const startTime = localStorage.getItem("violationStartTime");
+      if (!startTime) return;
+
+      const timePassed = Date.now() - parseInt(startTime);
+      const cooldownPeriod = 80 * 60 * 1000; // 80 menit
+
+      if (timePassed >= cooldownPeriod) {
+        localStorage.removeItem("violations");
+        localStorage.removeItem("violationStartTime");
+        localStorage.removeItem("penaltyPassed");
+
+        setViolations(0);
+        setPenaltyOpen(false);
+        document.body.style.overflow = "auto";
+
+        showModal(
+          "⏱️ Masa pemulihan 80 menit telah selesai.\n\nSemua catatan pelanggaran Anda telah di-reset menjadi 0. Anda dapat mengikuti ujian kembali dengan normal.",
+        );
+      }
+    };
+
+    // Jalankan pengecekan otomatis setiap 10 detik
+    const interval = setInterval(checkAutoResetLive, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // =========================
   // CEK PESAN REALTIME
@@ -327,8 +376,9 @@ export default function StartExamPage() {
       return;
     }
 
-    // 🔥 RESET PELANGGARAN SAAT KELUAR
+    // 🔥 RESET SEMUA DATA SAAT KELUAR RESMI
     localStorage.removeItem("violations");
+    localStorage.removeItem("violationStartTime"); // Tembahkan baris ini
     localStorage.removeItem("penaltyPassed");
     localStorage.removeItem("draftAnswers");
     localStorage.removeItem("draftMode");
@@ -336,7 +386,6 @@ export default function StartExamPage() {
     setViolations(0);
 
     localStorage.removeItem("examLink");
-
     router.push("/exam");
   }
 
