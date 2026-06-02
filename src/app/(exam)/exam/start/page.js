@@ -11,7 +11,7 @@ export default function StartExamPage() {
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("");
   const [pesan, setPesan] = useState("");
-  const [timeLeft, setTimeLeft] = useState(30 * 60);
+  const [timeLeft, setTimeLeft] = useState(40 * 60);
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
