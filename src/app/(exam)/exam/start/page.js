@@ -38,6 +38,14 @@ export default function StartExamPage() {
   const [showPanduanModal, setShowPanduanModal] = useState(false);
 
   const [examStarted, setExamStarted] = useState(false);
+  // =========================
+  // EMERGENCY ACCESS
+  // =========================
+  const [showEmergencyInput, setShowEmergencyInput] = useState(false);
+
+  const [emergencyCode, setEmergencyCode] = useState("");
+
+  const emergencyPressTimer = useRef(null);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
@@ -72,6 +80,38 @@ export default function StartExamPage() {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  // =========================
+  // EMERGENCY CODE
+  // =========================
+  function handleEmergencySubmit() {
+    // KODE BENAR
+    if (emergencyCode === "67676767") {
+      // timer langsung habis
+      setTimeLeft(0);
+
+      // buka lock soal
+      setSoalLocked(false);
+
+      showModal(
+        "✅ MODE DARURAT AKTIF\n\n" +
+          "Waktu ujian diakhiri.\n" +
+          "Iframe tetap aktif.",
+      );
+
+      setShowEmergencyInput(false);
+
+      setEmergencyCode("");
+
+      return;
+    }
+
+    // KODE SALAH = PELANGGARAN
+    setShowEmergencyInput(false);
+
+    setEmergencyCode("");
+
+    forceLogout("Kode darurat salah");
   }
 
   const fullscreenTimeout = useRef(null);
@@ -622,6 +662,24 @@ export default function StartExamPage() {
 
           return;
         }
+        // MODAL DARURAT
+        if (showEmergencyInput) {
+          setShowEmergencyInput(false);
+
+          setEmergencyCode("");
+
+          setTimeout(async () => {
+            try {
+              if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+              }
+            } catch (err) {}
+
+            setIgnoreFullscreen(false);
+          }, 300);
+
+          return;
+        }
 
         // Jika tidak ada modal
         forceLogout("Tombol ESC terdeteksi");
@@ -668,6 +726,14 @@ export default function StartExamPage() {
       ];
 
       if (allowedScroll.includes(e.key)) return;
+
+      // =========================
+      // IZINKAN KEYBOARD
+      // HANYA SAAT MODAL DARURAT
+      // =========================
+      if (showEmergencyInput && document.activeElement?.tagName === "INPUT") {
+        return;
+      }
 
       e.preventDefault();
     }
@@ -1257,6 +1323,69 @@ export default function StartExamPage() {
           </div>
         </div>
       )}
+      {/* MODAL DARURAT */}
+      {showEmergencyInput && (
+        <div className="fixed inset-0 z-[999999] bg-black/70 flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <h2 className="text-2xl font-black text-red-600 mb-4">
+              MODE DARURAT
+            </h2>
+
+            <p className="text-gray-600 text-sm mb-4">
+              Masukkan kode akses darurat
+            </p>
+
+            <input
+              type="password"
+              value={emergencyCode}
+              onChange={(e) => setEmergencyCode(e.target.value)}
+              className="
+          w-full
+          border
+          border-gray-300
+          rounded-2xl
+          p-4
+          outline-none
+          focus:border-red-500
+        "
+              placeholder="Masukkan kode"
+            />
+
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <button
+                onClick={() => {
+                  setShowEmergencyInput(false);
+
+                  setEmergencyCode("");
+
+                  setIgnoreFullscreen(false);
+                }}
+                className="
+            py-3
+            rounded-2xl
+            bg-gray-200
+            font-bold
+          "
+              >
+                Batal
+              </button>
+
+              <button
+                onClick={handleEmergencySubmit}
+                className="
+            py-3
+            rounded-2xl
+            bg-red-600
+            text-white
+            font-bold
+          "
+              >
+                Aktifkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* MODAL INFO */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-5">
@@ -1338,26 +1467,46 @@ export default function StartExamPage() {
               {/* BADGE */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div
+                  onTouchStart={() => {
+                    emergencyPressTimer.current = setTimeout(() => {
+                      setIgnoreFullscreen(true);
+
+                      setShowEmergencyInput(true);
+                    }, 2500);
+                  }}
+                  onTouchEnd={() => {
+                    clearTimeout(emergencyPressTimer.current);
+                  }}
+                  onMouseDown={() => {
+                    emergencyPressTimer.current = setTimeout(() => {
+                      setIgnoreFullscreen(true);
+
+                      setShowEmergencyInput(true);
+                    }, 2500);
+                  }}
+                  onMouseUp={() => {
+                    clearTimeout(emergencyPressTimer.current);
+                  }}
                   className="
-              px-2
-              py-1
+      px-2
+      py-1
 
-              rounded-lg
+      rounded-lg
 
-              bg-white/20
-              backdrop-blur-md
+      bg-white/20
+      backdrop-blur-md
 
-              border
-              border-white/30
+      border
+      border-white/30
 
-              text-[8px]
-              md:text-[9px]
+      text-[8px]
+      md:text-[9px]
 
-              font-black
-              tracking-[1.2px]
+      font-black
+      tracking-[1.2px]
 
-              text-yellow-950
-            "
+      text-yellow-950
+    "
                 >
                   CBT EXAM SYSTEM
                 </div>
