@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
 import { login } from "../lib/api";
 import { saveSession } from "../lib/auth";
 
@@ -12,6 +11,15 @@ export default function LoginMagang() {
 
   const [id, setId] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // LANGKAH 2: Tambah state untuk recentIds
+  const [recentIds, setRecentIds] = useState([]);
+
+  // LANGKAH 3: Ambil data dari localStorage saat halaman dibuka
+  useEffect(() => {
+    const ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
+    setRecentIds(ids);
+  }, []);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -25,7 +33,6 @@ export default function LoginMagang() {
 
     try {
       const result = await login(id);
-
       console.log("HASIL LOGIN :", result);
       console.log("DATA LOGIN :", result.data);
 
@@ -38,6 +45,13 @@ export default function LoginMagang() {
         alert("Data login tidak diterima dari server.");
         return;
       }
+
+      // LANGKAH 4: Simpan ID yang berhasil login ke localStorage
+      let ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
+      ids = ids.filter((item) => item !== id);
+      ids.unshift(id);
+      ids = ids.slice(0, 10);
+      localStorage.setItem("magang_recent_ids", JSON.stringify(ids));
 
       // Simpan hanya data user
       saveSession(result.data);
@@ -98,7 +112,9 @@ export default function LoginMagang() {
               ID Pengguna
             </label>
 
+            {/* LANGKAH 5: Tambahkan list="recentIds" pada input */}
             <input
+              list="recentIds"
               type="text"
               inputMode="numeric"
               maxLength={6}
@@ -107,6 +123,13 @@ export default function LoginMagang() {
               placeholder="Masukkan ID"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-center text-2xl font-bold tracking-[6px] outline-none transition focus:border-blue-600"
             />
+
+            {/* LANGKAH 6: Tambahkan komponen datalist */}
+            <datalist id="recentIds">
+              {recentIds.map((item, index) => (
+                <option key={index} value={item} />
+              ))}
+            </datalist>
           </div>
 
           <button

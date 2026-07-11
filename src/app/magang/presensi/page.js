@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
+import { cleanupResources } from "../lib/navigation";
 import { getSession, isLoggedIn } from "../lib/auth";
 // 1. Import savePresensi
 import { savePresensi } from "../lib/api";
@@ -18,6 +18,8 @@ export default function PresensiPage() {
   const [pembimbing, setPembimbing] = useState("");
   const [kompetensi, setKompetensi] = useState("");
   const [keterangan, setKeterangan] = useState("");
+
+  const [recentPembimbing, setRecentPembimbing] = useState([]);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -34,6 +36,10 @@ export default function PresensiPage() {
   // 2. Tambahan state saving
   const [saving, setSaving] = useState(false);
 
+  // Langkah 1: Tambahan useRef untuk stream dan watchId
+  const streamRef = useRef(null);
+  const watchIdRef = useRef(null);
+
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -44,6 +50,9 @@ export default function PresensiPage() {
         },
         audio: false,
       });
+
+      // Langkah 2: Simpan stream ke ref
+      streamRef.current = stream;
 
       if (!videoRef.current) return;
 
@@ -98,6 +107,7 @@ export default function PresensiPage() {
 
     if (navigator.geolocation) {
       setGpsLoading(true);
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLatitude(pos.coords.latitude);
@@ -118,6 +128,36 @@ export default function PresensiPage() {
     } else {
       alert("Browser Anda tidak mendukung fitur GPS.");
     }
+  }
+
+  // Langkah 3: Fungsi stopCamera
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  // Langkah 4: Fungsi stopLocation
+  function stopLocation() {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  }
+
+  // Langkah 5: Fungsi cleanup
+  function cleanup() {
+    cleanupResources({
+      streamRef,
+
+      videoRef,
+
+      watchIdRef,
+    });
   }
 
   // 3. Fungsi handleSubmit
@@ -151,30 +191,47 @@ export default function PresensiPage() {
         idGuru: user.idGuru,
         namaGuru: user.namaGuru,
         tempatMagang: user.tempatMagang,
-
         fotoUrl: photo,
-
         mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
-
         status: status,
-
         pembimbingLapangan: pembimbing,
-
         kompetensiYangDikuasai: kompetensi,
-
         keterangan: keterangan,
       });
 
       if (result.success) {
         alert("Presensi berhasil disimpan.");
+        let pembimbingList = JSON.parse(
+          localStorage.getItem("magang_recent_pembimbing") || "[]",
+        );
 
+        pembimbingList = pembimbingList.filter((item) => item !== pembimbing);
+
+        if (pembimbing.trim() !== "") {
+          pembimbingList.unshift(pembimbing);
+        }
+
+        pembimbingList = pembimbingList.slice(0, 10);
+
+        localStorage.setItem(
+          "magang_recent_pembimbing",
+          JSON.stringify(pembimbingList),
+        );
+
+        localStorage.setItem(
+          "magang_user_pref",
+          JSON.stringify({
+            status,
+
+            pembimbing,
+          }),
+        );
         router.replace("/magang/dashboard_siswa");
       } else {
         alert(result.message);
       }
     } catch (err) {
       console.error(err);
-
       alert("Terjadi kesalahan saat menyimpan.");
     } finally {
       setSaving(false);
@@ -196,6 +253,21 @@ export default function PresensiPage() {
       }
 
       setUser(session);
+      const pembimbingList = JSON.parse(
+        localStorage.getItem("magang_recent_pembimbing") || "[]",
+      );
+
+      setRecentPembimbing(pembimbingList);
+
+      const pref = JSON.parse(localStorage.getItem("magang_user_pref") || "{}");
+
+      if (pref.status) {
+        setStatus(pref.status);
+      }
+
+      if (pref.pembimbing) {
+        setPembimbing(pref.pembimbing);
+      }
       setLoading(false);
     }
 
@@ -207,11 +279,9 @@ export default function PresensiPage() {
       startCamera();
     }
 
+    // Langkah 7: Cleanup saat komponen di-unmount
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
-        tracks.forEach((track) => track.stop());
-      }
+      cleanup();
     };
   }, [loading, user, photo]);
 
@@ -238,8 +308,12 @@ export default function PresensiPage() {
             </div>
           </div>
 
+          {/* Langkah 6: Update onClick tombol kembali */}
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              cleanup();
+              router.back();
+            }}
             className="rounded-xl bg-blue-700 px-5 py-2 font-bold text-white hover:bg-blue-800"
           >
             Kembali
@@ -297,6 +371,7 @@ export default function PresensiPage() {
                   className="h-80 w-full rounded-3xl object-cover shadow-md border border-slate-200"
                 />
               )}
+
               <canvas ref={canvasRef} className="hidden" />
             </div>
 
@@ -335,6 +410,7 @@ export default function PresensiPage() {
 
           <div className="mt-8">
             <label className="font-bold text-slate-700">Status</label>
+
             <div className="mt-4 space-y-3">
               {["Hadir", "Izin", "Sakit"].map((item) => (
                 <label
@@ -359,11 +435,18 @@ export default function PresensiPage() {
                 Pembimbing Lapangan
               </label>
               <input
+                list="listPembimbing"
                 value={pembimbing}
                 onChange={(e) => setPembimbing(e.target.value)}
                 placeholder="Nama Pembimbing di Instansi"
                 className="mt-2 w-full rounded-xl border p-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
+
+              <datalist id="listPembimbing">
+                {recentPembimbing.map((item, index) => (
+                  <option key={index} value={item} />
+                ))}
+              </datalist>
             </div>
 
             <div className="mt-6">
