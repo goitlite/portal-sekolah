@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 import { getSession, isLoggedIn } from "../lib/auth";
-import {
-  getStatistikSiswa,
-  getRiwayatSiswa,
-  getPresensiHariIni,
-  savePresensi,
-} from "../lib/api";
+// 1. Import savePresensi
+import { savePresensi } from "../lib/api";
 
 export default function PresensiPage() {
   const router = useRouter();
@@ -29,15 +25,15 @@ export default function PresensiPage() {
   const [photo, setPhoto] = useState("");
   const [cameraReady, setCameraReady] = useState(false);
 
-  // 1. Tambahan State GPS
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
   const [accuracy, setAccuracy] = useState("-");
 
-  // SOLUSI 1: State gpsLoading dipindah ke level atas komponen
   const [gpsLoading, setGpsLoading] = useState(false);
 
-  // 2. Fungsi startCamera dipindah ke dalam komponen
+  // 2. Tambahan state saving
+  const [saving, setSaving] = useState(false);
+
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -54,8 +50,12 @@ export default function PresensiPage() {
       videoRef.current.srcObject = stream;
 
       videoRef.current.onloadedmetadata = async () => {
-        await videoRef.current.play();
-        setCameraReady(true);
+        try {
+          await videoRef.current.play();
+          setCameraReady(true);
+        } catch (e) {
+          console.error("Gagal memutar video:", e);
+        }
       };
     } catch (err) {
       console.error(err);
@@ -63,9 +63,7 @@ export default function PresensiPage() {
     }
   }
 
-  // 3. Fungsi capturePhoto dipindah ke dalam dan disisipkan GPS
   async function capturePhoto() {
-    // Logika untuk Ambil Ulang Foto
     if (photo) {
       setPhoto("");
       setLatitude("-");
@@ -80,7 +78,11 @@ export default function PresensiPage() {
 
     if (!video || !canvas) return;
 
-    // SOLUSI 3: Pastikan ukuran video sudah siap sebelum menggambar canvas
+    if (video.readyState !== 4) {
+      alert("Kamera masih mempersiapkan gambar.");
+      return;
+    }
+
     if (video.videoWidth === 0 || video.videoHeight === 0) {
       alert("Kamera belum siap.");
       return;
@@ -89,34 +91,23 @@ export default function PresensiPage() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
-    console.log(video.readyState);
-    console.log(video.videoWidth);
-    console.log(video.videoHeight);
     ctx.drawImage(video, 0, 0);
-
-    // SOLUSI 4: Pastikan canvas berhasil menggambar
-    console.log(canvas.toDataURL("image/jpeg"));
 
     const image = canvas.toDataURL("image/jpeg", 0.9);
     setPhoto(image);
 
-    // SOLUSI 2 & 5: Baris kode untuk menghentikan track video (track.stop) dihapus
-    // agar stream tetap menyala saat React merender <img>.
-
-    // Ambil GPS Otomatis setelah jepret foto
     if (navigator.geolocation) {
-      // SOLUSI 1: Cukup setGpsLoading(true) di sini
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLatitude(pos.coords.latitude);
           setLongitude(pos.coords.longitude);
           setAccuracy(Math.round(pos.coords.accuracy) + " meter");
-          setGpsLoading(false); // Opsional: Matikan loading saat sukses
+          setGpsLoading(false);
         },
         (err) => {
           alert("GPS gagal didapatkan. Pastikan izin lokasi aktif.");
-          setGpsLoading(false); // Opsional: Matikan loading saat error
+          setGpsLoading(false);
         },
         {
           enableHighAccuracy: true,
@@ -126,6 +117,67 @@ export default function PresensiPage() {
       );
     } else {
       alert("Browser Anda tidak mendukung fitur GPS.");
+    }
+  }
+
+  // 3. Fungsi handleSubmit
+  async function handleSubmit() {
+    if (!photo) {
+      alert("Silakan ambil foto terlebih dahulu.");
+      return;
+    }
+
+    if (latitude === "-") {
+      alert("Lokasi GPS belum diperoleh.");
+      return;
+    }
+
+    if (pembimbing.trim() === "") {
+      alert("Nama pembimbing lapangan wajib diisi.");
+      return;
+    }
+
+    if (kompetensi.trim() === "") {
+      alert("Kompetensi hari ini wajib diisi.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const result = await savePresensi({
+        idSiswa: user.id,
+        nama: user.nama,
+        idGuru: user.idGuru,
+        namaGuru: user.namaGuru,
+        tempatMagang: user.tempatMagang,
+
+        fotoUrl: photo,
+
+        mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
+
+        status: status,
+
+        pembimbingLapangan: pembimbing,
+
+        kompetensiYangDikuasai: kompetensi,
+
+        keterangan: keterangan,
+      });
+
+      if (result.success) {
+        alert("Presensi berhasil disimpan.");
+
+        router.replace("/magang/dashboard_siswa");
+      } else {
+        alert(result.message);
+      }
+    } catch (err) {
+      console.error(err);
+
+      alert("Terjadi kesalahan saat menyimpan.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -144,14 +196,24 @@ export default function PresensiPage() {
       }
 
       setUser(session);
-
-      await startCamera();
-
       setLoading(false);
     }
 
     loadPage();
   }, [router]);
+
+  useEffect(() => {
+    if (!loading && user && !photo) {
+      startCamera();
+    }
+
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach((track) => track.stop());
+      }
+    };
+  }, [loading, user, photo]);
 
   if (loading || !user) {
     return (
@@ -166,7 +228,6 @@ export default function PresensiPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 pb-10">
-      {/* HEADER */}
       <header className="sticky top-0 z-50 border-b bg-white shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
@@ -187,7 +248,6 @@ export default function PresensiPage() {
       </header>
 
       <div className="mx-auto max-w-5xl p-6">
-        {/* HERO */}
         <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-8 text-white shadow-xl">
           <p className="text-sm uppercase tracking-widest text-amber-300">
             Presensi Hari Ini
@@ -201,7 +261,6 @@ export default function PresensiPage() {
           </div>
         </div>
 
-        {/* STATUS */}
         <section className="mt-8 rounded-3xl bg-white p-8 shadow">
           <h2 className="text-2xl font-black text-slate-800">
             Status Hari Ini
@@ -216,9 +275,7 @@ export default function PresensiPage() {
           </div>
         </section>
 
-        {/* FOTO & GPS SECTION DIBUAT BERDEKATAN KARENA SATU AKSI */}
         <div className="mt-8 grid gap-8 md:grid-cols-2">
-          {/* FOTO */}
           <section className="rounded-3xl bg-white p-8 shadow">
             <h2 className="text-2xl font-black text-slate-800">Foto Selfie</h2>
 
@@ -231,7 +288,7 @@ export default function PresensiPage() {
                   playsInline
                   controls={false}
                   disablePictureInPicture
-                  className="h-80 w-full rounded-3xl bg-black object-cover"
+                  className="h-80 w-full rounded-3xl bg-black object-cover shadow-inner"
                 />
               ) : (
                 <img
@@ -256,7 +313,6 @@ export default function PresensiPage() {
             </button>
           </section>
 
-          {/* GPS */}
           <section className="rounded-3xl bg-white p-8 shadow">
             <h2 className="text-2xl font-black text-slate-800">Lokasi GPS</h2>
             <p className="mt-2 text-sm text-slate-500">
@@ -264,17 +320,16 @@ export default function PresensiPage() {
             </p>
 
             <div className="mt-6 space-y-4">
-              {/* Menggunakan GpsInfo agar warna font kontras dengan background putih */}
               <GpsInfo label="Latitude" value={latitude} />
               <GpsInfo label="Longitude" value={longitude} />
-              <GpsInfo label="Akurasi GPS" value={accuracy} />
+              <GpsInfo
+                label="Akurasi GPS"
+                value={gpsLoading ? "Mendapatkan lokasi..." : accuracy}
+              />
             </div>
-
-            {/* Tombol Ambil Lokasi manual dihapus sesuai Blueprint (1 kali klik) */}
           </section>
         </div>
 
-        {/* FORM */}
         <section className="mt-8 rounded-3xl bg-white p-8 shadow">
           <h2 className="text-2xl font-black text-slate-800">Data Presensi</h2>
 
@@ -335,14 +390,16 @@ export default function PresensiPage() {
               />
             </div>
 
+            {/* 4. Ganti tombol submit dan hubungkan handleSubmit */}
             <button
-              disabled={!photo || latitude === "-"}
+              onClick={handleSubmit}
+              disabled={!photo || latitude === "-" || saving}
               className="mt-8 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition"
             >
-              SIMPAN PRESENSI
+              {saving ? "MENYIMPAN..." : "SIMPAN PRESENSI"}
             </button>
 
-            {(!photo || latitude === "-") && (
+            {(!photo || latitude === "-") && !saving && (
               <p className="mt-3 text-center text-sm font-semibold text-red-500">
                 *Harap ambil Foto & Lokasi GPS terlebih dahulu sebelum
                 menyimpan.
@@ -355,7 +412,6 @@ export default function PresensiPage() {
   );
 }
 
-// Komponen Info untuk Hero (Background Biru Gelap)
 function Info({ label, value }) {
   return (
     <div className="rounded-xl bg-white/10 p-4">
@@ -365,7 +421,6 @@ function Info({ label, value }) {
   );
 }
 
-// Komponen Info untuk GPS (Background Putih Terang)
 function GpsInfo({ label, value }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
