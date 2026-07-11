@@ -53,7 +53,7 @@ export default function LoginMagang() {
           return;
 
         case "siswa":
-          router.replace("/magang/siswa");
+          router.replace("/magang/dashboard_siswa");
           return;
 
         default:

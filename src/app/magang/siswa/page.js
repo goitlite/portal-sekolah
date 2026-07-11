@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-import { getSiswaByGuru } from "../lib/api";
+import { getSiswaByGuru, deleteSiswa } from "../lib/api";
 import { getSession, isLoggedIn } from "../lib/auth";
 
 export default function DaftarSiswa() {
@@ -50,6 +50,28 @@ export default function DaftarSiswa() {
 
     loadData();
   }, [router]);
+
+  async function handleDelete(id) {
+    const yakin = confirm("Apakah Anda yakin ingin menghapus siswa ini?");
+
+    if (!yakin) return;
+
+    try {
+      const result = await deleteSiswa(id);
+
+      if (result.success) {
+        alert("Siswa berhasil dihapus.");
+
+        setSiswa((prev) => prev.filter((item) => item.ID !== id));
+      } else {
+        alert(result.message);
+      }
+    } catch (err) {
+      console.error(err);
+
+      alert("Gagal menghapus siswa.");
+    }
+  }
 
   if (loading) {
     return (
@@ -144,18 +166,14 @@ export default function DaftarSiswa() {
                 <div className="mt-6 flex gap-3">
                   <button
                     onClick={() => router.push(`/magang/edit/${item.ID}`)}
-                    className="flex-1 rounded-xl bg-amber-500 py-3 font-bold text-white transition hover:bg-amber-600"
+                    className="flex-1 rounded-xl bg-amber-500 py-3 font-bold text-white hover:bg-amber-600"
                   >
                     ✏ Edit
                   </button>
 
                   <button
-                    onClick={() => {
-                      if (confirm(`Hapus siswa ${item.NAMA}?`)) {
-                        alert("Tahap berikutnya: fungsi hapus akan dibuat.");
-                      }
-                    }}
-                    className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white transition hover:bg-red-700"
+                    onClick={() => handleDelete(item.ID)}
+                    className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
                   >
                     🗑 Hapus
                   </button>

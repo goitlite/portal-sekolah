@@ -126,9 +126,9 @@ export async function editSiswa(data) {
 // HAPUS SISWA
 // ==========================================
 
-export async function deleteSiswa(idSiswa) {
+export async function deleteSiswa(id) {
   return request("deleteSiswa", {
-    idSiswa,
+    id,
   });
 }
 
@@ -138,4 +138,14 @@ export async function deleteSiswa(idSiswa) {
 
 export async function getGuru() {
   return request("getGuru");
+}
+
+// ==========================================
+// GET SISWA BERDASARKAN ID
+// ==========================================
+
+export async function getSiswaById(id) {
+  return request("getSiswaById", {
+    id,
+  });
 }
