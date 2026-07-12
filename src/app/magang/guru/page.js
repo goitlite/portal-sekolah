@@ -143,9 +143,14 @@ export default function DashboardGuru() {
             onClick={() => router.push("/magang/tambah")}
           />
           <MenuCard
+            title="Monitoring Lapangan"
+            subtitle="Foto monitoring kegiatan siswa"
+            onClick={() => router.push("/magang/guru/monitoring")}
+          />
+          <MenuCard
             title="Rekap Kehadiran"
             subtitle="Lihat rekap bulanan"
-            onClick={() => router.push("/magang/guru/rekap")}
+            onClick={() => router.push("/magang/rekap")}
           />
           <MenuCard
             title="Cetak Rekap"

@@ -149,3 +149,43 @@ export async function getSiswaById(id) {
     id,
   });
 }
+
+// =====================================================
+// MONITORING
+// =====================================================
+
+export async function saveMonitoring(data) {
+  return request("saveMonitoring", data);
+}
+
+export async function getMonitoringGuru(idGuru, limit = 20) {
+  return request("getMonitoringGuru", {
+    idGuru,
+    limit,
+  });
+}
+
+export async function getMonitoringTerbaru(idGuru, limit = 5) {
+  return request("getMonitoringTerbaru", {
+    idGuru,
+    limit,
+  });
+}
+
+export async function getStatistikMonitoring(idGuru) {
+  return request("getStatistikMonitoring", {
+    idGuru,
+  });
+}
+
+// ==========================================
+// UPLOAD FOTO KE GOOGLE DRIVE
+// ==========================================
+
+export async function uploadPhoto(base64Data, fileName) {
+  return request("uploadPhoto", {
+    base64Data,
+    fileName,
+    mimeType: "image/jpeg",
+  });
+}
