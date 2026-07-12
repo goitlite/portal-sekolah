@@ -335,7 +335,7 @@ export default function MonitoringPage() {
 
         setGpsSuccess(false);
 
-        router.replace("/magang/guru");
+        window.location.href = "/magang/guru";
       } else {
         alert(result.message);
       }
