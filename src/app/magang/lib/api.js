@@ -153,6 +153,11 @@ export async function getSiswaById(id) {
 // =====================================================
 // MONITORING
 // =====================================================
+export async function getTempatMagangGuru(idGuru) {
+  return request("getTempatMagangGuru", {
+    idGuru,
+  });
+}
 
 export async function saveMonitoring(data) {
   return request("saveMonitoring", data);

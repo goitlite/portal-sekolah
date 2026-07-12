@@ -35,6 +35,8 @@ export default function MonitoringPage() {
   const canvasRef = useRef(null);
   const watermarkCanvasRef = useRef(null);
 
+  const [tempatMagang, setTempatMagang] = useState("");
+
   // FUNGSI BACK DENGAN STOP KAMERA
   function handleBack() {
     if (videoRef.current?.srcObject) {
@@ -118,6 +120,8 @@ export default function MonitoringPage() {
 
         const watermarkText = [
           `Guru: ${user.nama}`,
+
+          `Tempat : ${tempatMagang}`,
 
           `Hari: ${hari}`,
 
@@ -297,6 +301,8 @@ export default function MonitoringPage() {
 
         namaGuru: user.nama,
 
+        tempatMagang: tempatMagang,
+
         fotoUrl: upload.data.url,
 
         latitude: latitude,
@@ -366,6 +372,16 @@ export default function MonitoringPage() {
       }
 
       setUser(session);
+
+      const tempat = localStorage.getItem("tempatMagangMonitoring");
+
+      if (!tempat) {
+        alert("Silakan pilih tempat magang terlebih dahulu.");
+        router.replace("/magang/guru/pilih-tempat");
+        return;
+      }
+
+      setTempatMagang(tempat);
 
       setLoading(false);
     }
@@ -457,6 +473,8 @@ export default function MonitoringPage() {
             <Info label="ID GURU" value={user.id} />
 
             <Info label="NAMA GURU" value={user.nama} />
+
+            <Info label="TEMPAT MAGANG" value={tempatMagang} />
 
             <div className="rounded-xl bg-white/10 p-4">
               <p className="text-xs uppercase tracking-wider text-blue-200">
