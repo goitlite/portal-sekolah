@@ -4,14 +4,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 // FIX PATH IMPORT: Dikembalikan ke ../lib sesuai struktur Bapak
-import { getDashboardGuru, getTempatMagangGuru } from "../lib/api";
 import { getSession, isLoggedIn, logout } from "../lib/auth";
+
+import {
+  getDashboardGuru,
+  getTempatMagangGuru,
+  getAktivitasGuru,
+} from "../lib/api";
 
 export default function DashboardGuru() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+
+  const [aktivitas, setAktivitas] = useState([]);
 
   const [dashboard, setDashboard] = useState({
     jumlahSiswa: "--",
@@ -50,6 +57,11 @@ export default function DashboardGuru() {
           const tempat = await getTempatMagangGuru(session.id);
           if (tempat.success) {
             setTempatMagang(tempat.data);
+            const aktivitasResult = await getAktivitasGuru(session.id);
+
+            if (aktivitasResult.success) {
+              setAktivitas(aktivitasResult.data);
+            }
           }
         } else {
           console.log("Response dari API:", result);
@@ -204,29 +216,53 @@ export default function DashboardGuru() {
         {/* AKTIVITAS */}
         <div className="mt-10 rounded-3xl bg-white shadow overflow-hidden">
           <div className="border-b p-5">
-            <h2 className="font-black text-slate-800">
-              Aktivitas Presensi Terbaru
+            <h2 className="text-xl font-black text-slate-800">
+              Aktivitas Terbaru
             </h2>
+
+            <p className="text-sm text-slate-500">
+              Presensi & Monitoring Terakhir
+            </p>
           </div>
 
-          <div className="p-6">
-            {/* PERBAIKAN 3: Pengecekan eksistensi array aktivitas sebelum map */}
-            {!dashboard?.aktivitas || dashboard.aktivitas.length === 0 ? (
-              <p className="text-center text-slate-500">Belum ada aktivitas.</p>
+          <div className="p-5">
+            {aktivitas.length === 0 ? (
+              <p className="text-center text-slate-400">Belum ada aktivitas.</p>
             ) : (
-              <div className="space-y-1">
-                {dashboard.aktivitas.map((item, index) => (
+              <div className="space-y-4">
+                {aktivitas.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between border-b border-slate-100 py-3 last:border-b-0"
+                    className="flex items-center gap-4 rounded-2xl border p-4"
                   >
-                    <div>
-                      <p className="font-bold text-slate-800">{item.nama}</p>
-                      <p className="text-xs text-slate-500">{item.waktu}</p>
+                    <img
+                      src={item.foto}
+                      alt="foto"
+                      onError={(e) => {
+                        console.log("URL FOTO =", item.foto);
+
+                        e.currentTarget.style.border = "3px solid red";
+                      }}
+                      className="h-20 w-20 rounded-xl object-cover border"
+                    />
+
+                    <div className="flex-1">
+                      <span
+                        className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                          item.jenis === "PRESENSI"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {item.jenis}
+                      </span>
+
+                      <h3 className="mt-2 font-bold">{item.nama}</h3>
+
+                      <p className="text-sm text-slate-500">{item.tempat}</p>
+
+                      <p className="text-xs text-slate-400">{item.waktu}</p>
                     </div>
-                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
-                      {item.status}
-                    </span>
                   </div>
                 ))}
               </div>

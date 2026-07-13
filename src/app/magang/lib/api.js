@@ -183,6 +183,12 @@ export async function getStatistikMonitoring(idGuru) {
   });
 }
 
+export async function getAktivitasGuru(idGuru) {
+  return request("getAktivitasGuru", {
+    idGuru,
+  });
+}
+
 // ==========================================
 // UPLOAD FOTO KE GOOGLE DRIVE
 // ==========================================
