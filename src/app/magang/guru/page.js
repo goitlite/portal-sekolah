@@ -12,6 +12,24 @@ import {
   getAktivitasGuru,
 } from "../lib/api";
 
+function formatTanggal(waktu) {
+  if (!waktu) return "-";
+
+  const tanggal = new Date(waktu);
+
+  return (
+    tanggal.toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }) + " WIB"
+  );
+}
+
 export default function DashboardGuru() {
   const router = useRouter();
 
@@ -229,7 +247,7 @@ export default function DashboardGuru() {
             {aktivitas.length === 0 ? (
               <p className="text-center text-slate-400">Belum ada aktivitas.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {aktivitas.map((item, index) => (
                   <div
                     key={index}
@@ -261,7 +279,9 @@ export default function DashboardGuru() {
 
                       <p className="text-sm text-slate-500">{item.tempat}</p>
 
-                      <p className="text-xs text-slate-400">{item.waktu}</p>
+                      <p className="text-xs text-slate-400">
+                        {formatTanggal(item.waktu)}
+                      </p>
                     </div>
                   </div>
                 ))}
