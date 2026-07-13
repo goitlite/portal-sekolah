@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
 // FIX PATH IMPORT: Dikembalikan ke ../lib sesuai struktur Bapak
-import { getDashboardGuru } from "../lib/api";
+import { getDashboardGuru, getTempatMagangGuru } from "../lib/api";
 import { getSession, isLoggedIn, logout } from "../lib/auth";
 
 export default function DashboardGuru() {
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -20,6 +20,7 @@ export default function DashboardGuru() {
     izinSakit: "--",
     aktivitas: [],
   });
+  const [tempatMagang, setTempatMagang] = useState([]);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -45,6 +46,11 @@ export default function DashboardGuru() {
         // PERBAIKAN 1 & 6: Pengecekan ketat untuk result.success dan result.data
         if (result.success && result.data) {
           setDashboard(result.data);
+
+          const tempat = await getTempatMagangGuru(session.id);
+          if (tempat.success) {
+            setTempatMagang(tempat.data);
+          }
         } else {
           console.log("Response dari API:", result);
           alert(
@@ -69,6 +75,11 @@ export default function DashboardGuru() {
     if (!confirm("Keluar dari aplikasi?")) return;
     logout();
     router.replace("/magang/login");
+  }
+
+  function mulaiMonitoring(tempat) {
+    localStorage.setItem("tempatMagangMonitoring", tempat);
+    router.push("/magang/guru/monitoring");
   }
 
   if (loading || !user) {
@@ -129,6 +140,42 @@ export default function DashboardGuru() {
           <Card title="Izin / Sakit" value={dashboard?.izinSakit ?? "--"} />
         </div>
 
+        {/* MONITORING */}
+        <div className="mt-10 rounded-3xl bg-white p-6 shadow">
+          <h2 className="text-xl font-black text-slate-800">
+            📷 Monitoring Lapangan
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Pilih lokasi magang untuk melakukan monitoring.
+          </p>
+          <div className="mt-6 space-y-4">
+            {tempatMagang.length === 0 ? (
+              <p className="text-slate-400">Belum ada tempat magang.</p>
+            ) : (
+              tempatMagang.map((item, index) => (
+                <div key={index} className="rounded-2xl border p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">
+                        {item.tempat}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {item.jumlah} siswa
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => mulaiMonitoring(item.tempat)}
+                      className="rounded-xl bg-blue-700 px-5 py-2 font-bold text-white hover:bg-blue-800"
+                    >
+                      📸 Monitoring
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         {/* MENU */}
         <div className="mt-10 grid gap-5 md:grid-cols-2">
           {/* PERBAIKAN 5: Menu sudah menggunakan onClick dengan router.push */}
@@ -141,11 +188,6 @@ export default function DashboardGuru() {
             title="Tambah Siswa"
             subtitle="Membuat ID siswa baru"
             onClick={() => router.push("/magang/tambah")}
-          />
-          <MenuCard
-            title="Monitoring Lapangan"
-            subtitle="Foto monitoring kegiatan siswa"
-            onClick={() => router.push("/magang/guru/pilih-tempat")}
           />
           <MenuCard
             title="Rekap Kehadiran"
