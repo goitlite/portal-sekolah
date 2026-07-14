@@ -18,15 +18,19 @@ export default function RekapPage() {
   }, []);
 
   async function load() {
+    setLoading(true);
+
     const session = getSession();
 
-    if (!session) return;
+    const guruId = session ? session.id : "";
 
-    const hasil = await getRekapGuru(session.id, bulan);
+    const hasil = await getRekapGuru(guruId, bulan);
 
-    console.log("HASIL REKAP =", hasil);
+    console.log(hasil);
 
     setData(hasil.data || []);
+
+    setLoading(false);
   }
 
   return (
