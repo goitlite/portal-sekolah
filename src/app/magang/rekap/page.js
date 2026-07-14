@@ -5,7 +5,6 @@ import { getRekapGuru } from "../lib/api";
 import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
-// IMPORT LIBRARY BARU DI SINI
 import { toBlob } from "html-to-image";
 
 export default function RekapPage() {
@@ -14,7 +13,10 @@ export default function RekapPage() {
   const [bulan, setBulan] = useState("");
   const [mode, setMode] = useState("card");
   const [tempat, setTempat] = useState("Semua");
+
+  // State untuk tombol share
   const [isSharing, setIsSharing] = useState(false);
+  const [shareProgress, setShareProgress] = useState("");
 
   useEffect(() => {
     load();
@@ -40,16 +42,19 @@ export default function RekapPage() {
     }
 
     setIsSharing(true);
+    setShareProgress("Menyiapkan gambar...");
 
     try {
       const filesArray = [];
 
       for (let i = 0; i < cards.length; i++) {
-        // PERBAIKAN: Menggunakan html-to-image yang lebih tahan CSS Modern
+        // Update teks progress di tombol
+        setShareProgress(`Memproses foto ${i + 1} dari ${cards.length}...`);
+
         const blob = await toBlob(cards[i], {
           quality: 0.9,
           backgroundColor: "#ffffff",
-          pixelRatio: 2, // Menggandakan resolusi agar HD seperti scale: 2
+          pixelRatio: 2,
         });
 
         if (blob) {
@@ -64,7 +69,8 @@ export default function RekapPage() {
         throw new Error("Gagal menghasilkan gambar dari card.");
       }
 
-      // Kirim kumpulan gambar langsung ke WhatsApp (Untuk HP)
+      setShareProgress("Membuka WhatsApp...");
+
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
         await navigator.share({
           title: "Rekap Presensi Magang",
@@ -72,7 +78,6 @@ export default function RekapPage() {
           files: filesArray,
         });
       } else {
-        // Fallback untuk Desktop/PC
         alert(
           "Perangkat PC tidak mendukung Share massal langsung. Gambar akan didownload otomatis, silakan tarik (drag) gambar tersebut ke WhatsApp Web.",
         );
@@ -90,6 +95,7 @@ export default function RekapPage() {
       alert("Terjadi kesalahan saat memproses gambar.");
     } finally {
       setIsSharing(false);
+      setShareProgress("");
     }
   }
 
@@ -128,9 +134,16 @@ export default function RekapPage() {
             <button
               onClick={handleShareWA}
               disabled={isSharing || data.length === 0}
-              className="rounded-xl bg-green-600 px-6 py-3 font-black text-white shadow transition hover:bg-green-700 disabled:bg-slate-400 flex items-center justify-center gap-2"
+              className="rounded-xl bg-green-600 px-6 py-3 font-black text-white shadow transition hover:bg-green-700 disabled:bg-slate-400 flex items-center justify-center gap-2 min-w-[250px]"
             >
-              {isSharing ? "MEMPROSES GAMBAR..." : "📲 BAGIKAN KE WHATSAPP"}
+              {isSharing ? (
+                <>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  {shareProgress}
+                </>
+              ) : (
+                "📲 BAGIKAN KE WHATSAPP"
+              )}
             </button>
           )}
         </div>
@@ -181,70 +194,80 @@ export default function RekapPage() {
           </button>
         </div>
 
-        {/* TAMPILAN CARD */}
-        {mode == "card" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {data
-              .filter((x) => {
-                if (tempat == "Semua") return true;
-                return x.tempat == tempat;
-              })
-              .map((item, index) => (
-                <div
-                  key={index}
-                  className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow"
-                >
-                  {item.foto ? (
-                    <div className="bg-slate-100 flex items-center justify-center">
-                      <img
-                        src={item.foto}
-                        alt="Foto Lokasi"
-                        className="max-h-80 w-auto object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-72 items-center justify-center bg-slate-100 text-slate-400">
-                      Belum ada foto monitoring
-                    </div>
-                  )}
-
-                  <div className="p-6">
-                    <h2 className="text-2xl font-black text-slate-800">
-                      📍 {item.tempat}
-                    </h2>
-                    <p className="mt-2 text-slate-600">👨‍🏫 {item.guru}</p>
-                    <p className="text-slate-600">
-                      Jumlah siswa : <b>{item.siswa.length}</b>
-                    </p>
-
-                    <table className="mt-5 w-full text-sm text-left">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="py-2">No</th>
-                          <th className="py-2">Nama</th>
-                          <th className="py-2">H</th>
-                          <th className="py-2">I</th>
-                          <th className="py-2">S</th>
-                          <th className="py-2">A</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {item.siswa.map((s, i) => (
-                          <tr key={i} className="border-b last:border-b-0">
-                            <td className="py-2">{i + 1}</td>
-                            <td className="py-2">{s.nama}</td>
-                            <td className="py-2">{s.hadir}</td>
-                            <td className="py-2">{s.izin}</td>
-                            <td className="py-2">{s.sakit}</td>
-                            <td className="py-2">{s.alfa}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
+        {/* LOADING STATE DATA AWAL */}
+        {loading ? (
+          <div className="mt-10 flex flex-col items-center justify-center text-slate-500">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700"></div>
+            <p className="mt-4 font-semibold">
+              Memuat rekap data & foto (Bisa memakan waktu beberapa detik)...
+            </p>
           </div>
+        ) : (
+          /* TAMPILAN CARD */
+          mode == "card" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {data
+                .filter((x) => {
+                  if (tempat == "Semua") return true;
+                  return x.tempat == tempat;
+                })
+                .map((item, index) => (
+                  <div
+                    key={index}
+                    className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow"
+                  >
+                    {item.foto ? (
+                      <div className="bg-slate-100 flex items-center justify-center">
+                        <img
+                          src={item.foto}
+                          alt="Foto Lokasi"
+                          className="max-h-80 w-auto object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-72 items-center justify-center bg-slate-100 text-slate-400">
+                        Belum ada foto monitoring
+                      </div>
+                    )}
+
+                    <div className="p-6">
+                      <h2 className="text-2xl font-black text-slate-800">
+                        📍 {item.tempat}
+                      </h2>
+                      <p className="mt-2 text-slate-600">👨‍🏫 {item.guru}</p>
+                      <p className="text-slate-600">
+                        Jumlah siswa : <b>{item.siswa.length}</b>
+                      </p>
+
+                      <table className="mt-5 w-full text-sm text-left">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="py-2">No</th>
+                            <th className="py-2">Nama</th>
+                            <th className="py-2">H</th>
+                            <th className="py-2">I</th>
+                            <th className="py-2">S</th>
+                            <th className="py-2">A</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {item.siswa.map((s, i) => (
+                            <tr key={i} className="border-b last:border-b-0">
+                              <td className="py-2">{i + 1}</td>
+                              <td className="py-2">{s.nama}</td>
+                              <td className="py-2">{s.hadir}</td>
+                              <td className="py-2">{s.izin}</td>
+                              <td className="py-2">{s.sakit}</td>
+                              <td className="py-2">{s.alfa}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )
         )}
       </div>
     </>
