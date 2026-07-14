@@ -200,3 +200,17 @@ export async function uploadPhoto(base64Data, fileName) {
     mimeType: "image/jpeg",
   });
 }
+
+export async function getRekapGuru(idGuru, bulan) {
+  return request("getRekapGuru", {
+    idGuru,
+    bulan,
+  });
+}
+
+export async function getRekapSemua(bulan, tempat = "") {
+  return request("getRekapSemua", {
+    bulan,
+    tempat,
+  });
+}

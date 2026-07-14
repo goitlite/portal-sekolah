@@ -7,6 +7,7 @@ import Image from "next/image";
 import { saveMonitoring, uploadPhoto } from "../../lib/api";
 
 import { getSession, isLoggedIn } from "../../lib/auth";
+import QRCode from "qrcode";
 
 export default function MonitoringPage() {
   const router = useRouter();
@@ -133,29 +134,102 @@ export default function MonitoringPage() {
         ].join("\n");
 
         // Gambar background watermark
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        const boxX = 20;
+        const boxY = img.height - 230;
+        const boxW = img.width - 40;
+        const boxH = 210;
 
-        ctx.fillRect(10, img.height - 140, 300, 130);
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(boxX, boxY, boxW, boxH);
 
         // Gambar text
         ctx.fillStyle = "#FFFFFF";
 
-        ctx.font = "14px Arial";
+        //===============================
+        // HEADER
+        //===============================
 
-        ctx.lineHeight = 20;
+        const titleX = boxX + 20;
+        let titleY = boxY + 35;
 
-        let y = img.height - 120;
+        ctx.font = "bold 24px Arial";
+        ctx.fillText("SMKN 1 TELUK KUANTAN", titleX, titleY);
 
-        watermarkText.split("\n").forEach((line) => {
-          ctx.fillText(line, 20, y);
+        titleY += 30;
 
-          y += 20;
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("PRESENSI MONITORING MAGANG", titleX, titleY);
+
+        titleY += 18;
+
+        //===============================
+        // 3 KOLOM
+        //===============================
+
+        const col1 = boxX + 20;
+
+        const col2 = boxX + 330;
+
+        const col3 = boxX + boxW - 165;
+
+        const startY = boxY + 95;
+
+        ctx.font = "18px Arial";
+
+        // KOLOM 1
+
+        ctx.fillText("Guru : " + user.nama, col1, startY);
+
+        ctx.fillText("Tempat : " + tempatMagang, col1, startY + 30);
+
+        ctx.fillText("Status : " + status, col1, startY + 60);
+
+        // KOLOM 2
+
+        ctx.fillText("Hari : " + hari, col2, startY);
+
+        ctx.fillText("Tanggal : " + tanggal, col2, startY + 30);
+
+        ctx.fillText("Jam : " + jam + " WIB", col2, startY + 60);
+
+        ctx.fillText("GPS : " + latitude, col2, startY + 90);
+
+        const qrX = boxX + boxW - 165;
+        const qrY = boxY + 20;
+
+        const qrData = `https://maps.google.com/?q=${latitude},${longitude}`;
+
+        QRCode.toDataURL(qrData, {
+          width: 150,
+          margin: 1,
+        }).then((qrUrl) => {
+          const qrImage = new window.Image();
+
+          qrImage.onload = () => {
+            // Gambar QR Code
+            ctx.drawImage(qrImage, qrX, qrY, 140, 140);
+
+            // Background tulisan
+            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.fillRect(qrX, qrY + 140, 140, 24);
+
+            // Tulisan
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 13px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
+
+            // Kembalikan align ke default
+            ctx.textAlign = "left";
+
+            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.9);
+
+            resolve(watermarkedImage);
+          };
+
+          qrImage.src = qrUrl;
         });
-
-        // Convert ke Base64
-        const watermarkedImage = canvas.toDataURL("image/jpeg", 0.9);
-
-        resolve(watermarkedImage);
+        return;
       };
 
       img.src = imageData;
