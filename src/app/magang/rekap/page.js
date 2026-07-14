@@ -5,6 +5,8 @@ import { getRekapGuru } from "../lib/api";
 import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
+// 1. Import html2canvas
+import html2canvas from "html2canvas";
 
 export default function RekapPage() {
   const [loading, setLoading] = useState(true);
@@ -13,24 +15,87 @@ export default function RekapPage() {
   const [mode, setMode] = useState("card");
   const [tempat, setTempat] = useState("Semua");
 
+  // State untuk efek loading saat tombol share ditekan
+  const [isSharing, setIsSharing] = useState(false);
+
   useEffect(() => {
     load();
   }, []);
 
   async function load() {
     setLoading(true);
-
     const session = getSession();
-
     const guruId = session ? session.id : "";
-
     const hasil = await getRekapGuru(guruId, bulan);
 
     console.log(hasil);
-
     setData(hasil.data || []);
-
     setLoading(false);
+  }
+
+  // 2. Fungsi untuk memproses HTML menjadi Gambar dan Share ke WA
+  async function handleShareWA() {
+    // Ambil semua elemen HTML yang memiliki class "rekap-card-wa"
+    const cards = document.querySelectorAll(".rekap-card-wa");
+
+    if (cards.length === 0) {
+      alert("Tidak ada data card yang ditampilkan untuk dibagikan.");
+      return;
+    }
+
+    setIsSharing(true);
+
+    try {
+      const filesArray = [];
+
+      // Proses setiap card menjadi gambar HD (scale: 2)
+      for (let i = 0; i < cards.length; i++) {
+        const canvas = await html2canvas(cards[i], {
+          scale: 2, // Kualitas HD
+          useCORS: true, // Penting agar foto dari Google Drive bisa dimuat
+          allowTaint: true,
+          backgroundColor: "#ffffff", // Pastikan background putih
+        });
+
+        // Ubah canvas menjadi file blob (gambar)
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.9),
+        );
+
+        const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
+          type: "image/jpeg",
+        });
+
+        filesArray.push(file);
+      }
+
+      // Cek apakah HP/Browser mendukung fitur Web Share dengan file
+      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+        await navigator.share({
+          title: "Rekap Presensi Magang",
+          text: "Berikut adalah laporan rekap presensi dan monitoring siswa magang.",
+          files: filesArray,
+        });
+      } else {
+        // Fallback untuk Desktop PC: Jika tidak bisa langsung share, gambar otomatis didownload
+        alert(
+          "Perangkat ini tidak mendukung Share langsung. Gambar akan didownload otomatis agar bisa Anda kirim manual ke WA.",
+        );
+        filesArray.forEach((file) => {
+          const url = URL.createObjectURL(file);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = file.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+    } catch (error) {
+      console.error("Gagal membagikan ke WhatsApp:", error);
+      alert("Terjadi kesalahan saat memproses gambar.");
+    } finally {
+      setIsSharing(false);
+    }
   }
 
   return (
@@ -40,10 +105,8 @@ export default function RekapPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="Logo" width={52} height={52} />
-
             <div>
               <h1 className="text-lg font-black">PRESENSI MAGANG</h1>
-
               <p className="text-sm text-blue-100">SMKN 1 TELUK KUANTAN</p>
             </div>
           </div>
@@ -58,11 +121,24 @@ export default function RekapPage() {
       </header>
 
       <div className="space-y-6 p-6 min-h-screen bg-slate-100">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800">
-            Rekap Kehadiran
-          </h1>
-          <p className="text-slate-500">Rekap presensi seluruh siswa.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800">
+              Rekap Kehadiran
+            </h1>
+            <p className="text-slate-500">Rekap presensi seluruh siswa.</p>
+          </div>
+
+          {/* 3. Tombol Eksekusi Share WA diletakkan di atas agar mudah dijangkau */}
+          {mode === "card" && (
+            <button
+              onClick={handleShareWA}
+              disabled={isSharing || data.length === 0}
+              className="rounded-xl bg-green-600 px-6 py-3 font-black text-white shadow transition hover:bg-green-700 disabled:bg-slate-400 flex items-center justify-center gap-2"
+            >
+              {isSharing ? "MEMPROSES GAMBAR..." : "📲 BAGIKAN KE WHATSAPP"}
+            </button>
+          )}
         </div>
 
         {/* FILTER */}
@@ -122,13 +198,16 @@ export default function RekapPage() {
               .map((item, index) => (
                 <div
                   key={index}
-                  className="overflow-hidden rounded-3xl bg-white shadow"
+                  // 4. Tambahkan class "rekap-card-wa" untuk target screenshot
+                  className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow"
                 >
                   {item.foto ? (
                     <div className="bg-slate-100 flex items-center justify-center">
                       <img
                         src={item.foto}
                         alt="Foto Lokasi"
+                        // Penting: Tambahkan crossOrigin agar bisa diproses html2canvas
+                        crossOrigin="anonymous"
                         className="max-h-80 w-auto object-contain"
                       />
                     </div>
