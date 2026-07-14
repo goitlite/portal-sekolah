@@ -5,7 +5,8 @@ import { getRekapGuru } from "../lib/api";
 import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
-import html2canvas from "html2canvas";
+// IMPORT LIBRARY BARU DI SINI
+import { toBlob } from "html-to-image";
 
 export default function RekapPage() {
   const [loading, setLoading] = useState(true);
@@ -44,24 +45,26 @@ export default function RekapPage() {
       const filesArray = [];
 
       for (let i = 0; i < cards.length; i++) {
-        const canvas = await html2canvas(cards[i], {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
+        // PERBAIKAN: Menggunakan html-to-image yang lebih tahan CSS Modern
+        const blob = await toBlob(cards[i], {
+          quality: 0.9,
           backgroundColor: "#ffffff",
+          pixelRatio: 2, // Menggandakan resolusi agar HD seperti scale: 2
         });
 
-        const blob = await new Promise((resolve) =>
-          canvas.toBlob(resolve, "image/jpeg", 0.9),
-        );
-
-        const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
-          type: "image/jpeg",
-        });
-
-        filesArray.push(file);
+        if (blob) {
+          const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
+            type: "image/jpeg",
+          });
+          filesArray.push(file);
+        }
       }
 
+      if (filesArray.length === 0) {
+        throw new Error("Gagal menghasilkan gambar dari card.");
+      }
+
+      // Kirim kumpulan gambar langsung ke WhatsApp (Untuk HP)
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
         await navigator.share({
           title: "Rekap Presensi Magang",
@@ -69,8 +72,9 @@ export default function RekapPage() {
           files: filesArray,
         });
       } else {
+        // Fallback untuk Desktop/PC
         alert(
-          "Perangkat ini tidak mendukung Share langsung. Gambar akan didownload otomatis agar bisa Anda kirim manual ke WA.",
+          "Perangkat PC tidak mendukung Share massal langsung. Gambar akan didownload otomatis, silakan tarik (drag) gambar tersebut ke WhatsApp Web.",
         );
         filesArray.forEach((file) => {
           const url = URL.createObjectURL(file);
@@ -192,7 +196,6 @@ export default function RekapPage() {
                 >
                   {item.foto ? (
                     <div className="bg-slate-100 flex items-center justify-center">
-                      {/* Atribut crossOrigin dihapus agar gambar muncul */}
                       <img
                         src={item.foto}
                         alt="Foto Lokasi"
