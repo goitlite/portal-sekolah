@@ -5,7 +5,6 @@ import { getRekapGuru } from "../lib/api";
 import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
-// 1. Import html2canvas
 import html2canvas from "html2canvas";
 
 export default function RekapPage() {
@@ -14,8 +13,6 @@ export default function RekapPage() {
   const [bulan, setBulan] = useState("");
   const [mode, setMode] = useState("card");
   const [tempat, setTempat] = useState("Semua");
-
-  // State untuk efek loading saat tombol share ditekan
   const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
@@ -33,9 +30,7 @@ export default function RekapPage() {
     setLoading(false);
   }
 
-  // 2. Fungsi untuk memproses HTML menjadi Gambar dan Share ke WA
   async function handleShareWA() {
-    // Ambil semua elemen HTML yang memiliki class "rekap-card-wa"
     const cards = document.querySelectorAll(".rekap-card-wa");
 
     if (cards.length === 0) {
@@ -48,16 +43,14 @@ export default function RekapPage() {
     try {
       const filesArray = [];
 
-      // Proses setiap card menjadi gambar HD (scale: 2)
       for (let i = 0; i < cards.length; i++) {
         const canvas = await html2canvas(cards[i], {
-          scale: 2, // Kualitas HD
-          useCORS: true, // Penting agar foto dari Google Drive bisa dimuat
+          scale: 2,
+          useCORS: true,
           allowTaint: true,
-          backgroundColor: "#ffffff", // Pastikan background putih
+          backgroundColor: "#ffffff",
         });
 
-        // Ubah canvas menjadi file blob (gambar)
         const blob = await new Promise((resolve) =>
           canvas.toBlob(resolve, "image/jpeg", 0.9),
         );
@@ -69,7 +62,6 @@ export default function RekapPage() {
         filesArray.push(file);
       }
 
-      // Cek apakah HP/Browser mendukung fitur Web Share dengan file
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
         await navigator.share({
           title: "Rekap Presensi Magang",
@@ -77,7 +69,6 @@ export default function RekapPage() {
           files: filesArray,
         });
       } else {
-        // Fallback untuk Desktop PC: Jika tidak bisa langsung share, gambar otomatis didownload
         alert(
           "Perangkat ini tidak mendukung Share langsung. Gambar akan didownload otomatis agar bisa Anda kirim manual ke WA.",
         );
@@ -110,7 +101,6 @@ export default function RekapPage() {
               <p className="text-sm text-blue-100">SMKN 1 TELUK KUANTAN</p>
             </div>
           </div>
-
           <Link
             href="/magang/login"
             className="rounded-xl bg-white px-5 py-2 font-bold text-blue-700 hover:bg-blue-100"
@@ -129,7 +119,7 @@ export default function RekapPage() {
             <p className="text-slate-500">Rekap presensi seluruh siswa.</p>
           </div>
 
-          {/* 3. Tombol Eksekusi Share WA diletakkan di atas agar mudah dijangkau */}
+          {/* TOMBOL SHARE WA */}
           {mode === "card" && (
             <button
               onClick={handleShareWA}
@@ -198,16 +188,14 @@ export default function RekapPage() {
               .map((item, index) => (
                 <div
                   key={index}
-                  // 4. Tambahkan class "rekap-card-wa" untuk target screenshot
                   className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow"
                 >
                   {item.foto ? (
                     <div className="bg-slate-100 flex items-center justify-center">
+                      {/* Atribut crossOrigin dihapus agar gambar muncul */}
                       <img
                         src={item.foto}
                         alt="Foto Lokasi"
-                        // Penting: Tambahkan crossOrigin agar bisa diproses html2canvas
-                        crossOrigin="anonymous"
                         className="max-h-80 w-auto object-contain"
                       />
                     </div>
