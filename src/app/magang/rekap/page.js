@@ -37,45 +37,6 @@ export default function RekapPage() {
   }
 
   // Fungsi saat nama siswa di-klik
-  // Fungsi saat nama siswa di-klik
-  async function handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang) {
-    setSelectedSiswa({
-      id: idSiswa,
-      nama: namaSiswa,
-      guru: namaGuru,
-      tempat: tempatMagang,
-    });
-    setRiwayatLoading(true);
-    setRiwayatSiswa([]);
-
-    try {
-      // Ambil data riwayat dari API
-      const response = await getRiwayatSiswa(idSiswa);
-
-      // LOG DEBUGGING: Jika ingin melihat struktur data di Console browser (F12)
-      console.log("Cek Response API Riwayat:", response);
-
-      // PERBAIKAN: Ambil array yang ada di dalam "response.data"
-      const riwayatData = response?.data
-        ? response.data
-        : Array.isArray(response)
-          ? response
-          : [];
-
-      if (riwayatData && Array.isArray(riwayatData) && riwayatData.length > 0) {
-        // Balik urutan: dari yang paling lama hingga yang paling baru (kronologis naik)
-        const sortedLamaKeBaru = [...riwayatData].reverse();
-        setRiwayatSiswa(sortedLamaKeBaru);
-      } else {
-        setRiwayatSiswa([]);
-      }
-    } catch (error) {
-      console.error("Gagal mengambil riwayat siswa:", error);
-      setRiwayatSiswa([]);
-    } finally {
-      setRiwayatLoading(false);
-    }
-  }
   async function handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang) {
     console.log("--- DEBUGGING KLIK SISWA ---");
     console.log("ID Siswa yang diklik:", idSiswa);
@@ -92,9 +53,11 @@ export default function RekapPage() {
     try {
       const response = await getRiwayatSiswa(idSiswa);
       console.log("Response Lengkap dari API:", response);
-
-      // Ambil data (asumsi struktur response API adalah { success: true, data: [...] })
-      const dataSiswa = response.data || response;
+      const dataSiswa = response?.data
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
 
       if (Array.isArray(dataSiswa)) {
         console.log("Jumlah data ditemukan:", dataSiswa.length);
@@ -115,7 +78,7 @@ export default function RekapPage() {
     }
   }
 
-  // Helper mendapatkan nama Hari dari string Timestamp (Format: "YYYY-MM-DD HH:mm:ss" atau sejenisnya)
+  // Helper mendapatkan nama Hari dari string Timestamp
   function getHariDanTanggal(timestampStr) {
     if (!timestampStr) return { hari: "-", tanggal: "-" };
     try {
@@ -175,7 +138,6 @@ export default function RekapPage() {
           backgroundColor: "#ffffff",
           pixelRatio: 2,
         });
-
         if (blob) {
           const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
             type: "image/jpeg",
@@ -186,7 +148,6 @@ export default function RekapPage() {
 
       if (filesArray.length === 0)
         throw new Error("Gagal menghasilkan gambar.");
-
       setShareProgress("Membuka WhatsApp...");
 
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
@@ -220,199 +181,294 @@ export default function RekapPage() {
   return (
     <>
       {/* HEADER */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow">
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Logo" width={52} height={52} />
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={52}
+              height={52}
+              className="drop-shadow-sm"
+            />
             <div>
-              <h1 className="text-lg font-black">PRESENSI MAGANG</h1>
-              <p className="text-sm text-blue-100">SMKN 1 TELUK KUANTAN</p>
+              <h1 className="text-lg font-black tracking-wide">
+                PRESENSI MAGANG
+              </h1>
+              <p className="text-xs font-semibold text-blue-100 tracking-wider">
+                SMKN 1 TELUK KUANTAN
+              </p>
             </div>
           </div>
           <Link
             href="/magang/login"
-            className="rounded-xl bg-white px-5 py-2 font-bold text-blue-700 hover:bg-blue-100"
+            className="rounded-lg bg-white px-5 py-2 text-sm font-bold text-blue-700 shadow transition-colors hover:bg-blue-50 focus:ring-2 focus:ring-blue-300"
           >
             Login
           </Link>
         </div>
       </header>
 
-      <div className="space-y-6 p-6 min-h-screen bg-slate-100">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-slate-800">
-              Rekap Kehadiran
-            </h1>
-            <p className="text-slate-500">
-              Rekap presensi seluruh siswa magang.
-            </p>
+      <div className="space-y-6 bg-slate-100 min-h-screen p-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+                Rekap Kehadiran
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Rekap presensi seluruh siswa magang lapangan.
+              </p>
+            </div>
+
+            {/* TOMBOL SHARE WA */}
+            {mode === "card" && (
+              <button
+                onClick={handleShareWA}
+                disabled={isSharing || data.length === 0}
+                className="flex min-w-[250px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-black tracking-wide text-white shadow-md transition-all hover:bg-emerald-700 hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {isSharing ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    {shareProgress}
+                  </>
+                ) : (
+                  "📲 BAGIKAN KE WHATSAPP"
+                )}
+              </button>
+            )}
           </div>
 
-          {/* TOMBOL SHARE WA */}
-          {mode === "card" && (
-            <button
-              onClick={handleShareWA}
-              disabled={isSharing || data.length === 0}
-              className="rounded-xl bg-green-600 px-6 py-3 font-black text-white shadow transition hover:bg-green-700 disabled:bg-slate-400 flex items-center justify-center gap-2 min-w-[250px]"
+          {/* FILTER */}
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100 mb-6">
+            <select
+              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={bulan}
+              onChange={(e) => setBulan(e.target.value)}
             >
-              {isSharing ? (
-                <>
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  {shareProgress}
-                </>
-              ) : (
-                "📲 BAGIKAN KE WHATSAPP"
-              )}
-            </button>
+              <option value="">Juli 2026</option>
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={tempat}
+              onChange={(e) => setTempat(e.target.value)}
+            >
+              <option>Semua</option>
+              {data.map((x) => (
+                <option key={x.tempat} value={x.tempat}>
+                  {x.tempat}
+                </option>
+              ))}
+            </select>
+
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={() => setMode("card")}
+                className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${
+                  mode === "card"
+                    ? "bg-blue-700 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Card
+              </button>
+
+              <button
+                onClick={() => setMode("table")}
+                className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${
+                  mode === "table"
+                    ? "bg-blue-700 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Tabel
+              </button>
+            </div>
+          </div>
+
+          {/* LOADING STATE DATA AWAL */}
+          {loading ? (
+            <div className="mt-16 flex flex-col items-center justify-center text-slate-500">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></div>
+              <p className="mt-4 text-sm font-semibold">
+                Memuat rekap data & foto...
+              </p>
+            </div>
+          ) : (
+            /* TAMPILAN CARD */
+            mode === "card" && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {data
+                  .filter((x) => {
+                    if (tempat === "Semua") return true;
+                    return x.tempat === tempat;
+                  })
+                  .map((item, index) => (
+                    <div
+                      key={index}
+                      className="rekap-card-wa flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200 transition-shadow duration-300 hover:shadow-lg"
+                    >
+                      {/* Laporan Header */}
+                      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-3">
+                        <div>
+                          <h3 className="text-xs font-black tracking-wider text-slate-800">
+                            LAPORAN MONITORING MAGANG
+                          </h3>
+                          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mt-0.5">
+                            SMKN 1 Teluk Kuantan
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Area Foto Presensi - Ukuran Maksimal & Klik View Full */}
+                      {item.foto ? (
+                        <div className="flex h-80 w-full items-center justify-center bg-slate-50 p-3 border-b border-slate-200 overflow-hidden">
+                          <a
+                            href={item.foto}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group relative block h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-sm transition-transform duration-200 hover:scale-[1.01] cursor-zoom-in"
+                            title="Klik untuk melihat foto asli resolusi penuh"
+                          >
+                            <img
+                              src={item.foto}
+                              alt="Foto Lokasi"
+                              className="h-full w-full object-contain rounded-xl"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
+                              <span className="rounded-lg bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-md">
+                                🔍 Buka Ukuran Penuh
+                              </span>
+                            </div>
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="flex h-80 w-full flex-col items-center justify-center border-b border-slate-200 bg-slate-50 text-slate-400">
+                          <span className="text-4xl mb-3">📷</span>
+                          <span className="text-sm font-semibold">
+                            Belum ada foto monitoring
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Meta Info Guru & Tempat */}
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <h2 className="text-lg font-black text-slate-800 leading-tight">
+                              📍 {item.tempat}
+                            </h2>
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-xs shadow-sm shadow-indigo-200">
+                                👨‍🏫
+                              </span>
+                              <div className="leading-tight">
+                                <span className="text-xs text-slate-400 font-medium block">
+                                  Guru Pembimbing :
+                                </span>
+                                <span className="text-slate-800 font-bold">
+                                  {item.guru}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-center rounded-lg border border-blue-100 bg-gradient-to-b from-blue-50 to-blue-100/50 px-4 py-2 shadow-inner">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                              Total Siswa
+                            </span>
+                            <span className="text-xl font-black text-blue-800">
+                              {item.siswa.length}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Tabel Ringkas Rekap Presensi */}
+                        <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 border-b border-slate-200">
+                              <tr>
+                                <th className="px-3 py-2 font-black text-slate-600">
+                                  No
+                                </th>
+                                <th className="px-3 py-2 font-black text-slate-600">
+                                  Nama Siswa
+                                </th>
+                                <th className="px-2 py-2 text-center font-black text-emerald-600">
+                                  H
+                                </th>
+                                <th className="px-2 py-2 text-center font-black text-amber-500">
+                                  I
+                                </th>
+                                <th className="px-2 py-2 text-center font-black text-blue-500">
+                                  S
+                                </th>
+                                <th className="px-2 py-2 text-center font-black text-red-500">
+                                  A
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {item.siswa.map((s, i) => (
+                                <tr
+                                  key={i}
+                                  className="transition-colors hover:bg-slate-50/80"
+                                >
+                                  <td className="px-3 py-1.5 font-medium text-slate-500">
+                                    {i + 1}
+                                  </td>
+                                  <td className="px-3 py-1.5 font-medium">
+                                    <button
+                                      onClick={() =>
+                                        handleSiswaClick(
+                                          s.id,
+                                          s.nama,
+                                          item.guru,
+                                          item.tempat,
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1.5 text-left font-bold text-blue-600 transition-colors hover:text-blue-800 hover:underline focus:outline-none truncate max-w-[140px] md:max-w-[200px]"
+                                    >
+                                      {/* Ikon User Disamping Nama */}
+                                      <svg
+                                        className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                      <span className="truncate">{s.nama}</span>
+                                    </button>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center font-bold text-emerald-600">
+                                    {s.hadir}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center font-bold text-amber-500">
+                                    {s.izin}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center font-bold text-blue-500">
+                                    {s.sakit}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center font-bold text-red-500">
+                                    {s.alfa}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )
           )}
         </div>
-
-        {/* FILTER */}
-        <div className="flex flex-wrap gap-3 bg-white p-5 rounded-3xl shadow">
-          <select
-            className="rounded-xl border p-3"
-            value={bulan}
-            onChange={(e) => setBulan(e.target.value)}
-          >
-            <option value="">Juli 2026</option>
-          </select>
-
-          <select
-            className="rounded-xl border p-3"
-            value={tempat}
-            onChange={(e) => setTempat(e.target.value)}
-          >
-            <option>Semua</option>
-            {data.map((x) => (
-              <option key={x.tempat} value={x.tempat}>
-                {x.tempat}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => setMode("card")}
-            className={
-              mode == "card"
-                ? "rounded-xl bg-blue-700 px-5 py-3 text-white font-bold"
-                : "rounded-xl bg-slate-200 px-5 py-3 font-bold text-slate-700"
-            }
-          >
-            Card
-          </button>
-
-          <button
-            onClick={() => setMode("table")}
-            className={
-              mode == "table"
-                ? "rounded-xl bg-blue-700 px-5 py-3 text-white font-bold"
-                : "rounded-xl bg-slate-200 px-5 py-3 font-bold text-slate-700"
-            }
-          >
-            Tabel
-          </button>
-        </div>
-
-        {/* LOADING STATE DATA AWAL */}
-        {loading ? (
-          <div className="mt-10 flex flex-col items-center justify-center text-slate-500">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700"></div>
-            <p className="mt-4 font-semibold">Memuat rekap data & foto...</p>
-          </div>
-        ) : (
-          /* TAMPILAN CARD */
-          mode == "card" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {data
-                .filter((x) => {
-                  if (tempat == "Semua") return true;
-                  return x.tempat == tempat;
-                })
-                .map((item, index) => (
-                  <div
-                    key={index}
-                    className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow"
-                  >
-                    {item.foto ? (
-                      <div className="bg-slate-100 flex items-center justify-center">
-                        <img
-                          src={item.foto}
-                          alt="Foto Lokasi"
-                          className="max-h-80 w-auto object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-72 items-center justify-center bg-slate-100 text-slate-400">
-                        Belum ada foto monitoring
-                      </div>
-                    )}
-
-                    <div className="p-6">
-                      <h2 className="text-2xl font-black text-slate-800">
-                        📍 {item.tempat}
-                      </h2>
-                      <p className="mt-2 text-slate-600">👨‍🏫 {item.guru}</p>
-                      <p className="text-slate-600">
-                        Jumlah siswa : <b>{item.siswa.length}</b>
-                      </p>
-
-                      <table className="mt-5 w-full text-sm text-left">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="py-2">No</th>
-                            <th className="py-2">Nama</th>
-                            <th className="py-2 text-center">H</th>
-                            <th className="py-2 text-center">I</th>
-                            <th className="py-2 text-center">S</th>
-                            <th className="py-2 text-center">A</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {item.siswa.map((s, i) => (
-                            <tr
-                              key={i}
-                              className="border-b last:border-b-0 hover:bg-slate-50 transition"
-                            >
-                              <td className="py-3">{i + 1}</td>
-                              <td className="py-3">
-                                {/* NAMA SISWA YANG BISA DI-KLIK */}
-                                <button
-                                  onClick={() =>
-                                    handleSiswaClick(
-                                      s.id,
-                                      s.nama,
-                                      item.guru,
-                                      item.tempat,
-                                    )
-                                  }
-                                  className="text-left font-bold text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
-                                >
-                                  {s.nama}
-                                </button>
-                              </td>
-                              <td className="py-3 text-center font-semibold text-emerald-600">
-                                {s.hadir}
-                              </td>
-                              <td className="py-3 text-center font-semibold text-amber-500">
-                                {s.izin}
-                              </td>
-                              <td className="py-3 text-center font-semibold text-blue-500">
-                                {s.sakit}
-                              </td>
-                              <td className="py-3 text-center font-semibold text-red-500">
-                                {s.alfa}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )
-        )}
       </div>
 
       {/* DRAWER MODAL - DETAIL RIWAYAT PRESENSI SISWA */}
@@ -427,47 +483,59 @@ export default function RekapPage() {
             {/* Background Overlay hitam transparan */}
             <div
               onClick={() => setSelectedSiswa(null)}
-              className="absolute inset-0 bg-slate-900 bg-opacity-60 transition-opacity backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             ></div>
 
-            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 md:pl-16">
+            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
               {/* Drawer Container */}
               <div className="pointer-events-auto w-screen max-w-4xl transform transition-transform duration-500 ease-in-out">
-                <div className="flex h-full flex-col bg-white shadow-2xl rounded-l-3xl overflow-hidden">
+                <div className="flex h-full flex-col overflow-hidden rounded-l-3xl bg-white shadow-2xl">
                   {/* HEADER DRAWER */}
-                  <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white shadow-inner">
+                    <div className="flex items-start justify-between">
                       <div>
-                        <span className="text-xs font-black uppercase tracking-widest bg-blue-500 bg-opacity-40 px-3 py-1 rounded-full">
+                        <span className="inline-block rounded-full bg-blue-500/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
                           Riwayat Presensi Magang
                         </span>
-                        <h2 className="text-2xl font-black mt-2 tracking-tight">
+                        <h2 className="mt-3 text-2xl font-black tracking-tight leading-tight">
                           {selectedSiswa.nama}
                         </h2>
                       </div>
                       <button
                         onClick={() => setSelectedSiswa(null)}
-                        className="rounded-full bg-black bg-opacity-20 p-2 text-white hover:bg-opacity-30 focus:outline-none transition"
+                        className="rounded-full bg-black/20 p-2.5 text-white transition hover:bg-black/40 focus:outline-none"
                       >
-                        ✕
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2.5"
+                            d="M6 18L18 6M6 6l12 12"
+                          ></path>
+                        </svg>
                       </button>
                     </div>
 
                     {/* Metadata Detail */}
-                    <div className="mt-6 grid grid-cols-2 gap-4 border-t border-white border-opacity-10 pt-4 text-sm">
+                    <div className="mt-6 grid grid-cols-2 gap-6 border-t border-white/10 pt-5 text-sm">
                       <div>
-                        <p className="text-blue-200 text-xs uppercase tracking-wider font-semibold">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
                           Guru Pembimbing
                         </p>
-                        <p className="font-bold mt-0.5">
+                        <p className="mt-1 font-bold">
                           👨‍🏫 {selectedSiswa.guru}
                         </p>
                       </div>
                       <div>
-                        <p className="text-blue-200 text-xs uppercase tracking-wider font-semibold">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
                           Tempat Magang
                         </p>
-                        <p className="font-bold mt-0.5">
+                        <p className="mt-1 font-bold">
                           📍 {selectedSiswa.tempat}
                         </p>
                       </div>
@@ -475,11 +543,11 @@ export default function RekapPage() {
                   </div>
 
                   {/* BODY CONTENT */}
-                  <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                  <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
                     {riwayatLoading ? (
                       <div className="flex h-64 flex-col items-center justify-center text-slate-500">
-                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700"></div>
-                        <p className="mt-4 font-semibold">
+                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></div>
+                        <p className="mt-4 text-sm font-semibold">
                           Mengambil seluruh riwayat presensi...
                         </p>
                       </div>
@@ -488,79 +556,85 @@ export default function RekapPage() {
                         <p className="text-lg font-bold">
                           Belum ada riwayat presensi
                         </p>
-                        <p className="text-sm text-slate-400">
+                        <p className="mt-1 text-sm text-slate-400">
                           Siswa belum pernah melakukan presensi bulan ini.
                         </p>
                       </div>
                     ) : (
                       <div className="space-y-6">
                         {/* STATISTIK RINGKAS */}
-                        <div className="grid grid-cols-3 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                          <div className="text-center border-r">
-                            <span className="text-2xl font-black text-emerald-600">
+                        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-sm p-2">
+                          <div className="flex flex-col items-center justify-center py-3">
+                            <span className="text-3xl font-black text-emerald-600">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Hadir")
                                   .length
                               }
                             </span>
-                            <p className="text-xs text-slate-500 font-bold uppercase mt-1">
+                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
                               Hadir
                             </p>
                           </div>
-                          <div className="text-center border-r">
-                            <span className="text-2xl font-black text-amber-500">
+                          <div className="flex flex-col items-center justify-center py-3">
+                            <span className="text-3xl font-black text-amber-500">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Izin")
                                   .length
                               }
                             </span>
-                            <p className="text-xs text-slate-500 font-bold uppercase mt-1">
+                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
                               Izin
                             </p>
                           </div>
-                          <div className="text-center">
-                            <span className="text-2xl font-black text-blue-500">
+                          <div className="flex flex-col items-center justify-center py-3">
+                            <span className="text-3xl font-black text-blue-500">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Sakit")
                                   .length
                               }
                             </span>
-                            <p className="text-xs text-slate-500 font-bold uppercase mt-1">
+                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
                               Sakit
                             </p>
                           </div>
                         </div>
 
                         {/* TABEL RIWAYAT LENGKAP */}
-                        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                            <thead className="bg-slate-100 font-black text-slate-700 uppercase tracking-wider text-xs">
+                        <div className="overflow-hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                          <table className="min-w-full text-left text-xs whitespace-nowrap">
+                            <thead className="border-b border-slate-200 bg-slate-50">
                               <tr>
-                                <th className="px-4 py-3 text-center">No</th>
-                                <th className="px-4 py-3">Tanggal & Hari</th>
-                                <th className="px-4 py-3 text-center">
+                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
+                                  No
+                                </th>
+                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
+                                  Tanggal & Hari
+                                </th>
+                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
                                   Status
                                 </th>
-                                <th className="px-4 py-3 text-center">Foto</th>
-                                <th className="px-4 py-3 text-center">Peta</th>
-                                <th className="px-4 py-3">
-                                  Pembimbing Lapangan
+                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
+                                  Foto
                                 </th>
-                                <th className="px-4 py-3">Kompetensi</th>
-                                <th className="px-4 py-3">Keterangan</th>
+                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
+                                  Peta
+                                </th>
+                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
+                                  Pembimbing
+                                </th>
+                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
+                                  Kompetensi
+                                </th>
+                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
+                                  Keterangan
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                               {riwayatSiswa.map((r, i) => {
-                                // r[1] = Timestamp
-                                // r[13] = FotoUrl, r[14] = MapUrl
-                                // r[15] = Status (Hadir, Sakit, Izin)
-                                // r[16] = Pembimbing Lapangan
-                                // r[17] = Kompetensi, r[18] = Keterangan
                                 const { hari, tanggal } = getHariDanTanggal(
                                   r.TIMESTAMP,
                                 );
-
                                 const status = r.STATUS || "-";
                                 const fotoUrl = r.FOTO;
                                 const mapUrl = r.MAP;
@@ -568,22 +642,22 @@ export default function RekapPage() {
                                 return (
                                   <tr
                                     key={i}
-                                    className="hover:bg-slate-50 transition"
+                                    className="transition hover:bg-slate-50"
                                   >
-                                    <td className="px-4 py-4 text-center font-bold text-slate-500">
+                                    <td className="px-4 py-3 text-center font-bold text-slate-500">
                                       {i + 1}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-3">
                                       <p className="font-bold text-slate-800">
                                         {tanggal}
                                       </p>
-                                      <p className="text-xs text-slate-500 font-semibold">
+                                      <p className="mt-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
                                         {hari}
                                       </p>
                                     </td>
-                                    <td className="px-4 py-4 text-center whitespace-nowrap">
+                                    <td className="px-4 py-3 text-center">
                                       <span
-                                        className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
+                                        className={`inline-flex items-center rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
                                           status === "Hadir"
                                             ? "bg-emerald-100 text-emerald-800"
                                             : status === "Izin"
@@ -594,52 +668,54 @@ export default function RekapPage() {
                                         {status}
                                       </span>
                                     </td>
-                                    {/* Link Foto Singkat */}
-                                    <td className="px-4 py-4 text-center">
+                                    <td className="px-4 py-3 text-center">
                                       {fotoUrl ? (
                                         <a
                                           href={fotoUrl}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="inline-flex items-center justify-center rounded-lg bg-blue-100 p-2 text-blue-700 hover:bg-blue-200 transition"
+                                          className="inline-flex items-center justify-center rounded-lg bg-blue-50 p-1.5 text-blue-600 transition hover:bg-blue-100 hover:text-blue-800"
                                           title="Buka Foto"
                                         >
                                           📸
                                         </a>
                                       ) : (
-                                        "-"
+                                        <span className="text-slate-300">
+                                          -
+                                        </span>
                                       )}
                                     </td>
-                                    {/* Link Map Singkat */}
-                                    <td className="px-4 py-4 text-center">
+                                    <td className="px-4 py-3 text-center">
                                       {mapUrl ? (
                                         <a
                                           href={mapUrl}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="inline-flex items-center justify-center rounded-lg bg-rose-100 p-2 text-rose-700 hover:bg-rose-200 transition"
+                                          className="inline-flex items-center justify-center rounded-lg bg-rose-50 p-1.5 text-rose-600 transition hover:bg-rose-100 hover:text-rose-800"
                                           title="Buka Google Maps"
                                         >
                                           🗺️
                                         </a>
                                       ) : (
-                                        "-"
+                                        <span className="text-slate-300">
+                                          -
+                                        </span>
                                       )}
                                     </td>
                                     <td
-                                      className="px-4 py-4 max-w-[150px] truncate"
+                                      className="px-4 py-3 max-w-[150px] truncate font-medium text-slate-700"
                                       title={r.PEMBIMBING_LAPANGAN || "-"}
                                     >
                                       {r.PEMBIMBING_LAPANGAN || "-"}
                                     </td>
                                     <td
-                                      className="px-4 py-4 max-w-[150px] truncate font-medium text-slate-700"
+                                      className="px-4 py-3 max-w-[180px] truncate font-semibold text-slate-800"
                                       title={r.KOMPETENSI_YANG_DIKUASAI || "-"}
                                     >
                                       {r.KOMPETENSI_YANG_DIKUASAI || "-"}
                                     </td>
                                     <td
-                                      className="px-4 py-4 max-w-[150px] truncate text-xs text-slate-500"
+                                      className="px-4 py-3 max-w-[150px] truncate font-medium text-slate-500"
                                       title={r.KETERANGAN || "-"}
                                     >
                                       {r.KETERANGAN || "-"}
@@ -655,10 +731,10 @@ export default function RekapPage() {
                   </div>
 
                   {/* FOOTER DRAWER */}
-                  <div className="border-t border-slate-100 bg-slate-50 p-6 flex justify-end">
+                  <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-4">
                     <button
                       onClick={() => setSelectedSiswa(null)}
-                      className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-bold text-slate-700 hover:bg-slate-100 transition"
+                      className="rounded-xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300"
                     >
                       Tutup Riwayat
                     </button>
