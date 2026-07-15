@@ -23,6 +23,9 @@ export default function RekapPage() {
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const [riwayatSiswa, setRiwayatSiswa] = useState([]);
 
+  // State BARU: Untuk Overlay Gambar (Lightbox)
+  const [selectedImage, setSelectedImage] = useState(null);
+
   useEffect(() => {
     load();
   }, []);
@@ -53,11 +56,7 @@ export default function RekapPage() {
     try {
       const response = await getRiwayatSiswa(idSiswa);
       console.log("Response Lengkap dari API:", response);
-      const dataSiswa = response?.data
-        ? response.data
-        : Array.isArray(response)
-          ? response
-          : [];
+      const dataSiswa = response.data || response;
 
       if (Array.isArray(dataSiswa)) {
         console.log("Jumlah data ditemukan:", dataSiswa.length);
@@ -135,7 +134,7 @@ export default function RekapPage() {
         setShareProgress(`Memproses foto ${i + 1} dari ${cards.length}...`);
         const blob = await toBlob(cards[i], {
           quality: 0.9,
-          backgroundColor: "#ffffff",
+          backgroundColor: "#f8fafc", // Menggunakan warna slate-50 agar rapi
           pixelRatio: 2,
         });
         if (blob) {
@@ -180,126 +179,189 @@ export default function RekapPage() {
 
   return (
     <>
-      {/* HEADER */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-md">
+      {/* HEADER - Desain Gradien Modern */}
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logo.png"
-              alt="Logo"
-              width={52}
-              height={52}
-              className="drop-shadow-sm"
-            />
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm border border-white/20">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={48}
+                height={48}
+                className="object-contain"
+              />
+            </div>
             <div>
-              <h1 className="text-lg font-black tracking-wide">
+              <h1 className="text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
                 PRESENSI MAGANG
               </h1>
-              <p className="text-xs font-semibold text-blue-100 tracking-wider">
+              <p className="text-sm font-medium text-blue-300 tracking-wide">
                 SMKN 1 TELUK KUANTAN
               </p>
             </div>
           </div>
           <Link
             href="/magang/login"
-            className="rounded-lg bg-white px-5 py-2 text-sm font-bold text-blue-700 shadow transition-colors hover:bg-blue-50 focus:ring-2 focus:ring-blue-300"
+            className="rounded-xl bg-white/10 px-6 py-2.5 font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 hover:border-white transition-all duration-300 shadow-sm"
           >
             Login
           </Link>
         </div>
       </header>
 
-      <div className="space-y-6 bg-slate-100 min-h-screen p-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-8">
+        <div className="mx-auto max-w-7xl px-0 sm:px-6">
+          {/* JUDUL HALAMAN & TOMBOL WA */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-6 sm:px-0 mb-8">
             <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider mb-3">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                </span>
+                Live Monitoring
+              </div>
+              <h1 className="text-4xl font-black text-slate-800 tracking-tight">
                 Rekap Kehadiran
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
-                Rekap presensi seluruh siswa magang lapangan.
+              <p className="mt-2 text-slate-500 font-medium text-lg">
+                Pantau aktivitas dan presensi siswa magang secara *real-time*.
               </p>
             </div>
 
-            {/* TOMBOL SHARE WA */}
             {mode === "card" && (
               <button
                 onClick={handleShareWA}
                 disabled={isSharing || data.length === 0}
-                className="flex min-w-[250px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-black tracking-wide text-white shadow-md transition-all hover:bg-emerald-700 hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-3 min-w-[280px]"
               >
+                <div className="absolute inset-0 w-full h-full bg-white/20 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
                 {isSharing ? (
                   <>
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    {shareProgress}
+                    <span className="relative z-10">{shareProgress}</span>
                   </>
                 ) : (
-                  "📲 BAGIKAN KE WHATSAPP"
+                  <>
+                    <svg
+                      className="w-6 h-6 relative z-10"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    <span className="relative z-10 tracking-wide">
+                      BAGIKAN LAPORAN
+                    </span>
+                  </>
                 )}
               </button>
             )}
           </div>
 
-          {/* FILTER */}
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100 mb-6">
-            <select
-              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              value={bulan}
-              onChange={(e) => setBulan(e.target.value)}
-            >
-              <option value="">Juli 2026</option>
-            </select>
+          {/* FILTER & TABS */}
+          <div className="mx-6 sm:mx-0 flex flex-wrap gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
+                Bulan
+              </label>
+              <select
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                value={bulan}
+                onChange={(e) => setBulan(e.target.value)}
+              >
+                <option value="">Juli 2026</option>
+              </select>
+            </div>
 
-            <select
-              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              value={tempat}
-              onChange={(e) => setTempat(e.target.value)}
-            >
-              <option>Semua</option>
-              {data.map((x) => (
-                <option key={x.tempat} value={x.tempat}>
-                  {x.tempat}
-                </option>
-              ))}
-            </select>
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
+                Lokasi Magang
+              </label>
+              <select
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                value={tempat}
+                onChange={(e) => setTempat(e.target.value)}
+              >
+                <option>Semua</option>
+                {data.map((x) => (
+                  <option key={x.tempat} value={x.tempat}>
+                    {x.tempat}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <div className="ml-auto flex gap-2">
+            <div className="flex items-end gap-2">
               <button
                 onClick={() => setMode("card")}
-                className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${
+                className={`rounded-xl px-6 py-3.5 font-bold transition-all ${
                   mode === "card"
-                    ? "bg-blue-700 text-white shadow-sm"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
-                Card
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                    />
+                  </svg>
+                  Card
+                </span>
               </button>
-
               <button
                 onClick={() => setMode("table")}
-                className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${
+                className={`rounded-xl px-6 py-3.5 font-bold transition-all ${
                   mode === "table"
-                    ? "bg-blue-700 text-white shadow-sm"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
-                Tabel
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 10h16M4 14h16M4 18h16"
+                    />
+                  </svg>
+                  Tabel
+                </span>
               </button>
             </div>
           </div>
 
           {/* LOADING STATE DATA AWAL */}
           {loading ? (
-            <div className="mt-16 flex flex-col items-center justify-center text-slate-500">
-              <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></div>
-              <p className="mt-4 text-sm font-semibold">
-                Memuat rekap data & foto...
+            <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-700 border-t-transparent animate-spin"></div>
+              </div>
+              <p className="mt-6 font-semibold text-lg tracking-wide">
+                Sinkronisasi Data Sistem...
               </p>
             </div>
           ) : (
             /* TAMPILAN CARD */
             mode === "card" && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 px-0 sm:px-0">
                 {data
                   .filter((x) => {
                     if (tempat === "Semua") return true;
@@ -308,103 +370,105 @@ export default function RekapPage() {
                   .map((item, index) => (
                     <div
                       key={index}
-                      className="rekap-card-wa flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200 transition-shadow duration-300 hover:shadow-lg"
+                      // Margin negatif (-mx-6) pada mobile agar full layaknya aplikasi native. Pada SM ke atas kembali normal.
+                      className="rekap-card-wa overflow-hidden sm:rounded-[2rem] bg-white shadow-xl shadow-slate-200/50 border-y sm:border border-slate-200 flex flex-col -mx-6 sm:mx-0"
                     >
-                      {/* Laporan Header */}
-                      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-3">
-                        <div>
-                          <h3 className="text-xs font-black tracking-wider text-slate-800">
-                            LAPORAN MONITORING MAGANG
-                          </h3>
-                          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mt-0.5">
-                            SMKN 1 Teluk Kuantan
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Area Foto Presensi - Ukuran Maksimal & Klik View Full */}
                       {item.foto ? (
-                        <div className="flex h-80 w-full items-center justify-center bg-slate-50 p-3 border-b border-slate-200 overflow-hidden">
-                          <a
-                            href={item.foto}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group relative block h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-sm transition-transform duration-200 hover:scale-[1.01] cursor-zoom-in"
-                            title="Klik untuk melihat foto asli resolusi penuh"
-                          >
-                            <img
-                              src={item.foto}
-                              alt="Foto Lokasi"
-                              className="h-full w-full object-contain rounded-xl"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
-                              <span className="rounded-lg bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-md">
-                                🔍 Buka Ukuran Penuh
-                              </span>
-                            </div>
-                          </a>
+                        <div
+                          className="relative w-full cursor-pointer bg-slate-100 flex items-center justify-center group overflow-hidden"
+                          onClick={() => setSelectedImage(item.foto)}
+                        >
+                          {/* object-contain memastikan watermark tidak hilang/terpotong. w-full membuatnya menyentuh sisi layar pada mobile */}
+                          <img
+                            src={item.foto}
+                            alt="Foto Lokasi"
+                            className="w-full max-h-[450px] object-contain transition-transform duration-700 group-hover:scale-105"
+                          />
+                          {/* Efek Hover Glassmorphism */}
+                          <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                            <span className="text-white font-black tracking-widest uppercase bg-blue-900/60 px-6 py-3 rounded-2xl border border-white/30 shadow-2xl flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                />
+                              </svg>
+                              Perbesar Foto
+                            </span>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex h-80 w-full flex-col items-center justify-center border-b border-slate-200 bg-slate-50 text-slate-400">
-                          <span className="text-4xl mb-3">📷</span>
-                          <span className="text-sm font-semibold">
+                        <div className="flex h-[300px] flex-col items-center justify-center bg-slate-50 text-slate-400 border-b border-dashed border-slate-200">
+                          <svg
+                            className="w-12 h-12 mb-3 text-slate-300"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span className="font-semibold tracking-wide">
                             Belum ada foto monitoring
                           </span>
                         </div>
                       )}
 
-                      {/* Meta Info Guru & Tempat */}
-                      <div className="p-5">
+                      <div className="p-6 sm:p-8">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-2">
-                            <h2 className="text-lg font-black text-slate-800 leading-tight">
-                              📍 {item.tempat}
+                          <div>
+                            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                              <span className="text-blue-600">📍</span>{" "}
+                              {item.tempat}
                             </h2>
-                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-xs shadow-sm shadow-indigo-200">
+                            <p className="mt-2 text-slate-500 font-medium flex items-center gap-2">
+                              <span className="bg-slate-100 p-1 rounded-lg">
                                 👨‍🏫
-                              </span>
-                              <div className="leading-tight">
-                                <span className="text-xs text-slate-400 font-medium block">
-                                  Guru Pembimbing :
-                                </span>
-                                <span className="text-slate-800 font-bold">
-                                  {item.guru}
-                                </span>
-                              </div>
-                            </div>
+                              </span>{" "}
+                              {item.guru}
+                            </p>
                           </div>
-                          <div className="flex flex-col items-center rounded-lg border border-blue-100 bg-gradient-to-b from-blue-50 to-blue-100/50 px-4 py-2 shadow-inner">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                          <div className="bg-blue-50 border border-blue-100 text-blue-700 px-4 py-2 rounded-2xl text-center">
+                            <p className="text-xs font-black uppercase tracking-wider mb-0.5 opacity-70">
                               Total Siswa
-                            </span>
-                            <span className="text-xl font-black text-blue-800">
+                            </p>
+                            <p className="text-2xl font-black">
                               {item.siswa.length}
-                            </span>
+                            </p>
                           </div>
                         </div>
 
-                        {/* Tabel Ringkas Rekap Presensi */}
-                        <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                              <tr>
-                                <th className="px-3 py-2 font-black text-slate-600">
+                        <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                          <table className="w-full text-sm text-left">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200">
+                                <th className="py-3.5 px-4 font-bold text-slate-500 w-12 text-center">
                                   No
                                 </th>
-                                <th className="px-3 py-2 font-black text-slate-600">
+                                <th className="py-3.5 px-4 font-bold text-slate-500">
                                   Nama Siswa
                                 </th>
-                                <th className="px-2 py-2 text-center font-black text-emerald-600">
+                                <th className="py-3.5 px-2 font-black text-emerald-600 text-center w-10">
                                   H
                                 </th>
-                                <th className="px-2 py-2 text-center font-black text-amber-500">
+                                <th className="py-3.5 px-2 font-black text-amber-500 text-center w-10">
                                   I
                                 </th>
-                                <th className="px-2 py-2 text-center font-black text-blue-500">
+                                <th className="py-3.5 px-2 font-black text-blue-500 text-center w-10">
                                   S
                                 </th>
-                                <th className="px-2 py-2 text-center font-black text-red-500">
+                                <th className="py-3.5 px-2 font-black text-rose-500 text-center w-10">
                                   A
                                 </th>
                               </tr>
@@ -413,12 +477,12 @@ export default function RekapPage() {
                               {item.siswa.map((s, i) => (
                                 <tr
                                   key={i}
-                                  className="transition-colors hover:bg-slate-50/80"
+                                  className="hover:bg-blue-50/50 transition-colors duration-200 group"
                                 >
-                                  <td className="px-3 py-1.5 font-medium text-slate-500">
+                                  <td className="py-4 px-4 text-center font-medium text-slate-400">
                                     {i + 1}
                                   </td>
-                                  <td className="px-3 py-1.5 font-medium">
+                                  <td className="py-4 px-4">
                                     <button
                                       onClick={() =>
                                         handleSiswaClick(
@@ -428,33 +492,21 @@ export default function RekapPage() {
                                           item.tempat,
                                         )
                                       }
-                                      className="inline-flex items-center gap-1.5 text-left font-bold text-blue-600 transition-colors hover:text-blue-800 hover:underline focus:outline-none truncate max-w-[140px] md:max-w-[200px]"
+                                      className="text-left font-bold text-slate-700 group-hover:text-blue-700 group-hover:underline focus:outline-none transition-colors"
                                     >
-                                      {/* Ikon User Disamping Nama */}
-                                      <svg
-                                        className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"
-                                        fill="currentColor"
-                                        viewBox="0 0 20 20"
-                                      >
-                                        <path
-                                          fillRule="evenodd"
-                                          d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                                          clipRule="evenodd"
-                                        />
-                                      </svg>
-                                      <span className="truncate">{s.nama}</span>
+                                      {s.nama}
                                     </button>
                                   </td>
-                                  <td className="px-2 py-1.5 text-center font-bold text-emerald-600">
+                                  <td className="py-4 px-2 text-center font-black text-emerald-600 bg-emerald-50/30">
                                     {s.hadir}
                                   </td>
-                                  <td className="px-2 py-1.5 text-center font-bold text-amber-500">
+                                  <td className="py-4 px-2 text-center font-black text-amber-500 bg-amber-50/30">
                                     {s.izin}
                                   </td>
-                                  <td className="px-2 py-1.5 text-center font-bold text-blue-500">
+                                  <td className="py-4 px-2 text-center font-black text-blue-500 bg-blue-50/30">
                                     {s.sakit}
                                   </td>
-                                  <td className="px-2 py-1.5 text-center font-bold text-red-500">
+                                  <td className="py-4 px-2 text-center font-black text-rose-500 bg-rose-50/30">
                                     {s.alfa}
                                   </td>
                                 </tr>
@@ -471,6 +523,47 @@ export default function RekapPage() {
         </div>
       </div>
 
+      {/* OVERLAY GAMBAR / LIGHTBOX (BARU) */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-2 sm:p-8"
+          onClick={() => setSelectedImage(null)}
+        >
+          {/* Tombol Close */}
+          <button
+            className="absolute top-4 right-4 sm:top-8 sm:right-8 text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-full w-12 h-12 flex items-center justify-center transition-all duration-300 focus:outline-none shadow-2xl z-[101]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedImage(null);
+            }}
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+
+          {/* Gambar Overlay mematuhi object-contain agar utuh, tidak tertutup, tidak meluber */}
+          <div className="relative max-w-full max-h-full w-full h-full flex items-center justify-center p-4">
+            <img
+              src={selectedImage}
+              alt="Preview Full"
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+              onClick={(e) => e.stopPropagation()} // Supaya klik gambar tidak langsung close
+            />
+          </div>
+        </div>
+      )}
+
       {/* DRAWER MODAL - DETAIL RIWAYAT PRESENSI SISWA */}
       {selectedSiswa && (
         <div
@@ -480,153 +573,164 @@ export default function RekapPage() {
           aria-modal="true"
         >
           <div className="absolute inset-0 overflow-hidden">
-            {/* Background Overlay hitam transparan */}
+            {/* Background Overlay */}
             <div
               onClick={() => setSelectedSiswa(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              className="absolute inset-0 bg-slate-900/60 transition-opacity backdrop-blur-sm"
             ></div>
 
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
               {/* Drawer Container */}
               <div className="pointer-events-auto w-screen max-w-4xl transform transition-transform duration-500 ease-in-out">
-                <div className="flex h-full flex-col overflow-hidden rounded-l-3xl bg-white shadow-2xl">
+                <div className="flex h-full flex-col bg-slate-50 shadow-2xl rounded-l-[2.5rem] overflow-hidden border-l border-white/20">
                   {/* HEADER DRAWER */}
-                  <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white shadow-inner">
-                    <div className="flex items-start justify-between">
+                  <div className="relative bg-gradient-to-br from-blue-700 via-indigo-800 to-blue-900 p-8 text-white overflow-hidden">
+                    {/* Hiasan background */}
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
+
+                    <div className="relative flex items-start justify-between">
                       <div>
-                        <span className="inline-block rounded-full bg-blue-500/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-                          Riwayat Presensi Magang
-                        </span>
-                        <h2 className="mt-3 text-2xl font-black tracking-tight leading-tight">
+                        <div className="inline-flex items-center gap-2 bg-blue-400/20 border border-blue-300/30 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-md mb-4">
+                          <span className="w-2 h-2 rounded-full bg-blue-300"></span>
+                          Riwayat Presensi
+                        </div>
+                        <h2 className="text-3xl font-black tracking-tight leading-none mb-1">
                           {selectedSiswa.nama}
                         </h2>
                       </div>
                       <button
                         onClick={() => setSelectedSiswa(null)}
-                        className="rounded-full bg-black/20 p-2.5 text-white transition hover:bg-black/40 focus:outline-none"
+                        className="rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20 border border-white/10 focus:outline-none transition-all"
                       >
                         <svg
-                          className="w-4 h-4"
+                          className="w-5 h-5"
                           fill="none"
-                          stroke="currentColor"
                           viewBox="0 0 24 24"
+                          stroke="currentColor"
                         >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth="2.5"
+                            strokeWidth={2.5}
                             d="M6 18L18 6M6 6l12 12"
-                          ></path>
+                          />
                         </svg>
                       </button>
                     </div>
 
                     {/* Metadata Detail */}
-                    <div className="mt-6 grid grid-cols-2 gap-6 border-t border-white/10 pt-5 text-sm">
+                    <div className="relative mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 text-sm">
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
-                          Guru Pembimbing
+                        <p className="text-blue-200/80 text-xs uppercase tracking-widest font-bold mb-1">
+                          Pembimbing
                         </p>
-                        <p className="mt-1 font-bold">
-                          👨‍🏫 {selectedSiswa.guru}
+                        <p className="font-bold text-lg flex items-center gap-2">
+                          <span className="text-xl">👨‍🏫</span>{" "}
+                          {selectedSiswa.guru}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
-                          Tempat Magang
+                        <p className="text-blue-200/80 text-xs uppercase tracking-widest font-bold mb-1">
+                          Lokasi Magang
                         </p>
-                        <p className="mt-1 font-bold">
-                          📍 {selectedSiswa.tempat}
+                        <p className="font-bold text-lg flex items-center gap-2">
+                          <span className="text-xl">📍</span>{" "}
+                          {selectedSiswa.tempat}
                         </p>
                       </div>
                     </div>
                   </div>
 
                   {/* BODY CONTENT */}
-                  <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
+                  <div className="flex-1 overflow-y-auto p-6 sm:p-8">
                     {riwayatLoading ? (
                       <div className="flex h-64 flex-col items-center justify-center text-slate-500">
-                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></div>
-                        <p className="mt-4 text-sm font-semibold">
-                          Mengambil seluruh riwayat presensi...
+                        <div className="relative h-12 w-12 mb-4">
+                          <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
+                          <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                        </div>
+                        <p className="font-bold tracking-wide">
+                          Menyinkronkan Riwayat...
                         </p>
                       </div>
                     ) : riwayatSiswa.length === 0 ? (
-                      <div className="flex h-64 flex-col items-center justify-center text-slate-400">
-                        <p className="text-lg font-bold">
-                          Belum ada riwayat presensi
+                      <div className="flex h-64 flex-col items-center justify-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
+                        <svg
+                          className="w-16 h-16 mb-4 text-slate-200"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <p className="text-xl font-black text-slate-700">
+                          Belum Ada Data
                         </p>
-                        <p className="mt-1 text-sm text-slate-400">
-                          Siswa belum pernah melakukan presensi bulan ini.
+                        <p className="text-sm font-medium mt-1">
+                          Siswa belum melakukan presensi bulan ini.
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-6">
+                      <div className="space-y-8">
                         {/* STATISTIK RINGKAS */}
-                        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-sm p-2">
-                          <div className="flex flex-col items-center justify-center py-3">
-                            <span className="text-3xl font-black text-emerald-600">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute top-0 w-full h-1 bg-emerald-500"></div>
+                            <span className="text-4xl font-black text-emerald-600 group-hover:scale-110 transition-transform">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Hadir")
                                   .length
                               }
                             </span>
-                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
                               Hadir
                             </p>
                           </div>
-                          <div className="flex flex-col items-center justify-center py-3">
-                            <span className="text-3xl font-black text-amber-500">
+                          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute top-0 w-full h-1 bg-amber-500"></div>
+                            <span className="text-4xl font-black text-amber-500 group-hover:scale-110 transition-transform">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Izin")
                                   .length
                               }
                             </span>
-                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
                               Izin
                             </p>
                           </div>
-                          <div className="flex flex-col items-center justify-center py-3">
-                            <span className="text-3xl font-black text-blue-500">
+                          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute top-0 w-full h-1 bg-blue-500"></div>
+                            <span className="text-4xl font-black text-blue-500 group-hover:scale-110 transition-transform">
                               {
                                 riwayatSiswa.filter((r) => r.STATUS === "Sakit")
                                   .length
                               }
                             </span>
-                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
                               Sakit
                             </p>
                           </div>
                         </div>
 
                         {/* TABEL RIWAYAT LENGKAP */}
-                        <div className="overflow-hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                          <table className="min-w-full text-left text-xs whitespace-nowrap">
-                            <thead className="border-b border-slate-200 bg-slate-50">
+                        <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+                          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 font-black uppercase tracking-wider text-[11px]">
                               <tr>
-                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
-                                  No
-                                </th>
-                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
-                                  Tanggal & Hari
-                                </th>
-                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
+                                <th className="px-6 py-4 text-center">No</th>
+                                <th className="px-6 py-4">Waktu Presensi</th>
+                                <th className="px-6 py-4 text-center">
                                   Status
                                 </th>
-                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
-                                  Foto
-                                </th>
-                                <th className="px-4 py-3 text-center font-black uppercase tracking-wider text-slate-600">
-                                  Peta
-                                </th>
-                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
-                                  Pembimbing
-                                </th>
-                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
-                                  Kompetensi
-                                </th>
-                                <th className="px-4 py-3 font-black uppercase tracking-wider text-slate-600">
-                                  Keterangan
+                                <th className="px-6 py-4 text-center">Bukti</th>
+                                <th className="px-6 py-4">Pembimbing</th>
+                                <th className="px-6 py-4">
+                                  Kegiatan / Kompetensi
                                 </th>
                               </tr>
                             </thead>
@@ -642,83 +746,89 @@ export default function RekapPage() {
                                 return (
                                   <tr
                                     key={i}
-                                    className="transition hover:bg-slate-50"
+                                    className="hover:bg-slate-50/80 transition-colors"
                                   >
-                                    <td className="px-4 py-3 text-center font-bold text-slate-500">
+                                    <td className="px-6 py-5 text-center font-bold text-slate-400">
                                       {i + 1}
                                     </td>
-                                    <td className="px-4 py-3">
-                                      <p className="font-bold text-slate-800">
+                                    <td className="px-6 py-5 whitespace-nowrap">
+                                      <p className="font-bold text-slate-800 text-base">
                                         {tanggal}
                                       </p>
-                                      <p className="mt-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                      <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
                                         {hari}
                                       </p>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
+                                    <td className="px-6 py-5 text-center whitespace-nowrap">
                                       <span
-                                        className={`inline-flex items-center rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
+                                        className={`inline-flex rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-wider border ${
                                           status === "Hadir"
-                                            ? "bg-emerald-100 text-emerald-800"
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                             : status === "Izin"
-                                              ? "bg-amber-100 text-amber-800"
-                                              : "bg-blue-100 text-blue-800"
+                                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                                              : "bg-blue-50 text-blue-700 border-blue-200"
                                         }`}
                                       >
                                         {status}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
-                                      {fotoUrl ? (
-                                        <a
-                                          href={fotoUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex items-center justify-center rounded-lg bg-blue-50 p-1.5 text-blue-600 transition hover:bg-blue-100 hover:text-blue-800"
-                                          title="Buka Foto"
-                                        >
-                                          📸
-                                        </a>
-                                      ) : (
-                                        <span className="text-slate-300">
-                                          -
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      {mapUrl ? (
-                                        <a
-                                          href={mapUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex items-center justify-center rounded-lg bg-rose-50 p-1.5 text-rose-600 transition hover:bg-rose-100 hover:text-rose-800"
-                                          title="Buka Google Maps"
-                                        >
-                                          🗺️
-                                        </a>
-                                      ) : (
-                                        <span className="text-slate-300">
-                                          -
-                                        </span>
-                                      )}
+                                    <td className="px-6 py-5 text-center">
+                                      <div className="flex items-center justify-center gap-2">
+                                        {fotoUrl ? (
+                                          <a
+                                            href={fotoUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="group flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
+                                            title="Buka Foto Bukti"
+                                          >
+                                            <span className="text-lg group-hover:scale-110 transition-transform">
+                                              📸
+                                            </span>
+                                          </a>
+                                        ) : (
+                                          <span className="h-10 w-10 flex items-center justify-center text-slate-300 font-bold">
+                                            -
+                                          </span>
+                                        )}
+                                        {mapUrl && (
+                                          <a
+                                            href={mapUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="group flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
+                                            title="Buka Peta Lokasi"
+                                          >
+                                            <span className="text-lg group-hover:scale-110 transition-transform">
+                                              📍
+                                            </span>
+                                          </a>
+                                        )}
+                                      </div>
                                     </td>
                                     <td
-                                      className="px-4 py-3 max-w-[150px] truncate font-medium text-slate-700"
+                                      className="px-6 py-5 max-w-[150px] truncate font-semibold text-slate-700"
                                       title={r.PEMBIMBING_LAPANGAN || "-"}
                                     >
                                       {r.PEMBIMBING_LAPANGAN || "-"}
                                     </td>
-                                    <td
-                                      className="px-4 py-3 max-w-[180px] truncate font-semibold text-slate-800"
-                                      title={r.KOMPETENSI_YANG_DIKUASAI || "-"}
-                                    >
-                                      {r.KOMPETENSI_YANG_DIKUASAI || "-"}
-                                    </td>
-                                    <td
-                                      className="px-4 py-3 max-w-[150px] truncate font-medium text-slate-500"
-                                      title={r.KETERANGAN || "-"}
-                                    >
-                                      {r.KETERANGAN || "-"}
+                                    <td className="px-6 py-5">
+                                      <p
+                                        className="max-w-[200px] truncate font-bold text-slate-800"
+                                        title={
+                                          r.KOMPETENSI_YANG_DIKUASAI || "-"
+                                        }
+                                      >
+                                        {r.KOMPETENSI_YANG_DIKUASAI || "-"}
+                                      </p>
+                                      {r.KETERANGAN && (
+                                        <p
+                                          className="max-w-[200px] truncate text-xs text-slate-500 mt-1"
+                                          title={r.KETERANGAN}
+                                        >
+                                          Catatan: {r.KETERANGAN}
+                                        </p>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -731,10 +841,10 @@ export default function RekapPage() {
                   </div>
 
                   {/* FOOTER DRAWER */}
-                  <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-4">
+                  <div className="border-t border-slate-200 bg-white p-6 flex justify-end z-10">
                     <button
                       onClick={() => setSelectedSiswa(null)}
-                      className="rounded-xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      className="rounded-xl border-2 border-slate-200 bg-white px-8 py-3 font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all focus:outline-none focus:ring-4 focus:ring-slate-100"
                     >
                       Tutup Riwayat
                     </button>
