@@ -499,7 +499,7 @@ export default function RekapPage() {
                           <div className="text-center border-r">
                             <span className="text-2xl font-black text-emerald-600">
                               {
-                                riwayatSiswa.filter((r) => r[15] === "Hadir")
+                                riwayatSiswa.filter((r) => r.STATUS === "Hadir")
                                   .length
                               }
                             </span>
@@ -510,7 +510,7 @@ export default function RekapPage() {
                           <div className="text-center border-r">
                             <span className="text-2xl font-black text-amber-500">
                               {
-                                riwayatSiswa.filter((r) => r[15] === "Izin")
+                                riwayatSiswa.filter((r) => r.STATUS === "Izin")
                                   .length
                               }
                             </span>
@@ -521,7 +521,7 @@ export default function RekapPage() {
                           <div className="text-center">
                             <span className="text-2xl font-black text-blue-500">
                               {
-                                riwayatSiswa.filter((r) => r[15] === "Sakit")
+                                riwayatSiswa.filter((r) => r.STATUS === "Sakit")
                                   .length
                               }
                             </span>
@@ -558,11 +558,12 @@ export default function RekapPage() {
                                 // r[16] = Pembimbing Lapangan
                                 // r[17] = Kompetensi, r[18] = Keterangan
                                 const { hari, tanggal } = getHariDanTanggal(
-                                  r[1],
+                                  r.TIMESTAMP,
                                 );
-                                const status = r[15] || "Hadir";
-                                const fotoUrl = r[13];
-                                const mapUrl = r[14];
+
+                                const status = r.STATUS || "-";
+                                const fotoUrl = r.FOTO;
+                                const mapUrl = r.MAP;
 
                                 return (
                                   <tr
@@ -627,21 +628,21 @@ export default function RekapPage() {
                                     </td>
                                     <td
                                       className="px-4 py-4 max-w-[150px] truncate"
-                                      title={r[16] || "-"}
+                                      title={r.PEMBIMBING_LAPANGAN || "-"}
                                     >
-                                      {r[16] || "-"}
+                                      {r.PEMBIMBING_LAPANGAN || "-"}
                                     </td>
                                     <td
                                       className="px-4 py-4 max-w-[150px] truncate font-medium text-slate-700"
-                                      title={r[17] || "-"}
+                                      title={r.KOMPETENSI_YANG_DIKUASAI || "-"}
                                     >
-                                      {r[17] || "-"}
+                                      {r.KOMPETENSI_YANG_DIKUASAI || "-"}
                                     </td>
                                     <td
                                       className="px-4 py-4 max-w-[150px] truncate text-xs text-slate-500"
-                                      title={r[18] || "-"}
+                                      title={r.KETERANGAN || "-"}
                                     >
-                                      {r[18] || "-"}
+                                      {r.KETERANGAN || "-"}
                                     </td>
                                   </tr>
                                 );
