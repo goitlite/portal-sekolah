@@ -211,7 +211,8 @@ export default function RekapPage() {
       </header>
 
       <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-8">
-        <div className="mx-auto max-w-7xl px-0 sm:px-6">
+        {/* 1. PERBAIKAN CONTAINER UTAMA (px-4 sm:px-6) */}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           {/* JUDUL HALAMAN & TOMBOL WA */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-6 sm:px-0 mb-8">
             <div>
@@ -222,19 +223,21 @@ export default function RekapPage() {
                 </span>
                 Live Monitoring
               </div>
-              <h1 className="text-4xl font-black text-slate-800 tracking-tight">
+              {/* 8. RESPONSIVE JUDUL & SUBJUDUL DI HP */}
+              <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight">
                 Rekap Kehadiran
               </h1>
-              <p className="mt-2 text-slate-500 font-medium text-lg">
+              <p className="mt-2 text-slate-500 font-medium text-base sm:text-lg">
                 Pantau aktivitas dan presensi siswa magang secara *real-time*.
               </p>
             </div>
 
             {mode === "card" && (
+              /* 9. RESPONSIVE LEBAR TOMBOL WA (w-full sm:w-auto sm:min-w-[280px]) */
               <button
                 onClick={handleShareWA}
                 disabled={isSharing || data.length === 0}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-3 min-w-[280px]"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-3 w-full sm:w-auto sm:min-w-[280px]"
               >
                 <div className="absolute inset-0 w-full h-full bg-white/20 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
                 {isSharing ? (
@@ -361,7 +364,8 @@ export default function RekapPage() {
           ) : (
             /* TAMPILAN CARD */
             mode === "card" && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 px-0 sm:px-0">
+              /* 2. PERBAIKAN GRID CARD (gap-6 tanpa px-0 sm:px-0) */
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 {data
                   .filter((x) => {
                     if (tempat === "Semua") return true;
@@ -370,19 +374,20 @@ export default function RekapPage() {
                   .map((item, index) => (
                     <div
                       key={index}
-                      // Margin negatif (-mx-6) pada mobile agar full layaknya aplikasi native. Pada SM ke atas kembali normal.
-                      className="rekap-card-wa overflow-hidden sm:rounded-[2rem] bg-white shadow-xl shadow-slate-200/50 border-y sm:border border-slate-200 flex flex-col -mx-6 sm:mx-0"
+                      /* 3. PERBAIKAN CARD STYLING (rounded-3xl, hapus -mx-6 & border-y) */
+                      className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow-xl shadow-slate-200/50 border border-slate-200 flex flex-col"
                     >
                       {item.foto ? (
+                        /* 4 & 6. CONTAINER GAMBAR (Responsif height & background elegan) */
                         <div
-                          className="relative w-full cursor-pointer bg-slate-100 flex items-center justify-center group overflow-hidden"
+                          className="relative w-full h-[260px] sm:h-[380px] lg:h-[430px] bg-gradient-to-b from-slate-100 to-white overflow-hidden flex items-center justify-center cursor-pointer group"
                           onClick={() => setSelectedImage(item.foto)}
                         >
-                          {/* object-contain memastikan watermark tidak hilang/terpotong. w-full membuatnya menyentuh sisi layar pada mobile */}
+                          {/* 5. PERBAIKAN TAG img (block, h-full, object-contain, duration-500) */}
                           <img
                             src={item.foto}
                             alt="Foto Lokasi"
-                            className="w-full max-h-[450px] object-contain transition-transform duration-700 group-hover:scale-105"
+                            className="block w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                           />
                           {/* Efek Hover Glassmorphism */}
                           <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
@@ -425,6 +430,9 @@ export default function RekapPage() {
                         </div>
                       )}
 
+                      {/* 7. GARIS PEMISAH DI HEADER CARD */}
+                      <div className="border-t border-slate-200"></div>
+
                       <div className="p-6 sm:p-8">
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -435,8 +443,15 @@ export default function RekapPage() {
                             <p className="mt-2 text-slate-500 font-medium flex items-center gap-2">
                               <span className="bg-slate-100 p-1 rounded-lg">
                                 👨‍🏫
-                              </span>{" "}
-                              {item.guru}
+                              </span>
+                              <span>
+                                <span className="font-semibold text-slate-500">
+                                  GURU PEMBIMBING :
+                                </span>{" "}
+                                <span className="font-bold text-slate-800">
+                                  {item.guru}
+                                </span>
+                              </span>
                             </p>
                           </div>
                           <div className="bg-blue-50 border border-blue-100 text-blue-700 px-4 py-2 rounded-2xl text-center">
@@ -483,6 +498,7 @@ export default function RekapPage() {
                                     {i + 1}
                                   </td>
                                   <td className="py-4 px-4">
+                                    {/* PENAMBAHAN ICON USER DI DEPAN NAMA SISWA */}
                                     <button
                                       onClick={() =>
                                         handleSiswaClick(
@@ -492,9 +508,22 @@ export default function RekapPage() {
                                           item.tempat,
                                         )
                                       }
-                                      className="text-left font-bold text-slate-700 group-hover:text-blue-700 group-hover:underline focus:outline-none transition-colors"
+                                      className="text-left font-bold text-slate-700 group-hover:text-blue-700 group-hover:underline focus:outline-none transition-colors flex items-center gap-2"
                                     >
-                                      {s.nama}
+                                      <svg
+                                        className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors flex-shrink-0"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                        />
+                                      </svg>
+                                      <span>{s.nama}</span>
                                     </button>
                                   </td>
                                   <td className="py-4 px-2 text-center font-black text-emerald-600 bg-emerald-50/30">
