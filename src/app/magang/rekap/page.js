@@ -13,71 +13,121 @@ export default function RekapPage() {
   const [bulan, setBulan] = useState("");
   const [mode, setMode] = useState("card");
   const [tempat, setTempat] = useState("Semua");
-
-  // State untuk share WA
   const [isSharing, setIsSharing] = useState(false);
   const [shareProgress, setShareProgress] = useState("");
-
-  // State untuk Detail Siswa (Modal/Drawer)
   const [selectedSiswa, setSelectedSiswa] = useState(null);
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const [riwayatSiswa, setRiwayatSiswa] = useState([]);
-
-  // State BARU: Untuk Overlay Gambar (Lightbox)
   const [selectedImage, setSelectedImage] = useState(null);
 
-  useEffect(() => {
-    load();
-  }, []);
+  // --- FUNGSI RESET CACHE & BROWSER STATE ---
+  async function clearBrowserState() {
+    localStorage.clear();
+    sessionStorage.clear();
 
-  async function load() {
-    setLoading(true);
-    const session = getSession();
-    const guruId = session ? session.id : "";
-    const hasil = await getRekapGuru(guruId, bulan);
-    setData(hasil.data || []);
-    setLoading(false);
-  }
-
-  // Fungsi saat nama siswa di-klik
-  async function handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang) {
-    console.log("--- DEBUGGING KLIK SISWA ---");
-    console.log("ID Siswa yang diklik:", idSiswa);
-
-    setSelectedSiswa({
-      id: idSiswa,
-      nama: namaSiswa,
-      guru: namaGuru,
-      tempat: tempatMagang,
-    });
-    setRiwayatLoading(true);
-    setRiwayatSiswa([]);
-
-    try {
-      const response = await getRiwayatSiswa(idSiswa);
-      console.log("Response Lengkap dari API:", response);
-      const dataSiswa = response.data || response;
-
-      if (Array.isArray(dataSiswa)) {
-        console.log("Jumlah data ditemukan:", dataSiswa.length);
-        if (dataSiswa.length > 0) {
-          setRiwayatSiswa([...dataSiswa].reverse());
-        } else {
-          console.warn(
-            "API mengembalikan array kosong! Pastikan ID di sheet PRESENSI sama dengan ID di sheet SISWA.",
-          );
+    if ("caches" in window) {
+      try {
+        const keys = await caches.keys();
+        for (const key of keys) {
+          await caches.delete(key);
         }
-      } else {
-        console.error("Format data dari API salah, bukan Array!");
+      } catch (error) {
+        console.error("Gagal menghapus Cache Storage:", error);
       }
-    } catch (error) {
-      console.error("Error saat fetch:", error);
-    } finally {
-      setRiwayatLoading(false);
+    }
+
+    if ("serviceWorker" in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) {
+          await reg.unregister();
+        }
+      } catch (error) {
+        console.error("Gagal unregister Service Worker:", error);
+      }
     }
   }
 
-  // Helper mendapatkan nama Hari dari string Timestamp
+  async function forceFreshMode() {
+    await clearBrowserState();
+    window.history.replaceState({}, "", window.location.pathname);
+    window.location.href = window.location.pathname + "?fresh=" + Date.now();
+  }
+
+  // Bersihkan cache saat halaman pertama kali dibuka
+  useEffect(() => {
+    clearBrowserState().then(() => {
+      load();
+    });
+  }, []);
+
+  // --- LOGIKA FETCH DENGAN RETRY ---
+  async function load(isRetry = false) {
+    if (!isRetry) setLoading(true);
+
+    try {
+      const session = getSession();
+      const guruId = session ? session.id : "";
+      const hasil = await getRekapGuru(guruId, bulan);
+      setData(hasil.data || []);
+      setLoading(false);
+    } catch (error) {
+      console.error("Fetch Rekap error:", error);
+      if (!isRetry) {
+        console.log("Mencoba ulang (retry) dalam 1 detik...");
+        await clearBrowserState(); // Reset cache otomatis
+        setTimeout(() => load(true), 1000);
+      } else {
+        setLoading(false);
+        // Biarkan gagal setelah retry, user bisa pakai tombol Paksa Fresh
+      }
+    }
+  }
+
+  async function handleSiswaClick(
+    idSiswa,
+    namaSiswa,
+    namaGuru,
+    tempatMagang,
+    isRetry = false,
+  ) {
+    if (!isRetry) {
+      setSelectedSiswa({
+        id: idSiswa,
+        nama: namaSiswa,
+        guru: namaGuru,
+        tempat: tempatMagang,
+      });
+      setRiwayatLoading(true);
+      setRiwayatSiswa([]);
+    }
+
+    try {
+      const response = await getRiwayatSiswa(idSiswa);
+      const dataSiswa = response.data || response;
+
+      if (Array.isArray(dataSiswa)) {
+        if (dataSiswa.length > 0) {
+          setRiwayatSiswa([...dataSiswa].reverse());
+        }
+      }
+      setRiwayatLoading(false);
+    } catch (error) {
+      console.error("Fetch Riwayat error:", error);
+      if (!isRetry) {
+        console.log("Mencoba ulang (retry) riwayat dalam 1 detik...");
+        await clearBrowserState(); // Reset cache otomatis
+        setTimeout(
+          () =>
+            handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang, true),
+          1000,
+        );
+      } else {
+        setRiwayatLoading(false);
+      }
+    }
+  }
+
   function getHariDanTanggal(timestampStr) {
     if (!timestampStr) return { hari: "-", tanggal: "-" };
     try {
@@ -120,10 +170,7 @@ export default function RekapPage() {
 
   async function handleShareWA() {
     const cards = document.querySelectorAll(".rekap-card-wa");
-    if (cards.length === 0) {
-      alert("Tidak ada data card yang ditampilkan untuk dibagikan.");
-      return;
-    }
+    if (cards.length === 0) return;
 
     setIsSharing(true);
     setShareProgress("Menyiapkan gambar...");
@@ -134,7 +181,7 @@ export default function RekapPage() {
         setShareProgress(`Memproses foto ${i + 1} dari ${cards.length}...`);
         const blob = await toBlob(cards[i], {
           quality: 0.9,
-          backgroundColor: "#f8fafc", // Menggunakan warna slate-50 agar rapi
+          backgroundColor: "#f8fafc",
           pixelRatio: 2,
         });
         if (blob) {
@@ -157,7 +204,7 @@ export default function RekapPage() {
         });
       } else {
         alert(
-          "Perangkat PC tidak mendukung Share massal langsung. Gambar akan didownload otomatis, silakan seret (drag) gambar tersebut ke WhatsApp Web.",
+          "Gambar akan didownload otomatis, silakan seret (drag) ke WhatsApp.",
         );
         filesArray.forEach((file) => {
           const url = URL.createObjectURL(file);
@@ -170,7 +217,6 @@ export default function RekapPage() {
       }
     } catch (error) {
       console.error("Gagal membagikan ke WhatsApp:", error);
-      alert("Terjadi kesalahan saat memproses gambar.");
     } finally {
       setIsSharing(false);
       setShareProgress("");
@@ -179,7 +225,6 @@ export default function RekapPage() {
 
   return (
     <>
-      {/* HEADER - Desain Gradien Modern */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
@@ -211,9 +256,7 @@ export default function RekapPage() {
       </header>
 
       <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-8">
-        {/* 1. PERBAIKAN CONTAINER UTAMA (px-4 sm:px-6) */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          {/* JUDUL HALAMAN & TOMBOL WA */}
+        <div className="mx-auto max-w-7xl px-0 sm:px-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-6 sm:px-0 mb-8">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider mb-3">
@@ -223,23 +266,20 @@ export default function RekapPage() {
                 </span>
                 Live Monitoring
               </div>
-              {/* 8. RESPONSIVE JUDUL & SUBJUDUL DI HP */}
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight">
+              <h1 className="text-4xl font-black text-slate-800 tracking-tight">
                 Rekap Kehadiran
               </h1>
-              <p className="mt-2 text-slate-500 font-medium text-base sm:text-lg">
+              <p className="mt-2 text-slate-500 font-medium text-lg">
                 Pantau aktivitas dan presensi siswa magang secara *real-time*.
               </p>
             </div>
 
             {mode === "card" && (
-              /* 9. RESPONSIVE LEBAR TOMBOL WA (w-full sm:w-auto sm:min-w-[280px]) */
               <button
                 onClick={handleShareWA}
                 disabled={isSharing || data.length === 0}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-3 w-full sm:w-auto sm:min-w-[280px]"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 flex items-center justify-center gap-3 min-w-[280px]"
               >
-                <div className="absolute inset-0 w-full h-full bg-white/20 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
                 {isSharing ? (
                   <>
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
@@ -247,13 +287,6 @@ export default function RekapPage() {
                   </>
                 ) : (
                   <>
-                    <svg
-                      className="w-6 h-6 relative z-10"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                    </svg>
                     <span className="relative z-10 tracking-wide">
                       BAGIKAN LAPORAN
                     </span>
@@ -263,14 +296,13 @@ export default function RekapPage() {
             )}
           </div>
 
-          {/* FILTER & TABS */}
-          <div className="mx-6 sm:mx-0 flex flex-wrap gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
-            <div className="flex-1 min-w-[200px]">
+          <div className="mx-6 sm:mx-0 flex flex-wrap gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10 items-end">
+            <div className="flex-1 min-w-[150px]">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
                 Bulan
               </label>
               <select
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500"
                 value={bulan}
                 onChange={(e) => setBulan(e.target.value)}
               >
@@ -278,12 +310,12 @@ export default function RekapPage() {
               </select>
             </div>
 
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[150px]">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
                 Lokasi Magang
               </label>
               <select
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-semibold text-slate-700 outline-none focus:border-blue-500"
                 value={tempat}
                 onChange={(e) => setTempat(e.target.value)}
               >
@@ -296,61 +328,39 @@ export default function RekapPage() {
               </select>
             </div>
 
+            {/* TOMBOL MODE FRESH (BARU) */}
             <div className="flex items-end gap-2">
+              <button
+                onClick={forceFreshMode}
+                className="rounded-xl px-6 py-3.5 font-bold bg-rose-100 text-rose-700 hover:bg-rose-200 shadow-sm transition-all"
+                title="Hapus Cache & Refresh Halaman"
+              >
+                🔄 Refresh Data
+              </button>
+
               <button
                 onClick={() => setMode("card")}
                 className={`rounded-xl px-6 py-3.5 font-bold transition-all ${
                   mode === "card"
-                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2"
+                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30"
                     : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                    />
-                  </svg>
-                  Card
-                </span>
+                Card
               </button>
               <button
                 onClick={() => setMode("table")}
                 className={`rounded-xl px-6 py-3.5 font-bold transition-all ${
                   mode === "table"
-                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2"
+                    ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30"
                     : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                    />
-                  </svg>
-                  Tabel
-                </span>
+                Tabel
               </button>
             </div>
           </div>
 
-          {/* LOADING STATE DATA AWAL */}
           {loading ? (
             <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
               <div className="relative h-16 w-16">
@@ -362,10 +372,8 @@ export default function RekapPage() {
               </p>
             </div>
           ) : (
-            /* TAMPILAN CARD */
             mode === "card" && (
-              /* 2. PERBAIKAN GRID CARD (gap-6 tanpa px-0 sm:px-0) */
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 px-0 sm:px-0">
                 {data
                   .filter((x) => {
                     if (tempat === "Semua") return true;
@@ -374,64 +382,33 @@ export default function RekapPage() {
                   .map((item, index) => (
                     <div
                       key={index}
-                      /* 3. PERBAIKAN CARD STYLING (rounded-3xl, hapus -mx-6 & border-y) */
-                      className="rekap-card-wa overflow-hidden rounded-3xl bg-white shadow-xl shadow-slate-200/50 border border-slate-200 flex flex-col"
+                      className="rekap-card-wa overflow-hidden sm:rounded-[2rem] bg-white shadow-xl shadow-slate-200/50 border-y sm:border border-slate-200 flex flex-col -mx-6 sm:mx-0"
                     >
                       {item.foto ? (
-                        /* 4 & 6. CONTAINER GAMBAR (Responsif height & background elegan) */
                         <div
-                          className="relative w-full h-[260px] sm:h-[380px] lg:h-[430px] bg-gradient-to-b from-slate-100 to-white overflow-hidden flex items-center justify-center cursor-pointer group"
+                          className="relative w-full cursor-pointer bg-slate-100 flex items-center justify-center group overflow-hidden"
                           onClick={() => setSelectedImage(item.foto)}
                         >
-                          {/* 5. PERBAIKAN TAG img (block, h-full, object-contain, duration-500) */}
+                          {/* GAMBAR DENGAN BUSTER CACHE & EAGER */}
                           <img
-                            src={item.foto}
+                            src={`${item.foto}?v=${Date.now()}`}
+                            loading="eager"
                             alt="Foto Lokasi"
-                            className="block w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                            className="w-full max-h-[450px] object-contain transition-transform duration-700 group-hover:scale-105"
                           />
-                          {/* Efek Hover Glassmorphism */}
                           <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
                             <span className="text-white font-black tracking-widest uppercase bg-blue-900/60 px-6 py-3 rounded-2xl border border-white/30 shadow-2xl flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
-                                />
-                              </svg>
                               Perbesar Foto
                             </span>
                           </div>
                         </div>
                       ) : (
                         <div className="flex h-[300px] flex-col items-center justify-center bg-slate-50 text-slate-400 border-b border-dashed border-slate-200">
-                          <svg
-                            className="w-12 h-12 mb-3 text-slate-300"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
                           <span className="font-semibold tracking-wide">
                             Belum ada foto monitoring
                           </span>
                         </div>
                       )}
-
-                      {/* 7. GARIS PEMISAH DI HEADER CARD */}
-                      <div className="border-t border-slate-200"></div>
 
                       <div className="p-6 sm:p-8">
                         <div className="flex items-start justify-between gap-4">
@@ -443,15 +420,8 @@ export default function RekapPage() {
                             <p className="mt-2 text-slate-500 font-medium flex items-center gap-2">
                               <span className="bg-slate-100 p-1 rounded-lg">
                                 👨‍🏫
-                              </span>
-                              <span>
-                                <span className="font-semibold text-slate-500">
-                                  GURU PEMBIMBING :
-                                </span>{" "}
-                                <span className="font-bold text-slate-800">
-                                  {item.guru}
-                                </span>
-                              </span>
+                              </span>{" "}
+                              {item.guru}
                             </p>
                           </div>
                           <div className="bg-blue-50 border border-blue-100 text-blue-700 px-4 py-2 rounded-2xl text-center">
@@ -498,7 +468,6 @@ export default function RekapPage() {
                                     {i + 1}
                                   </td>
                                   <td className="py-4 px-4">
-                                    {/* PENAMBAHAN ICON USER DI DEPAN NAMA SISWA */}
                                     <button
                                       onClick={() =>
                                         handleSiswaClick(
@@ -508,22 +477,9 @@ export default function RekapPage() {
                                           item.tempat,
                                         )
                                       }
-                                      className="text-left font-bold text-slate-700 group-hover:text-blue-700 group-hover:underline focus:outline-none transition-colors flex items-center gap-2"
+                                      className="text-left font-bold text-slate-700 group-hover:text-blue-700 group-hover:underline focus:outline-none transition-colors"
                                     >
-                                      <svg
-                                        className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors flex-shrink-0"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                        />
-                                      </svg>
-                                      <span>{s.nama}</span>
+                                      {s.nama}
                                     </button>
                                   </td>
                                   <td className="py-4 px-2 text-center font-black text-emerald-600 bg-emerald-50/30">
@@ -552,48 +508,33 @@ export default function RekapPage() {
         </div>
       </div>
 
-      {/* OVERLAY GAMBAR / LIGHTBOX (BARU) */}
       {selectedImage && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-2 sm:p-8"
           onClick={() => setSelectedImage(null)}
         >
-          {/* Tombol Close */}
           <button
-            className="absolute top-4 right-4 sm:top-8 sm:right-8 text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-full w-12 h-12 flex items-center justify-center transition-all duration-300 focus:outline-none shadow-2xl z-[101]"
+            className="absolute top-4 right-4 sm:top-8 sm:right-8 text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-full w-12 h-12 flex items-center justify-center transition-all duration-300 z-[101]"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedImage(null);
             }}
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            Tutup
           </button>
-
-          {/* Gambar Overlay mematuhi object-contain agar utuh, tidak tertutup, tidak meluber */}
           <div className="relative max-w-full max-h-full w-full h-full flex items-center justify-center p-4">
+            {/* GAMBAR OVERLAY DENGAN BUSTER CACHE & EAGER */}
             <img
-              src={selectedImage}
+              src={`${selectedImage}?v=${Date.now()}`}
+              loading="eager"
               alt="Preview Full"
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-              onClick={(e) => e.stopPropagation()} // Supaya klik gambar tidak langsung close
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>
       )}
 
-      {/* DRAWER MODAL - DETAIL RIWAYAT PRESENSI SISWA */}
       {selectedSiswa && (
         <div
           className="fixed inset-0 z-50 overflow-hidden"
@@ -602,25 +543,19 @@ export default function RekapPage() {
           aria-modal="true"
         >
           <div className="absolute inset-0 overflow-hidden">
-            {/* Background Overlay */}
             <div
               onClick={() => setSelectedSiswa(null)}
               className="absolute inset-0 bg-slate-900/60 transition-opacity backdrop-blur-sm"
             ></div>
-
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
-              {/* Drawer Container */}
               <div className="pointer-events-auto w-screen max-w-4xl transform transition-transform duration-500 ease-in-out">
                 <div className="flex h-full flex-col bg-slate-50 shadow-2xl rounded-l-[2.5rem] overflow-hidden border-l border-white/20">
-                  {/* HEADER DRAWER */}
                   <div className="relative bg-gradient-to-br from-blue-700 via-indigo-800 to-blue-900 p-8 text-white overflow-hidden">
-                    {/* Hiasan background */}
                     <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
-
                     <div className="relative flex items-start justify-between">
                       <div>
                         <div className="inline-flex items-center gap-2 bg-blue-400/20 border border-blue-300/30 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-md mb-4">
-                          <span className="w-2 h-2 rounded-full bg-blue-300"></span>
+                          <span className="w-2 h-2 rounded-full bg-blue-300"></span>{" "}
                           Riwayat Presensi
                         </div>
                         <h2 className="text-3xl font-black tracking-tight leading-none mb-1">
@@ -629,25 +564,12 @@ export default function RekapPage() {
                       </div>
                       <button
                         onClick={() => setSelectedSiswa(null)}
-                        className="rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20 border border-white/10 focus:outline-none transition-all"
+                        className="rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20 border border-white/10 transition-all"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2.5}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        Tutup
                       </button>
                     </div>
 
-                    {/* Metadata Detail */}
                     <div className="relative mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 text-sm">
                       <div>
                         <p className="text-blue-200/80 text-xs uppercase tracking-widest font-bold mb-1">
@@ -670,7 +592,6 @@ export default function RekapPage() {
                     </div>
                   </div>
 
-                  {/* BODY CONTENT */}
                   <div className="flex-1 overflow-y-auto p-6 sm:p-8">
                     {riwayatLoading ? (
                       <div className="flex h-64 flex-col items-center justify-center text-slate-500">
@@ -684,19 +605,6 @@ export default function RekapPage() {
                       </div>
                     ) : riwayatSiswa.length === 0 ? (
                       <div className="flex h-64 flex-col items-center justify-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
-                        <svg
-                          className="w-16 h-16 mb-4 text-slate-200"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
                         <p className="text-xl font-black text-slate-700">
                           Belum Ada Data
                         </p>
@@ -706,7 +614,6 @@ export default function RekapPage() {
                       </div>
                     ) : (
                       <div className="space-y-8">
-                        {/* STATISTIK RINGKAS */}
                         <div className="grid grid-cols-3 gap-4">
                           <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
                             <div className="absolute top-0 w-full h-1 bg-emerald-500"></div>
@@ -746,7 +653,6 @@ export default function RekapPage() {
                           </div>
                         </div>
 
-                        {/* TABEL RIWAYAT LENGKAP */}
                         <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
                           <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 font-black uppercase tracking-wider text-[11px]">
@@ -805,11 +711,10 @@ export default function RekapPage() {
                                       <div className="flex items-center justify-center gap-2">
                                         {fotoUrl ? (
                                           <a
-                                            href={fotoUrl}
+                                            href={`${fotoUrl}?v=${Date.now()}`}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="group flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
-                                            title="Buka Foto Bukti"
                                           >
                                             <span className="text-lg group-hover:scale-110 transition-transform">
                                               📸
@@ -826,7 +731,6 @@ export default function RekapPage() {
                                             target="_blank"
                                             rel="noreferrer"
                                             className="group flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
-                                            title="Buka Peta Lokasi"
                                           >
                                             <span className="text-lg group-hover:scale-110 transition-transform">
                                               📍
@@ -869,7 +773,6 @@ export default function RekapPage() {
                     )}
                   </div>
 
-                  {/* FOOTER DRAWER */}
                   <div className="border-t border-slate-200 bg-white p-6 flex justify-end z-10">
                     <button
                       onClick={() => setSelectedSiswa(null)}
