@@ -20,7 +20,7 @@ export default function RekapPage() {
   const [riwayatSiswa, setRiwayatSiswa] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // --- FUNGSI RESET CACHE & BROWSER STATE ---
+  // --- FUNGSI RESET CACHE & BROWSER STATEe ---
   async function clearBrowserState() {
     localStorage.clear();
     sessionStorage.clear();
