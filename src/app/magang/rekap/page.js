@@ -434,7 +434,6 @@ export default function RekapPage() {
                           className="relative w-full h-[260px] sm:h-[380px] lg:h-[430px] bg-gradient-to-b from-slate-100 to-white overflow-hidden flex items-center justify-center cursor-pointer group"
                           onClick={() => setSelectedImage(item.foto)}
                         >
-                          // KODE PERBAIKAN
                           <img
                             src={item.foto}
                             alt="Foto Lokasi"
@@ -630,7 +629,6 @@ export default function RekapPage() {
             </svg>
           </button>
           <div className="relative max-w-full max-h-full w-full h-full flex items-center justify-center p-4">
-            // KODE PERBAIKAN
             <img
               src={selectedImage}
               alt="Preview Full"
