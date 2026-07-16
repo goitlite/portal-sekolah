@@ -20,7 +20,7 @@ export default function RekapPage() {
   const [riwayatSiswa, setRiwayatSiswa] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // --- FUNGSI RESET CACHE & BROWSER STATEe ---
+  // --- FUNGSI RESET CACHE & BROWSER STATE ---
   async function clearBrowserState() {
     localStorage.clear();
     sessionStorage.clear();
@@ -269,7 +269,7 @@ export default function RekapPage() {
       <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           {/* JUDUL & TOMBOL WA */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-6 sm:px-0 mb-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-4 sm:px-0 mb-8">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider mb-3">
                 <span className="relative flex h-2 w-2">
@@ -314,8 +314,8 @@ export default function RekapPage() {
             </button>
           </div>
 
-          {/* FILTER CONTROLS - Bersih & Rapi Tanpa Tab Switcher */}
-          <div className="mx-6 sm:mx-0 flex flex-wrap items-end gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
+          {/* FILTER CONTROLS */}
+          <div className="mx-4 sm:mx-0 flex flex-wrap items-end gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
             <div className="flex-1 min-w-[200px]">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
                 Bulan
@@ -356,7 +356,7 @@ export default function RekapPage() {
             </button>
           </div>
 
-          {/* LOADING STATE DATA AWAL */}
+          {/* LOADING STATE */}
           {loading ? (
             <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
               <div className="relative h-16 w-16">
@@ -376,9 +376,9 @@ export default function RekapPage() {
                 .map((item, index) => (
                   <div
                     key={index}
-                    className="rekap-card-wa overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-white to-blue-50/40 shadow-xl shadow-slate-200/60 border border-blue-100/70 flex flex-col transition-all duration-300 hover:shadow-2xl hover:border-blue-200/80"
+                    // --- PERUBAHAN DESAIN CARD DI SINI ---
+                    className="rekap-card-wa overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-blue-50/40 to-indigo-100/80 shadow-[0_10px_40px_-10px_rgba(59,130,246,0.15)] border border-blue-200/60 flex flex-col transition-all duration-300 hover:shadow-2xl hover:border-blue-300/80"
                   >
-                    {/* MODEL THUMBNAIL FOTO LAMA (Watermark Terlihat Jelas) */}
                     {item.foto ? (
                       <div
                         className="relative w-full h-[260px] sm:h-[380px] lg:h-[430px] bg-gradient-to-b from-slate-100 to-white overflow-hidden flex items-center justify-center cursor-pointer group"
@@ -431,12 +431,11 @@ export default function RekapPage() {
                       </div>
                     )}
 
-                    <div className="border-t border-slate-100"></div>
+                    <div className="border-t border-slate-100/50"></div>
 
                     <div className="p-6 sm:p-7">
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div className="flex-1">
-                          {/* SENTUHAN SHAPE BADGE PADA NAMA PERUSAHAAN */}
                           <div className="inline-flex items-center gap-2.5 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent pl-3 pr-5 py-2 rounded-full border border-blue-100/80 mb-3 shadow-sm">
                             <span className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-xs shadow-md shadow-blue-500/20">
                               📍
@@ -446,7 +445,6 @@ export default function RekapPage() {
                             </h2>
                           </div>
 
-                          {/* LOGO GURU PEMBIMBING YANG PRO */}
                           <div className="mt-1 text-slate-500 text-sm font-medium flex items-center gap-2">
                             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
                               <svg
@@ -478,7 +476,7 @@ export default function RekapPage() {
                           </div>
                         </div>
 
-                        <div className="bg-white border border-blue-100 text-blue-700 px-5 py-2 rounded-2xl text-center shadow-sm max-w-[120px]">
+                        <div className="bg-white border border-blue-100/80 text-blue-700 px-5 py-2 rounded-2xl text-center shadow-sm max-w-[120px]">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">
                             Total Siswa
                           </p>
@@ -488,90 +486,83 @@ export default function RekapPage() {
                         </div>
                       </div>
 
-                      {/* CONTAINER TABEL DAFTAR SISWA */}
-                      <div className="mt-8 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
-                        <table className="w-full text-sm text-left border-separate border-spacing-y-3">
-                          <thead>
-                            <tr className="text-slate-400">
-                              <th className="pb-3 px-4 font-bold uppercase tracking-wider text-xs w-14 text-center">
-                                No
-                              </th>
-                              <th className="pb-3 px-4 font-bold uppercase tracking-wider text-xs">
-                                Daftar Siswa
-                              </th>
-                              <th className="pb-3 px-2 font-black text-emerald-600 text-center w-12 text-xs">
-                                H
-                              </th>
-                              <th className="pb-3 px-2 font-black text-amber-500 text-center w-12 text-xs">
-                                I
-                              </th>
-                              <th className="pb-3 px-2 font-black text-blue-500 text-center w-12 text-xs">
-                                S
-                              </th>
-                              <th className="pb-3 px-2 font-black text-rose-500 text-center w-12 text-xs">
-                                A
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {item.siswa.map((s, i) => (
-                              <tr
-                                key={i}
-                                onClick={() =>
-                                  handleSiswaClick(
-                                    s.id,
-                                    s.nama,
-                                    item.guru,
-                                    item.tempat,
-                                  )
-                                }
-                                className="bg-blue-600 text-white rounded-full cursor-pointer select-none transition-all duration-150 
-                     md:hover:bg-blue-700 md:hover:scale-[1.01] md:hover:shadow-md
-                     active:scale-[0.98] active:bg-blue-800"
-                              >
-                                {/* KOLOM NO DENGAN LINGKARAN SEMI-TRANSPARAN */}
-                                <td className="py-3.5 px-4 text-center rounded-l-full">
-                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 font-bold text-xs">
-                                    {i + 1}
-                                  </span>
-                                </td>
-
-                                {/* NAMA SISWA */}
-                                <td className="py-3.5 px-4 font-bold text-base tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
-                                  {s.nama}
-                                </td>
-
-                                {/* INDIKATOR KEHADIRAN (HADIR) */}
-                                <td className="py-3.5 px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-black shadow-sm">
-                                    {s.hadir}
-                                  </span>
-                                </td>
-
-                                {/* INDIKATOR KEHADIRAN (IZIN) */}
-                                <td className="py-3.5 px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500 text-white font-black shadow-sm">
-                                    {s.izin}
-                                  </span>
-                                </td>
-
-                                {/* INDIKATOR KEHADIRAN (SAKIT) */}
-                                <td className="py-3.5 px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-400 text-white font-black shadow-sm">
-                                    {s.sakit}
-                                  </span>
-                                </td>
-
-                                {/* INDIKATOR KEHADIRAN (ALFA) */}
-                                <td className="py-3.5 px-2 text-center rounded-r-full">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-500 text-white font-black shadow-sm">
-                                    {s.alfa}
-                                  </span>
-                                </td>
+                      {/* --- PERBAIKAN RESPONSIVITAS TABEL DI SINI --- */}
+                      <div className="mt-8 w-full overflow-hidden rounded-2xl sm:rounded-3xl border border-white/60 bg-white/60 backdrop-blur-sm p-3 sm:p-4 shadow-sm">
+                        {/* Wrapper overflow-x-auto agar tabel bisa digeser di HP */}
+                        <div className="overflow-x-auto w-full pb-2">
+                          {/* Diberi min-w-[500px] agar kolom tidak menyusut / hancur */}
+                          <table className="w-full min-w-[500px] text-sm text-left border-separate border-spacing-y-2 sm:border-spacing-y-3">
+                            <thead>
+                              <tr className="text-slate-500">
+                                <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-bold uppercase tracking-wider text-[10px] sm:text-xs w-10 sm:w-14 text-center">
+                                  No
+                                </th>
+                                <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-bold uppercase tracking-wider text-[10px] sm:text-xs">
+                                  Daftar Siswa
+                                </th>
+                                <th className="pb-2 sm:pb-3 px-1 sm:px-2 font-black text-emerald-600 text-center w-10 sm:w-12 text-[10px] sm:text-xs">
+                                  H
+                                </th>
+                                <th className="pb-2 sm:pb-3 px-1 sm:px-2 font-black text-amber-500 text-center w-10 sm:w-12 text-[10px] sm:text-xs">
+                                  I
+                                </th>
+                                <th className="pb-2 sm:pb-3 px-1 sm:px-2 font-black text-blue-500 text-center w-10 sm:w-12 text-[10px] sm:text-xs">
+                                  S
+                                </th>
+                                <th className="pb-2 sm:pb-3 px-1 sm:px-2 font-black text-rose-500 text-center w-10 sm:w-12 text-[10px] sm:text-xs">
+                                  A
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {item.siswa.map((s, i) => (
+                                <tr
+                                  key={i}
+                                  onClick={() =>
+                                    handleSiswaClick(
+                                      s.id,
+                                      s.nama,
+                                      item.guru,
+                                      item.tempat,
+                                    )
+                                  }
+                                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full cursor-pointer select-none transition-all duration-150 
+                     md:hover:from-blue-700 md:hover:to-indigo-700 md:hover:scale-[1.01] md:hover:shadow-md
+                     active:scale-[0.98] active:from-blue-800 active:to-indigo-800 shadow-sm"
+                                >
+                                  <td className="py-2.5 sm:py-3.5 px-2 sm:px-4 text-center rounded-l-full">
+                                    <span className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/20 font-bold text-[10px] sm:text-xs">
+                                      {i + 1}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 sm:py-3.5 px-2 sm:px-4 font-bold text-sm sm:text-base tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-none">
+                                    {s.nama}
+                                  </td>
+                                  <td className="py-2.5 sm:py-3.5 px-1 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-500 text-white font-black shadow-sm text-xs sm:text-sm">
+                                      {s.hadir}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 sm:py-3.5 px-1 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500 text-white font-black shadow-sm text-xs sm:text-sm">
+                                      {s.izin}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 sm:py-3.5 px-1 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-400 text-white font-black shadow-sm text-xs sm:text-sm">
+                                      {s.sakit}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 sm:py-3.5 px-1 sm:px-2 text-center rounded-r-full">
+                                    <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-500 text-white font-black shadow-sm text-xs sm:text-sm">
+                                      {s.alfa}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>
