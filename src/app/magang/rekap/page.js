@@ -266,7 +266,7 @@ export default function RekapPage() {
         </div>
       </header>
 
-      <div className="min-h-screen bg-slate-50/50 space-y-8 pb-12 pt-8">
+      <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           {/* JUDUL & TOMBOL WA */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-6 sm:px-0 mb-8">
@@ -286,38 +286,36 @@ export default function RekapPage() {
               </p>
             </div>
 
-            {mode === "card" && (
-              <button
-                onClick={handleShareWA}
-                disabled={isSharing || data.length === 0}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none flex items-center justify-center gap-3 w-full sm:w-auto sm:min-w-[280px]"
-              >
-                <div className="absolute inset-0 w-full h-full bg-white/20 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
-                {isSharing ? (
-                  <>
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    <span className="relative z-10">{shareProgress}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-6 h-6 relative z-10"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                    </svg>
-                    <span className="relative z-10 tracking-wide">
-                      BAGIKAN LAPORAN
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              onClick={handleShareWA}
+              disabled={isSharing || data.length === 0}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-8 py-4 font-black text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 hover:shadow-emerald-500/40 disabled:bg-slate-400 disabled:shadow-none flex items-center justify-center gap-3 w-full sm:w-auto sm:min-w-[280px]"
+            >
+              <div className="absolute inset-0 w-full h-full bg-white/20 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
+              {isSharing ? (
+                <>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  <span className="relative z-10">{shareProgress}</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-6 h-6 relative z-10"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                  </svg>
+                  <span className="relative z-10 tracking-wide">
+                    BAGIKAN LAPORAN
+                  </span>
+                </>
+              )}
+            </button>
           </div>
 
-          {/* FILTER CONTROLS */}
-          <div className="mx-6 sm:mx-0 flex flex-wrap gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
+          {/* FILTER CONTROLS - Bersih & Rapi Tanpa Tab Switcher */}
+          <div className="mx-6 sm:mx-0 flex flex-wrap items-end gap-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-200/60 mb-10">
             <div className="flex-1 min-w-[200px]">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1 block">
                 Bulan
@@ -349,32 +347,16 @@ export default function RekapPage() {
               </select>
             </div>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <button
-                onClick={forceFreshMode}
-                className="rounded-xl px-6 py-3.5 font-bold bg-rose-100 text-rose-700 hover:bg-rose-200 shadow-sm transition-all"
-                title="Hapus Cache & Refresh Halaman"
-              >
-                🔄 Paksa Fresh
-              </button>
-
-              <button
-                onClick={() => setMode("card")}
-                className={`rounded-xl px-6 py-3.5 font-bold transition-all ${mode === "card" ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-              >
-                Card
-              </button>
-
-              <button
-                onClick={() => setMode("table")}
-                className={`rounded-xl px-6 py-3.5 font-bold transition-all ${mode === "table" ? "bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-2 ring-blue-700 ring-offset-2" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-              >
-                Tabel
-              </button>
-            </div>
+            <button
+              onClick={forceFreshMode}
+              className="rounded-xl px-6 py-3.5 font-bold bg-rose-100 text-rose-700 hover:bg-rose-200 shadow-sm transition-all h-[54px]"
+              title="Hapus Cache & Refresh Halaman"
+            >
+              🔄 Refresh
+            </button>
           </div>
 
-          {/* LOADING STATE */}
+          {/* LOADING STATE DATA AWAL */}
           {loading ? (
             <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
               <div className="relative h-16 w-16">
@@ -386,34 +368,89 @@ export default function RekapPage() {
               </p>
             </div>
           ) : (
-            mode === "card" && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                {data
-                  .filter((x) =>
-                    tempat === "Semua" ? true : x.tempat === tempat,
-                  )
-                  .map((item, index) => (
-                    <div
-                      key={index}
-                      // Penambahan Gradien Putih ke Biru pada Card
-                      className="rekap-card-wa overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-white to-blue-50 shadow-xl shadow-blue-900/5 border border-blue-100/60 flex flex-col group/card transition-all duration-500 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200"
-                    >
-                      {item.foto ? (
-                        <div
-                          className="relative w-full h-[260px] sm:h-[320px] lg:h-[380px] bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer group"
-                          onClick={() => setSelectedImage(item.foto)}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              {data
+                .filter((x) =>
+                  tempat === "Semua" ? true : x.tempat === tempat,
+                )
+                .map((item, index) => (
+                  <div
+                    key={index}
+                    className="rekap-card-wa overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-white to-blue-50/40 shadow-xl shadow-slate-200/60 border border-blue-100/70 flex flex-col transition-all duration-300 hover:shadow-2xl hover:border-blue-200/80"
+                  >
+                    {/* MODEL THUMBNAIL FOTO LAMA (Watermark Terlihat Jelas) */}
+                    {item.foto ? (
+                      <div
+                        className="relative w-full h-[260px] sm:h-[380px] lg:h-[430px] bg-gradient-to-b from-slate-100 to-white overflow-hidden flex items-center justify-center cursor-pointer group"
+                        onClick={() => setSelectedImage(item.foto)}
+                      >
+                        <img
+                          src={item.foto}
+                          alt="Foto Lokasi"
+                          crossOrigin="anonymous"
+                          referrerPolicy="no-referrer"
+                          className="w-full max-h-[450px] object-contain transition-transform duration-700 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                          <span className="text-white font-black tracking-widest uppercase bg-blue-900/60 px-6 py-3 rounded-2xl border border-white/30 shadow-2xl flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                              />
+                            </svg>
+                            Perbesar Foto
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex h-[300px] flex-col items-center justify-center bg-slate-50 text-slate-400 border-b border-dashed border-slate-200">
+                        <svg
+                          className="w-12 h-12 mb-3 text-slate-300"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
                         >
-                          <img
-                            src={item.foto}
-                            alt="Foto Lokasi"
-                            crossOrigin="anonymous"
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-blue-900/80 via-blue-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-center pb-8 backdrop-blur-[1px]">
-                            <span className="text-white font-black tracking-widest uppercase bg-blue-600/90 px-6 py-3 rounded-full border border-white/20 shadow-2xl flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                        </svg>
+                        <span className="font-semibold tracking-wide">
+                          Belum ada foto monitoring
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="border-t border-slate-100"></div>
+
+                    <div className="p-6 sm:p-7">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex-1">
+                          {/* SENTUHAN SHAPE BADGE PADA NAMA PERUSAHAAN */}
+                          <div className="inline-flex items-center gap-2.5 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent pl-3 pr-5 py-2 rounded-full border border-blue-100/80 mb-3 shadow-sm">
+                            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-xs shadow-md shadow-blue-500/20">
+                              📍
+                            </span>
+                            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                              {item.tempat}
+                            </h2>
+                          </div>
+
+                          {/* LOGO GURU PEMBIMBING YANG PRO */}
+                          <div className="mt-1 text-slate-500 text-sm font-medium flex items-center gap-2">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
                               <svg
-                                className="w-5 h-5"
+                                className="w-4 h-4"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -422,152 +459,124 @@ export default function RekapPage() {
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                   strokeWidth={2}
-                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                  d="M12 14l9-5-9-5-9 5 9 5z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
                                 />
                               </svg>
-                              Perbesar Foto
+                            </div>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                              GURU PEMBIMBING :
+                            </span>
+                            <span className="font-bold text-slate-700">
+                              {item.guru}
                             </span>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex h-[260px] flex-col items-center justify-center bg-slate-50/50 text-slate-400 border-b border-dashed border-blue-100">
-                          <svg
-                            className="w-14 h-14 mb-4 text-slate-300"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span className="font-semibold tracking-wide">
-                            Belum ada foto monitoring
-                          </span>
-                        </div>
-                      )}
 
-                      <div className="p-6 sm:p-8">
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-                          <div className="flex-1">
-                            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2 mb-4 leading-tight">
-                              <span className="text-blue-600">📍</span>{" "}
-                              {item.tempat}
-                            </h2>
-
-                            {/* Ikon Logo Guru Pembimbing yang lebih Pro */}
-                            <div className="flex items-center gap-4 bg-white/60 p-3 rounded-2xl border border-blue-50 inline-flex">
-                              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30">
-                                <svg
-                                  className="w-6 h-6"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 14l9-5-9-5-9 5 9 5z"
-                                  />
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
-                                  />
-                                </svg>
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-black tracking-widest text-blue-500 uppercase">
-                                  Guru Pembimbing
-                                </span>
-                                <span className="text-lg font-bold text-slate-800">
-                                  {item.guru}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-white border border-blue-100 shadow-sm text-blue-700 px-6 py-3 rounded-2xl text-center min-w-[120px]">
-                            <p className="text-xs font-black uppercase tracking-widest mb-1 text-slate-400">
-                              Total Siswa
-                            </p>
-                            <p className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">
-                              {item.siswa.length}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* LIST SISWA: Merubah tabel kaku menjadi list tombol ujung melengkung (Rounded Full) */}
-                        <div className="mt-8 flex flex-col gap-3 relative">
-                          <div className="flex items-center justify-between px-4 pb-2 border-b border-blue-100/50">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                              Daftar Siswa
-                            </span>
-                            <div className="flex items-center gap-1 sm:gap-2 pr-1">
-                              <span className="w-8 sm:w-10 text-center text-[10px] font-black text-emerald-600 uppercase">
-                                H
-                              </span>
-                              <span className="w-8 sm:w-10 text-center text-[10px] font-black text-amber-500 uppercase">
-                                I
-                              </span>
-                              <span className="w-8 sm:w-10 text-center text-[10px] font-black text-blue-500 uppercase">
-                                S
-                              </span>
-                              <span className="w-8 sm:w-10 text-center text-[10px] font-black text-rose-500 uppercase">
-                                A
-                              </span>
-                            </div>
-                          </div>
-
-                          {item.siswa.map((s, i) => (
-                            <button
-                              key={i}
-                              onClick={() =>
-                                handleSiswaClick(
-                                  s.id,
-                                  s.nama,
-                                  item.guru,
-                                  item.tempat,
-                                )
-                              }
-                              className="w-full group flex items-center justify-between p-2.5 sm:p-3 bg-white hover:bg-gradient-to-r hover:from-blue-600 hover:to-indigo-600 border border-slate-100 hover:border-transparent rounded-full transition-all duration-300 focus:outline-none shadow-sm hover:shadow-xl hover:shadow-blue-900/20"
-                            >
-                              <div className="flex items-center gap-3 sm:gap-4 pl-1 sm:pl-2">
-                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black text-xs group-hover:bg-white/20 group-hover:text-white transition-colors duration-300">
-                                  {i + 1}
-                                </div>
-                                <span className="font-bold text-sm sm:text-base text-slate-700 group-hover:text-white truncate max-w-[140px] sm:max-w-[220px] text-left transition-colors duration-300">
-                                  {s.nama}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-1 sm:gap-2 pr-1">
-                                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 text-emerald-600 font-black text-xs sm:text-sm group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300 border border-emerald-100/50 group-hover:border-transparent">
-                                  {s.hadir}
-                                </div>
-                                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-amber-50 text-amber-600 font-black text-xs sm:text-sm group-hover:bg-amber-500 group-hover:text-white transition-all duration-300 border border-amber-100/50 group-hover:border-transparent">
-                                  {s.izin}
-                                </div>
-                                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 text-blue-600 font-black text-xs sm:text-sm group-hover:bg-blue-400 group-hover:text-white transition-all duration-300 border border-blue-100/50 group-hover:border-transparent">
-                                  {s.sakit}
-                                </div>
-                                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-rose-50 text-rose-600 font-black text-xs sm:text-sm group-hover:bg-rose-500 group-hover:text-white transition-all duration-300 border border-rose-100/50 group-hover:border-transparent">
-                                  {s.alfa}
-                                </div>
-                              </div>
-                            </button>
-                          ))}
+                        <div className="bg-white border border-blue-100 text-blue-700 px-5 py-2 rounded-2xl text-center shadow-sm max-w-[120px]">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">
+                            Total Siswa
+                          </p>
+                          <p className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">
+                            {item.siswa.length}
+                          </p>
                         </div>
                       </div>
+
+                      {/* CONTAINER TABEL DAFTAR SISWA */}
+                      <div className="mt-8 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+                        <table className="w-full text-sm text-left border-separate border-spacing-y-3">
+                          <thead>
+                            <tr className="text-slate-400">
+                              <th className="pb-3 px-4 font-bold uppercase tracking-wider text-xs w-14 text-center">
+                                No
+                              </th>
+                              <th className="pb-3 px-4 font-bold uppercase tracking-wider text-xs">
+                                Daftar Siswa
+                              </th>
+                              <th className="pb-3 px-2 font-black text-emerald-600 text-center w-12 text-xs">
+                                H
+                              </th>
+                              <th className="pb-3 px-2 font-black text-amber-500 text-center w-12 text-xs">
+                                I
+                              </th>
+                              <th className="pb-3 px-2 font-black text-blue-500 text-center w-12 text-xs">
+                                S
+                              </th>
+                              <th className="pb-3 px-2 font-black text-rose-500 text-center w-12 text-xs">
+                                A
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {item.siswa.map((s, i) => (
+                              <tr
+                                key={i}
+                                onClick={() =>
+                                  handleSiswaClick(
+                                    s.id,
+                                    s.nama,
+                                    item.guru,
+                                    item.tempat,
+                                  )
+                                }
+                                className="bg-blue-600 text-white rounded-full cursor-pointer select-none transition-all duration-150 
+                     md:hover:bg-blue-700 md:hover:scale-[1.01] md:hover:shadow-md
+                     active:scale-[0.98] active:bg-blue-800"
+                              >
+                                {/* KOLOM NO DENGAN LINGKARAN SEMI-TRANSPARAN */}
+                                <td className="py-3.5 px-4 text-center rounded-l-full">
+                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 font-bold text-xs">
+                                    {i + 1}
+                                  </span>
+                                </td>
+
+                                {/* NAMA SISWA */}
+                                <td className="py-3.5 px-4 font-bold text-base tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {s.nama}
+                                </td>
+
+                                {/* INDIKATOR KEHADIRAN (HADIR) */}
+                                <td className="py-3.5 px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-black shadow-sm">
+                                    {s.hadir}
+                                  </span>
+                                </td>
+
+                                {/* INDIKATOR KEHADIRAN (IZIN) */}
+                                <td className="py-3.5 px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500 text-white font-black shadow-sm">
+                                    {s.izin}
+                                  </span>
+                                </td>
+
+                                {/* INDIKATOR KEHADIRAN (SAKIT) */}
+                                <td className="py-3.5 px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-400 text-white font-black shadow-sm">
+                                    {s.sakit}
+                                  </span>
+                                </td>
+
+                                {/* INDIKATOR KEHADIRAN (ALFA) */}
+                                <td className="py-3.5 px-2 text-center rounded-r-full">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-500 text-white font-black shadow-sm">
+                                    {s.alfa}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ))}
-              </div>
-            )
+                  </div>
+                ))}
+            </div>
           )}
         </div>
       </div>
@@ -612,7 +621,7 @@ export default function RekapPage() {
         </div>
       )}
 
-      {/* DRAWER MODAL - DETAIL RIWAYAT PRESENSI */}
+      {/* DRAWER MODAL - DETAIL RIWAYAT PRESENSI SISWA */}
       {selectedSiswa && (
         <div
           className="fixed inset-0 z-50 overflow-hidden"
