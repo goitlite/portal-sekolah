@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRekapGuru, getRiwayatSiswa } from "../lib/api";
+import {
+  getRekapGuru,
+  getRekapSemua,
+  getRiwayatSiswa,
+  getGuru,
+} from "../lib/api";
 import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
@@ -19,7 +24,8 @@ export default function RekapPage() {
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const [riwayatSiswa, setRiwayatSiswa] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
-
+  const [guruDipilih, setGuruDipilih] = useState("");
+  const [guruList, setGuruList] = useState([]);
   // --- FUNGSI RESET CACHE & BROWSER STATE ---
   async function clearBrowserState() {
     localStorage.clear();
@@ -63,25 +69,64 @@ export default function RekapPage() {
   }
 
   // --- LOGIKA LOAD & RETRY ---
+  // 1. Load daftar guru saat halaman pertama kali dibuka
   useEffect(() => {
-    clearBrowserState().then(() => {
-      load();
-    });
+    async function fetchGuru() {
+      try {
+        const res = await getGuru();
+        let list = res.data || [];
+        // Urutkan alfabet
+        list.sort((a, b) => a.NAMA_GURU.localeCompare(b.NAMA_GURU));
+        setGuruList(list);
+      } catch (error) {
+        console.error("Gagal load data guru", error);
+      }
+    }
+    fetchGuru();
   }, []);
+
+  // 2. Jangan memuat data rekap apabila guru belum dipilih
+  // HAPUS KODE INI:
+  useEffect(() => {
+    // 1. Jika pembimbing BELUM dipilih (saat halaman pertama dibuka)
+    if (!guruDipilih) {
+      setData([]); // Pastikan layar bersih/kosong
+      setLoading(false); // Matikan animasi loading
+      return; // Hentikan eksekusi di sini, jangan hubungi backend
+    }
+
+    // 2. Jika pembimbing SUDAH dipilih, baru jalankan loading dan ambil data
+    clearBrowserState().then(() => {
+      load(false);
+    });
+  }, [guruDipilih, bulan, tempat]);
 
   async function load(isRetry = false) {
     if (!isRetry) setLoading(true);
 
     try {
-      const session = getSession();
-      const guruId = session ? session.id : "";
-      const hasil = await getRekapGuru(guruId, bulan);
+      const idGuruAman = guruDipilih || "";
+
+      // === RADAR DETEKTOR 1: Cek apa yang dikirim frontend ===
+      console.log("🔴 CEK PARAMETER YANG DIKIRIM:");
+      console.log("- Bulan:", bulan);
+      console.log("- Tempat:", tempat);
+      console.log("- ID Guru:", idGuruAman);
+
+      const hasil = await getRekapSemua(
+        bulan,
+        tempat === "Semua" ? "" : tempat,
+        idGuruAman,
+      );
+
+      // === RADAR DETEKTOR 2: Cek apa yang dibalas backend ===
+      console.log("🟢 BALASAN DARI BACKEND:", hasil.data);
+
       setData(hasil.data || []);
       setLoading(false);
     } catch (error) {
       console.error("Fetch Rekap error:", error);
       if (!isRetry) {
-        console.log("Mencoba ulang (retry) dalam 1 detik...");
         await clearBrowserState();
         setTimeout(() => load(true), 1000);
       } else {
@@ -325,6 +370,41 @@ shadow-[0_12px_35px_rgba(212,175,55,0.22)]
 border border-[#D9B44A]
 mb-6 sm:mb-10"
           >
+            <div className="flex-1 w-full sm:min-w-[200px]">
+              <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
+                Guru Pembimbing
+              </label>
+              <select
+                className="w-full rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3.5 text-sm sm:text-base font-semibold text-slate-700 outline-none focus:border-blue-500"
+                value={guruDipilih}
+                onChange={(e) => {
+                  console.log("🟠 GURU DIPILIH (VALUE):", e.target.value);
+                  setGuruDipilih(e.target.value);
+                }}
+              >
+                <option value="">-- Pilih Guru Pembimbing --</option>
+                {guruList.map((g, i) => {
+                  // Pengaman: Ambil otomatis nama kolom ID dari database Bapak
+                  const finalId =
+                    g.id ||
+                    g.ID ||
+                    g.ID_GURU ||
+                    g.id_guru ||
+                    g.idGuru ||
+                    g.NAMA_GURU ||
+                    g.nama ||
+                    "";
+                  const finalNama =
+                    g.NAMA || g.nama || g.NAMA_GURU || g.nama_guru || "Guru";
+
+                  return (
+                    <option key={i} value={finalId}>
+                      {finalNama}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             <div className="flex-1 w-full sm:min-w-[200px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
                 Bulan

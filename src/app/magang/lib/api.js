@@ -208,9 +208,10 @@ export async function getRekapGuru(idGuru, bulan) {
   });
 }
 
-export async function getRekapSemua(bulan, tempat = "") {
+export function getRekapSemua(bulan, tempat = "", idGuru = "") {
   return request("getRekapSemua", {
     bulan,
     tempat,
+    idGuru,
   });
 }
