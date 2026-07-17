@@ -27,38 +27,16 @@ export default function RekapPage() {
   const [guruDipilih, setGuruDipilih] = useState("");
   const [guruList, setGuruList] = useState([]);
 
-  // --- FUNGSI RESET CACHE (Dipakai manual saja lewat tombol Refresh) ---
-  async function clearBrowserState() {
-    localStorage.clear();
-    sessionStorage.clear();
-
-    if ("caches" in window) {
-      try {
-        const keys = await caches.keys();
-        for (const key of keys) {
-          await caches.delete(key);
-        }
-      } catch (error) {
-        console.error("Gagal menghapus Cache Storage:", error);
-      }
-    }
-
-    if ("serviceWorker" in navigator) {
-      try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const reg of regs) {
-          await reg.unregister();
-        }
-      } catch (error) {
-        console.error("Gagal unregister Service Worker:", error);
-      }
-    }
-  }
-
   async function forceFreshMode() {
-    await clearBrowserState();
-    window.history.replaceState({}, "", window.location.pathname);
-    window.location.href = window.location.pathname + "?fresh=" + Date.now();
+    // Hanya memanggil fungsi load() untuk mengambil ulang data rekap terbaru
+    // dari server tanpa merefresh halaman penuh dan tanpa menyentuh cache/storage.
+    if (guruDipilih) {
+      load(false);
+    } else {
+      // Opsional: Jika ingin refresh halaman secara penuh tapi aman (tanpa hapus cache)
+      // window.location.reload();
+      alert("Silakan pilih guru pembimbing terlebih dahulu");
+    }
   }
 
   // --- HELPER UNTUK GAMBAR DRIVE ---
