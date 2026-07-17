@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { cleanupResources } from "../lib/navigation";
-import { getSession, isLoggedIn } from "../lib/auth";
-// 1. Import savePresensi
-import { savePresensi } from "../lib/api";
+import { cleanupResources } from "../lib/navigation"; // Sesuai source asli
+import { getSession, isLoggedIn } from "../lib/auth"; // Sesuai source asli
+import { savePresensi } from "../lib/api"; // Sesuai source asli
 
 export default function PresensiPage() {
   const router = useRouter();
@@ -32,11 +31,8 @@ export default function PresensiPage() {
   const [accuracy, setAccuracy] = useState("-");
 
   const [gpsLoading, setGpsLoading] = useState(false);
-
-  // 2. Tambahan state saving
   const [saving, setSaving] = useState(false);
 
-  // Langkah 1: Tambahan useRef untuk stream dan watchId
   const streamRef = useRef(null);
   const watchIdRef = useRef(null);
 
@@ -51,11 +47,8 @@ export default function PresensiPage() {
         audio: false,
       });
 
-      // Langkah 2: Simpan stream ke ref
       streamRef.current = stream;
-
       if (!videoRef.current) return;
-
       videoRef.current.srcObject = stream;
 
       videoRef.current.onloadedmetadata = async () => {
@@ -130,37 +123,14 @@ export default function PresensiPage() {
     }
   }
 
-  // Langkah 3: Fungsi stopCamera
-  function stopCamera() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-  }
-
-  // Langkah 4: Fungsi stopLocation
-  function stopLocation() {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-  }
-
-  // Langkah 5: Fungsi cleanup
   function cleanup() {
     cleanupResources({
       streamRef,
-
       videoRef,
-
       watchIdRef,
     });
   }
 
-  // 3. Fungsi handleSubmit
   async function handleSubmit() {
     if (!photo) {
       alert("Silakan ambil foto terlebih dahulu.");
@@ -206,25 +176,18 @@ export default function PresensiPage() {
         );
 
         pembimbingList = pembimbingList.filter((item) => item !== pembimbing);
-
         if (pembimbing.trim() !== "") {
           pembimbingList.unshift(pembimbing);
         }
-
         pembimbingList = pembimbingList.slice(0, 10);
 
         localStorage.setItem(
           "magang_recent_pembimbing",
           JSON.stringify(pembimbingList),
         );
-
         localStorage.setItem(
           "magang_user_pref",
-          JSON.stringify({
-            status,
-
-            pembimbing,
-          }),
+          JSON.stringify({ status, pembimbing }),
         );
         router.replace("/magang/dashboard_siswa");
       } else {
@@ -246,7 +209,6 @@ export default function PresensiPage() {
       }
 
       const session = getSession();
-
       if (!session || session.role !== "siswa") {
         router.replace("/magang/login");
         return;
@@ -256,18 +218,12 @@ export default function PresensiPage() {
       const pembimbingList = JSON.parse(
         localStorage.getItem("magang_recent_pembimbing") || "[]",
       );
-
       setRecentPembimbing(pembimbingList);
 
       const pref = JSON.parse(localStorage.getItem("magang_user_pref") || "{}");
+      if (pref.status) setStatus(pref.status);
+      if (pref.pembimbing) setPembimbing(pref.pembimbing);
 
-      if (pref.status) {
-        setStatus(pref.status);
-      }
-
-      if (pref.pembimbing) {
-        setPembimbing(pref.pembimbing);
-      }
       setLoading(false);
     }
 
@@ -278,170 +234,248 @@ export default function PresensiPage() {
     if (!loading && user && !photo) {
       startCamera();
     }
-
-    // Langkah 7: Cleanup saat komponen di-unmount
     return () => {
       cleanup();
     };
   }, [loading, user, photo]);
 
+  // --- TAMPILAN LOADING ANIMATIF ---
   if (loading || !user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700"></div>
-          <p className="mt-4 text-slate-500">Memuat halaman presensi...</p>
+          <div className="relative mx-auto h-14 w-14">
+            <div className="absolute inset-0 rounded-full border-4 border-blue-200"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-blue-700 border-t-transparent animate-spin"></div>
+          </div>
+          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+            Membuka Form Presensi...
+          </p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 pb-10">
-      <header className="sticky top-0 z-50 border-b bg-white shadow-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
+      {/* HEADER NAVBAR */}
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
+        <div className="mx-auto max-w-5xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Logo" width={45} height={45} />
+            <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={38}
+                height={38}
+                className="object-contain"
+              />
+            </div>
             <div>
-              <h1 className="font-black text-slate-800">PRESENSI MAGANG</h1>
-              <p className="text-xs text-slate-500">SMKN 1 TELUK KUANTAN</p>
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
+                PRESENSI MAGANG
+              </h1>
+              <p className="text-[10px] sm:text-xs font-medium text-blue-300">
+                SMKN 1 TELUK KUANTAN
+              </p>
             </div>
           </div>
 
-          {/* Langkah 6: Update onClick tombol kembali */}
           <button
             onClick={() => {
               cleanup();
               router.replace("/magang/dashboard_siswa");
             }}
-            className="rounded-xl bg-blue-700 px-5 py-2 font-bold text-white hover:bg-blue-800"
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-indigo-900/30 border border-blue-500/30 transition-all flex items-center gap-1"
           >
-            BERANDA PROFIL
+            🏠 BERANDA PROFIL
           </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-8 text-white shadow-xl">
-          <p className="text-sm uppercase tracking-widest text-amber-300">
-            Presensi Hari Ini
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{user.nama}</h2>
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-6 sm:space-y-8">
+        {/* BANNER IDENTITAS SISWA */}
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 text-white shadow-xl border border-blue-800">
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-3 border border-amber-400/30">
+              📸 Input Presensi Harian
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              {user.nama}
+            </h2>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
-            <Info label="ID SISWA" value={user.id} />
-            <Info label="GURU PEMBIMBING" value={user.namaGuru} />
-            <Info label="TEMPAT MAGANG" value={user.tempatMagang} />
+            <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3 border-t border-white/10 pt-4">
+              <Info label="ID SISWA" value={user.id} isLight={true} />
+              <Info
+                label="GURU PEMBIMBING"
+                value={user.namaGuru}
+                isLight={true}
+              />
+              <Info
+                label="TEMPAT MAGANG"
+                value={user.tempatMagang}
+                isLight={true}
+              />
+            </div>
           </div>
         </div>
 
-        <section className="mt-8 rounded-3xl bg-white p-8 shadow">
-          <h2 className="text-2xl font-black text-slate-800">
-            Status Hari Ini
-          </h2>
-          <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-6">
-            <p className="text-2xl font-black text-red-600">
-              🔴 Belum Presensi
-            </p>
-            <p className="mt-2 text-slate-600">
-              Silakan lakukan presensi hari ini.
-            </p>
-          </div>
-        </section>
+        {/* STATUS AWAL */}
+        <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 shadow-sm">
+          <p className="text-lg font-black text-rose-600 flex items-center gap-2">
+            🔴 Status: Belum Melakukan Presensi Hari Ini
+          </p>
+        </div>
 
-        <div className="mt-8 grid gap-8 md:grid-cols-2">
-          <section className="rounded-3xl bg-white p-8 shadow">
-            <h2 className="text-2xl font-black text-slate-800">Foto Selfie</h2>
+        {/* KOTAK KAMERA & LOKASI */}
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* FOTO SELFIE */}
+          <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                🤳 Foto Kamera Utama
+              </h2>
 
-            <div className="mt-6 relative">
-              {!photo ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  controls={false}
-                  disablePictureInPicture
-                  className="h-80 w-full rounded-3xl bg-black object-cover shadow-inner"
-                />
-              ) : (
-                <img
-                  src={photo}
-                  alt="Hasil Selfie"
-                  className="h-80 w-full rounded-3xl object-cover shadow-md border border-slate-200"
-                />
-              )}
-
-              <canvas ref={canvasRef} className="hidden" />
+              <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
+                {!photo ? (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    controls={false}
+                    disablePictureInPicture
+                    className="h-full w-full object-cover transform -scale-x-100"
+                  />
+                ) : (
+                  <img
+                    src={photo}
+                    alt="Hasil Selfie"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
             </div>
 
             <button
               onClick={capturePhoto}
               disabled={!cameraReady && !photo}
-              className={`mt-6 w-full rounded-2xl py-4 text-lg font-bold text-white transition ${
+              className={`mt-5 w-full rounded-2xl py-4 text-base font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] ${
                 photo
-                  ? "bg-amber-500 hover:bg-amber-600"
-                  : "bg-blue-700 hover:bg-blue-800 disabled:bg-slate-400"
+                  ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-orange-500/20 hover:brightness-110"
+                  : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:scale-100 disabled:cursor-not-allowed"
               }`}
             >
-              {photo ? "Ambil Ulang Foto" : "Ambil Foto & Lokasi"}
+              {photo ? "🔄 AMBIL ULANG FOTO" : "📸 AMBIL FOTO & DETEKSI GPS"}
             </button>
           </section>
 
-          <section className="rounded-3xl bg-white p-8 shadow">
-            <h2 className="text-2xl font-black text-slate-800">Lokasi GPS</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Lokasi akan terdeteksi otomatis saat Anda mengambil foto selfie.
-            </p>
+          {/* DATA GEOLOCATION */}
+          <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-800">
+                📡 Koordinat Geotagging
+              </h2>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Sistem mengunci titik koordinat otomatis ketika tombol jepret
+                ditekan.
+              </p>
 
-            <div className="mt-6 space-y-4">
-              <GpsInfo label="Latitude" value={latitude} />
-              <GpsInfo label="Longitude" value={longitude} />
-              <GpsInfo
-                label="Akurasi GPS"
-                value={gpsLoading ? "Mendapatkan lokasi..." : accuracy}
-              />
+              <div className="mt-5 space-y-3">
+                <GpsCard
+                  label="Latitude (Garis Lintang)"
+                  value={latitude}
+                  icon="🌐"
+                />
+                <GpsCard
+                  label="Longitude (Garis Bujur)"
+                  value={longitude}
+                  icon="📍"
+                />
+                <GpsCard
+                  label="Akurasi Margin Kesalahan"
+                  value={gpsLoading ? "Mencari Satelit..." : accuracy}
+                  icon="🎯"
+                  isLoading={gpsLoading}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 p-4 bg-blue-50 text-blue-800 rounded-2xl text-xs font-bold border border-blue-100">
+              ℹ️ Pastikan akurasi berada di bawah 50 meter untuk validitas
+              kehadiran optimal.
             </div>
           </section>
         </div>
 
-        <section className="mt-8 rounded-3xl bg-white p-8 shadow">
-          <h2 className="text-2xl font-black text-slate-800">Data Presensi</h2>
+        {/* DATA ISIAN FORM JURNAL */}
+        <section className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
+          <h2 className="text-2xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
+            📝 Lembar Verifikasi Aktivitas
+          </h2>
 
-          <div className="mt-8">
-            <label className="font-bold text-slate-700">Status</label>
-
-            <div className="mt-4 space-y-3">
-              {["Hadir", "Izin", "Sakit"].map((item) => (
-                <label
-                  key={item}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition hover:bg-slate-50 ${
-                    status === item ? "border-blue-500 bg-blue-50/50" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    className="h-5 w-5 cursor-pointer accent-blue-600"
-                    checked={status === item}
-                    onChange={() => setStatus(item)}
-                  />
-                  <span className="font-semibold text-slate-800">{item}</span>
-                </label>
-              ))}
+          <div className="space-y-6">
+            {/* INPUT RADIO STATUS */}
+            <div>
+              <label className="text-sm font-black text-slate-700 uppercase tracking-wider block mb-3">
+                Pilih Status Absensi Hari Ini
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  {
+                    name: "Hadir",
+                    color:
+                      "peer-checked:border-emerald-500 peer-checked:bg-emerald-50 text-emerald-700 bg-emerald-50/20",
+                  },
+                  {
+                    name: "Izin",
+                    color:
+                      "peer-checked:border-amber-500 peer-checked:bg-amber-50 text-amber-700 bg-amber-50/20",
+                  },
+                  {
+                    name: "Sakit",
+                    color:
+                      "peer-checked:border-blue-500 peer-checked:bg-blue-50 text-blue-700 bg-blue-50/20",
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.name}
+                    className="relative cursor-pointer block select-none"
+                  >
+                    <input
+                      type="radio"
+                      name="status_absen"
+                      className="peer sr-only"
+                      checked={status === item.name}
+                      onChange={() => setStatus(item.name)}
+                    />
+                    <div
+                      className={`w-full text-center py-4 rounded-xl border-2 border-slate-200 font-black text-sm transition-all duration-150 active:scale-[0.95] ${item.color} peer-checked:shadow-sm`}
+                    >
+                      {item.name === "Hadir" && "✅ "}
+                      {item.name === "Izin" && "📝 "}
+                      {item.name === "Sakit" && "🤒 "}
+                      {item.name}
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            <div className="mt-8">
-              <label className="font-bold text-slate-700">
-                Pembimbing Lapangan
+            {/* INPUT PEMBIMBING */}
+            <div className="flex flex-col">
+              <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
+                Nama Pembimbing Lapangan (Instansi/DUDI)
               </label>
               <input
                 list="listPembimbing"
                 value={pembimbing}
                 onChange={(e) => setPembimbing(e.target.value)}
-                placeholder="Nama Pembimbing di Instansi"
-                className="mt-2 w-full rounded-xl border p-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Masukkan nama staf pembimbing industri..."
+                className="w-full rounded-2xl border-2 border-slate-200 p-4 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 focus:outline-none transition-colors"
               />
-
               <datalist id="listPembimbing">
                 {recentPembimbing.map((item, index) => (
                   <option key={index} value={item} />
@@ -449,45 +483,54 @@ export default function PresensiPage() {
               </datalist>
             </div>
 
-            <div className="mt-6">
-              <label className="font-bold text-slate-700">
-                Kompetensi Hari Ini
+            {/* INPUT KOMPETENSI */}
+            <div className="flex flex-col">
+              <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
+                Materi/Kompetensi yang Dikerjakan Hari Ini
               </label>
               <textarea
                 rows={4}
                 value={kompetensi}
                 onChange={(e) => setKompetensi(e.target.value)}
-                placeholder="Apa yang Anda kerjakan atau pelajari hari ini?"
-                className="mt-2 w-full rounded-xl border p-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Contoh: Melakukan perbaikan jaringan LAN, merakit PC kantor, membuat laporan keuangan harian..."
+                className="w-full rounded-2xl border-2 border-slate-200 p-4 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 focus:outline-none transition-colors resize-none"
               />
             </div>
 
-            <div className="mt-6">
-              <label className="font-bold text-slate-700">Keterangan</label>
+            {/* INPUT KETERANGAN */}
+            <div className="flex flex-col">
+              <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
+                Catatan Tambahan / Keterangan{" "}
+                <span className="text-slate-400 font-normal">(Opsional)</span>
+              </label>
               <textarea
-                rows={4}
+                rows={3}
                 value={keterangan}
                 onChange={(e) => setKeterangan(e.target.value)}
-                placeholder="Catatan tambahan (opsional)"
-                className="mt-2 w-full rounded-xl border p-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Tulis alasan jika Izin/Sakit, atau catatan kendala teknis di lapangan..."
+                className="w-full rounded-2xl border-2 border-slate-200 p-4 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 focus:outline-none transition-colors resize-none"
               />
             </div>
 
-            {/* 4. Ganti tombol submit dan hubungkan handleSubmit */}
-            <button
-              onClick={handleSubmit}
-              disabled={!photo || latitude === "-" || saving}
-              className="mt-8 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition"
-            >
-              {saving ? "MENYIMPAN..." : "SIMPAN PRESENSI"}
-            </button>
+            {/* BUTTON SUBMIT */}
+            <div className="pt-4">
+              <button
+                onClick={handleSubmit}
+                disabled={!photo || latitude === "-" || saving}
+                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
+              >
+                {saving
+                  ? "🔄 SEDANG MENYIMPAN DATA..."
+                  : "🚀 SIMPAN & KIRIM PRESENSI"}
+              </button>
 
-            {(!photo || latitude === "-") && !saving && (
-              <p className="mt-3 text-center text-sm font-semibold text-red-500">
-                *Harap ambil Foto & Lokasi GPS terlebih dahulu sebelum
-                menyimpan.
-              </p>
-            )}
+              {(!photo || latitude === "-") && !saving && (
+                <p className="mt-3 text-center text-xs font-bold text-rose-500 animate-pulse">
+                  *Akses simpan ditutup. Harap ambil foto selfie & pastikan
+                  koordinat GPS terkunci terlebih dahulu.
+                </p>
+              )}
+            </div>
           </div>
         </section>
       </div>
@@ -495,22 +538,43 @@ export default function PresensiPage() {
   );
 }
 
-function Info({ label, value }) {
+/* --- REUSABLE SUB-COMPONENTS --- */
+
+function Info({ label, value, isLight = false }) {
   return (
-    <div className="rounded-xl bg-white/10 p-4">
-      <p className="text-xs uppercase tracking-wider text-blue-200">{label}</p>
-      <p className="mt-1 text-lg font-bold text-white">{value}</p>
+    <div
+      className={`rounded-xl p-3 ${isLight ? "bg-white/10 border border-white/5" : "bg-slate-50 border border-slate-100"}`}
+    >
+      <p
+        className={`text-[10px] font-black uppercase tracking-wider ${isLight ? "text-blue-300" : "text-slate-400"}`}
+      >
+        {label}
+      </p>
+      <p
+        className={`text-sm font-extrabold mt-0.5 truncate ${isLight ? "text-white" : "text-slate-800"}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
 
-function GpsInfo({ label, value }) {
+function GpsCard({ label, value, icon, isLoading = false }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 text-lg font-bold text-slate-800">{value}</p>
+    <div className="flex items-center gap-4 rounded-2xl border-2 border-slate-100 bg-slate-50 p-4 shadow-sm">
+      <div className="text-2xl bg-white w-12 h-12 flex items-center justify-center rounded-xl border border-slate-200 shadow-sm shrink-0">
+        <span className={isLoading ? "animate-bounce" : ""}>{icon}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">
+          {label}
+        </p>
+        <p
+          className={`text-base font-black truncate ${value === "-" ? "text-slate-400" : "text-blue-900"}`}
+        >
+          {value}
+        </p>
+      </div>
     </div>
   );
 }

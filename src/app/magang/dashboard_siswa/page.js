@@ -8,9 +8,9 @@ import {
   getStatistikSiswa,
   getRiwayatSiswa,
   getPresensiHariIni,
-} from "../lib/api";
+} from "../lib/api"; // Sesuai dengan source asli
 
-import { getSession, isLoggedIn, logout } from "../lib/auth";
+import { getSession, isLoggedIn, logout } from "../lib/auth"; // Sesuai dengan source asli
 
 export default function DashboardSiswa() {
   const router = useRouter();
@@ -18,9 +18,7 @@ export default function DashboardSiswa() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [statistik, setStatistik] = useState(null);
-
   const [riwayat, setRiwayat] = useState([]);
-
   const [presensiHariIni, setPresensiHariIni] = useState(null);
 
   useEffect(() => {
@@ -42,24 +40,20 @@ export default function DashboardSiswa() {
       try {
         // Statistik
         const stat = await getStatistikSiswa(session.id);
-
         if (stat.success) {
           setStatistik(stat.data);
         }
 
         // Riwayat
         const history = await getRiwayatSiswa(session.id);
-
         if (history.success) {
           setRiwayat(history.data.slice(0, 5));
         }
 
         // Presensi hari ini
         const today = await getPresensiHariIni(session.idGuru);
-
         if (today.success) {
           const dataSaya = today.data.find((x) => x.ID_SISWA === session.id);
-
           if (dataSaya) {
             setPresensiHariIni(dataSaya);
           }
@@ -76,203 +70,304 @@ export default function DashboardSiswa() {
 
   function handleLogout() {
     if (!confirm("Keluar dari aplikasi?")) return;
-
     logout();
     router.replace("/magang/login");
   }
 
+  // --- TAMPILAN LOADING ANIMATIF ---
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-100">
+      <main className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700"></div>
-
-          <p className="mt-4 text-slate-500">Memuat Dashboard...</p>
+          <div className="relative mx-auto h-14 w-14">
+            <div className="absolute inset-0 rounded-full border-4 border-amber-200"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+          </div>
+          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+            Menyinkronkan Data Siswa...
+          </p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      {/* HEADER */}
-
-      <header className="sticky top-0 z-50 bg-white shadow">
-        <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
+    <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
+      {/* HEADER NAVBAR */}
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
+        <div className="mx-auto max-w-5xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Logo" width={45} height={45} />
-
+            <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={38}
+                height={38}
+                className="object-contain"
+              />
+            </div>
             <div>
-              <h1 className="font-black text-slate-800">PRESENSI MAGANG</h1>
-
-              <p className="text-xs text-slate-500">SMKN 1 TELUK KUANTAN</p>
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
+                PRESENSI MAGANG
+              </h1>
+              <p className="text-[10px] sm:text-xs font-medium text-blue-300">
+                SMKN 1 TELUK KUANTAN
+              </p>
             </div>
           </div>
 
           <button
             onClick={handleLogout}
-            className="rounded-xl bg-red-600 px-5 py-2 font-bold text-white hover:bg-red-700"
+            className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-red-900/30 border border-red-500/30 transition-all"
           >
-            Logout
+            ❌ LOGOUT
           </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl p-6">
-        {/* HERO */}
-
-        <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-8 text-white shadow-xl">
-          <p className="uppercase tracking-widest text-amber-300 text-sm">
-            Dashboard Siswa
-          </p>
-
-          <h2 className="mt-3 text-4xl font-black">Selamat Datang</h2>
-
-          <h3 className="mt-2 text-2xl font-bold">{user.nama}</h3>
-
-          <p className="mt-2 text-blue-200">
-            Silakan melakukan presensi magang hari ini.
-          </p>
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-6 sm:space-y-8">
+        {/* HERO BANNER SISWA */}
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-xl border border-blue-800">
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-4 border border-amber-400/30">
+              🎓 Dashboard Siswa
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+              Halo,
+            </h2>
+            <h3 className="mt-1 text-xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100">
+              {user?.nama}
+            </h3>
+            <p className="mt-2 text-sm text-blue-200 max-w-md font-medium">
+              Jangan lupa untuk mengirimkan bukti presensi magang harian kamu
+              hari ini!
+            </p>
+          </div>
         </div>
 
-        {/* DATA SISWA */}
-
-        <div className="mt-8 rounded-3xl bg-white p-8 shadow">
-          <h2 className="text-2xl font-black text-slate-800">
-            Informasi Siswa
+        {/* STATUS PRESENSI HARI INI (DIATAS AGAR MUDAH DIAKSES) */}
+        <div className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
+          <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-4">
+            Status Kehadiran Hari Ini
           </h2>
 
-          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <Card title="Hadir" value={statistik?.hadir ?? 0} />
+          {presensiHariIni ? (
+            <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-5 sm:p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 opacity-10 text-8xl pointer-events-none transform translate-x-4 translate-y-4">
+                ✅
+              </div>
+              <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-emerald-500/30 mb-4">
+                  ✅ Sudah Presensi
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Info
+                    label="Status"
+                    value={presensiHariIni.STATUS}
+                    textColor="text-emerald-800"
+                  />
+                  <Info
+                    label="Waktu Masuk"
+                    value={
+                      presensiHariIni.TIMESTAMP.split(" ")[1] ||
+                      presensiHariIni.TIMESTAMP
+                    }
+                    textColor="text-emerald-800"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-rose-500/30 mb-2">
+                  ❌ Belum Presensi
+                </div>
+                <p className="text-sm font-semibold text-rose-800/80">
+                  Kamu belum melakukan presensi hari ini. Silakan isi sekarang!
+                </p>
+              </div>
+              <button
+                onClick={() => router.push("/magang/presensi")}
+                className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/40 active:scale-[0.96] transition-all whitespace-nowrap"
+              >
+                📸 ISI PRESENSI
+              </button>
+            </div>
+          )}
+        </div>
 
-            <Card title="Izin" value={statistik?.izin ?? 0} />
+        {/* MENU UTAMA (Tombol Sentuh Besar) */}
+        <div className="grid gap-4 grid-cols-2">
+          <MenuCard
+            title="Presensi Sekarang"
+            subtitle="Kirim foto & lokasi live"
+            icon="📸"
+            bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/30"
+            onClick={() => router.push("/magang/presensi")}
+          />
+          <MenuCard
+            title="Riwayat Lengkap"
+            subtitle="Lihat semua datamu"
+            icon="📋"
+            bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30"
+            onClick={() => router.push("/magang/rekap")}
+          />
+        </div>
 
-            <Card title="Sakit" value={statistik?.sakit ?? 0} />
+        {/* INFORMASI & STATISTIK SISWA */}
+        <div className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
+          <h2 className="text-xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
+            Statistik & Profil Kamu
+          </h2>
 
+          <div className="grid gap-3 sm:gap-5 grid-cols-2 xl:grid-cols-4 mb-8">
             <Card
-              title="Persentase"
+              title="Hadir"
+              value={statistik?.hadir ?? 0}
+              accentColor="border-emerald-500"
+              textColor="text-emerald-600"
+              icon="✅"
+            />
+            <Card
+              title="Izin"
+              value={statistik?.izin ?? 0}
+              accentColor="border-amber-500"
+              textColor="text-amber-600"
+              icon="📝"
+            />
+            <Card
+              title="Sakit"
+              value={statistik?.sakit ?? 0}
+              accentColor="border-blue-500"
+              textColor="text-blue-600"
+              icon="🤒"
+            />
+            <Card
+              title="Kehadiran"
               value={`${statistik?.persentaseHadir ?? 0}%`}
+              accentColor="border-indigo-500"
+              textColor="text-indigo-600"
+              icon="📈"
             />
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="grid sm:grid-cols-3 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <Info label="ID Siswa" value={user.id} />
-
             <Info label="Guru Pembimbing" value={user.namaGuru} />
-
             <Info label="Tempat Magang" value={user.tempatMagang} />
           </div>
         </div>
 
-        <div className="mt-8 rounded-3xl bg-white p-8 shadow">
-          <h2 className="text-2xl font-black text-slate-800">
-            Status Presensi Hari Ini
-          </h2>
+        {/* RIWAYAT TERBARU */}
+        <div className="rounded-[2rem] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+          <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-white">
+            <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
+              ⏳ Riwayat Terakhir
+            </h2>
+          </div>
 
-          {presensiHariIni ? (
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-6">
-              <h3 className="text-xl font-black text-green-700">
-                🟢 Sudah Presensi
-              </h3>
-
-              <div className="mt-4 space-y-2">
-                <Info label="Status" value={presensiHariIni.STATUS} />
-
-                <Info label="Jam" value={presensiHariIni.TIMESTAMP} />
+          <div className="p-4 sm:p-6">
+            {riwayat.length === 0 ? (
+              <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                <p className="text-sm font-bold text-slate-400">
+                  Belum ada riwayat presensi.
+                </p>
               </div>
-            </div>
-          ) : (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
-              <h3 className="text-xl font-black text-red-600">
-                🔴 Belum Presensi
-              </h3>
+            ) : (
+              <div className="space-y-3">
+                {riwayat.map((item, index) => {
+                  const statusWarna =
+                    item.STATUS === "Hadir"
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                      : item.STATUS === "Izin"
+                        ? "bg-amber-100 text-amber-700 border-amber-200"
+                        : "bg-blue-100 text-blue-700 border-blue-200";
 
-              <p className="mt-2 text-slate-600">
-                Silakan melakukan presensi hari ini.
-              </p>
-            </div>
-          )}
-        </div>
+                  return (
+                    <div
+                      key={index}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div>
+                        <p className="font-black text-slate-700 text-sm">
+                          {item.TIMESTAMP}
+                        </p>
+                        <p className="text-xs font-bold text-slate-400 flex items-center gap-1 mt-0.5">
+                          📍 {item.TEMPAT_MAGANG}
+                        </p>
+                      </div>
 
-        {/* MENU */}
-
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          <MenuCard
-            title="📍 Presensi Sekarang"
-            subtitle="Ambil foto & lokasi"
-            onClick={() => router.push("/magang/presensi")}
-          />
-
-          <MenuCard
-            title="📄 Riwayat Lengkap"
-            subtitle="Lihat seluruh presensi"
-            onClick={() => router.push("/magang/riwayat")}
-          />
-        </div>
-
-        <div className="mt-8 rounded-3xl bg-white p-8 shadow">
-          <h2 className="text-2xl font-black text-slate-800">
-            Riwayat Presensi Terbaru
-          </h2>
-
-          {riwayat.length === 0 ? (
-            <p className="mt-5 text-slate-500">Belum ada riwayat presensi.</p>
-          ) : (
-            <div className="mt-5 space-y-4">
-              {riwayat.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between rounded-xl border p-4"
-                >
-                  <div>
-                    <p className="font-bold">{item.TIMESTAMP}</p>
-
-                    <p className="text-sm text-slate-500">
-                      {item.TEMPAT_MAGANG}
-                    </p>
-                  </div>
-
-                  <span className="rounded-full bg-blue-700 px-4 py-1 text-white">
-                    {item.STATUS}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+                      <span
+                        className={`inline-flex items-center justify-center rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-wider border ${statusWarna}`}
+                      >
+                        {item.STATUS}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-function Info({ label, value }) {
-  return (
-    <div className="border-b border-slate-200 pb-3">
-      <p className="text-xs uppercase text-slate-400">{label}</p>
+/* --- REUSABLE COMPONENTS --- */
 
-      <p className="mt-1 text-lg font-bold text-slate-800">{value}</p>
+function Info({ label, value, textColor = "text-slate-800" }) {
+  return (
+    <div>
+      <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+        {label}
+      </p>
+      <p className={`text-sm sm:text-base font-black ${textColor} truncate`}>
+        {value}
+      </p>
     </div>
   );
 }
 
-function MenuCard({ title, subtitle, onClick }) {
+function Card({ title, value, accentColor, textColor, icon }) {
+  return (
+    <div
+      className={`rounded-2xl bg-white p-4 sm:p-5 shadow-sm border border-slate-100 border-t-4 ${accentColor} relative overflow-hidden group`}
+    >
+      <p className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
+        {title}
+      </p>
+      <h2
+        className={`mt-1 sm:mt-2 text-2xl sm:text-3xl font-black ${textColor}`}
+      >
+        {value}
+      </h2>
+      <div className="absolute right-3 bottom-2 text-2xl opacity-15 sm:opacity-20 pointer-events-none select-none">
+        {icon}
+      </div>
+    </div>
+  );
+}
+
+function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-2xl bg-white p-6 text-left shadow hover:-translate-y-1 hover:shadow-xl transition"
+      className={`w-full text-left p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${bgGrad} text-white shadow-lg flex flex-col justify-between h-32 sm:h-36 transition-all active:scale-[0.96] active:brightness-95 focus:outline-none border border-white/10`}
     >
-      <h2 className="text-xl font-black text-slate-800">{title}</h2>
-
-      <p className="mt-2 text-slate-500">{subtitle}</p>
+      <div className="text-2xl sm:text-3xl bg-white/20 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-white/20 shadow-inner">
+        {icon}
+      </div>
+      <div>
+        <h2 className="text-sm sm:text-lg font-black tracking-tight leading-snug">
+          {title}
+        </h2>
+        <p className="text-[10px] sm:text-xs text-white/90 font-medium mt-0.5">
+          {subtitle}
+        </p>
+      </div>
     </button>
-  );
-}
-function Card({ title, value }) {
-  return (
-    <div className="rounded-2xl bg-white p-6 shadow">
-      <p className="text-sm font-semibold text-slate-500">{title}</p>
-
-      <h2 className="mt-3 text-4xl font-black text-blue-900">{value}</h2>
-    </div>
   );
 }
