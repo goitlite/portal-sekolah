@@ -26,7 +26,8 @@ export default function RekapPage() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [guruDipilih, setGuruDipilih] = useState("");
   const [guruList, setGuruList] = useState([]);
-  // --- FUNGSI RESET CACHE & BROWSER STATE ---
+
+  // --- FUNGSI RESET CACHE (Dipakai manual saja lewat tombol Refresh) ---
   async function clearBrowserState() {
     localStorage.clear();
     sessionStorage.clear();
@@ -68,14 +69,12 @@ export default function RekapPage() {
       : `${url}?v=${Date.now()}`;
   }
 
-  // --- LOGIKA LOAD & RETRY ---
   // 1. Load daftar guru saat halaman pertama kali dibuka
   useEffect(() => {
     async function fetchGuru() {
       try {
         const res = await getGuru();
         let list = res.data || [];
-        // Urutkan alfabet
         list.sort((a, b) => a.NAMA_GURU.localeCompare(b.NAMA_GURU));
         setGuruList(list);
       } catch (error) {
@@ -85,20 +84,16 @@ export default function RekapPage() {
     fetchGuru();
   }, []);
 
-  // 2. Jangan memuat data rekap apabila guru belum dipilih
-  // HAPUS KODE INI:
+  // 2. Load data rekap ketika dropdown berubah (AMAN & TANPA RESET LOGOUT)
   useEffect(() => {
-    // 1. Jika pembimbing BELUM dipilih (saat halaman pertama dibuka)
     if (!guruDipilih) {
-      setData([]); // Pastikan layar bersih/kosong
-      setLoading(false); // Matikan animasi loading
-      return; // Hentikan eksekusi di sini, jangan hubungi backend
+      setData([]);
+      setLoading(false);
+      return;
     }
 
-    // 2. Jika pembimbing SUDAH dipilih, baru jalankan loading dan ambil data
-    clearBrowserState().then(() => {
-      load(false);
-    });
+    // Langsung panggil load tanpa menghapus storage browser
+    load(false);
   }, [guruDipilih, bulan, tempat]);
 
   async function load(isRetry = false) {
@@ -107,7 +102,6 @@ export default function RekapPage() {
     try {
       const idGuruAman = guruDipilih || "";
 
-      // === RADAR DETEKTOR 1: Cek apa yang dikirim frontend ===
       console.log("🔴 CEK PARAMETER YANG DIKIRIM:");
       console.log("- Bulan:", bulan);
       console.log("- Tempat:", tempat);
@@ -119,7 +113,6 @@ export default function RekapPage() {
         idGuruAman,
       );
 
-      // === RADAR DETEKTOR 2: Cek apa yang dibalas backend ===
       console.log("🟢 BALASAN DARI BACKEND:", hasil.data);
 
       setData(hasil.data || []);
@@ -127,7 +120,7 @@ export default function RekapPage() {
     } catch (error) {
       console.error("Fetch Rekap error:", error);
       if (!isRetry) {
-        await clearBrowserState();
+        // Retry tanpa merusak session login
         setTimeout(() => load(true), 1000);
       } else {
         setLoading(false);
@@ -167,7 +160,7 @@ export default function RekapPage() {
       console.error("Fetch Riwayat error:", error);
       if (!isRetry) {
         console.log("Mencoba ulang (retry) riwayat dalam 1 detik...");
-        await clearBrowserState();
+        // Retry tanpa merusak session login
         setTimeout(
           () =>
             handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang, true),
@@ -357,19 +350,7 @@ export default function RekapPage() {
           </div>
 
           {/* FILTER CONTROLS */}
-          {/* FILTER CONTROLS */}
-          <div
-            className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4
-bg-gradient-to-br
-from-[#FFFDF8]
-via-[#FCE7A4]
-to-[#F3D36B]
-p-3 sm:p-4
-rounded-2xl sm:rounded-3xl
-shadow-[0_12px_35px_rgba(212,175,55,0.22)]
-border border-[#D9B44A]
-mb-6 sm:mb-10"
-          >
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A] mb-6 sm:mb-10">
             <div className="flex-1 w-full sm:min-w-[200px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
                 Guru Pembimbing
@@ -384,7 +365,6 @@ mb-6 sm:mb-10"
               >
                 <option value="">-- Pilih Guru Pembimbing --</option>
                 {guruList.map((g, i) => {
-                  // Pengaman: Ambil otomatis nama kolom ID dari database Bapak
                   const finalId =
                     g.id ||
                     g.ID ||
@@ -396,7 +376,6 @@ mb-6 sm:mb-10"
                     "";
                   const finalNama =
                     g.NAMA || g.nama || g.NAMA_GURU || g.nama_guru || "Guru";
-
                   return (
                     <option key={i} value={finalId}>
                       {finalNama}
@@ -405,6 +384,7 @@ mb-6 sm:mb-10"
                 })}
               </select>
             </div>
+
             <div className="flex-1 w-full sm:min-w-[200px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
                 Bulan
@@ -464,14 +444,7 @@ mb-6 sm:mb-10"
                 .map((item, index) => (
                   <div
                     key={index}
-                    className="rekap-card-wa overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem]
-bg-gradient-to-br
-from-yellow-50
-via-amber-100
-to-yellow-200
-shadow-[0_10px_35px_rgba(180,140,20,0.18)]
-border border-yellow-300
-flex flex-col transition-all duration-300"
+                    className="rekap-card-wa overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-gradient-to-br from-yellow-50 via-amber-100 to-yellow-200 shadow-[0_10px_35px_rgba(180,140,20,0.18)] border border-yellow-300 flex flex-col transition-all duration-300"
                   >
                     {item.foto ? (
                       <div
@@ -513,9 +486,7 @@ flex flex-col transition-all duration-300"
                     )}
 
                     <div className="p-4 sm:p-7">
-                      {/* --- HEADER CARD: TEMPAT (KIRI) & GURU (KANAN) --- */}
                       <div className="flex flex-row items-start justify-between gap-2 sm:gap-4 border-b border-blue-200/60 pb-3 sm:pb-4">
-                        {/* KIRI - Tempat Magang */}
                         <div className="flex-1 text-left">
                           <div className="inline-flex items-start gap-1 sm:gap-2 bg-blue-600 text-white px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-sm mb-1.5">
                             <span className="text-[10px] sm:text-sm mt-0.5">
@@ -532,7 +503,6 @@ flex flex-col transition-all duration-300"
                           </div>
                         </div>
 
-                        {/* KANAN - Guru Pembimbing */}
                         <div className="flex-1 text-right flex flex-col items-end">
                           <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1 text-slate-500">
                             <span className="text-[9px] sm:text-xs font-black uppercase tracking-wider">
@@ -560,7 +530,7 @@ flex flex-col transition-all duration-300"
                         </div>
                       </div>
 
-                      {/* --- TABEL SISWA --- */}
+                      {/* TABEL SISWA */}
                       <div className="mt-4 sm:mt-5 w-full rounded-xl sm:rounded-2xl border border-white bg-white/70 backdrop-blur-sm p-1.5 sm:p-3 shadow-inner">
                         <table className="w-full text-left border-separate border-spacing-y-1 sm:border-spacing-y-2">
                           <thead>
@@ -604,11 +574,9 @@ flex flex-col transition-all duration-300"
                                     {i + 1}
                                   </span>
                                 </td>
-
                                 <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
                                   {s.nama}
                                 </td>
-
                                 <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
                                   <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
                                     {s.hadir}
@@ -682,14 +650,13 @@ flex flex-col transition-all duration-300"
         </div>
       )}
 
-      {/* MODAL RIWAYAT PRESENSI SISWA - LENGKAP */}
+      {/* MODAL RIWAYAT PRESENSI SISWA */}
       {selectedSiswa && (
         <div
           className="fixed inset-0 z-50 overflow-hidden"
           role="dialog"
           aria-modal="true"
         >
-          {/* Background overlay */}
           <div className="absolute inset-0 overflow-hidden">
             <div
               onClick={() => setSelectedSiswa(null)}
@@ -698,7 +665,6 @@ flex flex-col transition-all duration-300"
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
               <div className="pointer-events-auto w-screen max-w-4xl transform transition-transform duration-500 ease-in-out">
                 <div className="flex h-full flex-col bg-slate-50 shadow-2xl rounded-l-[2.5rem] overflow-hidden border-l border-white/20">
-                  {/* HEADER */}
                   <div className="relative bg-gradient-to-br from-blue-700 via-indigo-800 to-blue-900 p-6 sm:p-8 text-white overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
                     <div className="relative flex items-start justify-between">
@@ -737,8 +703,7 @@ flex flex-col transition-all duration-300"
                           Pembimbing
                         </p>
                         <p className="font-bold text-sm sm:text-lg flex items-center gap-2">
-                          <span className="text-lg">👨‍🏫</span>
-                          {selectedSiswa.guru}
+                          👨‍🏫 {selectedSiswa.guru}
                         </p>
                       </div>
                       <div>
@@ -746,14 +711,12 @@ flex flex-col transition-all duration-300"
                           Lokasi Magang
                         </p>
                         <p className="font-bold text-sm sm:text-lg flex items-center gap-2">
-                          <span className="text-lg">📍</span>
-                          {selectedSiswa.tempat}
+                          📍 {selectedSiswa.tempat}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* CONTENT */}
                   <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                     {riwayatLoading ? (
                       <div className="flex h-64 flex-col items-center justify-center text-slate-500">
@@ -789,7 +752,6 @@ flex flex-col transition-all duration-300"
                       </div>
                     ) : (
                       <div className="space-y-6 sm:space-y-8">
-                        {/* STAT CARDS */}
                         <div className="grid grid-cols-3 gap-3 sm:gap-4">
                           <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
                             <div className="absolute top-0 w-full h-1 bg-emerald-500"></div>
@@ -829,31 +791,8 @@ flex flex-col transition-all duration-300"
                           </div>
                         </div>
 
-                        {/* TABEL RIWAYAT */}
                         <div className="overflow-x-auto rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
                           <table className="min-w-full divide-y divide-slate-200 text-left text-xs sm:text-sm">
-                            <thead className="bg-slate-50 text-slate-500 font-black uppercase tracking-wider text-[10px] sm:text-[11px]">
-                              <tr>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                                  No
-                                </th>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4">
-                                  Waktu Presensi
-                                </th>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                                  Status
-                                </th>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                                  Bukti
-                                </th>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4">
-                                  Pembimbing
-                                </th>
-                                <th className="px-3 sm:px-6 py-3 sm:py-4">
-                                  Kegiatan / Kompetensi
-                                </th>
-                              </tr>
-                            </thead>
                             <tbody className="divide-y divide-slate-100">
                               {riwayatSiswa.map((r, i) => {
                                 const { hari, tanggal } = getHariDanTanggal(
@@ -881,13 +820,7 @@ flex flex-col transition-all duration-300"
                                     </td>
                                     <td className="px-3 sm:px-6 py-3 sm:py-5 text-center whitespace-nowrap">
                                       <span
-                                        className={`inline-flex rounded-lg sm:rounded-xl px-2 sm:px-4 py-1 text-[9px] sm:text-xs font-black uppercase tracking-wider border ${
-                                          status === "Hadir"
-                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                            : status === "Izin"
-                                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                                              : "bg-blue-50 text-blue-700 border-blue-200"
-                                        }`}
+                                        className={`inline-flex rounded-lg sm:rounded-xl px-2 sm:px-4 py-1 text-[9px] sm:text-xs font-black uppercase tracking-wider border ${status === "Hadir" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : status === "Izin" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}
                                       >
                                         {status}
                                       </span>
@@ -900,7 +833,6 @@ flex flex-col transition-all duration-300"
                                             target="_blank"
                                             rel="noreferrer"
                                             className="group flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
-                                            title="Buka Foto Bukti"
                                           >
                                             <span className="text-sm sm:text-lg group-hover:scale-110 transition-transform">
                                               📸
@@ -917,7 +849,6 @@ flex flex-col transition-all duration-300"
                                             target="_blank"
                                             rel="noreferrer"
                                             className="group flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
-                                            title="Buka Peta Lokasi"
                                           >
                                             <span className="text-sm sm:text-lg group-hover:scale-110 transition-transform">
                                               📍
@@ -960,7 +891,6 @@ flex flex-col transition-all duration-300"
                     )}
                   </div>
 
-                  {/* FOOTER */}
                   <div className="border-t border-slate-200 bg-white p-4 sm:p-6 flex justify-end z-10">
                     <button
                       onClick={() => setSelectedSiswa(null)}
