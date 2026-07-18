@@ -6,6 +6,7 @@ import Image from "next/image";
 import { cleanupResources } from "../lib/navigation";
 import { getSession, isLoggedIn } from "../lib/auth";
 import { savePresensi } from "../lib/api";
+import QRCode from "qrcode";
 
 const NamaBadge = ({ rawName }) => {
   if (!rawName) return null;
@@ -56,6 +57,7 @@ export default function PresensiPage() {
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const watermarkCanvasRef = useRef(null);
 
   const [photo, setPhoto] = useState("");
   const [cameraReady, setCameraReady] = useState(false);
@@ -63,6 +65,7 @@ export default function PresensiPage() {
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
   const [accuracy, setAccuracy] = useState("-");
+  const [alamat, setAlamat] = useState("-"); // State baru untuk menyimpan alamat dari OpenStreetMap
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -99,12 +102,149 @@ export default function PresensiPage() {
     }
   }
 
+  function addWatermark(imageData) {
+    return new Promise((resolve) => {
+      const img = document.createElement("img");
+      img.onload = () => {
+        const canvas = watermarkCanvasRef.current;
+        if (!canvas) return resolve(imageData);
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(img, 0, 0);
+
+        const now = new Date();
+        const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
+        const tanggal = now.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        const jam = now.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+
+        // ==========================================
+        // 1. WATERMARK ATAS KANAN (ALAMAT & LOKASI)
+        // ==========================================
+        const topBoxW = 480;
+        const topBoxH = 140;
+        const topBoxX = img.width - topBoxW - 20; // 20px dari tepi kanan
+        const topBoxY = 20; // 20px dari tepi atas
+
+        // Background transparan yang sama dengan watermark bawah
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(topBoxX, topBoxY, topBoxW, topBoxH);
+
+        // Icon Map
+        ctx.font = "34px Arial";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillText("📍", topBoxX + 20, topBoxY + 50);
+
+        // Judul Lokasi
+        ctx.font = "bold 18px Arial";
+        ctx.fillText("LOKASI SAAT INI:", topBoxX + 65, topBoxY + 45);
+
+        // Teks Alamat (dengan fungsi auto-wrap ke baris baru)
+        ctx.font = "16px Arial";
+        const alamatText = alamat !== "-" ? alamat : "Mencari detail alamat...";
+        const maxTextWidth = topBoxW - 85;
+        const words = alamatText.split(" ");
+        let line = "";
+        let textY = topBoxY + 75;
+        const lineHeight = 22;
+
+        for (let n = 0; n < words.length; n++) {
+          const testLine = line + words[n] + " ";
+          const metrics = ctx.measureText(testLine);
+          const testWidth = metrics.width;
+          if (testWidth > maxTextWidth && n > 0) {
+            ctx.fillText(line, topBoxX + 65, textY);
+            line = words[n] + " ";
+            textY += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, topBoxX + 65, textY); // Draw sisa teks
+
+        // ==========================================
+        // 2. WATERMARK BAWAH (DATA SISWA & BARCODE)
+        // ==========================================
+        const boxX = 20;
+        const boxY = img.height - 230;
+        const boxW = img.width - 40;
+        const boxH = 210;
+
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+
+        ctx.fillStyle = "#FFFFFF";
+
+        const titleX = boxX + 20;
+        let titleY = boxY + 35;
+
+        ctx.font = "bold 24px Arial";
+        ctx.fillText("SMKN 1 TELUK KUANTAN", titleX, titleY);
+
+        titleY += 30;
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("PRESENSI SISWA MAGANG", titleX, titleY);
+
+        titleY += 18;
+
+        const col1 = boxX + 20;
+        const col2 = boxX + 330;
+        const startY = boxY + 95;
+
+        ctx.font = "18px Arial";
+
+        ctx.fillText("Siswa : " + user.nama, col1, startY);
+        ctx.fillText("Tempat : " + user.tempatMagang, col1, startY + 30);
+        ctx.fillText("Status : " + status, col1, startY + 60);
+
+        ctx.fillText("Hari : " + hari, col2, startY);
+        ctx.fillText("Tanggal : " + tanggal, col2, startY + 30);
+        ctx.fillText("Jam : " + jam + " WIB", col2, startY + 60);
+        ctx.fillText("GPS : " + latitude, col2, startY + 90);
+
+        const qrX = boxX + boxW - 165;
+        const qrY = boxY + 20;
+        const qrData = `https://maps.google.com/?q=${latitude},${longitude}`;
+
+        QRCode.toDataURL(qrData, { width: 150, margin: 1 }).then((qrUrl) => {
+          const qrImage = new window.Image();
+          qrImage.onload = () => {
+            ctx.drawImage(qrImage, qrX, qrY, 140, 140);
+            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.fillRect(qrX, qrY + 140, 140, 24);
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 13px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
+            ctx.textAlign = "left";
+
+            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.9);
+            resolve(watermarkedImage);
+          };
+          qrImage.src = qrUrl;
+        });
+      };
+      img.src = imageData;
+    });
+  }
+
   async function capturePhoto() {
     if (photo) {
       setPhoto("");
       setLatitude("-");
       setLongitude("-");
       setAccuracy("-");
+      setAlamat("-");
       await startCamera();
       return;
     }
@@ -137,10 +277,27 @@ export default function PresensiPage() {
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLatitude(pos.coords.latitude);
-          setLongitude(pos.coords.longitude);
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+
+          setLatitude(lat);
+          setLongitude(lon);
           setAccuracy(Math.round(pos.coords.accuracy) + " meter");
-          setGpsLoading(false);
+
+          // Panggil API OpenStreetMap (Nominatim) untuk reverse geocoding
+          fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+          )
+            .then((res) => res.json())
+            .then((data) => {
+              setAlamat(data.display_name || "Detail alamat tidak ditemukan");
+              setGpsLoading(false);
+            })
+            .catch((err) => {
+              console.error(err);
+              setAlamat("Gagal memuat alamat dari server GPS");
+              setGpsLoading(false);
+            });
         },
         (err) => {
           alert("GPS gagal didapatkan. Pastikan izin lokasi aktif.");
@@ -189,13 +346,15 @@ export default function PresensiPage() {
     try {
       setSaving(true);
 
+      const photoWithWatermark = await addWatermark(photo);
+
       const result = await savePresensi({
         idSiswa: user.id,
         nama: user.nama,
         idGuru: user.idGuru,
         namaGuru: user.namaGuru,
         tempatMagang: user.tempatMagang,
-        fotoUrl: photo,
+        fotoUrl: photoWithWatermark,
         mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
         status: status,
         pembimbingLapangan: pembimbing,
@@ -224,7 +383,6 @@ export default function PresensiPage() {
           JSON.stringify({ status, pembimbing }),
         );
 
-        // Menyimpan tanggal presensi hari ini ke localStorage
         const todayStr = new Date().toLocaleDateString("id-ID");
         localStorage.setItem("magang_last_presensi_date", todayStr);
 
@@ -263,7 +421,6 @@ export default function PresensiPage() {
       if (pref.status) setStatus(pref.status);
       if (pref.pembimbing) setPembimbing(pref.pembimbing);
 
-      // Mengecek apakah siswa sudah presensi hari ini
       const lastPresensiDate = localStorage.getItem(
         "magang_last_presensi_date",
       );
@@ -302,6 +459,19 @@ export default function PresensiPage() {
       </main>
     );
   }
+
+  const now = new Date();
+  const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
+  const tanggal = now.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const jam = now.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 
   return (
     <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
@@ -363,10 +533,36 @@ export default function PresensiPage() {
                 isLight={true}
               />
             </div>
+
+            <div className="mt-4 grid gap-3 grid-cols-3">
+              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
+                  Hari
+                </p>
+                <p className="mt-0.5 text-sm sm:text-base font-black text-white capitalize">
+                  {hari}
+                </p>
+              </div>
+              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
+                  Tanggal
+                </p>
+                <p className="mt-0.5 text-sm sm:text-base font-black text-white">
+                  {tanggal}
+                </p>
+              </div>
+              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
+                  Jam
+                </p>
+                <p className="mt-0.5 text-sm sm:text-base font-black text-amber-300">
+                  {jam}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* --- UPDATE STATUS PRESENSI --- */}
         {hasPresensiToday ? (
           <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 p-5 shadow-sm transition-all duration-300">
             <p className="text-lg font-black text-emerald-600 flex items-center gap-2">
@@ -384,7 +580,6 @@ export default function PresensiPage() {
             </p>
           </div>
         )}
-        {/* ----------------------------- */}
 
         <div className="grid gap-6 md:grid-cols-2">
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
@@ -412,6 +607,7 @@ export default function PresensiPage() {
                   />
                 )}
                 <canvas ref={canvasRef} className="hidden" />
+                <canvas ref={watermarkCanvasRef} className="hidden" />
               </div>
             </div>
 
@@ -453,6 +649,12 @@ export default function PresensiPage() {
                   label="Akurasi Margin Kesalahan"
                   value={gpsLoading ? "Mencari Satelit..." : accuracy}
                   icon="🎯"
+                  isLoading={gpsLoading}
+                />
+                <GpsCard
+                  label="Detail Alamat Lokasi"
+                  value={gpsLoading ? "Mencari alamat..." : alamat}
+                  icon="🗺️"
                   isLoading={gpsLoading}
                 />
               </div>
@@ -607,6 +809,9 @@ function Info({ label, value, isLight = false }) {
 }
 
 function GpsCard({ label, value, icon, isLoading = false }) {
+  // Ubah value menjadi string dengan aman untuk mencegah TypeError
+  const safeValue = String(value);
+
   return (
     <div className="flex items-center gap-4 rounded-2xl border-2 border-slate-100 bg-slate-50 p-4 shadow-sm">
       <div className="text-2xl bg-white w-12 h-12 flex items-center justify-center rounded-xl border border-slate-200 shadow-sm shrink-0">
@@ -617,7 +822,11 @@ function GpsCard({ label, value, icon, isLoading = false }) {
           {label}
         </p>
         <p
-          className={`text-base font-black truncate ${value === "-" ? "text-slate-400" : "text-blue-900"}`}
+          className={`text-sm sm:text-base font-black ${
+            safeValue === "-" || safeValue.includes("Mencari")
+              ? "text-slate-400"
+              : "text-blue-900"
+          } ${label.includes("Alamat") ? "line-clamp-2" : "truncate"}`}
         >
           {value}
         </p>

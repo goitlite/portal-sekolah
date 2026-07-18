@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-import { saveMonitoring, uploadPhoto } from "../../lib/api"; // Sesuai source asli
-import { getSession, isLoggedIn } from "../../lib/auth"; // Sesuai source asli
-import QRCode from "qrcode"; // Sesuai source asli
+import { saveMonitoring, uploadPhoto } from "../../lib/api";
+import { getSession, isLoggedIn } from "../../lib/auth";
+import QRCode from "qrcode";
 
 export default function MonitoringPage() {
   const router = useRouter();
@@ -26,6 +26,7 @@ export default function MonitoringPage() {
 
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
+  const [alamat, setAlamat] = useState("-"); // State baru untuk Alamat
   const [accuracy, setAccuracy] = useState("-");
   const [gpsSuccess, setGpsSuccess] = useState(false);
 
@@ -70,7 +71,7 @@ export default function MonitoringPage() {
     }
   }
 
-  // FUNGSI TAMBAH WATERMARK[cite: 5]
+  // FUNGSI TAMBAH WATERMARK
   function addWatermark(imageData) {
     return new Promise((resolve) => {
       const img = document.createElement("img");
@@ -97,10 +98,11 @@ export default function MonitoringPage() {
           hour12: false,
         });
 
+        // Ukuran box diperbesar untuk menampung baris alamat
         const boxX = 20;
-        const boxY = img.height - 230;
+        const boxY = img.height - 250;
         const boxW = img.width - 40;
-        const boxH = 210;
+        const boxH = 230;
 
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(boxX, boxY, boxW, boxH);
@@ -134,7 +136,19 @@ export default function MonitoringPage() {
         ctx.fillText("Hari : " + hari, col2, startY);
         ctx.fillText("Tanggal : " + tanggal, col2, startY + 30);
         ctx.fillText("Jam : " + jam + " WIB", col2, startY + 60);
-        ctx.fillText("GPS : " + latitude, col2, startY + 90);
+
+        // BARIS GABUNGAN UNTUK LOKASI DI BAWAH KOLOM
+        ctx.fillText(
+          "Koordinat : " + latitude + ", " + longitude,
+          col1,
+          startY + 90,
+        );
+
+        // Membatasi teks alamat agar tidak menabrak QR Code
+        const limit = 60;
+        const textAlamat =
+          alamat.length > limit ? alamat.substring(0, limit) + "..." : alamat;
+        ctx.fillText("Lokasi : " + textAlamat, col1, startY + 120);
 
         const qrX = boxX + boxW - 165;
         const qrY = boxY + 20;
@@ -162,13 +176,14 @@ export default function MonitoringPage() {
     });
   }
 
-  // FUNGSI AMBIL FOTO[cite: 5]
+  // FUNGSI AMBIL FOTO
   async function capturePhoto() {
     if (photo) {
       setPhoto("");
       setPhotoSuccess(false);
       setLatitude("-");
       setLongitude("-");
+      setAlamat("-"); // Reset Alamat
       setAccuracy("-");
       setGpsSuccess(false);
       setCameraReady(false);
@@ -201,7 +216,7 @@ export default function MonitoringPage() {
     getLocation();
   }
 
-  // FUNGSI GPS[cite: 5]
+  // FUNGSI GPS (Ditambah Reverse Geocoding via Nominatim)
   function getLocation() {
     if (!navigator.geolocation) {
       alert("GPS tidak didukung.");
@@ -209,23 +224,43 @@ export default function MonitoringPage() {
     }
 
     setGpsLoading(true);
+    setAlamat("Mencari alamat lokasi...");
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        setLatitude(lat);
+        setLongitude(lon);
         setAccuracy(Math.round(pos.coords.accuracy) + " meter");
         setGpsSuccess(true);
         setGpsLoading(false);
+
+        // Fetch nama jalan / alamat dari koordinat
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+          );
+          const data = await res.json();
+          if (data && data.display_name) {
+            setAlamat(data.display_name);
+          } else {
+            setAlamat("Alamat tidak ditemukan");
+          }
+        } catch (err) {
+          setAlamat("Gagal memuat alamat");
+        }
       },
       () => {
         setGpsLoading(false);
+        setAlamat("-");
         alert("Lokasi tidak dapat diperoleh.");
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }
 
-  // FUNGSI SIMPAN MONITORING[cite: 5]
+  // FUNGSI SIMPAN MONITORING
   async function handleSaveMonitoring() {
     if (!photo) {
       alert("Silakan ambil foto monitoring.");
@@ -279,6 +314,7 @@ export default function MonitoringPage() {
         setKeterangan("");
         setLatitude("-");
         setLongitude("-");
+        setAlamat("-"); // Reset Alamat
         setAccuracy("-");
         setGpsSuccess(false);
         window.location.href = "/magang/guru";
@@ -345,7 +381,7 @@ export default function MonitoringPage() {
     );
   }
 
-  // GET CURRENT DATE/TIME[cite: 5]
+  // GET CURRENT DATE/TIME
   const now = new Date();
   const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
   const tanggal = now.toLocaleDateString("id-ID", {
@@ -516,6 +552,13 @@ export default function MonitoringPage() {
                   value={longitude}
                   icon="📍"
                 />
+                {/* Komponen Baru untuk Alamat */}
+                <GpsCard
+                  label="Alamat Lokasi"
+                  value={alamat}
+                  icon="🗺️"
+                  isLoading={gpsLoading || String(alamat).includes("Mencari")}
+                />
                 <GpsCard
                   label="Akurasi Radar"
                   value={gpsLoading ? "Mengunci Satelit..." : accuracy}
@@ -659,7 +702,10 @@ function Info({ label, value, isLight = false }) {
   );
 }
 
+// SUDAH DIPERBAIKI: Konversi string aman untuk .includes()
 function GpsCard({ label, value, icon, isLoading = false }) {
+  const safeValue = String(value);
+
   return (
     <div className="flex items-center gap-3 rounded-2xl border-2 border-slate-100 bg-slate-50 p-3 sm:p-4 shadow-sm">
       <div className="text-xl sm:text-2xl bg-white w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-slate-200 shadow-sm shrink-0">
@@ -670,7 +716,13 @@ function GpsCard({ label, value, icon, isLoading = false }) {
           {label}
         </p>
         <p
-          className={`text-sm sm:text-base font-black truncate ${value === "-" ? "text-slate-400" : "text-blue-900"}`}
+          className={`text-sm sm:text-base font-black ${
+            safeValue === "-" ||
+            safeValue.includes("Mencari") ||
+            safeValue.includes("Gagal")
+              ? "text-slate-400"
+              : "text-blue-900"
+          } ${String(label).includes("Alamat") ? "line-clamp-2 text-xs sm:text-sm" : "truncate"}`}
         >
           {value}
         </p>
