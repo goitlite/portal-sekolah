@@ -11,6 +11,7 @@ import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { toBlob } from "html-to-image";
+
 const NamaBadge = ({ rawName }) => {
   if (!rawName) return null;
 
@@ -31,10 +32,8 @@ const NamaBadge = ({ rawName }) => {
   }
 
   return (
-    // inline-flex memastikan badge rapi berjejer di samping teks
     <span className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
       <span>{namaSiswa}</span>{" "}
-      {/* Tanpa class warna agar menyatu dengan desain asli */}
       <span
         className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-sm ${badgeClasses}`}
       >
@@ -60,18 +59,13 @@ export default function RekapPage() {
   const [guruList, setGuruList] = useState([]);
 
   async function forceFreshMode() {
-    // Hanya memanggil fungsi load() untuk mengambil ulang data rekap terbaru
-    // dari server tanpa merefresh halaman penuh dan tanpa menyentuh cache/storage.
     if (guruDipilih) {
       load(false);
     } else {
-      // Opsional: Jika ingin refresh halaman secara penuh tapi aman (tanpa hapus cache)
-      // window.location.reload();
       alert("Silakan pilih guru pembimbing terlebih dahulu");
     }
   }
 
-  // --- HELPER UNTUK GAMBAR DRIVE ---
   function getSafeFreshUrl(url) {
     if (!url) return "";
     return url.includes("?")
@@ -79,7 +73,6 @@ export default function RekapPage() {
       : `${url}?v=${Date.now()}`;
   }
 
-  // 1. Load daftar guru saat halaman pertama kali dibuka
   useEffect(() => {
     async function fetchGuru() {
       try {
@@ -94,15 +87,12 @@ export default function RekapPage() {
     fetchGuru();
   }, []);
 
-  // 2. Load data rekap ketika dropdown berubah (AMAN & TANPA RESET LOGOUT)
   useEffect(() => {
     if (!guruDipilih) {
       setData([]);
       setLoading(false);
       return;
     }
-
-    // Langsung panggil load tanpa menghapus storage browser
     load(false);
   }, [guruDipilih, bulan, tempat]);
 
@@ -111,26 +101,17 @@ export default function RekapPage() {
 
     try {
       const idGuruAman = guruDipilih || "";
-
-      console.log("🔴 CEK PARAMETER YANG DIKIRIM:");
-      console.log("- Bulan:", bulan);
-      console.log("- Tempat:", tempat);
-      console.log("- ID Guru:", idGuruAman);
-
       const hasil = await getRekapSemua(
         bulan,
         tempat === "Semua" ? "" : tempat,
         idGuruAman,
       );
 
-      console.log("🟢 BALASAN DARI BACKEND:", hasil.data);
-
       setData(hasil.data || []);
       setLoading(false);
     } catch (error) {
       console.error("Fetch Rekap error:", error);
       if (!isRetry) {
-        // Retry tanpa merusak session login
         setTimeout(() => load(true), 1000);
       } else {
         setLoading(false);
@@ -169,8 +150,6 @@ export default function RekapPage() {
     } catch (error) {
       console.error("Fetch Riwayat error:", error);
       if (!isRetry) {
-        console.log("Mencoba ulang (retry) riwayat dalam 1 detik...");
-        // Retry tanpa merusak session login
         setTimeout(
           () =>
             handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang, true),
@@ -223,45 +202,61 @@ export default function RekapPage() {
   }
 
   async function handleShareWA() {
+    // 1. Berikan sedikit jeda untuk memastikan DOM selesai render setelah sorting
+    setIsSharing(true);
+    setShareProgress("Menyiapkan elemen...");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
     const cards = document.querySelectorAll(".rekap-card-wa");
+
     if (cards.length === 0) {
-      alert("Tidak ada data card yang ditampilkan untuk dibagikan.");
+      alert("Tidak ada data card yang ditemukan untuk dibagikan.");
+      setIsSharing(false);
       return;
     }
 
-    setIsSharing(true);
-    setShareProgress("Menyiapkan gambar...");
+    setShareProgress("Memproses gambar...");
 
     try {
       const filesArray = [];
       for (let i = 0; i < cards.length; i++) {
         setShareProgress(`Memproses foto ${i + 1} dari ${cards.length}...`);
-        const blob = await toBlob(cards[i], {
-          quality: 0.9,
-          backgroundColor: "#f8fafc",
-          pixelRatio: 2,
-        });
-        if (blob) {
-          const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
-            type: "image/jpeg",
+
+        // Tambahkan error handling per-elemen
+        try {
+          const blob = await toBlob(cards[i], {
+            quality: 0.9,
+            backgroundColor: "#f8fafc",
+            pixelRatio: 2,
+            cacheBust: true, // Membantu menghindari masalah cache gambar
           });
-          filesArray.push(file);
+
+          if (blob) {
+            const file = new File([blob], `Rekap_Magang_${i + 1}.jpg`, {
+              type: "image/jpeg",
+            });
+            filesArray.push(file);
+          }
+        } catch (err) {
+          console.error(`Gagal memproses card ke-${i}:`, err);
+          // Kita lanjutkan ke card berikutnya meski satu gagal
         }
       }
 
       if (filesArray.length === 0)
-        throw new Error("Gagal menghasilkan gambar.");
+        throw new Error("Gagal menghasilkan gambar dari card.");
+
       setShareProgress("Membuka WhatsApp...");
 
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
         await navigator.share({
           title: "Rekap Presensi Magang",
-          text: "Berikut adalah laporan rekap presensi dan monitoring siswa magang.",
+          text: "Berikut adalah laporan rekap presensi siswa.",
           files: filesArray,
         });
       } else {
         alert(
-          "Perangkat PC tidak mendukung Share massal langsung. Gambar akan didownload otomatis, silakan seret (drag) gambar tersebut ke WhatsApp Web.",
+          "Perangkat tidak mendukung Share massal. Gambar akan didownload.",
         );
         filesArray.forEach((file) => {
           const url = URL.createObjectURL(file);
@@ -274,7 +269,9 @@ export default function RekapPage() {
       }
     } catch (error) {
       console.error("Gagal membagikan ke WhatsApp:", error);
-      alert("Terjadi kesalahan saat memproses gambar.");
+      alert(
+        "Terjadi kesalahan teknis saat memproses gambar. Pastikan gambar sudah ter-load.",
+      );
     } finally {
       setIsSharing(false);
       setShareProgress("");
@@ -283,7 +280,6 @@ export default function RekapPage() {
 
   return (
     <>
-      {/* HEADER */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -316,7 +312,6 @@ export default function RekapPage() {
 
       <div className="min-h-screen bg-slate-50 space-y-8 pb-12 pt-6 sm:pt-8">
         <div className="mx-auto max-w-7xl px-3 sm:px-6">
-          {/* JUDUL & TOMBOL WA */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 sm:mb-3">
@@ -359,7 +354,6 @@ export default function RekapPage() {
             </button>
           </div>
 
-          {/* FILTER CONTROLS */}
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A] mb-6 sm:mb-10">
             <div className="flex-1 w-full sm:min-w-[200px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
@@ -369,7 +363,6 @@ export default function RekapPage() {
                 className="w-full rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3.5 text-sm sm:text-base font-semibold text-slate-700 outline-none focus:border-blue-500"
                 value={guruDipilih}
                 onChange={(e) => {
-                  console.log("🟠 GURU DIPILIH (VALUE):", e.target.value);
                   setGuruDipilih(e.target.value);
                 }}
               >
@@ -418,11 +411,13 @@ export default function RekapPage() {
                 onChange={(e) => setTempat(e.target.value)}
               >
                 <option>Semua</option>
-                {data.map((x) => (
-                  <option key={x.tempat} value={x.tempat}>
-                    {x.tempat}
-                  </option>
-                ))}
+                {data
+                  .sort((a, b) => a.tempat.localeCompare(b.tempat)) // <-- SORTING DROPDOWN LOKASI (OPSIONAL)
+                  .map((x) => (
+                    <option key={x.tempat} value={x.tempat}>
+                      {x.tempat}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -434,7 +429,6 @@ export default function RekapPage() {
             </button>
           </div>
 
-          {/* LOADING STATE */}
           {loading ? (
             <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
               <div className="relative h-12 w-12 sm:h-16 sm:w-16">
@@ -451,6 +445,7 @@ export default function RekapPage() {
                 .filter((x) =>
                   tempat === "Semua" ? true : x.tempat === tempat,
                 )
+                .sort((a, b) => a.tempat.localeCompare(b.tempat)) // <-- SORTING CARD LOKASI (A-Z)
                 .map((item, index) => (
                   <div
                     key={index}
@@ -540,7 +535,6 @@ export default function RekapPage() {
                         </div>
                       </div>
 
-                      {/* TABEL SISWA */}
                       <div className="mt-4 sm:mt-5 w-full rounded-xl sm:rounded-2xl border border-white bg-white/70 backdrop-blur-sm p-1.5 sm:p-3 shadow-inner">
                         <table className="w-full text-left border-separate border-spacing-y-1 sm:border-spacing-y-2">
                           <thead>
@@ -566,49 +560,52 @@ export default function RekapPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {item.siswa.map((s, i) => (
-                              <tr
-                                key={i}
-                                onClick={() =>
-                                  handleSiswaClick(
-                                    s.id,
-                                    s.nama,
-                                    item.guru,
-                                    item.tempat,
-                                  )
-                                }
-                                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-full cursor-pointer transition-all active:scale-[0.98] shadow-sm"
-                              >
-                                <td className="py-1.5 sm:py-3 px-1 sm:px-3 text-center rounded-l-lg sm:rounded-l-full">
-                                  <span className="inline-flex items-center justify-center w-4 h-4 sm:w-7 sm:h-7 rounded-md sm:rounded-full bg-white/20 font-bold text-[9px] sm:text-xs mx-auto">
-                                    {i + 1}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
-                                  <NamaBadge rawName={s.nama} />
-                                </td>
-                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                    {s.hadir}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-amber-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                    {s.izin}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-blue-400 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                    {s.sakit}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center rounded-r-lg sm:rounded-r-full">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-rose-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                    {s.alfa}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
+                            {/* DITAMBAHKAN SPREAD OPERATOR DAN SORTING SISWA A-Z DI BAWAH INI */}
+                            {[...item.siswa]
+                              .sort((a, b) => a.nama.localeCompare(b.nama)) // <-- SORTING SISWA (A-Z)
+                              .map((s, i) => (
+                                <tr
+                                  key={i}
+                                  onClick={() =>
+                                    handleSiswaClick(
+                                      s.id,
+                                      s.nama,
+                                      item.guru,
+                                      item.tempat,
+                                    )
+                                  }
+                                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-full cursor-pointer transition-all active:scale-[0.98] shadow-sm"
+                                >
+                                  <td className="py-1.5 sm:py-3 px-1 sm:px-3 text-center rounded-l-lg sm:rounded-l-full">
+                                    <span className="inline-flex items-center justify-center w-4 h-4 sm:w-7 sm:h-7 rounded-md sm:rounded-full bg-white/20 font-bold text-[9px] sm:text-xs mx-auto">
+                                      {i + 1}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
+                                    <NamaBadge rawName={s.nama} />
+                                  </td>
+                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                      {s.hadir}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-amber-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                      {s.izin}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-blue-400 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                      {s.sakit}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center rounded-r-lg sm:rounded-r-full">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-rose-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                      {s.alfa}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
@@ -620,7 +617,6 @@ export default function RekapPage() {
         </div>
       </div>
 
-      {/* OVERLAY GAMBAR / LIGHTBOX */}
       {selectedImage && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-2 sm:p-8"
@@ -660,7 +656,6 @@ export default function RekapPage() {
         </div>
       )}
 
-      {/* MODAL RIWAYAT PRESENSI SISWA */}
       {selectedSiswa && (
         <div
           className="fixed inset-0 z-50 overflow-hidden"
