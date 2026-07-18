@@ -12,6 +12,59 @@ import {
 
 import { getSession, isLoggedIn, logout } from "../lib/auth"; // Sesuai dengan source asli
 
+// Letakkan di bawah import, di atas fungsi utama DashboardSiswa
+const NamaBadge = ({ rawName, isGradient = false }) => {
+  if (!rawName) return null;
+
+  const match = rawName.match(/(.+?)\s*\[(.*?)\]/);
+
+  if (!match) {
+    return (
+      <span
+        className={
+          isGradient
+            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100"
+            : ""
+        }
+      >
+        {rawName}
+      </span>
+    );
+  }
+
+  const namaSiswa = match[1].trim();
+  const kelas = match[2].trim();
+
+  let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700";
+  if (kelas === "XI TJKT 1") {
+    badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700";
+  } else if (kelas === "XI TJKT 2") {
+    badgeClasses = "bg-violet-50 border-violet-400 text-violet-700";
+  }
+
+  return (
+    // inline-flex agar nama dan badge berjejer rapi ke samping secara konsisten
+    <span className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
+      {/* Nama tetap menggunakan efek gradasi aslinya */}
+      <span
+        className={
+          isGradient
+            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100"
+            : ""
+        }
+      >
+        {namaSiswa}
+      </span>
+      {/* Badge solid yang terbebas dari efek pemotongan teks parent */}
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm bg-clip-border text-current ${badgeClasses}`}
+      >
+        {kelas}
+      </span>
+    </span>
+  );
+};
+
 export default function DashboardSiswa() {
   const router = useRouter();
 
@@ -19,7 +72,12 @@ export default function DashboardSiswa() {
   const [user, setUser] = useState(null);
   const [statistik, setStatistik] = useState(null);
   const [riwayat, setRiwayat] = useState([]);
+
+  // State untuk data API
   const [presensiHariIni, setPresensiHariIni] = useState(null);
+
+  // State tambahan untuk cek preference lokal
+  const [hasPresensiTodayLocal, setHasPresensiTodayLocal] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -37,6 +95,16 @@ export default function DashboardSiswa() {
 
       setUser(session);
 
+      // --- CEK PREFERENCE LOKAL (Seperti di halaman form) ---
+      const lastPresensiDate = localStorage.getItem(
+        "magang_last_presensi_date",
+      );
+      const todayStr = new Date().toLocaleDateString("id-ID");
+      if (lastPresensiDate === todayStr) {
+        setHasPresensiTodayLocal(true);
+      }
+      // -----------------------------------------------------
+
       try {
         // Statistik
         const stat = await getStatistikSiswa(session.id);
@@ -50,12 +118,14 @@ export default function DashboardSiswa() {
           setRiwayat(history.data.slice(0, 5));
         }
 
-        // Presensi hari ini
+        // Presensi hari ini (Data dari Server API)
         const today = await getPresensiHariIni(session.idGuru);
         if (today.success) {
           const dataSaya = today.data.find((x) => x.ID_SISWA === session.id);
           if (dataSaya) {
             setPresensiHariIni(dataSaya);
+            // Optional: Backup untuk memastikan jika API bilang sudah, lokal juga ter-set
+            setHasPresensiTodayLocal(true);
           }
         }
       } catch (err) {
@@ -73,6 +143,10 @@ export default function DashboardSiswa() {
     logout();
     router.replace("/magang/login");
   }
+
+  // Helper untuk menentukan apakah presensi hari ini "SUDAH"
+  // (Menggunakan gabungan antara API dan LocalStorage)
+  const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal;
 
   // --- TAMPILAN LOADING ANIMATIF ---
   if (loading) {
@@ -136,8 +210,8 @@ export default function DashboardSiswa() {
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
               Halo,
             </h2>
-            <h3 className="mt-1 text-xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100">
-              {user?.nama}
+            <h3 className="mt-1 text-xl sm:text-3xl font-extrabold flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <NamaBadge rawName={user?.nama} isGradient={true} />
             </h3>
             <p className="mt-2 text-sm text-blue-200 max-w-md font-medium">
               Jangan lupa untuk mengirimkan bukti presensi magang harian kamu
@@ -146,37 +220,29 @@ export default function DashboardSiswa() {
           </div>
         </div>
 
-        {/* STATUS PRESENSI HARI INI (DIATAS AGAR MUDAH DIAKSES) */}
+        {/* STATUS PRESENSI HARI INI */}
         <div className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
           <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-4">
             Status Kehadiran Hari Ini
           </h2>
 
-          {presensiHariIni ? (
-            <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-5 sm:p-6 shadow-sm relative overflow-hidden">
-              <div className="absolute right-0 bottom-0 opacity-10 text-8xl pointer-events-none transform translate-x-4 translate-y-4">
-                ✅
-              </div>
-              <div className="relative z-10">
-                <div className="inline-flex items-center gap-2 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-emerald-500/30 mb-4">
+          {isSudahPresensi ? (
+            <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-emerald-500/30 mb-2">
                   ✅ Sudah Presensi
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Info
-                    label="Status"
-                    value={presensiHariIni.STATUS}
-                    textColor="text-emerald-800"
-                  />
-                  <Info
-                    label="Waktu Masuk"
-                    value={
-                      presensiHariIni.TIMESTAMP.split(" ")[1] ||
-                      presensiHariIni.TIMESTAMP
-                    }
-                    textColor="text-emerald-800"
-                  />
-                </div>
+                <p className="text-sm font-semibold text-emerald-800/80">
+                  Kamu sudah melakukan presensi hari ini. Tetap semangat
+                  menjalani kegiatan magang!
+                </p>
               </div>
+              <button
+                disabled
+                className="rounded-xl bg-slate-300 px-6 py-3 text-sm font-black text-slate-500 cursor-not-allowed whitespace-nowrap"
+              >
+                ✔️ SELESAI HARI INI
+              </button>
             </div>
           ) : (
             <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -200,13 +266,22 @@ export default function DashboardSiswa() {
 
         {/* MENU UTAMA (Tombol Sentuh Besar) */}
         <div className="grid gap-4 grid-cols-2">
-          <MenuCard
-            title="Presensi Sekarang"
-            subtitle="Kirim foto & lokasi live"
-            icon="📸"
-            bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/30"
-            onClick={() => router.push("/magang/presensi")}
-          />
+          {isSudahPresensi ? (
+            <MenuCardDisabled
+              title="Presensi Selesai"
+              subtitle="Telah diisi hari ini"
+              icon="✅"
+            />
+          ) : (
+            <MenuCard
+              title="Presensi Sekarang"
+              subtitle="Kirim foto & lokasi live"
+              icon="📸"
+              bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/30"
+              onClick={() => router.push("/magang/presensi")}
+            />
+          )}
+
           <MenuCard
             title="Riwayat Lengkap"
             subtitle="Lihat semua datamu"
@@ -365,6 +440,28 @@ function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
           {title}
         </h2>
         <p className="text-[10px] sm:text-xs text-white/90 font-medium mt-0.5">
+          {subtitle}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+// Komponen Card Menu khusus yang keadaannya dinonaktifkan (Disabled)
+function MenuCardDisabled({ title, subtitle, icon }) {
+  return (
+    <button
+      disabled
+      className="w-full text-left p-4 sm:p-5 rounded-2xl bg-slate-200 text-slate-400 flex flex-col justify-between h-32 sm:h-36 cursor-not-allowed border border-slate-300"
+    >
+      <div className="text-2xl sm:text-3xl bg-slate-300/50 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-slate-300">
+        {icon}
+      </div>
+      <div>
+        <h2 className="text-sm sm:text-lg font-black tracking-tight leading-snug">
+          {title}
+        </h2>
+        <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">
           {subtitle}
         </p>
       </div>

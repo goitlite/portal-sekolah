@@ -3,9 +3,40 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { cleanupResources } from "../lib/navigation"; // Sesuai source asli
-import { getSession, isLoggedIn } from "../lib/auth"; // Sesuai source asli
-import { savePresensi } from "../lib/api"; // Sesuai source asli
+import { cleanupResources } from "../lib/navigation";
+import { getSession, isLoggedIn } from "../lib/auth";
+import { savePresensi } from "../lib/api";
+
+const NamaBadge = ({ rawName }) => {
+  if (!rawName) return null;
+
+  const match = rawName.match(/(.+?)\s*\[(.*?)\]/);
+
+  if (!match) {
+    return <span>{rawName}</span>;
+  }
+
+  const namaSiswa = match[1].trim();
+  const kelas = match[2].trim();
+
+  let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700";
+  if (kelas === "XI TJKT 1") {
+    badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700";
+  } else if (kelas === "XI TJKT 2") {
+    badgeClasses = "bg-violet-50 border-violet-400 text-violet-700";
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <span>{namaSiswa}</span>{" "}
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm bg-clip-border ${badgeClasses}`}
+      >
+        {kelas}
+      </span>
+    </span>
+  );
+};
 
 export default function PresensiPage() {
   const router = useRouter();
@@ -19,6 +50,9 @@ export default function PresensiPage() {
   const [keterangan, setKeterangan] = useState("");
 
   const [recentPembimbing, setRecentPembimbing] = useState([]);
+
+  // State baru untuk mendeteksi apakah sudah absen hari ini
+  const [hasPresensiToday, setHasPresensiToday] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -189,6 +223,11 @@ export default function PresensiPage() {
           "magang_user_pref",
           JSON.stringify({ status, pembimbing }),
         );
+
+        // Menyimpan tanggal presensi hari ini ke localStorage
+        const todayStr = new Date().toLocaleDateString("id-ID");
+        localStorage.setItem("magang_last_presensi_date", todayStr);
+
         router.replace("/magang/dashboard_siswa");
       } else {
         alert(result.message);
@@ -224,6 +263,15 @@ export default function PresensiPage() {
       if (pref.status) setStatus(pref.status);
       if (pref.pembimbing) setPembimbing(pref.pembimbing);
 
+      // Mengecek apakah siswa sudah presensi hari ini
+      const lastPresensiDate = localStorage.getItem(
+        "magang_last_presensi_date",
+      );
+      const todayStr = new Date().toLocaleDateString("id-ID");
+      if (lastPresensiDate === todayStr) {
+        setHasPresensiToday(true);
+      }
+
       setLoading(false);
     }
 
@@ -239,7 +287,6 @@ export default function PresensiPage() {
     };
   }, [loading, user, photo]);
 
-  // --- TAMPILAN LOADING ANIMATIF ---
   if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -258,7 +305,6 @@ export default function PresensiPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
-      {/* HEADER NAVBAR */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto max-w-5xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
@@ -294,15 +340,14 @@ export default function PresensiPage() {
       </header>
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-6 sm:space-y-8">
-        {/* BANNER IDENTITAS SISWA */}
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 text-white shadow-xl border border-blue-800">
           <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
           <div className="relative">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-3 border border-amber-400/30">
               📸 Input Presensi Harian
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              {user.nama}
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <NamaBadge rawName={user.nama} />
             </h2>
 
             <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3 border-t border-white/10 pt-4">
@@ -321,16 +366,27 @@ export default function PresensiPage() {
           </div>
         </div>
 
-        {/* STATUS AWAL */}
-        <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 shadow-sm">
-          <p className="text-lg font-black text-rose-600 flex items-center gap-2">
-            🔴 Status: Belum Melakukan Presensi Hari Ini
-          </p>
-        </div>
+        {/* --- UPDATE STATUS PRESENSI --- */}
+        {hasPresensiToday ? (
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 p-5 shadow-sm transition-all duration-300">
+            <p className="text-lg font-black text-emerald-600 flex items-center gap-2">
+              ✅ Hebat! Anda Sudah Melakukan Presensi Hari Ini
+            </p>
+            <p className="text-xs text-emerald-600/80 font-bold mt-1.5 ml-8">
+              Tetap semangat! Anda dapat mengisi form lagi jika perlu melaporkan
+              kegiatan tambahan.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 shadow-sm transition-all duration-300">
+            <p className="text-lg font-black text-rose-600 flex items-center gap-2">
+              🔴 Status: Belum Melakukan Presensi Hari Ini
+            </p>
+          </div>
+        )}
+        {/* ----------------------------- */}
 
-        {/* KOTAK KAMERA & LOKASI */}
         <div className="grid gap-6 md:grid-cols-2">
-          {/* FOTO SELFIE */}
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
@@ -372,7 +428,6 @@ export default function PresensiPage() {
             </button>
           </section>
 
-          {/* DATA GEOLOCATION */}
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800">
@@ -410,14 +465,12 @@ export default function PresensiPage() {
           </section>
         </div>
 
-        {/* DATA ISIAN FORM JURNAL */}
         <section className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
           <h2 className="text-2xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
             📝 Lembar Verifikasi Aktivitas
           </h2>
 
           <div className="space-y-6">
-            {/* INPUT RADIO STATUS */}
             <div>
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider block mb-3">
                 Pilih Status Absensi Hari Ini
@@ -464,7 +517,6 @@ export default function PresensiPage() {
               </div>
             </div>
 
-            {/* INPUT PEMBIMBING */}
             <div className="flex flex-col">
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
                 Nama Pembimbing Lapangan (Instansi/DUDI)
@@ -483,7 +535,6 @@ export default function PresensiPage() {
               </datalist>
             </div>
 
-            {/* INPUT KOMPETENSI */}
             <div className="flex flex-col">
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
                 Materi/Kompetensi yang Dikerjakan Hari Ini
@@ -497,7 +548,6 @@ export default function PresensiPage() {
               />
             </div>
 
-            {/* INPUT KETERANGAN */}
             <div className="flex flex-col">
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
                 Catatan Tambahan / Keterangan{" "}
@@ -512,7 +562,6 @@ export default function PresensiPage() {
               />
             </div>
 
-            {/* BUTTON SUBMIT */}
             <div className="pt-4">
               <button
                 onClick={handleSubmit}
@@ -537,8 +586,6 @@ export default function PresensiPage() {
     </main>
   );
 }
-
-/* --- REUSABLE SUB-COMPONENTS --- */
 
 function Info({ label, value, isLight = false }) {
   return (

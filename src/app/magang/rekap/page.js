@@ -11,6 +11,38 @@ import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { toBlob } from "html-to-image";
+const NamaBadge = ({ rawName }) => {
+  if (!rawName) return null;
+
+  const match = rawName.match(/(.+?)\s*\[(.*?)\]/);
+
+  if (!match) {
+    return <span>{rawName}</span>; // Warna mengikuti parent
+  }
+
+  const namaSiswa = match[1].trim();
+  const kelas = match[2].trim();
+
+  let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700";
+  if (kelas === "XI TJKT 1") {
+    badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700";
+  } else if (kelas === "XI TJKT 2") {
+    badgeClasses = "bg-violet-50 border-violet-400 text-violet-700";
+  }
+
+  return (
+    // inline-flex memastikan badge rapi berjejer di samping teks
+    <span className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <span>{namaSiswa}</span>{" "}
+      {/* Tanpa class warna agar menyatu dengan desain asli */}
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-sm ${badgeClasses}`}
+      >
+        {kelas}
+      </span>
+    </span>
+  );
+};
 
 export default function RekapPage() {
   const [loading, setLoading] = useState(true);
@@ -553,7 +585,7 @@ export default function RekapPage() {
                                   </span>
                                 </td>
                                 <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
-                                  {s.nama}
+                                  <NamaBadge rawName={s.nama} />
                                 </td>
                                 <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
                                   <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
@@ -652,7 +684,7 @@ export default function RekapPage() {
                           Riwayat Presensi
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-none mb-1">
-                          {selectedSiswa.nama}
+                          <NamaBadge rawName={selectedSiswa.nama} />
                         </h2>
                       </div>
                       <button
