@@ -4,28 +4,36 @@ export default function Navbar() {
   return (
     <header
       className="
-        fixed
-        top-0
-        left-0
-        right-0
-        z-[2000]
+fixed
+top-0
+left-0
+right-0
+z-[2000]
 
-        h-[74px]
+h-[74px]
 
-        bg-slate-950/65
-        backdrop-blur-2xl
+bg-gradient-to-r
+from-blue-900
+via-blue-800
+to-indigo-900
 
-        border-b
-        border-white/10
+text-white
 
-        shadow-[0_8px_30px_rgba(0,0,0,0.35)]
-      "
+border-b
+border-blue-700/50
+
+shadow-lg
+
+transition-all
+"
     >
-      {/* SOFT LIGHT EFFECT */}
+      {/* SOFT LIGHT EFFECT (Disesuaikan untuk Light Mode) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-20 left-10 w-60 h-60 bg-cyan-500/10 blur-3xl rounded-full"></div>
+        <div className="absolute -top-20 left-0 w-72 h-72 bg-cyan-300/20 blur-3xl rounded-full"></div>
 
-        <div className="absolute top-0 right-0 w-44 h-44 bg-blue-500/10 blur-3xl rounded-full"></div>
+        <div className="absolute top-0 right-0 w-60 h-60 bg-blue-500/20 blur-3xl rounded-full"></div>
+
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-72 h-40 bg-sky-300/10 blur-3xl rounded-full"></div>
       </div>
 
       <div
@@ -45,60 +53,55 @@ export default function Navbar() {
         "
       >
         {/* LOGO + TITLE */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           {/* LOGO */}
-          <div className="relative shrink-0">
-            <div className="absolute inset-0 bg-yellow-400/20 blur-xl rounded-full"></div>
+          <div className="relative shrink-0 group">
+            {/* Glow effect on hover */}
+            <div className="absolute inset-0 bg-blue-400/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
-            <Image
-              src="/logo.png"
-              alt="Logo"
-              width={48}
-              height={48}
-              className="
-                relative
-                rounded-full
-                border
-                border-yellow-400/30
-                shadow-[0_0_20px_rgba(255,215,0,0.25)]
-              "
-            />
+            <div className="relative bg-white/95 p-1 sm:p-1.5 rounded-[1rem] border border-white/30 shadow-sm flex items-center justify-center transition-transform group-hover:scale-105">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={42}
+                height={42}
+                className="object-contain w-[36px] h-[36px] sm:w-[42px] sm:h-[42px]"
+              />
+            </div>
           </div>
 
           {/* TITLE */}
-          <div className="min-w-0">
+          <div className="min-w-0 flex flex-col justify-center">
             <h1
               className="
-                text-sm
-                sm:text-lg
-                md:text-2xl
+text-sm
+sm:text-lg
+md:text-xl
 
-                font-black
+font-black
+tracking-tight
 
-                bg-gradient-to-r
-                from-yellow-100
-                via-yellow-300
-                to-amber-500
+text-white
 
-                bg-clip-text
-                text-transparent
-
-                leading-tight
-                truncate
-              "
+leading-tight
+truncate
+drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]
+"
             >
               Portal TJKT SMKN 1 Teluk Kuantan
             </h1>
 
             <p
               className="
-                text-[10px]
-                md:text-xs
+                text-[9px]
+                md:text-[11px]
 
-                font-semibold
-                tracking-wide
+                font-bold
+                uppercase
+                tracking-widest
 
-                text-slate-300
+                text-slate-100
+                mt-0.5
 
                 truncate
               "
@@ -115,23 +118,32 @@ export default function Navbar() {
             md:flex
 
             items-center
-            gap-2
+            gap-2.5
 
             px-4
             py-2
 
-            rounded-2xl
+            rounded-full
 
-            bg-white/5
+            bg-emerald-50
             border
-            border-white/10
+            border-emerald-100
 
-            backdrop-blur-xl
+            shadow-sm
+            transition-all
+            hover:shadow-md
+            hover:bg-emerald-100
           "
         >
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+          {/* Dot Indicator */}
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
 
-          <span className="text-sm text-white font-medium">System Online</span>
+          <span className="text-[11px] text-emerald-700 font-extrabold tracking-widest uppercase mt-0.5">
+            System Online
+          </span>
         </div>
       </div>
     </header>
