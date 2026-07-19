@@ -16,7 +16,7 @@ export default function TambahSiswaPage() {
   const [guru, setGuru] = useState(null);
 
   const [nama, setNama] = useState("");
-  const [kelas, setKelas] = useState("XI TJKT 1");
+  const [kelas, setKelas] = useState("TJKT 1");
   const [tempatMagang, setTempatMagang] = useState("");
 
   useEffect(() => {
@@ -163,8 +163,8 @@ export default function TambahSiswaPage() {
                   onChange={(e) => setKelas(e.target.value)}
                   className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 pr-10 text-sm sm:text-base text-slate-900 font-medium focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                 >
-                  <option value="XI TJKT 1">XI TJKT 1</option>
-                  <option value="XI TJKT 2">XI TJKT 2</option>
+                  <option value="TJKT 1">TJKT 1</option>
+                  <option value="TJKT 2">TJKT 2</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                   <svg

@@ -21,9 +21,9 @@ const NamaBadge = ({ rawName }) => {
   const kelas = match[2].trim();
 
   let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700";
-  if (kelas === "XI TJKT 1") {
+  if (kelas === "TJKT 1") {
     badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700";
-  } else if (kelas === "XI TJKT 2") {
+  } else if (kelas === "TJKT 2") {
     badgeClasses = "bg-violet-50 border-violet-400 text-violet-700";
   }
 

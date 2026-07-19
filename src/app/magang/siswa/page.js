@@ -21,9 +21,9 @@ const NamaBadge = ({ rawName }) => {
   const kelas = match[2].trim();
 
   let badgeClasses = "bg-blue-50 border-blue-200 text-blue-700";
-  if (kelas === "XI TJKT 1") {
+  if (kelas === "TJKT 1") {
     badgeClasses = "bg-emerald-50 border-emerald-200 text-emerald-700";
-  } else if (kelas === "XI TJKT 2") {
+  } else if (kelas === "TJKT 2") {
     badgeClasses = "bg-violet-50 border-violet-200 text-violet-700";
   }
 
@@ -193,8 +193,8 @@ export default function DaftarSiswa() {
           /* GRID KARTU SISWA (Dibuat Lebih Rapat) */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {siswa.map((item) => {
-              const isRPL = item.NAMA.includes("XI TJKT 1");
-              const isTKJ = item.NAMA.includes("XI TJKT 2");
+              const isRPL = item.NAMA.includes("TJKT 1");
+              const isTKJ = item.NAMA.includes("TJKT 2");
               const accentColor = isRPL
                 ? "bg-emerald-500"
                 : isTKJ
