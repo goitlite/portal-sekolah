@@ -221,7 +221,20 @@ export default function DashboardSiswa() {
         </div>
 
         {/* STATUS PRESENSI HARI INI */}
-        <div className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
+        <div
+          className="
+rounded-[2rem]
+bg-gradient-to-br
+from-[#FFFDF8]
+via-[#FFF5D9]
+to-[#F7E7A7]
+p-5 sm:p-6
+border border-[#E8D28A]
+shadow-[0_10px_30px_rgba(214,178,63,0.12)]
+transition-all duration-300
+hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]
+"
+        >
           <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-4">
             Status Kehadiran Hari Ini
           </h2>
@@ -292,7 +305,17 @@ export default function DashboardSiswa() {
         </div>
 
         {/* INFORMASI & STATISTIK SISWA */}
-        <div className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
+        <div
+          className="rounded-[2rem]
+bg-gradient-to-br
+from-[#FFFDF8]
+via-[#FFF7E5]
+to-[#F8E7A5]
+border border-[#E8D28A]
+shadow-[0_10px_30px_rgba(214,178,63,0.12)]
+transition-all duration-300
+hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100"
+        >
           <h2 className="text-xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
             Statistik & Profil Kamu
           </h2>
@@ -336,7 +359,18 @@ export default function DashboardSiswa() {
         </div>
 
         {/* RIWAYAT TERBARU */}
-        <div className="rounded-[2rem] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+        <div
+          className="rounded-[2rem]
+bg-gradient-to-br
+from-[#FFFDF8]
+via-[#FFF7E5]
+to-[#F8E7A5]
+border border-[#E8D28A]
+shadow-[0_10px_30px_rgba(214,178,63,0.12)]
+overflow-hidden
+transition-all duration-300
+hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden"
+        >
           <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-white">
             <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
               ⏳ Riwayat Terakhir
@@ -419,7 +453,24 @@ function Card({ title, value, accentColor, textColor, icon }) {
       >
         {value}
       </h2>
-      <div className="absolute right-3 bottom-2 text-2xl opacity-15 sm:opacity-20 pointer-events-none select-none">
+      <div
+        className="
+ absolute
+ top-4
+ right-4
+ w-12
+ h-12
+ rounded-full
+ bg-white/80
+ border
+ border-yellow-300
+ shadow-lg
+ flex
+ items-center
+ justify-center
+ text-2xl
+"
+      >
         {icon}
       </div>
     </div>
