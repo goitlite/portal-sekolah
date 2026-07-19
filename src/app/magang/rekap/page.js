@@ -58,6 +58,10 @@ export default function RekapPage() {
   const [guruDipilih, setGuruDipilih] = useState("");
   const [guruList, setGuruList] = useState([]);
 
+  // Tambahan state untuk filter Nama dan Kelas
+  const [filterNama, setFilterNama] = useState("");
+  const [filterKelas, setFilterKelas] = useState("Semua");
+
   async function forceFreshMode() {
     if (guruDipilih) {
       load(false);
@@ -263,6 +267,43 @@ export default function RekapPage() {
     }
   }
 
+  // Mendapatkan daftar kelas unik dari data siswa untuk opsi Filter Kelas
+  const uniqueKelas = Array.from(
+    new Set(
+      data.flatMap((item) =>
+        item.siswa
+          .map((s) => {
+            const match = s.nama.match(/\[(.*?)\]/);
+            return match ? match[1].trim() : null;
+          })
+          .filter(Boolean),
+      ),
+    ),
+  ).sort();
+
+  // Memfilter data berdasarkan filter Guru, Nama, dan Kelas
+  const filteredDataToRender = data
+    .map((item) => {
+      const filteredSiswa = item.siswa.filter((s) => {
+        // Filter Pencarian Nama
+        const matchName = s.nama
+          .toLowerCase()
+          .includes(filterNama.toLowerCase());
+
+        // Filter Kelas
+        const matchClass = s.nama.match(/\[(.*?)\]/);
+        const siswaKelas = matchClass ? matchClass[1].trim() : "";
+        const matchKelas =
+          filterKelas === "Semua" || siswaKelas === filterKelas;
+
+        return matchName && matchKelas;
+      });
+      return { ...item, siswa: filteredSiswa };
+    })
+    .filter((item) => item.siswa.length > 0) // Sembunyikan lokasi magang jika siswanya 0 setelah difilter
+    .filter((item) => (tempat === "Semua" ? true : item.tempat === tempat))
+    .sort((a, b) => a.tempat.localeCompare(b.tempat));
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
@@ -349,7 +390,7 @@ export default function RekapPage() {
               </select>
             </div>
 
-            <div className="flex-1 w-full sm:min-w-[200px]">
+            <div className="flex-1 w-full sm:min-w-[150px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
                 Bulan
               </label>
@@ -362,7 +403,7 @@ export default function RekapPage() {
               </select>
             </div>
 
-            <div className="flex-1 w-full sm:min-w-[200px]">
+            <div className="flex-1 w-full sm:min-w-[150px]">
               <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
                 Lokasi Magang
               </label>
@@ -371,14 +412,47 @@ export default function RekapPage() {
                 value={tempat}
                 onChange={(e) => setTempat(e.target.value)}
               >
-                <option>Semua</option>
+                <option value="Semua">Semua Tempat</option>
                 {data
-                  .sort((a, b) => a.tempat.localeCompare(b.tempat)) // <-- SORTING DROPDOWN LOKASI (OPSIONAL)
+                  .sort((a, b) => a.tempat.localeCompare(b.tempat))
                   .map((x) => (
                     <option key={x.tempat} value={x.tempat}>
                       {x.tempat}
                     </option>
                   ))}
+              </select>
+            </div>
+
+            {/* Filter Baru: Cari Nama */}
+            <div className="flex-1 w-full sm:min-w-[150px]">
+              <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
+                Cari Siswa
+              </label>
+              <input
+                type="text"
+                placeholder="Ketik nama..."
+                className="w-full rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3.5 text-sm sm:text-base font-semibold text-slate-700 outline-none focus:border-blue-500"
+                value={filterNama}
+                onChange={(e) => setFilterNama(e.target.value)}
+              />
+            </div>
+
+            {/* Filter Baru: Filter Kelas Otomatis */}
+            <div className="flex-1 w-full sm:min-w-[150px]">
+              <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">
+                Kelas
+              </label>
+              <select
+                className="w-full rounded-lg sm:rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3.5 text-sm sm:text-base font-semibold text-slate-700 outline-none focus:border-blue-500"
+                value={filterKelas}
+                onChange={(e) => setFilterKelas(e.target.value)}
+              >
+                <option value="Semua">Semua Kelas</option>
+                {uniqueKelas.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -400,201 +474,205 @@ export default function RekapPage() {
                 Sinkronisasi Data Sistem...
               </p>
             </div>
+          ) : !guruDipilih ? (
+            <div className="mt-20 flex flex-col items-center justify-center text-slate-400 bg-white p-8 sm:p-12 rounded-3xl border border-dashed border-slate-300 max-w-2xl mx-auto shadow-sm transition-all">
+              <span className="text-6xl mb-4 opacity-80">👨‍🏫</span>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-700 mb-2 text-center tracking-tight">
+                Pilih Guru Pembimbing
+              </h3>
+              <p className="text-center font-medium text-sm sm:text-base max-w-md text-slate-500 leading-relaxed">
+                Silakan pilih{" "}
+                <span className="font-bold text-blue-600">Guru Pembimbing</span>{" "}
+                di filter atas terlebih dahulu untuk melihat data rekap presensi
+                siswa.
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8">
-              {data
-                .filter((x) =>
-                  tempat === "Semua" ? true : x.tempat === tempat,
-                )
-                .sort((a, b) => a.tempat.localeCompare(b.tempat)) // <-- SORTING CARD LOKASI (A-Z)
-                .map((item, index) => (
-                  <div
-                    key={index}
-                    className="rekap-card-wa overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-gradient-to-br from-yellow-50 via-amber-100 to-yellow-200 shadow-[0_10px_35px_rgba(180,140,20,0.18)] border border-yellow-300 flex flex-col transition-all duration-300"
-                  >
-                    {item.foto ? (
-                      <div
-                        className="relative w-full h-[220px] sm:h-[350px] lg:h-[400px] bg-white flex items-center justify-center cursor-pointer group border-b border-blue-200"
-                        onClick={() => setSelectedImage(item.foto)}
+              {filteredDataToRender.map((item, index) => (
+                <div
+                  key={index}
+                  className="rekap-card-wa overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-gradient-to-br from-yellow-50 via-amber-100 to-yellow-200 shadow-[0_10px_35px_rgba(180,140,20,0.18)] border border-yellow-300 flex flex-col transition-all duration-300"
+                >
+                  {item.foto ? (
+                    <div
+                      className="relative w-full h-[220px] sm:h-[350px] lg:h-[400px] bg-white flex items-center justify-center cursor-pointer group border-b border-blue-200"
+                      onClick={() => setSelectedImage(item.foto)}
+                    >
+                      <img
+                        src={item.foto}
+                        alt="Foto Lokasi"
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                        <span className="text-white text-xs sm:text-sm font-bold bg-blue-900/70 px-4 py-2 rounded-xl">
+                          Perbesar Foto
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex h-[200px] sm:h-[300px] flex-col items-center justify-center bg-white border-b border-blue-200 text-slate-400">
+                      <svg
+                        className="w-10 h-10 mb-2 text-slate-300"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                       >
-                        <img
-                          src={item.foto}
-                          alt="Foto Lokasi"
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                         />
-                        <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                          <span className="text-white text-xs sm:text-sm font-bold bg-blue-900/70 px-4 py-2 rounded-xl">
-                            Perbesar Foto
+                      </svg>
+                      <span className="text-xs sm:text-sm font-semibold">
+                        Belum ada foto Pembimbing Monitoring
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="p-4 sm:p-7">
+                    <div className="flex flex-row items-start justify-between gap-2 sm:gap-4 border-b border-blue-200/60 pb-3 sm:pb-4">
+                      <div className="flex-1 text-left">
+                        <div className="inline-flex items-start gap-1 sm:gap-2 bg-blue-600 text-white px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-sm mb-1.5">
+                          <span className="text-[10px] sm:text-sm mt-0.5">
+                            📍
+                          </span>
+                          <h2 className="text-[12px] sm:text-xl font-black tracking-tight leading-snug break-words">
+                            {item.tempat}
+                          </h2>
+                        </div>
+                        <div className="mt-1">
+                          <span className="inline-block bg-blue-200/80 text-blue-900 text-[9px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-md">
+                            Total: {item.siswa.length} Siswa
                           </span>
                         </div>
                       </div>
-                    ) : (
-                      <div className="flex h-[200px] sm:h-[300px] flex-col items-center justify-center bg-white border-b border-blue-200 text-slate-400">
-                        <svg
-                          className="w-10 h-10 mb-2 text-slate-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
+
+                      <div className="flex-1 text-right flex flex-col items-end">
+                        <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1 text-slate-500">
+                          <span className="text-[9px] sm:text-xs font-black uppercase tracking-wider">
+                            Pembimbing
+                          </span>
+                          <div className="flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded bg-indigo-500 text-white shadow-sm">
+                            <svg
+                              className="w-2.5 h-2.5 sm:w-4 sm:h-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2.5}
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                        <p className="text-[11px] sm:text-sm font-bold text-slate-800 leading-tight">
+                          {item.guru}
+                        </p>
+
+                        <button
+                          onClick={() => handleShareWACard(index, item.tempat)}
+                          disabled={sharingIndex === index}
+                          title="Bagikan Laporan"
+                          className="mt-1.5 sm:mt-2 p-1.5 sm:p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm transition-all focus:outline-none flex items-center justify-center active:scale-95"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <span className="text-xs sm:text-sm font-semibold">
-                          Belum ada foto
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="p-4 sm:p-7">
-                      <div className="flex flex-row items-start justify-between gap-2 sm:gap-4 border-b border-blue-200/60 pb-3 sm:pb-4">
-                        <div className="flex-1 text-left">
-                          <div className="inline-flex items-start gap-1 sm:gap-2 bg-blue-600 text-white px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-sm mb-1.5">
-                            <span className="text-[10px] sm:text-sm mt-0.5">
-                              📍
-                            </span>
-                            <h2 className="text-[12px] sm:text-xl font-black tracking-tight leading-snug break-words">
-                              {item.tempat}
-                            </h2>
-                          </div>
-                          <div className="mt-1">
-                            <span className="inline-block bg-blue-200/80 text-blue-900 text-[9px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-md">
-                              Total: {item.siswa.length} Siswa
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex-1 text-right flex flex-col items-end">
-                          <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1 text-slate-500">
-                            <span className="text-[9px] sm:text-xs font-black uppercase tracking-wider">
-                              Pembimbing
-                            </span>
-                            <div className="flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded bg-indigo-500 text-white shadow-sm">
-                              <svg
-                                className="w-2.5 h-2.5 sm:w-4 sm:h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2.5}
-                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                />
-                              </svg>
-                            </div>
-                          </div>
-                          <p className="text-[11px] sm:text-sm font-bold text-slate-800 leading-tight">
-                            {item.guru}
-                          </p>
-
-                          {/* Tombol Bagikan per Card */}
-                          <button
-                            onClick={() =>
-                              handleShareWACard(index, item.tempat)
-                            }
-                            disabled={sharingIndex === index}
-                            title="Bagikan Laporan"
-                            className="mt-1.5 sm:mt-2 p-1.5 sm:p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm transition-all focus:outline-none flex items-center justify-center active:scale-95"
-                          >
-                            {sharingIndex === index ? (
-                              <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            ) : (
-                              <svg
-                                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 sm:mt-5 w-full rounded-xl sm:rounded-2xl border border-white bg-white/70 backdrop-blur-sm p-1.5 sm:p-3 shadow-inner">
-                        <table className="w-full text-left border-separate border-spacing-y-1 sm:border-spacing-y-2">
-                          <thead>
-                            <tr className="text-slate-600">
-                              <th className="pb-1 px-1 sm:px-3 font-bold uppercase text-[9px] sm:text-xs w-6 sm:w-12 text-center">
-                                No
-                              </th>
-                              <th className="pb-1 px-1 sm:px-3 font-bold uppercase text-[9px] sm:text-xs">
-                                Nama Siswa
-                              </th>
-                              <th className="pb-1 px-0.5 sm:px-2 font-black text-emerald-600 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
-                                H
-                              </th>
-                              <th className="pb-1 px-0.5 sm:px-2 font-black text-amber-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
-                                I
-                              </th>
-                              <th className="pb-1 px-0.5 sm:px-2 font-black text-blue-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
-                                S
-                              </th>
-                              <th className="pb-1 px-0.5 sm:px-2 font-black text-rose-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
-                                A
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* DITAMBAHKAN SPREAD OPERATOR DAN SORTING SISWA A-Z DI BAWAH INI */}
-                            {[...item.siswa]
-                              .sort((a, b) => a.nama.localeCompare(b.nama)) // <-- SORTING SISWA (A-Z)
-                              .map((s, i) => (
-                                <tr
-                                  key={i}
-                                  onClick={() =>
-                                    handleSiswaClick(
-                                      s.id,
-                                      s.nama,
-                                      item.guru,
-                                      item.tempat,
-                                    )
-                                  }
-                                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-full cursor-pointer transition-all active:scale-[0.98] shadow-sm"
-                                >
-                                  <td className="py-1.5 sm:py-3 px-1 sm:px-3 text-center rounded-l-lg sm:rounded-l-full">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 sm:w-7 sm:h-7 rounded-md sm:rounded-full bg-white/20 font-bold text-[9px] sm:text-xs mx-auto">
-                                      {i + 1}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
-                                    <NamaBadge rawName={s.nama} />
-                                  </td>
-                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                      {s.hadir}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-amber-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                      {s.izin}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
-                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-blue-400 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                      {s.sakit}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center rounded-r-lg sm:rounded-r-full">
-                                    <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-rose-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
-                                      {s.alfa}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
+                          {sharingIndex === index ? (
+                            <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                          ) : (
+                            <svg
+                              className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     </div>
+
+                    <div className="mt-4 sm:mt-5 w-full rounded-xl sm:rounded-2xl border border-white bg-white/70 backdrop-blur-sm p-1.5 sm:p-3 shadow-inner">
+                      <table className="w-full text-left border-separate border-spacing-y-1 sm:border-spacing-y-2">
+                        <thead>
+                          <tr className="text-slate-600">
+                            <th className="pb-1 px-1 sm:px-3 font-bold uppercase text-[9px] sm:text-xs w-6 sm:w-12 text-center">
+                              No
+                            </th>
+                            <th className="pb-1 px-1 sm:px-3 font-bold uppercase text-[9px] sm:text-xs">
+                              Nama Siswa
+                            </th>
+                            <th className="pb-1 px-0.5 sm:px-2 font-black text-emerald-600 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
+                              H
+                            </th>
+                            <th className="pb-1 px-0.5 sm:px-2 font-black text-amber-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
+                              I
+                            </th>
+                            <th className="pb-1 px-0.5 sm:px-2 font-black text-blue-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
+                              S
+                            </th>
+                            <th className="pb-1 px-0.5 sm:px-2 font-black text-rose-500 text-center w-6 sm:w-10 text-[9px] sm:text-xs">
+                              A
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...item.siswa]
+                            .sort((a, b) => a.nama.localeCompare(b.nama))
+                            .map((s, i) => (
+                              <tr
+                                key={i}
+                                onClick={() =>
+                                  handleSiswaClick(
+                                    s.id,
+                                    s.nama,
+                                    item.guru,
+                                    item.tempat,
+                                  )
+                                }
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-full cursor-pointer transition-all active:scale-[0.98] shadow-sm"
+                              >
+                                <td className="py-1.5 sm:py-3 px-1 sm:px-3 text-center rounded-l-lg sm:rounded-l-full">
+                                  <span className="inline-flex items-center justify-center w-4 h-4 sm:w-7 sm:h-7 rounded-md sm:rounded-full bg-white/20 font-bold text-[9px] sm:text-xs mx-auto">
+                                    {i + 1}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 sm:py-3 px-1 sm:px-3 font-semibold text-[10px] sm:text-sm leading-tight whitespace-normal break-words">
+                                  <NamaBadge rawName={s.nama} />
+                                </td>
+                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                    {s.hadir}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-amber-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                    {s.izin}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-blue-400 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                    {s.sakit}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 sm:py-3 px-0.5 sm:px-2 text-center rounded-r-lg sm:rounded-r-full">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-full bg-rose-500 text-white font-bold text-[9px] sm:text-sm mx-auto shadow-sm">
+                                    {s.alfa}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
           )}
         </div>
