@@ -51,8 +51,6 @@ export default function PresensiPage() {
   const [keterangan, setKeterangan] = useState("");
 
   const [recentPembimbing, setRecentPembimbing] = useState([]);
-
-  // State baru untuk mendeteksi apakah sudah absen hari ini
   const [hasPresensiToday, setHasPresensiToday] = useState(false);
 
   const videoRef = useRef(null);
@@ -65,7 +63,7 @@ export default function PresensiPage() {
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
   const [accuracy, setAccuracy] = useState("-");
-  const [alamat, setAlamat] = useState("-"); // State baru untuk menyimpan alamat dari OpenStreetMap
+  const [alamat, setAlamat] = useState("-");
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,33 +71,68 @@ export default function PresensiPage() {
   const streamRef = useRef(null);
   const watchIdRef = useRef(null);
 
+  // PERBAIKAN 1: Sistem Fallback & Pengecekan Akses Kamera yang Jauh Lebih Stabil
   async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert(
+        "Browser memblokir fitur kamera. Syarat wajib: Akses web ini menggunakan HTTPS atau dari localhost.",
+      );
+      return;
+    }
+
+    // Bersihkan stream lama agar tidak bentrok
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    setCameraReady(false);
+
     try {
+      // Coba akses kamera depan dengan opsi "ideal" (mencegah OverconstrainedError)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "user",
+          facingMode: { ideal: "user" },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
         audio: false,
       });
 
-      streamRef.current = stream;
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
-
-      videoRef.current.onloadedmetadata = async () => {
-        try {
-          await videoRef.current.play();
-          setCameraReady(true);
-        } catch (e) {
-          console.error("Gagal memutar video:", e);
-        }
-      };
+      attachStream(stream);
     } catch (err) {
-      console.error(err);
-      alert("Kamera tidak dapat dibuka.");
+      console.warn("Kamera depan HD gagal diakses, mencoba mode dasar...", err);
+      try {
+        // Fallback: Jika HP menolak resolusi HD atau facingMode, panggil mode paling dasar
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+
+        attachStream(fallbackStream);
+      } catch (fallbackErr) {
+        console.error("Semua percobaan akses kamera gagal:", fallbackErr);
+        alert(
+          "Akses kamera ditolak oleh HP. Pastikan izin kamera telah diberikan di pengaturan browser.",
+        );
+      }
     }
+  }
+
+  // Helper function untuk menyambungkan stream ke elemen video
+  function attachStream(stream) {
+    streamRef.current = stream;
+    if (!videoRef.current) return;
+    videoRef.current.srcObject = stream;
+
+    videoRef.current.onloadedmetadata = async () => {
+      try {
+        await videoRef.current.play();
+        setCameraReady(true);
+      } catch (e) {
+        console.error("Gagal autoplay video:", e);
+      }
+    };
   }
 
   function addWatermark(imageData) {
@@ -128,28 +161,21 @@ export default function PresensiPage() {
           hour12: false,
         });
 
-        // ==========================================
-        // 1. WATERMARK ATAS KANAN (ALAMAT & LOKASI)
-        // ==========================================
         const topBoxW = 480;
         const topBoxH = 140;
-        const topBoxX = img.width - topBoxW - 20; // 20px dari tepi kanan
-        const topBoxY = 20; // 20px dari tepi atas
+        const topBoxX = img.width - topBoxW - 20;
+        const topBoxY = 20;
 
-        // Background transparan yang sama dengan watermark bawah
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(topBoxX, topBoxY, topBoxW, topBoxH);
 
-        // Icon Map
         ctx.font = "34px Arial";
         ctx.fillStyle = "#FFFFFF";
         ctx.fillText("📍", topBoxX + 20, topBoxY + 50);
 
-        // Judul Lokasi
         ctx.font = "bold 18px Arial";
         ctx.fillText("LOKASI SAAT INI:", topBoxX + 65, topBoxY + 45);
 
-        // Teks Alamat (dengan fungsi auto-wrap ke baris baru)
         ctx.font = "16px Arial";
         const alamatText = alamat !== "-" ? alamat : "Mencari detail alamat...";
         const maxTextWidth = topBoxW - 85;
@@ -170,11 +196,8 @@ export default function PresensiPage() {
             line = testLine;
           }
         }
-        ctx.fillText(line, topBoxX + 65, textY); // Draw sisa teks
+        ctx.fillText(line, topBoxX + 65, textY);
 
-        // ==========================================
-        // 2. WATERMARK BAWAH (DATA SISWA & BARCODE)
-        // ==========================================
         const boxX = 20;
         const boxY = img.height - 230;
         const boxW = img.width - 40;
@@ -272,6 +295,13 @@ export default function PresensiPage() {
     const image = canvas.toDataURL("image/jpeg", 0.9);
     setPhoto(image);
 
+    // Matikan stream setelah difoto untuk hemat RAM/Baterai
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraReady(false);
+
     if (navigator.geolocation) {
       setGpsLoading(true);
 
@@ -284,7 +314,6 @@ export default function PresensiPage() {
           setLongitude(lon);
           setAccuracy(Math.round(pos.coords.accuracy) + " meter");
 
-          // Panggil API OpenStreetMap (Nominatim) untuk reverse geocoding
           fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
           )
@@ -435,14 +464,12 @@ export default function PresensiPage() {
     loadPage();
   }, [router]);
 
+  // PERBAIKAN 2: Kosongkan array dependency agar cleanup tidak mematikan kamera saat foto diambil
   useEffect(() => {
-    if (!loading && user && !photo) {
-      startCamera();
-    }
     return () => {
       cleanup();
     };
-  }, [loading, user, photo]);
+  }, []); // <-- Fix utama pembatalan render kamera
 
   if (loading || !user) {
     return (
@@ -590,15 +617,32 @@ export default function PresensiPage() {
 
               <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
                 {!photo ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    controls={false}
-                    disablePictureInPicture
-                    className="h-full w-full object-cover transform -scale-x-100"
-                  />
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      controls={false}
+                      disablePictureInPicture
+                      className="h-full w-full object-cover transform -scale-x-100"
+                    />
+                    {/* PERBAIKAN 3: Tombol manual di atas video agar izin selalu tereksekusi oleh klik siswa */}
+                    {!cameraReady && (
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-4 text-center">
+                        <div className="mb-3 text-3xl">📷</div>
+                        <button
+                          onClick={startCamera}
+                          className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-3 text-sm font-black text-white shadow-lg animate-pulse hover:brightness-110 active:scale-95 transition-all"
+                        >
+                          Ketuk Untuk Aktifkan Kamera
+                        </button>
+                        <p className="mt-3 text-[10px] font-semibold text-slate-300">
+                          Wajib ditekan manual untuk izin keamanan HP
+                        </p>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <img
                     src={photo}
@@ -809,7 +853,6 @@ function Info({ label, value, isLight = false }) {
 }
 
 function GpsCard({ label, value, icon, isLoading = false }) {
-  // Ubah value menjadi string dengan aman untuk mencegah TypeError
   const safeValue = String(value);
 
   return (
