@@ -235,6 +235,14 @@ export default function TambahSiswaPage() {
                   <option value="TJKT 1">TJKT 1</option>
                   <option value="TJKT 2">TJKT 2</option>
                   <option value="TDPIB">TDPIB</option>
+                  <option value="TE">TAV</option>
+                  <option value="GEO">GEO</option>
+                  <option value="TBSM1">TBSM1</option>
+                  <option value="TBSM2">TBSM2</option>
+                  <option value="TAB">TAB</option>
+                  <option value="TKRO">TKRO</option>
+                  <option value="TPL">TPL</option>
+                  <option value="TDPIB">TITL</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                   <svg
