@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-import { addSiswa } from "../lib/api";
+import { addSiswa, getTempatMagangGuru } from "../lib/api";
 import { getSession, isLoggedIn } from "../lib/auth";
 
 export default function TambahSiswaPage() {
@@ -18,6 +18,14 @@ export default function TambahSiswaPage() {
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("TJKT 1");
   const [tempatMagang, setTempatMagang] = useState("");
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [recentPlaces, setRecentPlaces] = useState([]);
+  const [inputTempatBaru, setInputTempatBaru] = useState("");
+
+  const [daftarTempatDb, setDaftarTempatDb] = useState([]);
+  const [loadingDb, setLoadingDb] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -34,24 +42,90 @@ export default function TambahSiswaPage() {
 
     setGuru(session);
     setLoading(false);
+
+    const storedPlaces = localStorage.getItem("recentTempatMagang");
+    if (storedPlaces) {
+      try {
+        setRecentPlaces(JSON.parse(storedPlaces));
+      } catch (e) {
+        console.error("Gagal membaca history", e);
+      }
+    }
   }, [router]);
+
+  useEffect(() => {
+    if (isModalOpen && guru?.id) {
+      fetchTempatMagangDb();
+    }
+  }, [isModalOpen, guru]);
+
+  // === PERBAIKAN UTAMA: EKSTRAKSI DATA OBJEK MENJADI TEKS ===
+  async function fetchTempatMagangDb() {
+    setLoadingDb(true);
+    try {
+      const res = await getTempatMagangGuru(guru.id);
+
+      if (res.success && res.data) {
+        const rawArray = Array.isArray(res.data) ? res.data : [res.data];
+
+        // EKSTRAKSI KHUSUS UNTUK OBJEK { tempat, jumlah }
+        const normalizedData = rawArray
+          .map((item) => {
+            if (!item) return "";
+            if (typeof item === "object") {
+              // Ambil properti 'tempat' atau 'TEMPAT'
+              return item.tempat || item.TEMPAT || item.nama || "";
+            }
+            return String(item);
+          })
+          .filter((item) => typeof item === "string" && item.trim() !== "");
+
+        const uniqueData = [...new Set(normalizedData)];
+        setDaftarTempatDb(uniqueData);
+      }
+    } catch (error) {
+      console.error("Gagal menarik data tempat magang", error);
+    }
+    setLoadingDb(false);
+  }
+
+  const saveToLocalStorage = (newPlace) => {
+    if (!newPlace) return;
+    let currentPlaces = [...recentPlaces];
+    currentPlaces = currentPlaces.filter((p) => p !== newPlace);
+    currentPlaces.unshift(newPlace);
+    if (currentPlaces.length > 8) {
+      currentPlaces = currentPlaces.slice(0, 8);
+    }
+    setRecentPlaces(currentPlaces);
+    localStorage.setItem("recentTempatMagang", JSON.stringify(currentPlaces));
+  };
+
+  const handlePilihTempat = (place) => {
+    setTempatMagang(place);
+    setIsModalOpen(false);
+  };
+
+  const handleGunakanTempatBaru = () => {
+    if (inputTempatBaru.trim() === "") return;
+    setTempatMagang(inputTempatBaru.trim().toUpperCase());
+    setInputTempatBaru("");
+    setIsModalOpen(false);
+  };
 
   async function simpanSiswa() {
     if (nama.trim() === "") {
       alert("Nama siswa belum diisi.");
       return;
     }
-
     if (tempatMagang.trim() === "") {
       alert("Tempat magang belum diisi.");
       return;
     }
 
     setSaving(true);
-
     try {
       const namaSiswaDenganKelas = `${nama.trim()} [${kelas}]`;
-
       const result = await addSiswa({
         nama: namaSiswaDenganKelas,
         idGuru: guru.id,
@@ -60,6 +134,7 @@ export default function TambahSiswaPage() {
       });
 
       if (result.success) {
+        saveToLocalStorage(tempatMagang);
         alert("Siswa berhasil ditambahkan.\n\nID Siswa : " + result.data.id);
         router.replace("/magang/siswa");
       } else {
@@ -69,14 +144,12 @@ export default function TambahSiswaPage() {
       console.error(err);
       alert("Terjadi kesalahan.");
     }
-
     setSaving(false);
   }
 
-  // --- TAMPILAN LOADING ---
   if (loading || !guru) {
     return (
-      <main className="min-h-screen bg-slate-50 font-sans flex items-center justify-center">
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center justify-center text-slate-500">
           <div className="relative h-12 w-12 sm:h-14 sm:w-14">
             <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
@@ -89,8 +162,7 @@ export default function TambahSiswaPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 font-sans selection:bg-blue-200 flex flex-col">
-      {/* HEADER FIXED */}
+    <main className="min-h-screen bg-slate-50 font-sans selection:bg-blue-200 flex flex-col relative">
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -121,7 +193,6 @@ export default function TambahSiswaPage() {
         </div>
       </header>
 
-      {/* KONTEN UTAMA */}
       <div className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
           <div className="mb-6 sm:mb-8 border-b border-slate-100 pb-5">
@@ -138,7 +209,6 @@ export default function TambahSiswaPage() {
           </div>
 
           <div className="space-y-5 sm:space-y-6">
-            {/* Input Nama (Dengan otomatis toUpperCase) */}
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
                 Nama Lengkap
@@ -152,7 +222,6 @@ export default function TambahSiswaPage() {
               />
             </div>
 
-            {/* Input Kelas */}
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
                 Kelas
@@ -179,22 +248,31 @@ export default function TambahSiswaPage() {
               </div>
             </div>
 
-            {/* Input Tempat Magang (Dengan otomatis toUpperCase) */}
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
                 Tempat Magang (DUDI)
               </label>
-              <input
-                type="text"
-                value={tempatMagang}
-                onChange={(e) => setTempatMagang(e.target.value.toUpperCase())}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
-                placeholder="CONTOH: PT. TELKOM INDONESIA"
-              />
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="w-full text-left rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all flex items-center justify-between group hover:bg-slate-100"
+              >
+                <span
+                  className={
+                    tempatMagang
+                      ? "text-slate-900 font-medium"
+                      : "text-slate-400"
+                  }
+                >
+                  {tempatMagang ? tempatMagang : "📍 Pilih Tempat Magang"}
+                </span>
+                <span className="text-slate-400 group-hover:text-blue-500 transition-colors">
+                  ▼
+                </span>
+              </button>
             </div>
           </div>
 
-          {/* Tombol Aksi */}
           <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
             <button
               onClick={() => router.back()}
@@ -202,7 +280,6 @@ export default function TambahSiswaPage() {
             >
               Batal
             </button>
-
             <button
               onClick={simpanSiswa}
               disabled={saving}
@@ -242,6 +319,148 @@ export default function TambahSiswaPage() {
           </div>
         </div>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm transition-opacity p-0 sm:p-4">
+          <div className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800">
+                Pilih Tempat Magang
+              </h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-100 rounded-full p-1.5 transition-colors"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-8 flex-1">
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 mb-3">
+                  <span>⭐</span> Terakhir Digunakan
+                </h4>
+                {recentPlaces.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {recentPlaces.map((place, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handlePilihTempat(place)}
+                        className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs sm:text-sm font-medium border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-colors text-left"
+                      >
+                        {place}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 italic bg-slate-50 p-3 rounded-xl border border-dashed border-slate-200">
+                    Belum ada riwayat tempat magang tersimpan di perangkat ini.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 flex items-center justify-between mb-3">
+                  <span className="flex items-center gap-1.5">
+                    🔍 Daftar dari Database
+                  </span>
+                  {daftarTempatDb.length > 0 && (
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                      {daftarTempatDb.length} Lokasi
+                    </span>
+                  )}
+                </h4>
+
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
+                  placeholder="Cari / Filter tempat magang..."
+                  className="w-full mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all"
+                />
+
+                {loadingDb ? (
+                  <div className="p-6 text-center">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mb-2"></div>
+                    <p className="text-xs font-medium text-slate-500">
+                      Mengambil data dari server...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {daftarTempatDb.length > 0 ? (
+                      daftarTempatDb
+                        // === PERLINDUNGAN EKSTRA: String() mencegah .toUpperCase() error ===
+                        .filter((item) =>
+                          String(item).toUpperCase().includes(searchQuery),
+                        )
+                        .map((item, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handlePilihTempat(String(item))}
+                            className="w-full text-left p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-sm font-medium text-slate-700 border border-slate-100 transition-all flex items-center justify-between group"
+                          >
+                            <span className="truncate pr-2">
+                              {String(item)}
+                            </span>
+                            <span className="text-[10px] text-blue-600 opacity-0 group-hover:opacity-100 font-bold bg-blue-100 px-2 py-1 rounded-md shrink-0">
+                              Pilih
+                            </span>
+                          </button>
+                        ))
+                    ) : (
+                      <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-sm font-medium text-slate-500">
+                          Belum ada siswa terdaftar
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Data DUDI akan muncul setelah siswa ditambahkan.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 mb-3">
+                  Atau ketik tempat magang baru
+                </h4>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={inputTempatBaru}
+                    onChange={(e) =>
+                      setInputTempatBaru(e.target.value.toUpperCase())
+                    }
+                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                    placeholder="CONTOH: PT MAJU BERSAMA"
+                  />
+                  <button
+                    onClick={handleGunakanTempatBaru}
+                    disabled={inputTempatBaru.trim() === ""}
+                    className="rounded-xl bg-slate-800 px-5 py-3 text-sm font-bold text-white hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Gunakan
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
