@@ -26,7 +26,7 @@ export default function MonitoringPage() {
 
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
-  const [alamat, setAlamat] = useState("-"); // State baru untuk Alamat
+  const [alamat, setAlamat] = useState("-");
   const [accuracy, setAccuracy] = useState("-");
   const [gpsSuccess, setGpsSuccess] = useState(false);
 
@@ -36,39 +36,84 @@ export default function MonitoringPage() {
   const canvasRef = useRef(null);
   const watermarkCanvasRef = useRef(null);
 
+  // PENAMBAHAN REF UNTUK STABILITAS KAMERA
+  const streamRef = useRef(null);
+
   const [tempatMagang, setTempatMagang] = useState("");
 
   // FUNGSI BACK DENGAN STOP KAMERA
   function handleBack() {
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
     }
     router.replace("/magang/guru");
   }
 
-  // FUNGSI KAMERA (Kamera Belakang/Environment)
+  // PERBAIKAN: Sistem Fallback & Pengecekan Akses Kamera yang Jauh Lebih Stabil
   async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert(
+        "Browser memblokir fitur kamera. Syarat wajib: Akses web ini menggunakan HTTPS atau dari localhost.",
+      );
+      return;
+    }
+
+    // Bersihkan stream lama agar tidak bentrok
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    setCameraReady(false);
+
     try {
+      // Coba akses kamera BELAKANG (environment) dengan opsi HD
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment",
+          facingMode: { ideal: "environment" },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
         audio: false,
       });
 
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
+      attachStream(stream);
+    } catch (err) {
+      console.warn(
+        "Kamera belakang HD gagal diakses, mencoba mode dasar...",
+        err,
+      );
+      try {
+        // Fallback: Jika HP menolak resolusi HD atau facingMode, panggil mode paling dasar
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
 
-      videoRef.current.onloadedmetadata = async () => {
+        attachStream(fallbackStream);
+      } catch (fallbackErr) {
+        console.error("Semua percobaan akses kamera gagal:", fallbackErr);
+        alert(
+          "Akses kamera ditolak oleh HP. Pastikan izin kamera telah diberikan di pengaturan browser.",
+        );
+      }
+    }
+  }
+
+  // Helper function untuk menyambungkan stream ke elemen video
+  function attachStream(stream) {
+    streamRef.current = stream;
+    if (!videoRef.current) return;
+    videoRef.current.srcObject = stream;
+
+    videoRef.current.onloadedmetadata = async () => {
+      try {
         await videoRef.current.play();
         setCameraReady(true);
-      };
-    } catch (err) {
-      console.log(err);
-      alert("Kamera tidak dapat dibuka.");
-    }
+      } catch (e) {
+        console.error("Gagal autoplay video:", e);
+      }
+    };
   }
 
   // FUNGSI TAMBAH WATERMARK
@@ -98,7 +143,6 @@ export default function MonitoringPage() {
           hour12: false,
         });
 
-        // Ukuran box diperbesar untuk menampung baris alamat
         const boxX = 20;
         const boxY = img.height - 250;
         const boxW = img.width - 40;
@@ -127,24 +171,20 @@ export default function MonitoringPage() {
 
         ctx.font = "18px Arial";
 
-        // KOLOM 1
         ctx.fillText("Guru : " + user.nama, col1, startY);
         ctx.fillText("Tempat : " + tempatMagang, col1, startY + 30);
         ctx.fillText("Status : " + status, col1, startY + 60);
 
-        // KOLOM 2
         ctx.fillText("Hari : " + hari, col2, startY);
         ctx.fillText("Tanggal : " + tanggal, col2, startY + 30);
         ctx.fillText("Jam : " + jam + " WIB", col2, startY + 60);
 
-        // BARIS GABUNGAN UNTUK LOKASI DI BAWAH KOLOM
         ctx.fillText(
           "Koordinat : " + latitude + ", " + longitude,
           col1,
           startY + 90,
         );
 
-        // Membatasi teks alamat agar tidak menabrak QR Code
         const limit = 60;
         const textAlamat =
           alamat.length > limit ? alamat.substring(0, limit) + "..." : alamat;
@@ -183,10 +223,9 @@ export default function MonitoringPage() {
       setPhotoSuccess(false);
       setLatitude("-");
       setLongitude("-");
-      setAlamat("-"); // Reset Alamat
+      setAlamat("-");
       setAccuracy("-");
       setGpsSuccess(false);
-      setCameraReady(false);
       await startCamera();
       return;
     }
@@ -196,6 +235,11 @@ export default function MonitoringPage() {
     if (!video || !canvas) return;
 
     if (video.readyState !== 4) {
+      alert("Kamera masih mempersiapkan gambar.");
+      return;
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
       alert("Kamera belum siap.");
       return;
     }
@@ -209,14 +253,17 @@ export default function MonitoringPage() {
     setPhoto(image);
     setPhotoSuccess(true);
 
-    const tracks = video.srcObject?.getTracks();
-    tracks?.forEach((track) => track.stop());
-    video.srcObject = null;
+    // Matikan stream setelah difoto untuk hemat RAM/Baterai
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraReady(false);
 
     getLocation();
   }
 
-  // FUNGSI GPS (Ditambah Reverse Geocoding via Nominatim)
+  // FUNGSI GPS
   function getLocation() {
     if (!navigator.geolocation) {
       alert("GPS tidak didukung.");
@@ -236,7 +283,6 @@ export default function MonitoringPage() {
         setGpsSuccess(true);
         setGpsLoading(false);
 
-        // Fetch nama jalan / alamat dari koordinat
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
@@ -303,18 +349,16 @@ export default function MonitoringPage() {
 
       if (result.success) {
         alert("Monitoring berhasil disimpan.");
-        if (videoRef.current?.srcObject) {
-          videoRef.current.srcObject
-            .getTracks()
-            .forEach((track) => track.stop());
-          videoRef.current.srcObject = null;
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
         }
         setPhoto("");
         setPhotoSuccess(false);
         setKeterangan("");
         setLatitude("-");
         setLongitude("-");
-        setAlamat("-"); // Reset Alamat
+        setAlamat("-");
         setAccuracy("-");
         setGpsSuccess(false);
         window.location.href = "/magang/guru";
@@ -351,20 +395,20 @@ export default function MonitoringPage() {
       setLoading(false);
     }
     init();
-  }, []);
+  }, [router]);
 
+  // KODE AUTO-START KAMERA TELAH DIHAPUS
+  // Sekarang tombol "Ketuk Untuk Aktifkan Kamera" akan selalu muncul di awal.
+
+  // Kosongkan array dependency agar cleanup mati dengan sempurna hanya saat pindah halaman
   useEffect(() => {
-    if (!loading && user && !photo) {
-      startCamera();
-    }
     return () => {
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [loading, user, photo]);
+  }, []);
 
-  // --- TAMPILAN LOADING ANIMATIF ---
   if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -381,7 +425,6 @@ export default function MonitoringPage() {
     );
   }
 
-  // GET CURRENT DATE/TIME
   const now = new Date();
   const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
   const tanggal = now.toLocaleDateString("id-ID", {
@@ -397,7 +440,6 @@ export default function MonitoringPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 pb-12">
-      {/* HEADER NAVBAR */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
@@ -429,7 +471,6 @@ export default function MonitoringPage() {
         </div>
       </header>
 
-      {/* HERO BANNER GURU */}
       <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-6 sm:pt-8 space-y-6 sm:space-y-8">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-xl border border-blue-800">
           <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
@@ -448,7 +489,6 @@ export default function MonitoringPage() {
               <Info label="TEMPAT MAGANG" value={tempatMagang} isLight={true} />
             </div>
 
-            {/* WAKTU MONITORING */}
             <div className="mt-4 grid gap-3 grid-cols-3">
               <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
@@ -478,9 +518,7 @@ export default function MonitoringPage() {
           </div>
         </div>
 
-        {/* KAMERA & GPS LAYOUT */}
         <div className="grid gap-6 md:grid-cols-2">
-          {/* KAMERA */}
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
@@ -489,13 +527,30 @@ export default function MonitoringPage() {
 
               <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
                 {!photo ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Tombol manual di atas video agar izin selalu tereksekusi bila ada kendala akses otomatis */}
+                    {!cameraReady && (
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-4 text-center">
+                        <div className="mb-3 text-3xl">📷</div>
+                        <button
+                          onClick={startCamera}
+                          className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-3 text-sm font-black text-white shadow-lg animate-pulse hover:brightness-110 active:scale-95 transition-all"
+                        >
+                          Ketuk Untuk Aktifkan Kamera
+                        </button>
+                        <p className="mt-3 text-[10px] font-semibold text-slate-300">
+                          Wajib ditekan manual untuk izin keamanan HP
+                        </p>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <img
                     src={photo}
@@ -503,7 +558,6 @@ export default function MonitoringPage() {
                     className="w-full h-full object-cover"
                   />
                 )}
-                {/* Canvas hidden untuk processing watermark */}
                 <canvas ref={canvasRef} className="hidden" />
                 <canvas ref={watermarkCanvasRef} className="hidden" />
               </div>
@@ -531,7 +585,6 @@ export default function MonitoringPage() {
             </button>
           </section>
 
-          {/* GPS INFO */}
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800 mb-1">
@@ -552,7 +605,6 @@ export default function MonitoringPage() {
                   value={longitude}
                   icon="📍"
                 />
-                {/* Komponen Baru untuk Alamat */}
                 <GpsCard
                   label="Alamat Lokasi"
                   value={alamat}
@@ -592,14 +644,12 @@ export default function MonitoringPage() {
           </section>
         </div>
 
-        {/* DATA MONITORING FORM */}
         <section className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
           <h2 className="text-2xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
             📝 Laporan Aktivitas
           </h2>
 
           <div className="space-y-6">
-            {/* STATUS MONITORING (TOUCH BLOCKS) */}
             <div>
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider block mb-3">
                 Kondisi Lapangan Siswa
@@ -641,7 +691,6 @@ export default function MonitoringPage() {
               </div>
             </div>
 
-            {/* KETERANGAN KONDISI */}
             <div className="flex flex-col">
               <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
                 Keterangan Monitoring <span className="text-rose-500">*</span>
@@ -655,7 +704,6 @@ export default function MonitoringPage() {
               />
             </div>
 
-            {/* TOMBOL SIMPAN */}
             <div className="pt-4">
               <button
                 onClick={handleSaveMonitoring}
@@ -702,7 +750,6 @@ function Info({ label, value, isLight = false }) {
   );
 }
 
-// SUDAH DIPERBAIKI: Konversi string aman untuk .includes()
 function GpsCard({ label, value, icon, isLoading = false }) {
   const safeValue = String(value);
 

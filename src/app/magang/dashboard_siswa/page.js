@@ -8,22 +8,22 @@ import {
   getStatistikSiswa,
   getRiwayatSiswa,
   getPresensiHariIni,
-} from "../lib/api"; // Sesuai dengan source asli
+} from "../lib/api"; // Sesuai dengan source asli[cite: 5]
 
-import { getSession, isLoggedIn, logout } from "../lib/auth"; // Sesuai dengan source asli
+import { getSession, isLoggedIn, logout } from "../lib/auth"; // Sesuai dengan source asli[cite: 5]
 
-// Letakkan di bawah import, di atas fungsi utama DashboardSiswa
+// Letakkan di bawah import, di atas fungsi utama DashboardSiswa[cite: 5]
 const NamaBadge = ({ rawName, isGradient = false }) => {
   if (!rawName) return null;
 
-  const match = rawName.match(/(.+?)\s*\[(.*?)\]/);
+  const match = rawName.match(/(.+?)\s*\[(.*?)\]/); //[cite: 5]
 
   if (!match) {
     return (
       <span
         className={
           isGradient
-            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100"
+            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100" //[cite: 5]
             : ""
         }
       >
@@ -32,32 +32,32 @@ const NamaBadge = ({ rawName, isGradient = false }) => {
     );
   }
 
-  const namaSiswa = match[1].trim();
-  const kelas = match[2].trim();
+  const namaSiswa = match[1].trim(); //[cite: 5]
+  const kelas = match[2].trim(); //[cite: 5]
 
-  let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700";
+  let badgeClasses = "bg-slate-100 border-slate-300 text-slate-700"; //[cite: 5]
   if (kelas === "TJKT 1") {
-    badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700";
+    badgeClasses = "bg-emerald-50 border-emerald-400 text-emerald-700"; //[cite: 5]
   } else if (kelas === "TJKT 2") {
-    badgeClasses = "bg-violet-50 border-violet-400 text-violet-700";
+    badgeClasses = "bg-violet-50 border-violet-400 text-violet-700"; //[cite: 5]
   }
 
   return (
-    // inline-flex agar nama dan badge berjejer rapi ke samping secara konsisten
+    // inline-flex agar nama dan badge berjejer rapi ke samping secara konsisten[cite: 5]
     <span className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
-      {/* Nama tetap menggunakan efek gradasi aslinya */}
+      {/* Nama tetap menggunakan efek gradasi aslinya[cite: 5] */}
       <span
         className={
           isGradient
-            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100"
+            ? "text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100" //[cite: 5]
             : ""
         }
       >
         {namaSiswa}
       </span>
-      {/* Badge solid yang terbebas dari efek pemotongan teks parent */}
+      {/* Badge solid yang terbebas dari efek pemotongan teks parent[cite: 5] */}
       <span
-        className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm bg-clip-border text-current ${badgeClasses}`}
+        className={`inline-flex items-center px-1.5 py-0.5 border rounded-md text-[9px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm bg-clip-border text-current ${badgeClasses}`} //[cite: 5]
       >
         {kelas}
       </span>
@@ -66,90 +66,134 @@ const NamaBadge = ({ rawName, isGradient = false }) => {
 };
 
 export default function DashboardSiswa() {
-  const router = useRouter();
+  const router = useRouter(); //[cite: 5]
+  const CACHE_KEY = "dashboardSiswaCache"; // Kunci cache khusus siswa
 
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [statistik, setStatistik] = useState(null);
-  const [riwayat, setRiwayat] = useState([]);
+  const [loading, setLoading] = useState(true); //[cite: 5]
+  const [user, setUser] = useState(null); //[cite: 5]
+  const [statistik, setStatistik] = useState(null); //[cite: 5]
+  const [riwayat, setRiwayat] = useState([]); //[cite: 5]
 
-  // State untuk data API
-  const [presensiHariIni, setPresensiHariIni] = useState(null);
+  // State untuk data API[cite: 5]
+  const [presensiHariIni, setPresensiHariIni] = useState(null); //[cite: 5]
 
-  // State tambahan untuk cek preference lokal
-  const [hasPresensiTodayLocal, setHasPresensiTodayLocal] = useState(false);
+  // State tambahan untuk cek preference lokal[cite: 5]
+  const [hasPresensiTodayLocal, setHasPresensiTodayLocal] = useState(false); //[cite: 5]
 
   useEffect(() => {
     async function loadDashboard() {
       if (!isLoggedIn()) {
-        router.replace("/magang/login");
+        //[cite: 5]
+        router.replace("/magang/login"); //[cite: 5]
         return;
       }
 
-      const session = getSession();
+      const session = getSession(); //[cite: 5]
 
       if (!session || session.role !== "siswa") {
-        router.replace("/magang/login");
+        //[cite: 5]
+        router.replace("/magang/login"); //[cite: 5]
         return;
       }
 
-      setUser(session);
+      setUser(session); //[cite: 5]
 
-      // --- CEK PREFERENCE LOKAL (Seperti di halaman form) ---
+      // --- CEK PREFERENCE LOKAL (Seperti di halaman form) ---[cite: 5]
       const lastPresensiDate = localStorage.getItem(
-        "magang_last_presensi_date",
+        "magang_last_presensi_date", //[cite: 5]
       );
-      const todayStr = new Date().toLocaleDateString("id-ID");
+      const todayStr = new Date().toLocaleDateString("id-ID"); //[cite: 5]
       if (lastPresensiDate === todayStr) {
-        setHasPresensiTodayLocal(true);
+        //[cite: 5]
+        setHasPresensiTodayLocal(true); //[cite: 5]
       }
-      // -----------------------------------------------------
+      // -----------------------------------------------------[cite: 5]
 
+      // 1. LOAD DATA DARI CACHE (INSTAN / TANPA SPINNER)
+      const cachedDataStr = localStorage.getItem(CACHE_KEY);
+      if (cachedDataStr) {
+        try {
+          const cachedData = JSON.parse(cachedDataStr);
+          setStatistik(cachedData.statistik);
+          setRiwayat(cachedData.riwayat);
+          setPresensiHariIni(cachedData.presensiHariIni);
+          setLoading(false); // Hilangkan loading screen agar responsif
+        } catch (error) {
+          console.error("Gagal membaca cache dashboard siswa:", error);
+        }
+      }
+
+      // 2. TETAP AMBIL DATA TERBARU DARI SERVER DI LATAR BELAKANG
       try {
-        // Statistik
-        const stat = await getStatistikSiswa(session.id);
+        let currentStatistik = statistik;
+        let currentRiwayat = riwayat;
+        let currentPresensi = presensiHariIni;
+
+        // Statistik[cite: 5]
+        const stat = await getStatistikSiswa(session.id); //[cite: 5]
         if (stat.success) {
-          setStatistik(stat.data);
+          //[cite: 5]
+          currentStatistik = stat.data;
+          setStatistik(currentStatistik);
         }
 
-        // Riwayat
-        const history = await getRiwayatSiswa(session.id);
+        // Riwayat[cite: 5]
+        const history = await getRiwayatSiswa(session.id); //[cite: 5]
         if (history.success) {
-          setRiwayat(history.data.slice(0, 5));
+          //[cite: 5]
+          currentRiwayat = history.data.slice(0, 5);
+          setRiwayat(currentRiwayat);
         }
 
-        // Presensi hari ini (Data dari Server API)
-        const today = await getPresensiHariIni(session.idGuru);
+        // Presensi hari ini (Data dari Server API)[cite: 5]
+        const today = await getPresensiHariIni(session.idGuru); //[cite: 5]
         if (today.success) {
-          const dataSaya = today.data.find((x) => x.ID_SISWA === session.id);
+          //[cite: 5]
+          const dataSaya = today.data.find((x) => x.ID_SISWA === session.id); //[cite: 5]
           if (dataSaya) {
-            setPresensiHariIni(dataSaya);
-            // Optional: Backup untuk memastikan jika API bilang sudah, lokal juga ter-set
-            setHasPresensiTodayLocal(true);
+            //[cite: 5]
+            currentPresensi = dataSaya;
+            setPresensiHariIni(currentPresensi);
+            // Optional: Backup untuk memastikan jika API bilang sudah, lokal juga ter-set[cite: 5]
+            setHasPresensiTodayLocal(true); //[cite: 5]
+          } else {
+            currentPresensi = null;
+            setPresensiHariIni(null);
           }
         }
-      } catch (err) {
-        console.error(err);
-      }
 
-      setLoading(false);
+        // Simpan Ke Cache Terbaru
+        const serverData = {
+          statistik: currentStatistik,
+          riwayat: currentRiwayat,
+          presensiHariIni: currentPresensi,
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+      } catch (err) {
+        //[cite: 5]
+        console.error("Error fetching dashboard:", err); //[cite: 5]
+      } finally {
+        setLoading(false); //[cite: 5]
+      }
     }
 
-    loadDashboard();
-  }, [router]);
+    loadDashboard(); //[cite: 5]
+  }, [router]); //[cite: 5]
 
   function handleLogout() {
-    if (!confirm("Keluar dari aplikasi?")) return;
-    logout();
-    router.replace("/magang/login");
+    if (!confirm("Keluar dari aplikasi?")) return; //[cite: 5]
+    localStorage.removeItem(CACHE_KEY); // Menghapus cache pada saat logout
+    logout(); //[cite: 5]
+    router.replace("/magang/login"); //[cite: 5]
   }
 
-  // Helper untuk menentukan apakah presensi hari ini "SUDAH"
-  // (Menggunakan gabungan antara API dan LocalStorage)
-  const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal;
+  // Helper untuk menentukan apakah presensi hari ini "SUDAH"[cite: 5]
+  // (Menggunakan gabungan antara API dan LocalStorage)[cite: 5]
+  const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal; //[cite: 5]
 
-  // --- TAMPILAN LOADING ANIMATIF ---
+  // --- TAMPILAN LOADING ANIMATIF ---[cite: 5]
   if (loading) {
+    //[cite: 5]
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -162,22 +206,22 @@ export default function DashboardSiswa() {
           </p>
         </div>
       </main>
-    );
+    ); //[cite: 5]
   }
 
   return (
     <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
-      {/* HEADER NAVBAR */}
+      {/* HEADER NAVBAR[cite: 5] */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto max-w-5xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
               <Image
-                src="/logo.png"
-                alt="Logo"
-                width={38}
-                height={38}
-                className="object-contain"
+                src="/logo.png" //[cite: 5]
+                alt="Logo" //[cite: 5]
+                width={38} //[cite: 5]
+                height={38} //[cite: 5]
+                className="object-contain" //[cite: 5]
               />
             </div>
             <div>
@@ -191,8 +235,8 @@ export default function DashboardSiswa() {
           </div>
 
           <button
-            onClick={handleLogout}
-            className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-red-900/30 border border-red-500/30 transition-all"
+            onClick={handleLogout} //[cite: 5]
+            className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-red-900/30 border border-red-500/30 transition-all" //[cite: 5]
           >
             ❌ LOGOUT
           </button>
@@ -200,7 +244,7 @@ export default function DashboardSiswa() {
       </header>
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-6 sm:space-y-8">
-        {/* HERO BANNER SISWA */}
+        {/* HERO BANNER SISWA[cite: 5] */}
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-xl border border-blue-800">
           <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
           <div className="relative">
@@ -220,7 +264,7 @@ export default function DashboardSiswa() {
           </div>
         </div>
 
-        {/* STATUS PRESENSI HARI INI */}
+        {/* STATUS PRESENSI HARI INI[cite: 5] */}
         <div
           className="
 rounded-[2rem]
@@ -233,13 +277,13 @@ border border-[#E8D28A]
 shadow-[0_10px_30px_rgba(214,178,63,0.12)]
 transition-all duration-300
 hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]
-"
+" //[cite: 5]
         >
           <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-4">
             Status Kehadiran Hari Ini
           </h2>
 
-          {isSudahPresensi ? (
+          {isSudahPresensi ? ( //[cite: 5]
             <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-emerald-500/30 mb-2">
@@ -251,8 +295,8 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]
                 </p>
               </div>
               <button
-                disabled
-                className="rounded-xl bg-slate-300 px-6 py-3 text-sm font-black text-slate-500 cursor-not-allowed whitespace-nowrap"
+                disabled //[cite: 5]
+                className="rounded-xl bg-slate-300 px-6 py-3 text-sm font-black text-slate-500 cursor-not-allowed whitespace-nowrap" //[cite: 5]
               >
                 ✔️ SELESAI HARI INI
               </button>
@@ -268,8 +312,8 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]
                 </p>
               </div>
               <button
-                onClick={() => router.push("/magang/presensi")}
-                className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/40 active:scale-[0.96] transition-all whitespace-nowrap"
+                onClick={() => router.push("/magang/presensi")} //[cite: 5]
+                className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/40 active:scale-[0.96] transition-all whitespace-nowrap" //[cite: 5]
               >
                 📸 ISI PRESENSI
               </button>
@@ -277,34 +321,34 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]
           )}
         </div>
 
-        {/* MENU UTAMA (Tombol Sentuh Besar) */}
+        {/* MENU UTAMA (Tombol Sentuh Besar)[cite: 5] */}
         <div className="grid gap-4 grid-cols-2">
-          {isSudahPresensi ? (
+          {isSudahPresensi ? ( //[cite: 5]
             <MenuCardDisabled
-              title="Presensi Selesai"
-              subtitle="Telah diisi hari ini"
-              icon="✅"
+              title="Presensi Selesai" //[cite: 5]
+              subtitle="Telah diisi hari ini" //[cite: 5]
+              icon="✅" //[cite: 5]
             />
           ) : (
             <MenuCard
-              title="Presensi Sekarang"
-              subtitle="Kirim foto & lokasi live"
-              icon="📸"
-              bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/30"
-              onClick={() => router.push("/magang/presensi")}
+              title="Presensi Sekarang" //[cite: 5]
+              subtitle="Kirim foto & lokasi live" //[cite: 5]
+              icon="📸" //[cite: 5]
+              bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/30" //[cite: 5]
+              onClick={() => router.push("/magang/presensi")} //[cite: 5]
             />
           )}
 
           <MenuCard
-            title="Riwayat Lengkap"
-            subtitle="Lihat semua datamu"
-            icon="📋"
-            bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30"
-            onClick={() => router.push("/magang/rekap")}
+            title="Riwayat Lengkap" //[cite: 5]
+            subtitle="Lihat semua datamu" //[cite: 5]
+            icon="📋" //[cite: 5]
+            bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30" //[cite: 5]
+            onClick={() => router.push("/magang/rekap")} //[cite: 5]
           />
         </div>
 
-        {/* INFORMASI & STATISTIK SISWA */}
+        {/* INFORMASI & STATISTIK SISWA[cite: 5] */}
         <div
           className="rounded-[2rem]
 bg-gradient-to-br
@@ -314,7 +358,7 @@ to-[#F8E7A5]
 border border-[#E8D28A]
 shadow-[0_10px_30px_rgba(214,178,63,0.12)]
 transition-all duration-300
-hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100"
+hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100" //[cite: 5]
         >
           <h2 className="text-xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
             Statistik & Profil Kamu
@@ -322,32 +366,32 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] p-5 sm:p-8 shadow-[0_8px_30px_r
 
           <div className="grid gap-3 sm:gap-5 grid-cols-2 xl:grid-cols-4 mb-8">
             <Card
-              title="Hadir"
-              value={statistik?.hadir ?? 0}
-              accentColor="border-emerald-500"
-              textColor="text-emerald-600"
-              icon="✅"
+              title="Hadir" //[cite: 5]
+              value={statistik?.hadir ?? 0} //[cite: 5]
+              accentColor="border-emerald-500" //[cite: 5]
+              textColor="text-emerald-600" //[cite: 5]
+              icon="✅" //[cite: 5]
             />
             <Card
-              title="Izin"
-              value={statistik?.izin ?? 0}
-              accentColor="border-amber-500"
-              textColor="text-amber-600"
-              icon="📝"
+              title="Izin" //[cite: 5]
+              value={statistik?.izin ?? 0} //[cite: 5]
+              accentColor="border-amber-500" //[cite: 5]
+              textColor="text-amber-600" //[cite: 5]
+              icon="📝" //[cite: 5]
             />
             <Card
-              title="Sakit"
-              value={statistik?.sakit ?? 0}
-              accentColor="border-blue-500"
-              textColor="text-blue-600"
-              icon="🤒"
+              title="Sakit" //[cite: 5]
+              value={statistik?.sakit ?? 0} //[cite: 5]
+              accentColor="border-blue-500" //[cite: 5]
+              textColor="text-blue-600" //[cite: 5]
+              icon="🤒" //[cite: 5]
             />
             <Card
-              title="Kehadiran"
-              value={`${statistik?.persentaseHadir ?? 0}%`}
-              accentColor="border-indigo-500"
-              textColor="text-indigo-600"
-              icon="📈"
+              title="Kehadiran" //[cite: 5]
+              value={`${statistik?.persentaseHadir ?? 0}%`} //[cite: 5]
+              accentColor="border-indigo-500" //[cite: 5]
+              textColor="text-indigo-600" //[cite: 5]
+              icon="📈" //[cite: 5]
             />
           </div>
 
@@ -358,7 +402,7 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] p-5 sm:p-8 shadow-[0_8px_30px_r
           </div>
         </div>
 
-        {/* RIWAYAT TERBARU */}
+        {/* RIWAYAT TERBARU[cite: 5] */}
         <div
           className="rounded-[2rem]
 bg-gradient-to-br
@@ -369,7 +413,7 @@ border border-[#E8D28A]
 shadow-[0_10px_30px_rgba(214,178,63,0.12)]
 overflow-hidden
 transition-all duration-300
-hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden"
+hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden" //[cite: 5]
         >
           <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-white">
             <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
@@ -378,7 +422,7 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0
           </div>
 
           <div className="p-4 sm:p-6">
-            {riwayat.length === 0 ? (
+            {riwayat.length === 0 ? ( //[cite: 5]
               <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
                 <p className="text-sm font-bold text-slate-400">
                   Belum ada riwayat presensi.
@@ -387,17 +431,18 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0
             ) : (
               <div className="space-y-3">
                 {riwayat.map((item, index) => {
-                  const statusWarna =
-                    item.STATUS === "Hadir"
-                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                      : item.STATUS === "Izin"
-                        ? "bg-amber-100 text-amber-700 border-amber-200"
-                        : "bg-blue-100 text-blue-700 border-blue-200";
+                  //[cite: 5]
+                  const statusWarna = //[cite: 5]
+                    item.STATUS === "Hadir" //[cite: 5]
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200" //[cite: 5]
+                      : item.STATUS === "Izin" //[cite: 5]
+                        ? "bg-amber-100 text-amber-700 border-amber-200" //[cite: 5]
+                        : "bg-blue-100 text-blue-700 border-blue-200"; //[cite: 5]
 
                   return (
                     <div
-                      key={index}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                      key={index} //[cite: 5]
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow" //[cite: 5]
                     >
                       <div>
                         <p className="font-black text-slate-700 text-sm">
@@ -409,7 +454,7 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0
                       </div>
 
                       <span
-                        className={`inline-flex items-center justify-center rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-wider border ${statusWarna}`}
+                        className={`inline-flex items-center justify-center rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-wider border ${statusWarna}`} //[cite: 5]
                       >
                         {item.STATUS}
                       </span>
@@ -422,12 +467,13 @@ hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)] shadow-[0_8px_30px_rgba(0,0,0,0
         </div>
       </div>
     </main>
-  );
+  ); //[cite: 5]
 }
 
-/* --- REUSABLE COMPONENTS --- */
+/* --- REUSABLE COMPONENTS ---[cite: 5] */
 
 function Info({ label, value, textColor = "text-slate-800" }) {
+  //[cite: 5]
   return (
     <div>
       <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">
@@ -437,19 +483,20 @@ function Info({ label, value, textColor = "text-slate-800" }) {
         {value}
       </p>
     </div>
-  );
+  ); //[cite: 5]
 }
 
 function Card({ title, value, accentColor, textColor, icon }) {
+  //[cite: 5]
   return (
     <div
-      className={`rounded-2xl bg-white p-4 sm:p-5 shadow-sm border border-slate-100 border-t-4 ${accentColor} relative overflow-hidden group`}
+      className={`rounded-2xl bg-white p-4 sm:p-5 shadow-sm border border-slate-100 border-t-4 ${accentColor} relative overflow-hidden group`} //[cite: 5]
     >
       <p className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
         {title}
       </p>
       <h2
-        className={`mt-1 sm:mt-2 text-2xl sm:text-3xl font-black ${textColor}`}
+        className={`mt-1 sm:mt-2 text-2xl sm:text-3xl font-black ${textColor}`} //[cite: 5]
       >
         {value}
       </h2>
@@ -469,19 +516,20 @@ function Card({ title, value, accentColor, textColor, icon }) {
  items-center
  justify-center
  text-2xl
-"
+" //[cite: 5]
       >
         {icon}
       </div>
     </div>
-  );
+  ); //[cite: 5]
 }
 
 function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
+  //[cite: 5]
   return (
     <button
-      onClick={onClick}
-      className={`w-full text-left p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${bgGrad} text-white shadow-lg flex flex-col justify-between h-32 sm:h-36 transition-all active:scale-[0.96] active:brightness-95 focus:outline-none border border-white/10`}
+      onClick={onClick} //[cite: 5]
+      className={`w-full text-left p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${bgGrad} text-white shadow-lg flex flex-col justify-between h-32 sm:h-36 transition-all active:scale-[0.96] active:brightness-95 focus:outline-none border border-white/10`} //[cite: 5]
     >
       <div className="text-2xl sm:text-3xl bg-white/20 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-white/20 shadow-inner">
         {icon}
@@ -495,15 +543,16 @@ function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
         </p>
       </div>
     </button>
-  );
+  ); //[cite: 5]
 }
 
-// Komponen Card Menu khusus yang keadaannya dinonaktifkan (Disabled)
+// Komponen Card Menu khusus yang keadaannya dinonaktifkan (Disabled)[cite: 5]
 function MenuCardDisabled({ title, subtitle, icon }) {
+  //[cite: 5]
   return (
     <button
-      disabled
-      className="w-full text-left p-4 sm:p-5 rounded-2xl bg-slate-200 text-slate-400 flex flex-col justify-between h-32 sm:h-36 cursor-not-allowed border border-slate-300"
+      disabled //[cite: 5]
+      className="w-full text-left p-4 sm:p-5 rounded-2xl bg-slate-200 text-slate-400 flex flex-col justify-between h-32 sm:h-36 cursor-not-allowed border border-slate-300" //[cite: 5]
     >
       <div className="text-2xl sm:text-3xl bg-slate-300/50 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-slate-300">
         {icon}
@@ -517,5 +566,5 @@ function MenuCardDisabled({ title, subtitle, icon }) {
         </p>
       </div>
     </button>
-  );
+  ); //[cite: 5]
 }

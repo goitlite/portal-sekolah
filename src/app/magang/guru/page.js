@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getSession, isLoggedIn, logout } from "../lib/auth"; // Berdasarkan struktur lib proyek[cite: 2]
+import { getSession, isLoggedIn, logout } from "../lib/auth";
 
 import {
   getDashboardGuru,
   getTempatMagangGuru,
   getAktivitasGuru,
-} from "../lib/api"; // Berdasarkan skema API[cite: 2]
+} from "../lib/api";
 
 function formatTanggal(waktu) {
   if (!waktu) return "-";
@@ -29,18 +29,18 @@ function formatTanggal(waktu) {
 
 export default function DashboardGuru() {
   const router = useRouter();
+  const CACHE_KEY = "dashboardGuruCache";
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [aktivitas, setAktivitas] = useState([]);
+  const [tempatMagang, setTempatMagang] = useState([]);
   const [dashboard, setDashboard] = useState({
     jumlahSiswa: "--",
     hadirHariIni: "--",
     totalHadir: "--",
     izinSakit: "--",
-    aktivitas: [],
   });
-  const [tempatMagang, setTempatMagang] = useState([]);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -58,34 +58,46 @@ export default function DashboardGuru() {
 
       setUser(session);
 
+      // 1. LOAD DATA DARI CACHE (INSTAN / TANPA SPINNER)
+      const cachedDataStr = localStorage.getItem(CACHE_KEY);
+      if (cachedDataStr) {
+        try {
+          const cachedData = JSON.parse(cachedDataStr);
+          setDashboard(cachedData.dashboard);
+          setTempatMagang(cachedData.tempatMagang);
+          setAktivitas(cachedData.aktivitas);
+          setLoading(false); // Hilangkan loading screen agar responsif
+        } catch (error) {
+          console.error("Gagal membaca cache dashboard:", error);
+        }
+      }
+
+      // 2. TETAP AMBIL DATA TERBARU DARI SERVER DI LATAR BELAKANG (BACKGROUND REFRESH)
       try {
         const result = await getDashboardGuru(session.id);
-        console.log("Dashboard Result :", result);
 
         if (result.success && result.data) {
-          setDashboard(result.data);
-
           const tempat = await getTempatMagangGuru(session.id);
-          if (tempat.success) {
-            setTempatMagang(tempat.data);
-            const aktivitasResult = await getAktivitasGuru(session.id);
+          const aktivitasResult = await getAktivitasGuru(session.id);
 
-            if (aktivitasResult.success) {
-              setAktivitas(aktivitasResult.data);
-            }
-          }
+          const serverData = {
+            dashboard: result.data,
+            tempatMagang: tempat.success ? tempat.data : [],
+            aktivitas: aktivitasResult.success ? aktivitasResult.data : [],
+          };
+
+          // Update State & Simpan Ke Cache Terbaru
+          setDashboard(serverData.dashboard);
+          setTempatMagang(serverData.tempatMagang);
+          setAktivitas(serverData.aktivitas);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
         } else {
-          console.log("Response dari API:", result);
-          alert(
-            result.message ||
-              "Data dashboard tidak ditemukan atau format Apps Script belum sesuai.",
-          );
+          if (!cachedDataStr) {
+            alert(result.message || "Data dashboard tidak ditemukan.");
+          }
         }
       } catch (err) {
         console.error("Error fetching dashboard:", err);
-        alert(
-          "Gagal mengambil dashboard. Periksa koneksi atau Apps Script Anda.",
-        );
       } finally {
         setLoading(false);
       }
@@ -96,6 +108,8 @@ export default function DashboardGuru() {
 
   function handleLogout() {
     if (!confirm("Keluar dari aplikasi?")) return;
+    localStorage.removeItem(CACHE_KEY); // Menghapus cache guru
+    localStorage.removeItem("dashboardSiswaCache"); // Menghapus cache siswa
     logout();
     router.replace("/magang/login");
   }
@@ -208,7 +222,7 @@ export default function DashboardGuru() {
           />
         </div>
 
-        {/* MONITORING LAPANGAN (Gaya Kuning-Emas Mirip Filter Rekap10) */}
+        {/* MONITORING LAPANGAN */}
         <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-5 sm:p-6 shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#D9B44A]/40 pb-4">
             <div>
@@ -261,7 +275,7 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* MENU TAMPILAN UTAMA (Grid Tombol Taktil Berwarna) */}
+        {/* MENU TAMPILAN UTAMA */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <MenuCard
             title="Daftar Siswa"
@@ -293,7 +307,7 @@ export default function DashboardGuru() {
           />
         </div>
 
-        {/* TABEL AKTIVITAS TERBARU (Gaya Card rekap10) */}
+        {/* TABEL AKTIVITAS TERBARU */}
         <div className="rounded-[2rem] bg-white border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
           <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100">
             <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
@@ -359,7 +373,6 @@ export default function DashboardGuru() {
   );
 }
 
-/* --- REUSABLE STATISTIC CARD COMPONENT --- */
 function Card({ title, value, accentColor, textColor, icon }) {
   return (
     <div
@@ -382,7 +395,6 @@ function Card({ title, value, accentColor, textColor, icon }) {
   );
 }
 
-/* --- REUSABLE MENU CARD FOR TOUCHSCREEN OPTIMIZATION --- */
 function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
   return (
     <button
