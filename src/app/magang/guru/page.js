@@ -40,6 +40,18 @@ export default function DashboardGuru() {
     hadirHariIni: "--",
     totalHadir: "--",
     izinSakit: "--",
+    // Ekspektasi array list nama dari API backend:
+    listJumlahSiswa: [],
+    listHadirHariIni: [],
+    listTotalHadir: [],
+    listIzinSakit: [],
+  });
+
+  // --- STATE UNTUK MODAL NAMA SISWA ---
+  const [modalConfig, setModalConfig] = useState({
+    isOpen: false,
+    title: "",
+    data: [],
   });
 
   useEffect(() => {
@@ -119,6 +131,15 @@ export default function DashboardGuru() {
     router.push("/magang/guru/monitoring");
   }
 
+  // --- FUNGSI KLIK CARD STATISTIK ---
+  function handleCardClick(title, listData) {
+    setModalConfig({
+      isOpen: true,
+      title: title,
+      data: listData || [],
+    });
+  }
+
   if (loading || !user) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -136,9 +157,9 @@ export default function DashboardGuru() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 space-y-6 pb-12">
+    <main className="min-h-screen bg-slate-50 space-y-6 pb-12 relative">
       {/* NAVBAR */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
@@ -162,7 +183,7 @@ export default function DashboardGuru() {
 
           <button
             onClick={handleLogout}
-            className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-red-900/30 border border-red-500/30 transition-all"
+            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg shadow-blue-900/30 hover:scale-105 hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
           >
             ❌ LOGOUT
           </button>
@@ -190,14 +211,17 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* STATISTIK CARD GRID */}
-        <div className="grid gap-4 grid-cols-2 xl:grid-cols-4">
+        {/* STATISTIK CARD GRID (Klik Untuk Lihat Nama) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card
             title="Jumlah Siswa"
             value={dashboard?.jumlahSiswa ?? "--"}
             accentColor="border-indigo-500"
             textColor="text-indigo-600"
             icon="👥"
+            onClick={() =>
+              handleCardClick("Daftar Jumlah Siswa", dashboard?.listJumlahSiswa)
+            }
           />
           <Card
             title="Hadir Hari Ini"
@@ -205,6 +229,12 @@ export default function DashboardGuru() {
             accentColor="border-emerald-500"
             textColor="text-emerald-600"
             icon="✅"
+            onClick={() =>
+              handleCardClick(
+                "Siswa Hadir Hari Ini",
+                dashboard?.listHadirHariIni,
+              )
+            }
           />
           <Card
             title="Total Kehadiran"
@@ -212,6 +242,9 @@ export default function DashboardGuru() {
             accentColor="border-blue-500"
             textColor="text-blue-600"
             icon="📊"
+            onClick={() =>
+              handleCardClick("Log Total Kehadiran", dashboard?.listTotalHadir)
+            }
           />
           <Card
             title="Izin / Sakit"
@@ -219,6 +252,12 @@ export default function DashboardGuru() {
             accentColor="border-amber-500"
             textColor="text-amber-600"
             icon="🤒"
+            onClick={() =>
+              handleCardClick(
+                "Daftar Siswa Izin / Sakit",
+                dashboard?.listIzinSakit,
+              )
+            }
           />
         </div>
 
@@ -369,29 +408,170 @@ export default function DashboardGuru() {
           </div>
         </div>
       </div>
+
+      {/* MODAL POP-UP NAMA SISWA */}
+      {modalConfig.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-5 flex items-center justify-between">
+              <h3 className="text-lg font-black text-white">
+                {modalConfig.title}
+              </h3>
+              <button
+                onClick={() =>
+                  setModalConfig({ ...modalConfig, isOpen: false })
+                }
+                className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 max-h-[60vh] overflow-y-auto">
+              {modalConfig.data && modalConfig.data.length > 0 ? (
+                <ul className="space-y-2">
+                  {modalConfig.data.map((namaSiswa, index) => (
+                    <li
+                      key={index}
+                      className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 shadow-sm"
+                    >
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm">
+                          {index + 1}
+                        </div>
+
+                        {typeof namaSiswa === "object" ? (
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-800">
+                                {namaSiswa.nama.replace(/\s*\[.*?\]/, "")}
+                              </span>
+
+                              <span className="px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-bold">
+                                {
+                                  (namaSiswa.nama.match(/\[(.*?)\]/) || [
+                                    ,
+                                    "",
+                                  ])[1]
+                                }
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-700">
+                              {String(namaSiswa).replace(/\s*\[.*?\]/, "")}
+                            </span>
+
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-bold">
+                              {
+                                (String(namaSiswa).match(/\[(.*?)\]/) || [
+                                  ,
+                                  "",
+                                ])[1]
+                              }
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {typeof namaSiswa === "object" && (
+                        <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold min-w-[48px] text-center">
+                          {namaSiswa.total}x
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-4xl mb-3">📭</p>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Tidak ada data siswa / Belum ada riwayat.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50">
+              <button
+                onClick={() =>
+                  setModalConfig({ ...modalConfig, isOpen: false })
+                }
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-xl transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-function Card({ title, value, accentColor, textColor, icon }) {
+function Card({ title, value, accentColor, textColor, icon, onClick }) {
+  const bgMap = {
+    "border-indigo-500":
+      "from-indigo-600 via-indigo-700 to-blue-800 shadow-indigo-500/30",
+    "border-emerald-500":
+      "from-emerald-500 via-green-600 to-teal-700 shadow-emerald-500/30",
+    "border-blue-500":
+      "from-blue-600 via-sky-700 to-indigo-800 shadow-blue-500/30",
+    "border-amber-500":
+      "from-amber-500 via-orange-500 to-amber-700 shadow-orange-500/30",
+  };
+
+  const bg =
+    bgMap[accentColor] || "from-slate-600 to-slate-700 shadow-slate-500/30";
+
   return (
-    <div
-      className={`rounded-2xl bg-white p-4 sm:p-5 shadow-md border-t-4 ${accentColor} flex flex-col justify-between relative overflow-hidden group`}
+    <button
+      onClick={onClick}
+      className={`
+        group relative overflow-hidden
+        rounded-3xl
+        bg-gradient-to-br ${bg}
+        text-white
+        p-4
+        w-full
+        shadow-xl
+        active:scale-95
+        hover:-translate-y-1
+        transition-all duration-300
+      `}
     >
-      <div>
-        <p className="text-[11px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
+      {/* Glow */}
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-3xl"></div>
+
+      {/* Icon + Arrow */}
+      <div className="relative flex items-start justify-between">
+        <div className="h-11 w-11 rounded-2xl bg-white/20 backdrop-blur border border-white/20 flex items-center justify-center text-xl shadow">
+          {icon}
+        </div>
+
+        <div className="rounded-full bg-white/20 backdrop-blur px-2.5 py-1 text-[10px] font-bold border border-white/20">
+          Detail
+          <span className="group-hover:translate-x-1 transition-transform">
+            →
+          </span>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div className="relative mt-5">
+        <p className="text-[10px] sm:text-xs uppercase tracking-[2px] text-white/80 font-bold">
           {title}
         </p>
-        <h2
-          className={`mt-2 text-2xl sm:text-4xl font-black ${textColor} tracking-tight`}
-        >
+
+        <h2 className="mt-1 text-3xl sm:text-4xl font-black leading-none">
           {value}
         </h2>
       </div>
-      <div className="absolute right-3 bottom-2 text-2xl opacity-15 sm:opacity-20 pointer-events-none select-none">
-        {icon}
+
+      {/* Garis */}
+      <div className="relative mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
+        <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
       </div>
-    </div>
+    </button>
   );
 }
 
