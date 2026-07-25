@@ -142,7 +142,7 @@ export default function Home() {
                     "
                   >
                     <span className="relative z-10 flex items-center gap-2">
-                      噫 Masuk Asesmen Siswa
+                      Masuk Asesmen Siswa
                     </span>
                     <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition"></div>
                   </button>
@@ -215,7 +215,7 @@ export default function Home() {
 
         <footer className="py-10 text-center text-amber-700/60 text-sm font-medium">
           <div className="max-w-7xl mx-auto px-5 border-t border-amber-100 pt-10">
-            <p>© 2024 SMKN 1 TELUK KUANTAN. All rights reserved.</p>
+            <p>© 2026 SMKN 1 TELUK KUANTAN. All rights reserved.</p>
             <p className="text-xs mt-1 text-amber-600/50">
               Portal Digital Sekolah Modern v2.0
             </p>

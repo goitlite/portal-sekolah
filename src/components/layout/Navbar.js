@@ -88,7 +88,7 @@ truncate
 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]
 "
             >
-              Portal TJKT SMKN 1 Teluk Kuantan
+              Portal SMKN 1 Teluk Kuantan
             </h1>
 
             <p
