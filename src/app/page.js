@@ -201,14 +201,24 @@ export default function Home() {
               title="Video Belajar"
               description="Akses ribuan konten video pembelajaran interaktif kapan saja."
               color="pink"
-              onClick={() => console.log("Video")}
+              onClick={() =>
+                window.open(
+                  "https://tjktsmkn1telukkuantan.web.id/video-belajar/",
+                  "_blank",
+                )
+              }
             />
             <ServiceCard
               icon="📚" // Diganti dari "答" menjadi emoji Tumpukan Buku
               title="Materi Belajar"
               description="Kumpulan modul dan materi digital lengkap pendukung belajar."
               color="violet"
-              onClick={() => console.log("Materi")}
+              onClick={() =>
+                window.open(
+                  "https://tjktsmkn1telukkuantan.web.id/buku-belajar/",
+                  "_blank",
+                )
+              }
             />
           </div>
         </section>
