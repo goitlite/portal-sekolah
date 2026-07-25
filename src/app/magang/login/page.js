@@ -226,25 +226,57 @@ export default function LoginMagang() {
             </button>
 
             {/* TOMBOL LIHAT REKAP */}
-            <div className="mt-5 text-center">
+            {/* CARD MENU TAMBAHAN (Rekap & Home) */}
+            <div className="mt-6 rounded-2xl bg-white/20 border border-white/30 backdrop-blur-sm p-1.5 shadow-sm overflow-hidden flex flex-col sm:flex-row gap-1">
+              {/* Tombol Lihat Rekap */}
               <Link
                 href="/magang/rekap"
-                className="inline-flex items-center justify-center gap-2 text-sm font-black text-blue-950 hover:text-white transition-colors py-2 px-4 rounded-xl hover:bg-white/15 active:scale-95"
+                className="flex-1 group flex items-center justify-center gap-2 text-[11px] sm:text-xs font-black text-blue-950 hover:text-white transition-all py-3 px-2 rounded-xl hover:bg-slate-900/10 active:scale-[0.98]"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2.5}
-                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                Lihat Rekap Kehadiran
+                <div className="bg-white/30 p-1.5 rounded-lg group-hover:bg-slate-900/20 transition-colors">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                LIHAT REKAP
+              </Link>
+
+              {/* Garis Pemisah (Hanya terlihat di layar agak besar, hilang di layar kecil) */}
+              <div className="hidden sm:block w-[1px] bg-white/40 my-2"></div>
+              {/* Garis Pemisah untuk layar kecil (Horizontal) */}
+              <div className="block sm:hidden h-[1px] bg-white/40 mx-4"></div>
+
+              {/* Tombol Halaman Utama */}
+              <Link
+                href="/" // Pastikan rute beranda Anda benar
+                className="flex-1 group flex items-center justify-center gap-2 text-[11px] sm:text-xs font-black text-amber-950/80 hover:text-white transition-all py-3 px-2 rounded-xl hover:bg-slate-900/10 active:scale-[0.98]"
+              >
+                <div className="bg-white/30 p-1.5 rounded-lg group-hover:bg-slate-900/20 transition-colors">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    />
+                  </svg>
+                </div>
+                MENU UTAMA
               </Link>
             </div>
           </form>

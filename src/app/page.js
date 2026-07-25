@@ -29,38 +29,68 @@ export default function Home() {
   }
 
   const ServiceCard = ({ icon, title, description, color, onClick }) => {
-    const colorMap = {
-      blue: "from-blue-500 to-blue-600 shadow-blue-500/30 border-blue-200",
+    // Mapping warna diadaptasi dari style gradien pada Dashboard Guru
+    const bgMap = {
+      blue: "from-blue-600 via-sky-700 to-indigo-800 shadow-blue-500/30",
       emerald:
-        "from-emerald-500 to-emerald-600 shadow-emerald-500/30 border-emerald-200",
-      pink: "from-pink-500 to-pink-600 shadow-pink-500/30 border-pink-200",
+        "from-emerald-500 via-green-600 to-teal-700 shadow-emerald-500/30",
+      amber: "from-amber-500 via-orange-500 to-amber-700 shadow-orange-500/30",
+      pink: "from-pink-500 via-rose-500 to-pink-700 shadow-pink-500/30",
       violet:
-        "from-violet-500 to-violet-600 shadow-violet-500/30 border-violet-200",
-      amber: "from-amber-500 to-amber-600 shadow-amber-500/30 border-amber-200",
+        "from-violet-500 via-purple-600 to-indigo-700 shadow-violet-500/30",
     };
+
+    // Default fallback jika warna tidak ditemukan
+    const bg =
+      bgMap[color] || "from-slate-600 to-slate-700 shadow-slate-500/30";
 
     return (
       <button
         onClick={onClick}
-        className={`group overflow-hidden rounded-[2rem] bg-white border border-amber-100 p-7 shadow-[0_10px_40px_rgba(217,119,6,0.05)] transition-all duration-300 hover:scale-[1.03] hover:shadow-xl text-left w-full`}
+        className={`
+        group relative overflow-hidden
+        rounded-3xl
+        bg-gradient-to-br ${bg}
+        text-white
+        p-5
+        w-full
+        text-left
+        shadow-xl
+        active:scale-95
+        hover:-translate-y-1
+        transition-all duration-300
+      `}
       >
-        <div
-          className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${colorMap[color]} flex items-center justify-center text-3xl shadow-lg mb-6 group-hover:scale-110 transition-transform`}
-        >
-          {icon}
+        {/* Efek Glow Bulat di Kanan Atas */}
+        <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-3xl"></div>
+
+        {/* Icon + Label "Buka Layanan" dengan style kaca (Backdrop Blur)[cite: 1] */}
+        <div className="relative flex items-start justify-between">
+          <div className="h-12 w-12 rounded-2xl bg-white/20 backdrop-blur border border-white/20 flex items-center justify-center text-2xl shadow">
+            {icon}
+          </div>
+
+          <div className="rounded-full bg-white/20 backdrop-blur px-3 py-1.5 text-[10px] font-bold border border-white/20 flex items-center gap-1">
+            Buka Layanan
+            <span className="group-hover:translate-x-1 transition-transform">
+              →
+            </span>
+          </div>
         </div>
-        <h3 className="text-xl font-extrabold text-amber-950 mb-2 tracking-tight">
-          {title}
-        </h3>
-        <p className="text-amber-800/70 text-sm leading-relaxed font-medium">
-          {description}
-        </p>
-        <div className="mt-4 flex justify-end">
-          <span
-            className={`text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 opacity-0 group-hover:opacity-100 transition-opacity`}
-          >
-            Buka Layanan →
-          </span>
+
+        {/* Title & Deskripsi */}
+        <div className="relative mt-6">
+          <h2 className="text-xl sm:text-2xl font-black leading-tight mb-1.5">
+            {title}
+          </h2>
+          <p className="text-xs sm:text-sm text-white/80 font-medium leading-relaxed">
+            {description}
+          </p>
+        </div>
+
+        {/* Animasi Garis Bawah saat Hover[cite: 1] */}
+        <div className="relative mt-5 h-1 rounded-full bg-white/20 overflow-hidden">
+          <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
         </div>
       </button>
     );
@@ -144,38 +174,37 @@ export default function Home() {
               satu portal yang elegan dan responsif.
             </p>
           </div>
-
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             <ServiceCard
-              icon="統"
+              icon="💻" // Diganti dari "統" menjadi emoji Laptop/Komputer
               title="Asesmen Online"
               description="Sistem ujian digital modern dengan akses cepat dan integritas tinggi."
               color="blue"
               onClick={handleMasukAsesmen}
             />
             <ServiceCard
-              icon="搭"
+              icon="📋" // Diganti dari "搭" menjadi emoji Papan Jalan/Clipboard
               title="Presensi Kelas"
               description="Pencatatan kehadiran siswa secara realtime dan terintegrasi sistem."
               color="emerald"
               onClick={() => router.push("/presensi")}
             />
             <ServiceCard
-              icon="💼"
+              icon="💼" // Tetap dipertahankan karena sudah terbaca jelas
               title="Presensi Magang"
               description="Monitoring kehadiran dan jurnal harian siswa PKL / Magang."
               color="amber"
               onClick={() => router.push("/magang/login")}
             />
             <ServiceCard
-              icon="磁"
+              icon="▶️" // Diganti dari "磁" menjadi emoji Tombol Play
               title="Video Belajar"
               description="Akses ribuan konten video pembelajaran interaktif kapan saja."
               color="pink"
               onClick={() => console.log("Video")}
             />
             <ServiceCard
-              icon="答"
+              icon="📚" // Diganti dari "答" menjadi emoji Tumpukan Buku
               title="Materi Belajar"
               description="Kumpulan modul dan materi digital lengkap pendukung belajar."
               color="violet"
