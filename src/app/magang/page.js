@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default function MagangHome() {
   return (
@@ -125,6 +126,7 @@ export default function MagangHome() {
           </p>
         </div>
       </div>
+      <InstallPrompt />
     </main>
   );
 }
