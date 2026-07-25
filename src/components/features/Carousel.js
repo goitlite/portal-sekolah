@@ -3,7 +3,7 @@
 import Image from "next/image";
 
 export default function Carousel() {
-  const images = ["/images/banner25.jpg"];
+  const images = ["/images/Banner25.jpg"];
 
   return (
     // Coba gunakan mt-16 (sekitar 64px). Jika masih terlalu bawah, ganti jadi mt-12 (48px)
