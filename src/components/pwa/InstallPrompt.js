@@ -13,17 +13,6 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Jika user sebelumnya memilih "Nanti"
-    const dismissed = localStorage.getItem("installDismiss");
-    if (dismissed) {
-      const selisih = Date.now() - parseInt(dismissed);
-
-      // 1 jam
-      if (selisih < 60 * 60 * 1000) {
-        return;
-      }
-    }
-
     function handleBeforeInstallPrompt(e) {
       e.preventDefault();
 
@@ -61,8 +50,6 @@ export default function InstallPrompt() {
   }
 
   function handleLater() {
-    localStorage.setItem("installDismiss", Date.now().toString());
-
     setShow(false);
   }
 

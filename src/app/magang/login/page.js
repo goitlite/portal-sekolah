@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { login } from "../lib/api";
 import { saveSession } from "../lib/auth";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default function LoginMagang() {
   const router = useRouter();
@@ -289,6 +290,7 @@ export default function LoginMagang() {
           </div>
         </div>
       </div>
+      <InstallPrompt />
     </main>
   );
 }
