@@ -8,7 +8,21 @@ import Carousel from "@/components/features/Carousel";
 export default function Home() {
   const router = useRouter();
 
-  async function handleMasukAsesmen() {
+  async function handleMasukAsesmen(e) {
+    // Deteksi apakah perangkat menggunakan layar sentuh
+    const isTouchDevice =
+      typeof window !== "undefined" &&
+      (window.matchMedia("(pointer: coarse)").matches ||
+        "ontouchstart" in window ||
+        navigator.maxTouchPoints > 0);
+
+    if (isTouchDevice) {
+      alert(
+        "Asesmen ini hanya untuk PC gunakan aplikasi asesmen Android UNTUK MELANJUTKAN Asesmen menggunakan pc",
+      );
+      return; // Hentikan proses masuk jika menggunakan layar sentuh
+    }
+
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       if (!isIOS) {
@@ -28,89 +42,131 @@ export default function Home() {
     router.push("/login");
   }
 
-  // Card Layanan: Base Biru Cerah + Garis Atas Dinamis (Beda Warna)
-  const ServiceCard = ({ icon, title, description, themeColor, onClick }) => {
-    // Pilihan warna aksen (Garis atas & efek hover tombol)
+  // Card Layanan: Base Biru Cerah + Garis Atas Dinamis + Judul Badge + Label "Baru" + Background Icon
+  const ServiceCard = ({
+    icon,
+    title,
+    description,
+    themeColor,
+    isNew,
+    onClick,
+  }) => {
+    // Pilihan warna aksen (Garis atas, efek hover tombol, dan Badge Judul)
     const themes = {
       yellow: {
         border: "border-t-yellow-400",
         hoverBorder: "hover:border-t-yellow-300",
         badgeHover:
           "group-hover:bg-yellow-400 group-hover:text-yellow-950 group-hover:border-yellow-300",
+        titleBadge: "bg-yellow-400 text-yellow-950 shadow-yellow-400/50",
       },
       emerald: {
         border: "border-t-emerald-400",
         hoverBorder: "hover:border-t-emerald-300",
         badgeHover:
           "group-hover:bg-emerald-400 group-hover:text-emerald-950 group-hover:border-emerald-300",
+        titleBadge: "bg-emerald-400 text-emerald-950 shadow-emerald-400/50",
       },
       orange: {
         border: "border-t-orange-400",
         hoverBorder: "hover:border-t-orange-300",
         badgeHover:
           "group-hover:bg-orange-400 group-hover:text-orange-950 group-hover:border-orange-300",
+        titleBadge: "bg-orange-400 text-orange-950 shadow-orange-400/50",
       },
       pink: {
         border: "border-t-pink-400",
         hoverBorder: "hover:border-t-pink-300",
         badgeHover:
           "group-hover:bg-pink-400 group-hover:text-pink-950 group-hover:border-pink-300",
+        titleBadge: "bg-pink-400 text-pink-950 shadow-pink-400/50",
       },
       violet: {
         border: "border-t-violet-400",
         hoverBorder: "hover:border-t-violet-300",
         badgeHover:
           "group-hover:bg-violet-400 group-hover:text-white group-hover:border-violet-300",
+        titleBadge: "bg-violet-400 text-white shadow-violet-400/50",
+      },
+      cyan: {
+        border: "border-t-cyan-400",
+        hoverBorder: "hover:border-t-cyan-300",
+        badgeHover:
+          "group-hover:bg-cyan-400 group-hover:text-cyan-950 group-hover:border-cyan-300",
+        titleBadge: "bg-cyan-400 text-cyan-950 shadow-cyan-400/50",
       },
     };
 
     const style = themes[themeColor] || themes.yellow;
 
     return (
-      <button
-        onClick={onClick}
-        className={`
-          group relative text-left 
-          bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600
-          border-x border-b border-blue-300/40
-          border-t-[4px] ${style.border}
-          rounded-2xl p-3.5 sm:p-5 shadow-lg shadow-blue-500/30 
-          transition-all duration-300 active:scale-[0.98]
-          flex flex-col justify-between w-full
-          hover:-translate-y-1.5 hover:shadow-xl hover:shadow-blue-500/40 ${style.hoverBorder}
-          overflow-hidden
-        `}
-      >
-        {/* Efek kilau cahaya saat di-hover */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-        <div className="relative z-10">
-          {/* Icon & Action Badge */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-white/20 text-white shadow-inner backdrop-blur-md border border-white/30">
-              {icon}
-            </div>
-
-            {/* Badge menyesuaikan warna tema saat disentuh */}
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/30 bg-white/10 text-white flex items-center gap-1 backdrop-blur-sm transition-all duration-300 shadow-sm ${style.badgeHover}`}
-            >
-              Akses
-              <span className="group-hover:translate-x-1 transition-transform duration-300">
-                →
-              </span>
+      <div className="relative w-full h-full flex">
+        {/* Label "Baru" diletakkan di luar struktur button agar bisa menonjol keluar sudut */}
+        {isNew && (
+          <div className="absolute -top-2.5 -right-2.5 z-20 animate-bounce">
+            <span className="bg-rose-500 text-white text-[10px] font-black tracking-widest uppercase px-2 py-1 rounded-full shadow-lg shadow-rose-500/40 border-2 border-white flex items-center justify-center">
+              Baru
             </span>
           </div>
+        )}
 
-          {/* Title & Description */}
-          <h3 className="text-sm sm:text-base font-extrabold text-white leading-snug drop-shadow-md">
-            {title}
-          </h3>
-          <p className="text-[11px] sm:text-xs text-blue-50 mt-1.5 leading-relaxed line-clamp-2 font-medium drop-shadow-sm">
-            {description}
-          </p>
-        </div>
-      </button>
+        <button
+          onClick={onClick}
+          className={`
+            group relative text-left 
+            bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600
+            border-x border-b border-blue-300/40
+            border-t-[4px] ${style.border}
+            rounded-2xl p-3.5 sm:p-5 shadow-lg shadow-blue-500/30 
+            transition-all duration-300 active:scale-[0.98]
+            flex flex-col justify-between w-full
+            hover:-translate-y-1.5 hover:shadow-xl hover:shadow-blue-500/40 ${style.hoverBorder}
+            overflow-hidden
+          `}
+        >
+          {/* Efek kilau cahaya saat di-hover */}
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"></div>
+
+          {/* BACKGROUND ICON BESAR TRANSPARAN DI KIRI */}
+          <div className="absolute -right-6 top-1/2 -translate-y-1/2 text-[110px] sm:text-[140px] leading-none opacity-[0.5] z-0 pointer-events-none select-none transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-12">
+            {icon}
+          </div>
+
+          {/* Konten Utama Card (Berada di atas background icon) */}
+          <div className="relative z-10 w-full">
+            {/* Icon & Action Badge */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-white/20 text-white shadow-inner backdrop-blur-md border border-white/30">
+                {icon}
+              </div>
+
+              {/* Badge menyesuaikan warna tema saat disentuh */}
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/30 bg-white/10 text-white flex items-center gap-1 backdrop-blur-sm transition-all duration-300 shadow-sm ${style.badgeHover}`}
+              >
+                Akses
+                <span className="group-hover:translate-x-1 transition-transform duration-300">
+                  →
+                </span>
+              </span>
+            </div>
+
+            {/* Title Badge (Disesuaikan dengan warna tema) */}
+            <div className="mb-2">
+              <span
+                className={`inline-block text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-md shadow-sm ${style.titleBadge}`}
+              >
+                {title}
+              </span>
+            </div>
+
+            {/* Description */}
+            <p className="text-[11px] sm:text-xs text-blue-50 leading-relaxed line-clamp-2 font-medium drop-shadow-sm mt-1">
+              {description}
+            </p>
+          </div>
+        </button>
+      </div>
     );
   };
 
@@ -242,34 +298,55 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Grid Kartu: Garis Lengkung Berbeda Warna */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5">
+            {/* Grid Kartu: 2 kolom di HP, 3 kolom di Tablet/Desktop agar rapi untuk 6 card */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-5">
+              {/* Card 1: Asesmen Komputer */}
               <ServiceCard
                 icon="💻"
-                title="Asesmen Online"
+                title="Asesmen Online Komputer"
                 description="Ujian digital terstruktur dan aman."
-                themeColor="yellow" // Garis Kuning Emas
+                themeColor="yellow"
                 onClick={handleMasukAsesmen}
               />
+
+              {/* Card 2: Asesmen Android (Baru Ditambahkan) */}
+              <ServiceCard
+                icon="📱"
+                title="Asesmen Online Android"
+                description="update : Timer kirim bisa di non aktifkan dari admin"
+                themeColor="cyan"
+                isNew={true}
+                onClick={() =>
+                  (window.location.href =
+                    "https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20ANDROID.apk")
+                }
+              />
+
+              {/* Card 3: Presensi Kelas */}
               <ServiceCard
                 icon="📋"
                 title="Presensi Kelas"
                 description="Pencatatan kehadiran siswa harian."
-                themeColor="emerald" // Garis Hijau Zamrud
+                themeColor="emerald"
                 onClick={() => router.push("/presensi")}
               />
+
+              {/* Card 4: Presensi Magang */}
               <ServiceCard
                 icon="💼"
                 title="Presensi Magang"
                 description="Monitoring jurnal & kehadiran PKL."
-                themeColor="orange" // Garis Oranye
+                themeColor="orange"
+                isNew={true}
                 onClick={() => router.push("/magang/login")}
               />
+
+              {/* Card 5: Video Belajar */}
               <ServiceCard
                 icon="▶️"
                 title="Video Belajar"
                 description="Kumpulan materi video interaktif."
-                themeColor="pink" // Garis Merah Muda
+                themeColor="pink"
                 onClick={() =>
                   window.open(
                     "https://tjktsmkn1telukkuantan.web.id/video-belajar/",
@@ -277,11 +354,13 @@ export default function Home() {
                   )
                 }
               />
+
+              {/* Card 6: Materi Belajar */}
               <ServiceCard
                 icon="📚"
                 title="Materi Belajar"
                 description="Modul & e-book pembelajaran."
-                themeColor="violet" // Garis Ungu
+                themeColor="violet"
                 onClick={() =>
                   window.open(
                     "https://tjktsmkn1telukkuantan.web.id/buku-belajar/",

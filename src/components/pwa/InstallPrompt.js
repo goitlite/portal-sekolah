@@ -6,10 +6,29 @@ import Image from "next/image";
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [show, setShow] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     // Jika aplikasi sudah terinstall, jangan tampilkan popup
     if (window.matchMedia("(display-mode: standalone)").matches) {
+      return;
+    }
+
+    // Deteksi iPhone / iPad
+    const ios =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    setIsIOS(ios);
+
+    // Jika iPhone langsung tampilkan popup
+    if (ios) {
+      console.log("iPhone terdeteksi");
+
+      setTimeout(() => {
+        setShow(true);
+      }, 800);
+
       return;
     }
 
@@ -20,7 +39,6 @@ export default function InstallPrompt() {
 
       setDeferredPrompt(e);
 
-      // beri jeda sedikit agar tidak muncul mendadak
       setTimeout(() => {
         setShow(true);
       }, 800);
@@ -37,6 +55,12 @@ export default function InstallPrompt() {
   }, []);
 
   async function handleInstall() {
+    // iPhone tidak memiliki beforeinstallprompt
+    if (isIOS) {
+      setShow(false);
+      return;
+    }
+
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
@@ -57,14 +81,25 @@ export default function InstallPrompt() {
 
   return (
     <>
-      {/* Background */}
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9998]" />
-
       {/* Bottom Sheet */}
       <div className="fixed left-0 right-0 bottom-0 z-[9999] animate-in slide-in-from-bottom duration-500">
-        <div className="mx-auto max-w-md rounded-t-3xl bg-white shadow-2xl p-6">
+        <div
+          className="
+    mx-auto
+    max-w-md
+    rounded-t-[32px]
+    border border-white/40
+    bg-gradient-to-br
+    from-amber-100/70
+    via-yellow-50/65
+    to-white/55
+    backdrop-blur-2xl
+    shadow-[0_-20px_60px_rgba(251,191,36,0.25)]
+    p-6
+  "
+        >
           <div className="flex justify-center">
-            <div className="rounded-2xl bg-slate-100 p-3 shadow">
+            <div className="rounded-2xl bg-white p-3 shadow-lg border border-amber-200">
               <Image
                 src="/logo.png"
                 alt="Logo"
@@ -84,7 +119,7 @@ export default function InstallPrompt() {
             nyaman.
           </p>
 
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-bold text-amber-700">📱 Cara Instal</h3>
 
             <div className="mt-3 space-y-3 text-sm text-slate-700">
@@ -103,7 +138,7 @@ export default function InstallPrompt() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+          <div className="mt-5 rounded-2xl bg-white border border-amber-100 shadow-sm p-4">
             <div className="space-y-2 text-sm text-slate-700">
               <div>✅ Ikon langsung di layar utama</div>
               <div>✅ Tampilan seperti aplikasi</div>
@@ -115,7 +150,7 @@ export default function InstallPrompt() {
             onClick={handleInstall}
             className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-base font-bold text-slate-900 shadow-lg transition active:scale-95 hover:shadow-xl"
           >
-            📲 Instal Sekarang
+            {isIOS ? "📱 Saya Mengerti" : "📲 Instal Sekarang"}
           </button>
 
           <button
