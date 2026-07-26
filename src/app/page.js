@@ -28,76 +28,85 @@ export default function Home() {
     router.push("/login");
   }
 
-  // Card Layanan: Desain Terang, Formal, dan Ringkas
-  const ServiceCard = ({ icon, title, description, color, onClick }) => {
-    const colorStyles = {
-      blue: {
-        accent: "border-t-blue-600",
-        iconBg: "bg-blue-600 text-white shadow-blue-500/20",
-        badge: "bg-blue-50 text-blue-700 border-blue-200",
-        hoverBorder: "hover:border-blue-300",
+  // Card Layanan: Base Biru Cerah + Garis Atas Dinamis (Beda Warna)
+  const ServiceCard = ({ icon, title, description, themeColor, onClick }) => {
+    // Pilihan warna aksen (Garis atas & efek hover tombol)
+    const themes = {
+      yellow: {
+        border: "border-t-yellow-400",
+        hoverBorder: "hover:border-t-yellow-300",
+        badgeHover:
+          "group-hover:bg-yellow-400 group-hover:text-yellow-950 group-hover:border-yellow-300",
       },
       emerald: {
-        accent: "border-t-emerald-600",
-        iconBg: "bg-emerald-600 text-white shadow-emerald-500/20",
-        badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        hoverBorder: "hover:border-emerald-300",
+        border: "border-t-emerald-400",
+        hoverBorder: "hover:border-t-emerald-300",
+        badgeHover:
+          "group-hover:bg-emerald-400 group-hover:text-emerald-950 group-hover:border-emerald-300",
       },
-      amber: {
-        accent: "border-t-amber-500",
-        iconBg: "bg-amber-500 text-white shadow-amber-500/20",
-        badge: "bg-amber-50 text-amber-800 border-amber-200",
-        hoverBorder: "hover:border-amber-300",
+      orange: {
+        border: "border-t-orange-400",
+        hoverBorder: "hover:border-t-orange-300",
+        badgeHover:
+          "group-hover:bg-orange-400 group-hover:text-orange-950 group-hover:border-orange-300",
       },
       pink: {
-        accent: "border-t-rose-500",
-        iconBg: "bg-rose-500 text-white shadow-rose-500/20",
-        badge: "bg-rose-50 text-rose-700 border-rose-200",
-        hoverBorder: "hover:border-rose-300",
+        border: "border-t-pink-400",
+        hoverBorder: "hover:border-t-pink-300",
+        badgeHover:
+          "group-hover:bg-pink-400 group-hover:text-pink-950 group-hover:border-pink-300",
       },
       violet: {
-        accent: "border-t-indigo-600",
-        iconBg: "bg-indigo-600 text-white shadow-indigo-500/20",
-        badge: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        hoverBorder: "hover:border-indigo-300",
+        border: "border-t-violet-400",
+        hoverBorder: "hover:border-t-violet-300",
+        badgeHover:
+          "group-hover:bg-violet-400 group-hover:text-white group-hover:border-violet-300",
       },
     };
 
-    const style = colorStyles[color] || colorStyles.blue;
+    const style = themes[themeColor] || themes.yellow;
 
     return (
       <button
         onClick={onClick}
         className={`
-          group relative text-left bg-white border border-slate-200/90
-          rounded-2xl p-3.5 sm:p-5 shadow-sm hover:shadow-md
-          transition-all duration-200 active:scale-[0.98]
-          flex flex-col justify-between w-full border-t-4 ${style.accent} ${style.hoverBorder}
+          group relative text-left 
+          bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600
+          border-x border-b border-blue-300/40
+          border-t-[4px] ${style.border}
+          rounded-2xl p-3.5 sm:p-5 shadow-lg shadow-blue-500/30 
+          transition-all duration-300 active:scale-[0.98]
+          flex flex-col justify-between w-full
+          hover:-translate-y-1.5 hover:shadow-xl hover:shadow-blue-500/40 ${style.hoverBorder}
+          overflow-hidden
         `}
       >
-        <div>
+        {/* Efek kilau cahaya saat di-hover */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+        <div className="relative z-10">
           {/* Icon & Action Badge */}
           <div className="flex items-center justify-between mb-3">
-            <div
-              className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl shadow-sm ${style.iconBg}`}
-            >
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-white/20 text-white shadow-inner backdrop-blur-md border border-white/30">
               {icon}
             </div>
+
+            {/* Badge menyesuaikan warna tema saat disentuh */}
             <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${style.badge} flex items-center gap-1`}
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/30 bg-white/10 text-white flex items-center gap-1 backdrop-blur-sm transition-all duration-300 shadow-sm ${style.badgeHover}`}
             >
               Akses
-              <span className="group-hover:translate-x-0.5 transition-transform">
+              <span className="group-hover:translate-x-1 transition-transform duration-300">
                 →
               </span>
             </span>
           </div>
 
           {/* Title & Description */}
-          <h3 className="text-sm sm:text-base font-bold text-slate-800 leading-snug group-hover:text-amber-600 transition-colors">
+          <h3 className="text-sm sm:text-base font-extrabold text-white leading-snug drop-shadow-md">
             {title}
           </h3>
-          <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2 font-normal">
+          <p className="text-[11px] sm:text-xs text-blue-50 mt-1.5 leading-relaxed line-clamp-2 font-medium drop-shadow-sm">
             {description}
           </p>
         </div>
@@ -108,47 +117,38 @@ export default function Home() {
   return (
     <main
       className="
-    min-h-screen
-    bg-gradient-to-br
-    from-white
-    via-amber-50
-    to-yellow-100/70
-    text-slate-800
-    font-sans
-    overflow-hidden
-    relative
-    selection:bg-amber-500
-    selection:text-white
-  "
+        min-h-screen
+        bg-gradient-to-br
+        from-orange-50
+        via-amber-50/80
+        to-yellow-100/90
+        text-stone-800
+        font-sans
+        overflow-hidden
+        relative
+        selection:bg-amber-500
+        selection:text-white
+      "
     >
-      <div className="absolute inset-0 opacity-[0.025] pointer-events-none">
-        <div className="h-full w-full bg-[linear-gradient(to_right,#475569_1px,transparent_1px),linear-gradient(to_bottom,#475569_1px,transparent_1px)] bg-[size:44px_44px]" />
+      {/* Grid Background */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="h-full w-full bg-[linear-gradient(to_right,#f59e0b_1px,transparent_1px),linear-gradient(to_bottom,#f59e0b_1px,transparent_1px)] bg-[size:44px_44px] opacity-[0.05]" />
       </div>
+
       {/* Soft Ambient Light Background */}
-      {/* Elegant Golden Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Cahaya utama */}
         <div
-          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[950px] h-[420px]
-      bg-gradient-to-b
-      from-yellow-200/45
-      via-amber-100/25
-      to-transparent
-      blur-3xl rounded-full"
+          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[950px] h-[450px]
+          bg-gradient-to-b from-orange-300/30 via-amber-200/20 to-transparent
+          blur-[100px] rounded-full"
         />
-
-        {/* Cahaya kiri bawah */}
         <div
-          className="absolute -bottom-24 -left-20 w-[420px] h-[320px]
-      bg-yellow-100/30
-      blur-3xl rounded-full"
+          className="absolute -bottom-24 -left-20 w-[420px] h-[350px]
+          bg-yellow-300/25 blur-[90px] rounded-full"
         />
-
-        {/* Cahaya kanan */}
         <div
-          className="absolute top-1/3 -right-24 w-[380px] h-[280px]
-      bg-amber-100/25
-      blur-3xl rounded-full"
+          className="absolute top-1/4 -right-24 w-[380px] h-[380px]
+          bg-amber-400/15 blur-[90px] rounded-full"
         />
       </div>
 
@@ -156,53 +156,57 @@ export default function Home() {
         <Navbar />
 
         {/* HERO SECTION */}
-        <section className="pt-3 pb-4 sm:pt-6 sm:pb-6">
+        <section className="pt-3 pb-4 sm:pt-8 sm:pb-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full">
-            <div className="grid md:grid-cols-12 gap-4 sm:gap-6 items-center">
+            <div className="grid md:grid-cols-12 gap-5 sm:gap-8 items-center">
               {/* Left Column: Headline */}
               <div className="md:col-span-5 text-center md:text-left z-20 order-2 md:order-1 flex flex-col items-center md:items-start">
-                <div className="inline-flex items-center gap-2 bg-white border border-amber-200/80 shadow-xs rounded-full px-3 py-1 mb-3">
+                {/* Badge/Label Atas */}
+                <div className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-md border border-amber-200/80 shadow-sm rounded-full px-3.5 py-1.5 mb-4">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
-                  <span className="text-slate-700 text-[11px] font-semibold tracking-wide uppercase">
+                  <span className="text-amber-900 text-[11px] font-bold tracking-wider uppercase">
                     Portal Resmi Sekolah
                   </span>
                 </div>
 
-                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 leading-tight tracking-tight">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-stone-900 leading-[1.15] tracking-tight drop-shadow-sm">
                   Sistem Layanan <br className="hidden sm:inline" />
-                  <span className="bg-gradient-to-r from-amber-600 to-amber-800 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 bg-clip-text text-transparent">
                     Digital Sekolah
                   </span>
                 </h1>
 
-                <p className="mt-2 sm:mt-3 text-slate-600 text-xs sm:text-sm font-medium leading-relaxed max-w-md">
+                <p className="mt-3 sm:mt-4 text-stone-600/90 text-sm font-medium leading-relaxed max-w-md">
                   Pusat layanan akademik terpadu untuk mendukung pembelajaran,
                   evaluasi, dan presensi secara mandiri dan cepat.
                 </p>
 
-                {/* Status Quick Bar (Mengisi area kosong secara formal) */}
-                <div className="mt-4 w-full grid grid-cols-2 gap-2 text-left bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                {/* Status Quick Bar - Emas Menyala */}
+                <div className="mt-6 w-full grid grid-cols-2 gap-3 text-left bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-500 p-3.5 rounded-2xl border border-yellow-200 shadow-[0_0_20px_rgba(250,204,21,0.6)] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/40 to-transparent pointer-events-none"></div>
+
+                  <div className="flex items-center gap-3 relative z-10">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400 border-2 border-white shadow-[0_0_10px_rgba(52,211,153,0.9)] animate-pulse"></div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-medium leading-none">
+                      <p className="text-[10px] text-yellow-950/70 font-extrabold uppercase tracking-wider leading-none">
                         Status Server
                       </p>
-                      <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                      <p className="text-xs font-black text-yellow-950 mt-1 drop-shadow-sm">
                         Online & Normal
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 border-l border-slate-100 pl-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+
+                  <div className="flex items-center gap-3 border-l-2 border-yellow-500/30 pl-3 relative z-10">
+                    <div className="w-3 h-3 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)]"></div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-medium leading-none">
+                      <p className="text-[10px] text-yellow-950/70 font-extrabold uppercase tracking-wider leading-none">
                         Instansi
                       </p>
-                      <p className="text-xs font-semibold text-slate-700 mt-0.5 truncate">
+                      <p className="text-xs font-black text-yellow-950 mt-1 truncate drop-shadow-sm">
                         SMKN 1 Teluk Kuantan
                       </p>
                     </div>
@@ -212,8 +216,8 @@ export default function Home() {
 
               {/* Right Column: Carousel */}
               <div className="md:col-span-7 order-1 md:order-2 w-full">
-                <div className="p-1.5 sm:p-2 bg-white rounded-2xl shadow-sm border border-slate-200/80">
-                  <div className="overflow-hidden rounded-xl aspect-video md:aspect-[16/9]">
+                <div className="p-2 bg-white/60 backdrop-blur-lg rounded-[1.5rem] shadow-xl shadow-amber-900/5 border border-amber-100/50 relative">
+                  <div className="overflow-hidden rounded-xl aspect-video md:aspect-[16/9] shadow-inner">
                     <Carousel />
                   </div>
                 </div>
@@ -226,46 +230,46 @@ export default function Home() {
         <section className="px-4 sm:px-6 py-4 sm:py-6">
           <div className="max-w-7xl mx-auto">
             {/* Header Section Layanan */}
-            <div className="flex items-center justify-between mb-3 border-b border-slate-200/60 pb-2">
+            <div className="flex items-center justify-between mb-4 border-b border-amber-200/50 pb-2">
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <span className="w-1.5 h-4 bg-amber-500 rounded-full inline-block"></span>
+                <h2 className="text-base sm:text-lg font-bold text-stone-900 flex items-center gap-2">
+                  <span className="w-2 h-5 bg-blue-500 rounded-full inline-block shadow-sm shadow-blue-500/50"></span>
                   Layanan Akademik & Siswa
                 </h2>
               </div>
-              <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+              <span className="text-[11px] text-amber-700/70 font-semibold uppercase tracking-wide hidden sm:inline bg-amber-100/50 px-3 py-1 rounded-full">
                 Pilih menu untuk melanjutkan
               </span>
             </div>
 
-            {/* Grid Kartu: 2 Kolom di HP, Compact & Rapi */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
+            {/* Grid Kartu: Garis Lengkung Berbeda Warna */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5">
               <ServiceCard
                 icon="💻"
                 title="Asesmen Online"
                 description="Ujian digital terstruktur dan aman."
-                color="blue"
+                themeColor="yellow" // Garis Kuning Emas
                 onClick={handleMasukAsesmen}
               />
               <ServiceCard
                 icon="📋"
                 title="Presensi Kelas"
                 description="Pencatatan kehadiran siswa harian."
-                color="emerald"
+                themeColor="emerald" // Garis Hijau Zamrud
                 onClick={() => router.push("/presensi")}
               />
               <ServiceCard
                 icon="💼"
                 title="Presensi Magang"
                 description="Monitoring jurnal & kehadiran PKL."
-                color="amber"
+                themeColor="orange" // Garis Oranye
                 onClick={() => router.push("/magang/login")}
               />
               <ServiceCard
                 icon="▶️"
                 title="Video Belajar"
                 description="Kumpulan materi video interaktif."
-                color="pink"
+                themeColor="pink" // Garis Merah Muda
                 onClick={() =>
                   window.open(
                     "https://tjktsmkn1telukkuantan.web.id/video-belajar/",
@@ -277,7 +281,7 @@ export default function Home() {
                 icon="📚"
                 title="Materi Belajar"
                 description="Modul & e-book pembelajaran."
-                color="violet"
+                themeColor="violet" // Garis Ungu
                 onClick={() =>
                   window.open(
                     "https://tjktsmkn1telukkuantan.web.id/buku-belajar/",
@@ -290,12 +294,12 @@ export default function Home() {
         </section>
 
         {/* FOOTER */}
-        <footer className="mt-auto py-5 text-center text-slate-500 text-xs font-medium w-full border-t border-slate-200/80 bg-white">
+        <footer className="mt-auto py-6 text-center text-stone-500 text-xs font-medium w-full border-t border-amber-200/50 bg-white/30 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4">
-            <p className="text-slate-700 font-semibold">
+            <p className="text-stone-800 font-bold tracking-wide">
               © 2026 SMKN 1 TELUK KUANTAN
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-stone-500 mt-1">
               Sistem Layanan Sekolah Digital • Terintegrasi & Responsif
             </p>
           </div>
