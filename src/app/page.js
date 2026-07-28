@@ -285,7 +285,7 @@ export default function Home() {
         {/* SERVICES SECTION */}
         <section className="px-4 sm:px-6 py-4 sm:py-6">
           <div className="max-w-7xl mx-auto">
-            {/* Header Section Layanann */}
+            {/* Header Section Layanan */}
             <div className="flex items-center justify-between mb-4 border-b border-amber-200/50 pb-2">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-stone-900 flex items-center gap-2">
@@ -304,7 +304,7 @@ export default function Home() {
                   }
                   window.location.reload();
                 }}
-                className="text-[11px] text-white font-bold uppercase tracking-wide hidden sm:flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-3 py-1 rounded-full shadow-sm shadow-emerald-500/30 border border-emerald-400 transition-all cursor-pointer"
+                className="text-[11px] text-white font-bold uppercase tracking-wide flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-3 py-1 rounded-full shadow-sm shadow-emerald-500/30 border border-emerald-400 transition-all cursor-pointer"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

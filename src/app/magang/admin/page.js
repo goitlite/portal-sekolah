@@ -12,12 +12,26 @@ export default function AdminPage() {
   const router = useRouter();
 
   // ===========================
-  // Mencegah Hydration Error
+  // Mencegah Hydration Error & Pemanasan Server
   // ===========================
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+
+    // TRIK PEMANASAN (WARM UP): Menembak API secara diam-diam di latar belakang.
+    // Ini memaksa server Google Apps Script bangun dari 'tidur' (cold start)
+    // saat layar PIN masih tampil, sehingga saat PIN benar data langsung instan.
+    fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      redirect: "follow",
+      body: JSON.stringify({ action: "getAdminGuru" }),
+    }).catch(() => {
+      // Dibiarkan kosong/diabaikan karena ini hanya tembakan pemancing
+    });
   }, []);
 
   // ===========================
@@ -248,36 +262,37 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* HEADER */}
-      <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 shadow-lg">
-        <div className="mx-auto max-w-6xl px-5 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+      {/* HEADER FIXED (Responsif seperti halaman siswa) */}
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl backdrop-blur-sm border border-white/20">
               <img
                 src="/logo.png"
                 alt="Logo"
-                className="h-auto w-[70px] object-contain"
+                className="object-contain w-9 h-9 sm:w-[44px] sm:h-[44px]"
               />
-              <div>
-                <h1 className="text-2xl font-black text-white">
-                  Dashboard Super Admin
-                </h1>
-                <p className="text-blue-100">Kelola Akun Guru Pembimbing</p>
-              </div>
             </div>
-
-            <button
-              onClick={() => {
-                setIsAuthenticated(false);
-                window.location.href = "/magang/login";
-              }}
-              className="flex w-max items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
-            >
-              Keluar (Kunci Layar) →
-            </button>
+            <div>
+              <h1 className="text-sm sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
+                DASHBOARD SUPER ADMIN
+              </h1>
+              <p className="text-[10px] sm:text-xs font-medium text-blue-300 tracking-wide mt-0.5">
+                Kelola Akun Guru Pembimbing
+              </p>
+            </div>
           </div>
+          <button
+            onClick={() => {
+              setIsAuthenticated(false);
+              window.location.href = "/magang/login";
+            }}
+            className="rounded-lg sm:rounded-xl bg-white/10 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm"
+          >
+            Keluar
+          </button>
         </div>
-      </div>
+      </header>
 
       <div className="mx-auto max-w-6xl p-5">
         {/* CARD STATISTIK */}
@@ -307,9 +322,18 @@ export default function AdminPage() {
 
         {/* LIST GURU */}
         <div className="mt-8">
-          <h2 className="mb-4 text-xl font-black text-slate-800">
-            Daftar Guru Pembimbing (A-Z)
-          </h2>
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-xl font-black text-slate-800">
+              Daftar Guru Pembimbing (A-Z)
+            </h2>
+            <button
+              onClick={loadGuru}
+              disabled={loading}
+              className="flex w-max items-center justify-center gap-2 rounded-xl bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-200 disabled:opacity-50"
+            >
+              🔄 Refresh Data
+            </button>
+          </div>
 
           {loading ? (
             <div className="rounded-3xl bg-white p-10 text-center shadow">
@@ -319,25 +343,34 @@ export default function AdminPage() {
             </div>
           ) : guruList.length === 0 ? (
             <div className="rounded-3xl bg-white p-10 text-center text-slate-500 shadow">
-              Belum ada akun guru.
+              <div className="mb-4 text-5xl">📭</div>
+              <p className="mb-4 text-slate-600">
+                Belum ada akun guru atau data gagal dimuat.
+              </p>
+              <button
+                onClick={loadGuru}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"
+              >
+                🔄 Muat Ulang
+              </button>
             </div>
           ) : (
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {guruList.map((guru) => (
                 <div
                   key={guru.ID}
-                  className="rounded-3xl border border-slate-100 bg-white p-5 shadow-lg transition hover:shadow-xl"
+                  className="rounded-3xl border border-yellow-200 bg-gradient-to-br from-white via-amber-50 to-yellow-100/70 p-5 shadow-lg transition hover:shadow-xl hover:border-yellow-300"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-3xl text-white shadow">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 text-3xl text-white shadow">
                       👨‍🏫
                     </div>
                     <div className="flex-1">
                       <div className="line-clamp-1 text-lg font-black text-slate-800">
                         {guru.NAMA_GURU}
                       </div>
-                      <div className="mt-2 text-xs text-slate-500">ID GURU</div>
-                      <div className="font-mono text-xl font-black tracking-widest text-blue-700">
+                      <div className="mt-2 text-xs text-slate-600">ID GURU</div>
+                      <div className="font-mono text-xl font-black tracking-widest text-yellow-700">
                         {guru.ID}
                       </div>
                     </div>
