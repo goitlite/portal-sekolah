@@ -285,7 +285,7 @@ export default function Home() {
         {/* SERVICES SECTION */}
         <section className="px-4 sm:px-6 py-4 sm:py-6">
           <div className="max-w-7xl mx-auto">
-            {/* Header Section Layanan */}
+            {/* Header Section Layanann */}
             <div className="flex items-center justify-between mb-4 border-b border-amber-200/50 pb-2">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-stone-900 flex items-center gap-2">
@@ -293,9 +293,35 @@ export default function Home() {
                   Layanan Akademik & Siswa
                 </h2>
               </div>
-              <span className="text-[11px] text-amber-700/70 font-semibold uppercase tracking-wide hidden sm:inline bg-amber-100/50 px-3 py-1 rounded-full">
-                Pilih menu untuk melanjutkan
-              </span>
+              <button
+                onClick={async () => {
+                  if ("caches" in window) {
+                    try {
+                      await caches.delete("portal-sekolah-v1");
+                    } catch (error) {
+                      console.error("Gagal menghapus cache:", error);
+                    }
+                  }
+                  window.location.reload();
+                }}
+                className="text-[11px] text-white font-bold uppercase tracking-wide hidden sm:flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-3 py-1 rounded-full shadow-sm shadow-emerald-500/30 border border-emerald-400 transition-all cursor-pointer"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                  stroke="currentColor"
+                  className="w-3.5 h-3.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
+                </svg>
+                Refresh Menu
+              </button>
             </div>
 
             {/* Grid Kartu: 2 kolom di HP, 3 kolom di Tablet/Desktop agar rapi untuk 6 card */}
