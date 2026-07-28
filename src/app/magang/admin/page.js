@@ -472,7 +472,7 @@ export default function AdminPage() {
                   </button>
                   <button
                     onClick={async () => {
-                      if (kodeHapus !== "293031") {
+                      if (kodeHapus !== "858687") {
                         showToast("Kode salah.", "error");
                         return;
                       }
