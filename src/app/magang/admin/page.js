@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { verifikasiPinLogin, verifikasiPinHapus } from "./actions"; // Memanggil fungsi aman dari server
 
 // Ganti URL ini dengan URL dari hasil "NEW DEPLOYMENT" yang aksesnya "Anyone"
 const API_URL =
@@ -53,11 +54,15 @@ export default function AdminPage() {
   };
 
   // ===========================
-  // Fungsi Cek PIN
+  // Fungsi Cek PIN Login (Diperbarui)
   // ===========================
-  const handleLoginAdmin = (e) => {
+  const handleLoginAdmin = async (e) => {
     e.preventDefault();
-    if (inputPin === "293031") {
+
+    // Mengecek PIN murni di belakang layar (Server)
+    const isPinBenar = await verifikasiPinLogin(inputPin);
+
+    if (isPinBenar) {
       setIsAuthenticated(true);
       loadGuru();
     } else {
@@ -156,7 +161,7 @@ export default function AdminPage() {
   }
 
   // ===========================
-  // TAMPILAN LOCK SCREEN (JIKA BELUM MASUKKAN PIN)
+  // TAMPILAN LOCK SCREEN
   // ===========================
   if (!isAuthenticated) {
     return (
@@ -217,7 +222,7 @@ export default function AdminPage() {
   }
 
   // ===========================
-  // TAMPILAN DASHBOARD (JIKA PIN BENAR)
+  // TAMPILAN DASHBOARD
   // ===========================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-50">
@@ -246,9 +251,7 @@ export default function AdminPage() {
       {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 shadow-lg">
         <div className="mx-auto max-w-6xl px-5 py-6">
-          {/* Container Flexbox untuk memisahkan Kiri dan Kanan */}
           <div className="flex items-center justify-between">
-            {/* Bagian Kiri: Logo dan Text */}
             <div className="flex items-center gap-4">
               <img
                 src="/logo.png"
@@ -263,18 +266,9 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Bagian Kanan: Tombol Keluar */}
             <button
               onClick={() => {
                 setIsAuthenticated(false);
-
-                // Opsi 1: Jika menggunakan Next.js (App Router/Pages Router)
-                // router.push('/magang/login');
-
-                // Opsi 2: Jika menggunakan React Router DOM
-                // navigate('/magang/login');
-
-                // Opsi 3: Cara bawaan Javascript (Vanilla JS)
                 window.location.href = "/magang/login";
               }}
               className="flex w-max items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
@@ -364,9 +358,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* ===========================
-            MODAL TAMBAH GURU
-        =========================== */}
+        {/* MODAL TAMBAH GURU */}
         {showTambah && (
           <>
             <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" />
@@ -424,9 +416,7 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* ===========================
-            MODAL HAPUS
-        =========================== */}
+        {/* MODAL HAPUS GURU (Diperbarui) */}
         {showHapus && (
           <>
             <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" />
@@ -472,7 +462,10 @@ export default function AdminPage() {
                   </button>
                   <button
                     onClick={async () => {
-                      if (kodeHapus !== "858687") {
+                      // Mengecek PIN Hapus di belakang layar
+                      const isKodeBenar = await verifikasiPinHapus(kodeHapus);
+
+                      if (!isKodeBenar) {
                         showToast("Kode salah.", "error");
                         return;
                       }
