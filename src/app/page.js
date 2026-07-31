@@ -344,7 +344,7 @@ export default function Home() {
                 isNew={true}
                 onClick={() =>
                   (window.location.href =
-                    "https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20ANDROID.apk")
+                    "https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20V3.apk")
                 }
               />
 
