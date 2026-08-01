@@ -54,6 +54,11 @@ export default function DashboardGuru() {
     data: [],
   });
 
+  // --- STATE UNTUK GALERI AKTIVITAS & FULLSCREEN ---
+  const [showGallery, setShowGallery] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   useEffect(() => {
     async function loadDashboard() {
       if (!isLoggedIn()) {
@@ -139,6 +144,17 @@ export default function DashboardGuru() {
       data: listData || [],
     });
   }
+
+  // --- FUNGSI NAVIGASI GALERI ---
+  const handleNextImage = (e) => {
+    e.stopPropagation();
+    setGalleryIndex((prev) => (prev + 1) % aktivitas.length);
+  };
+
+  const handlePrevImage = (e) => {
+    e.stopPropagation();
+    setGalleryIndex((prev) => (prev - 1 + aktivitas.length) % aktivitas.length);
+  };
 
   if (loading || !user) {
     return (
@@ -348,13 +364,28 @@ export default function DashboardGuru() {
 
         {/* TABEL AKTIVITAS TERBARU */}
         <div className="rounded-[2rem] bg-white border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-          <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100">
-            <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-              ⚡ Aktivitas Terkini
-            </h2>
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
-              Log pengiriman presensi & pemantauan foto riil siswa di lapangan.
-            </p>
+          <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
+                ⚡ Aktivitas Terkini
+              </h2>
+              <p className="text-xs sm:text-sm font-medium text-slate-500">
+                Log pengiriman presensi & pemantauan foto riil siswa di
+                lapangan.
+              </p>
+            </div>
+            {/* Tombol Lihat Semuanya (Ditambahkan di sini) */}
+            {aktivitas.length > 0 && (
+              <button
+                onClick={() => {
+                  setGalleryIndex(0);
+                  setShowGallery(true);
+                }}
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold py-2.5 px-5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <span>👁️</span> Lihat Semuanya
+              </button>
+            )}
           </div>
 
           <div className="p-4 sm:p-6">
@@ -502,6 +533,116 @@ export default function DashboardGuru() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* =========================================
+          MODAL GALERI AKTIVITAS (TAMPILAN SLIDER)
+          ========================================= */}
+      {showGallery && aktivitas.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col relative">
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-4 flex items-center justify-between text-white">
+              <h3 className="font-black text-lg">
+                Galeri Aktivitas ({galleryIndex + 1}/{aktivitas.length})
+              </h3>
+              <button
+                onClick={() => setShowGallery(false)}
+                className="bg-white/20 hover:bg-white/30 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col items-center relative">
+              {/* Gambar (Klik untuk Fullscreen) */}
+              <div
+                className="relative w-full h-64 sm:h-96 bg-slate-100 rounded-xl overflow-hidden cursor-zoom-in group border border-slate-200 shadow-inner"
+                onClick={() => setIsFullScreen(true)}
+              >
+                <img
+                  src={aktivitas[galleryIndex].foto}
+                  alt="Aktivitas"
+                  className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-md transition-opacity font-bold">
+                    🔍 Klik Gambar untuk Fullscreen
+                  </span>
+                </div>
+              </div>
+
+              {/* Data Siswa */}
+              <div className="mt-5 text-center px-4 w-full">
+                <span
+                  className={`inline-block mb-1.5 rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                    aktivitas[galleryIndex].jenis === "PRESENSI"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-blue-100 text-blue-800"
+                  }`}
+                >
+                  {aktivitas[galleryIndex].jenis}
+                </span>
+                <h4 className="font-black text-xl text-slate-800">
+                  {aktivitas[galleryIndex].nama}
+                </h4>
+                <p className="text-sm font-semibold text-slate-500 mt-1">
+                  📍 {aktivitas[galleryIndex].tempat}
+                </p>
+                <p className="text-xs text-slate-400 mt-1 font-medium">
+                  ⏱️ {formatTanggal(aktivitas[galleryIndex].waktu)}
+                </p>
+              </div>
+
+              {/* Tombol Sebelumnya / Selanjutnya */}
+              <button
+                onClick={handlePrevImage}
+                className="absolute left-2 sm:left-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-200"
+              >
+                ◀
+              </button>
+              <button
+                onClick={handleNextImage}
+                className="absolute right-2 sm:right-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-200"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================
+          MODAL GAMBAR FULLSCREEN
+          ========================================= */}
+      {isFullScreen && aktivitas.length > 0 && (
+        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-2 sm:p-6 animate-in fade-in duration-200">
+          <button
+            onClick={() => setIsFullScreen(false)}
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 z-[70] bg-white/10 hover:bg-white/20 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl transition-colors backdrop-blur-md"
+          >
+            ✕
+          </button>
+
+          <img
+            src={aktivitas[galleryIndex].foto}
+            alt="Fullscreen Aktivitas"
+            className="max-w-full max-h-full object-contain rounded-lg select-none"
+          />
+
+          {/* Tombol Sebelumnya / Selanjutnya (Fullscreen) */}
+          <button
+            onClick={handlePrevImage}
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+          >
+            ◀
+          </button>
+          <button
+            onClick={handleNextImage}
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+          >
+            ▶
+          </button>
         </div>
       )}
     </main>
