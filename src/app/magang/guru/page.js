@@ -305,6 +305,7 @@ export default function DashboardGuru() {
                   className="rounded-2xl border border-[#D9B44A]/60 bg-white/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA (TETAP / TIDAK BERUBAH) */}
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
                         <span className="text-sm sm:text-base">📍</span>{" "}
@@ -317,12 +318,57 @@ export default function DashboardGuru() {
                         </span>
                       </p>
                     </div>
-                    <button
-                      onClick={() => mulaiMonitoring(item.tempat)}
-                      className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-blue-600/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
-                    >
-                      📷 MONITORING AREA
-                    </button>
+
+                    {/* BAGIAN TOMBOL (DIBUNGKUS FLEX AGAR BISA BERJAJAR) */}
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+                      {/* TOMBOL BARU: Lihat Aktifitas */}
+                      <button
+                        onClick={() => {
+                          // Dapatkan format "Bulan Terbaru" (contoh: Agustus 2026)
+                          const date = new Date();
+                          const namaBulan = [
+                            "Januari",
+                            "Februari",
+                            "Maret",
+                            "April",
+                            "Mei",
+                            "Juni",
+                            "Juli",
+                            "Agustus",
+                            "September",
+                            "Oktober",
+                            "November",
+                            "Desember",
+                          ];
+                          const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
+
+                          // Kirim data Guru, Tempat, dan Bulan ke localStorage
+                          localStorage.setItem(
+                            "targetTempatRekap",
+                            item.tempat,
+                          );
+                          localStorage.setItem("targetGuruRekap", user.id);
+                          localStorage.setItem(
+                            "targetBulanRekap",
+                            bulanTerbaru,
+                          );
+
+                          // Pindah halaman
+                          router.push("/magang/rekap");
+                        }}
+                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-orange-500/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                      >
+                        👁️ LIHAT AKTIVITAS
+                      </button>
+
+                      {/* TOMBOL LAMA: Monitoring Area */}
+                      <button
+                        onClick={() => mulaiMonitoring(item.tempat)}
+                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-blue-600/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                      >
+                        📷 MONITORING AREA
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))

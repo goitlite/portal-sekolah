@@ -61,6 +61,34 @@ export default function RekapPage() {
   // Tambahan state untuk filter Nama dan Kelas
   const [filterNama, setFilterNama] = useState("");
   const [filterKelas, setFilterKelas] = useState("Semua");
+  // Menangkap request auto-select dari Dashboard Guru
+  useEffect(() => {
+    const autoSelectTempat = localStorage.getItem("targetTempatRekap");
+    const autoSelectGuru = localStorage.getItem("targetGuruRekap");
+    const autoSelectBulan = localStorage.getItem("targetBulanRekap");
+
+    let hasAutoSelect = false;
+
+    if (autoSelectGuru) {
+      setGuruDipilih(autoSelectGuru);
+      hasAutoSelect = true;
+    }
+    if (autoSelectTempat) {
+      setTempat(autoSelectTempat);
+      hasAutoSelect = true;
+    }
+    if (autoSelectBulan) {
+      setBulan(autoSelectBulan);
+      hasAutoSelect = true;
+    }
+
+    // Bersihkan memori agar jika halaman direfresh, filter tidak terkunci
+    if (hasAutoSelect) {
+      localStorage.removeItem("targetTempatRekap");
+      localStorage.removeItem("targetGuruRekap");
+      localStorage.removeItem("targetBulanRekap");
+    }
+  }, []);
 
   async function forceFreshMode() {
     if (guruDipilih) {
