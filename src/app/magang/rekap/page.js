@@ -61,6 +61,10 @@ export default function RekapPage() {
   // Tambahan state untuk filter Nama dan Kelas
   const [filterNama, setFilterNama] = useState("");
   const [filterKelas, setFilterKelas] = useState("Semua");
+
+  // Tambahan state untuk filter Bulan di Popup Riwayat Presensi
+  const [selectedRiwayatBulan, setSelectedRiwayatBulan] = useState("Semua");
+
   // Menangkap request auto-select dari Dashboard Guru
   useEffect(() => {
     const autoSelectTempat = localStorage.getItem("targetTempatRekap");
@@ -167,6 +171,7 @@ export default function RekapPage() {
       });
       setRiwayatLoading(true);
       setRiwayatSiswa([]);
+      setSelectedRiwayatBulan("Semua"); // Reset filter bulan saat membuka siswa baru
     }
 
     try {
@@ -230,6 +235,33 @@ export default function RekapPage() {
       };
     } catch (e) {
       return { hari: "-", tanggal: timestampStr };
+    }
+  }
+
+  // Helper untuk mendapatkan Nama Bulan dan Tahun untuk filter
+  function getBulanTahun(timestampStr) {
+    if (!timestampStr) return "-";
+    try {
+      const datePart = timestampStr.split(" ")[0];
+      const date = new Date(datePart);
+      if (isNaN(date.getTime())) return "-";
+      const bulanNames = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+      return `${bulanNames[date.getMonth()]} ${date.getFullYear()}`;
+    } catch (e) {
+      return "-";
     }
   }
 
@@ -331,6 +363,23 @@ export default function RekapPage() {
     .filter((item) => item.siswa.length > 0) // Sembunyikan lokasi magang jika siswanya 0 setelah difilter
     .filter((item) => (tempat === "Semua" ? true : item.tempat === tempat))
     .sort((a, b) => a.tempat.localeCompare(b.tempat));
+
+  // Mendapatkan daftar bulan unik dari data riwayat yang sedang dibuka
+  const uniqueBulanRiwayat = Array.from(
+    new Set(
+      riwayatSiswa
+        .map((r) => getBulanTahun(r.TIMESTAMP))
+        .filter((b) => b !== "-"),
+    ),
+  );
+
+  // Memfilter data riwayat berdasarkan filter bulan pada popup
+  const filteredRiwayatSiswa =
+    selectedRiwayatBulan === "Semua"
+      ? riwayatSiswa
+      : riwayatSiswa.filter(
+          (r) => getBulanTahun(r.TIMESTAMP) === selectedRiwayatBulan,
+        );
 
   return (
     <>
@@ -756,27 +805,29 @@ export default function RekapPage() {
               onClick={() => setSelectedSiswa(null)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             ></div>
-            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
-              <div className="pointer-events-auto w-screen max-w-4xl transform transition-transform duration-500 ease-in-out">
-                <div className="flex h-full flex-col bg-slate-50 shadow-2xl rounded-l-[2.5rem] overflow-hidden border-l border-white/20">
-                  <div className="relative bg-gradient-to-br from-blue-700 via-indigo-800 to-blue-900 p-6 sm:p-8 text-white overflow-hidden">
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
+
+            <div className="pointer-events-none fixed inset-y-0 right-0 flex w-full sm:max-w-5xl sm:pl-16">
+              <div className="pointer-events-auto w-full transform transition-transform duration-300 ease-in-out">
+                <div className="flex h-full flex-col bg-slate-50 shadow-2xl sm:rounded-l-2xl overflow-hidden border-l border-white/20">
+                  {/* HEADER BIRU (SUPER PADAT) */}
+                  <div className="relative bg-gradient-to-br from-blue-700 via-indigo-800 to-blue-900 p-3 sm:p-4 text-white overflow-hidden shrink-0">
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
                     <div className="relative flex items-start justify-between">
                       <div>
-                        <div className="inline-flex items-center gap-2 bg-blue-400/20 border border-blue-300/30 px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest backdrop-blur-md mb-4">
-                          <span className="w-2 h-2 rounded-full bg-blue-300"></span>
+                        <div className="inline-flex items-center gap-1.5 bg-blue-400/20 border border-blue-300/30 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider backdrop-blur-md mb-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-300"></span>
                           Riwayat Presensi
                         </div>
-                        <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-none mb-1">
+                        <h2 className="text-base sm:text-xl font-black tracking-tight leading-none">
                           <NamaBadge rawName={selectedSiswa.nama} />
                         </h2>
                       </div>
                       <button
                         onClick={() => setSelectedSiswa(null)}
-                        className="rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20 border border-white/10 focus:outline-none transition-all"
+                        className="rounded hover:bg-white/20 p-1 text-white border border-transparent hover:border-white/10 transition-all ml-2"
                       >
                         <svg
-                          className="w-5 h-5"
+                          className="w-4 h-4 sm:w-5 sm:h-5"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -791,204 +842,263 @@ export default function RekapPage() {
                       </button>
                     </div>
 
-                    <div className="relative mt-6 sm:mt-8 grid grid-cols-2 gap-4 sm:gap-6 border-t border-white/10 pt-6 text-sm">
+                    <div className="relative mt-2 sm:mt-3 grid grid-cols-3 gap-2 sm:gap-4 border-t border-white/10 pt-2 sm:pt-3">
                       <div>
-                        <p className="text-blue-200/80 text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1">
+                        <p className="text-blue-200/80 text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mb-0.5">
                           Pembimbing
                         </p>
-                        <p className="font-bold text-sm sm:text-lg flex items-center gap-2">
+                        <p className="font-bold text-[10px] sm:text-xs flex items-center gap-1 truncate">
                           👨‍🏫 {selectedSiswa.guru}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-blue-200/80 text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1">
+
+                      {/* FILTER BULAN DI TENGAH */}
+                      <div className="flex flex-col items-center justify-center border-x border-white/10 px-1 sm:px-2">
+                        <p className="text-blue-200/80 text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mb-0.5 text-center w-full">
+                          Filter Bulan
+                        </p>
+                        <select
+                          value={selectedRiwayatBulan}
+                          onChange={(e) =>
+                            setSelectedRiwayatBulan(e.target.value)
+                          }
+                          className="w-full max-w-[120px] bg-white/10 border border-white/20 text-white text-[9px] sm:text-[10px] font-bold rounded px-1 py-0.5 sm:py-1 outline-none focus:border-white transition-colors cursor-pointer text-center appearance-none"
+                          style={{ textAlignLast: "center" }}
+                        >
+                          <option value="Semua" className="text-slate-800">
+                            Semua Bulan
+                          </option>
+                          {uniqueBulanRiwayat.map((b, idx) => (
+                            <option
+                              key={idx}
+                              value={b}
+                              className="text-slate-800"
+                            >
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-blue-200/80 text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mb-0.5">
                           Lokasi Magang
                         </p>
-                        <p className="font-bold text-sm sm:text-lg flex items-center gap-2">
+                        <p className="font-bold text-[10px] sm:text-xs flex items-center justify-end gap-1 truncate">
                           📍 {selectedSiswa.tempat}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+                  {/* MAIN CONTENT AREA */}
+                  <div className="flex-1 overflow-y-auto p-2 sm:p-4">
                     {riwayatLoading ? (
-                      <div className="flex h-64 flex-col items-center justify-center text-slate-500">
-                        <div className="relative h-12 w-12 mb-4">
-                          <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
-                          <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                      <div className="flex h-32 flex-col items-center justify-center text-slate-500">
+                        <div className="relative h-8 w-8 mb-2">
+                          <div className="absolute inset-0 rounded-full border-2 border-slate-200"></div>
+                          <div className="absolute inset-0 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div>
                         </div>
-                        <p className="font-bold tracking-wide">
-                          Menyinkronkan Riwayat...
-                        </p>
+                        <p className="font-bold text-xs">Menyinkronkan...</p>
                       </div>
                     ) : riwayatSiswa.length === 0 ? (
-                      <div className="flex h-64 flex-col items-center justify-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
-                        <svg
-                          className="w-16 h-16 mb-4 text-slate-200"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        <p className="text-lg sm:text-xl font-black text-slate-700">
+                      <div className="flex h-32 flex-col items-center justify-center text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">
+                        <p className="text-sm font-black text-slate-700">
                           Belum Ada Data
-                        </p>
-                        <p className="text-xs sm:text-sm font-medium mt-1">
-                          Siswa belum melakukan presensi bulan ini.
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-6 sm:space-y-8">
-                        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                          <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
-                            <div className="absolute top-0 w-full h-1 bg-emerald-500"></div>
-                            <span className="text-3xl sm:text-4xl font-black text-emerald-600 group-hover:scale-110 transition-transform">
+                      <div className="space-y-3 sm:space-y-4">
+                        {/* KOTAK REKAPITULASI (MENGGUNAKAN DATA FILTER) */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="absolute top-0 w-full h-0.5 bg-emerald-500"></div>
+                            <span className="text-xl sm:text-2xl font-black text-emerald-600 leading-none">
                               {
-                                riwayatSiswa.filter((r) => r.STATUS === "Hadir")
-                                  .length
+                                filteredRiwayatSiswa.filter(
+                                  (r) => r.STATUS === "Hadir",
+                                ).length
                               }
                             </span>
-                            <p className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
+                            <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase mt-1">
                               Hadir
                             </p>
                           </div>
-                          <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
-                            <div className="absolute top-0 w-full h-1 bg-amber-500"></div>
-                            <span className="text-3xl sm:text-4xl font-black text-amber-500 group-hover:scale-110 transition-transform">
+                          <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="absolute top-0 w-full h-0.5 bg-amber-500"></div>
+                            <span className="text-xl sm:text-2xl font-black text-amber-500 leading-none">
                               {
-                                riwayatSiswa.filter((r) => r.STATUS === "Izin")
-                                  .length
+                                filteredRiwayatSiswa.filter(
+                                  (r) => r.STATUS === "Izin",
+                                ).length
                               }
                             </span>
-                            <p className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
+                            <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase mt-1">
                               Izin
                             </p>
                           </div>
-                          <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden group">
-                            <div className="absolute top-0 w-full h-1 bg-blue-500"></div>
-                            <span className="text-3xl sm:text-4xl font-black text-blue-500 group-hover:scale-110 transition-transform">
+                          <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="absolute top-0 w-full h-0.5 bg-blue-500"></div>
+                            <span className="text-xl sm:text-2xl font-black text-blue-500 leading-none">
                               {
-                                riwayatSiswa.filter((r) => r.STATUS === "Sakit")
-                                  .length
+                                filteredRiwayatSiswa.filter(
+                                  (r) => r.STATUS === "Sakit",
+                                ).length
                               }
                             </span>
-                            <p className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">
+                            <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase mt-1">
                               Sakit
                             </p>
                           </div>
                         </div>
 
-                        <div className="overflow-x-auto rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
-                          <table className="min-w-full divide-y divide-slate-200 text-left text-xs sm:text-sm">
-                            <tbody className="divide-y divide-slate-100">
-                              {riwayatSiswa.map((r, i) => {
-                                const { hari, tanggal } = getHariDanTanggal(
-                                  r.TIMESTAMP,
-                                );
-                                const status = r.STATUS || "-";
-                                const fotoUrl = r.FOTO;
-                                const mapUrl = r.MAP;
-
-                                return (
-                                  <tr
-                                    key={i}
-                                    className="hover:bg-slate-50/80 transition-colors"
-                                  >
-                                    <td className="px-3 sm:px-6 py-3 sm:py-5 text-center font-bold text-slate-400">
-                                      {i + 1}
-                                    </td>
-                                    <td className="px-3 sm:px-6 py-3 sm:py-5 whitespace-nowrap">
-                                      <p className="font-bold text-slate-800 text-xs sm:text-base">
-                                        {tanggal}
-                                      </p>
-                                      <p className="text-[9px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
-                                        {hari}
-                                      </p>
-                                    </td>
-                                    <td className="px-3 sm:px-6 py-3 sm:py-5 text-center whitespace-nowrap">
-                                      <span
-                                        className={`inline-flex rounded-lg sm:rounded-xl px-2 sm:px-4 py-1 text-[9px] sm:text-xs font-black uppercase tracking-wider border ${status === "Hadir" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : status === "Izin" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}
-                                      >
-                                        {status}
-                                      </span>
-                                    </td>
-                                    <td className="px-3 sm:px-6 py-3 sm:py-5 text-center">
-                                      <div className="flex items-center justify-center gap-2">
-                                        {fotoUrl ? (
-                                          <a
-                                            href={getSafeFreshUrl(fotoUrl)}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="group flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
-                                          >
-                                            <span className="text-sm sm:text-lg group-hover:scale-110 transition-transform">
-                                              📸
-                                            </span>
-                                          </a>
-                                        ) : (
-                                          <span className="h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center text-slate-300 font-bold text-xs">
-                                            -
-                                          </span>
-                                        )}
-                                        {mapUrl && (
-                                          <a
-                                            href={mapUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="group flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
-                                          >
-                                            <span className="text-sm sm:text-lg group-hover:scale-110 transition-transform">
-                                              📍
-                                            </span>
-                                          </a>
-                                        )}
-                                      </div>
-                                    </td>
+                        {/* TABEL DATA (MENGGUNAKAN DATA FILTER) */}
+                        <div className="rounded-lg border border-slate-200 bg-white w-full overflow-hidden">
+                          <div className="overflow-x-auto w-full">
+                            <table className="min-w-max w-full divide-y divide-slate-200 text-left">
+                              <thead className="bg-slate-50">
+                                <tr>
+                                  <th className="px-2 py-1.5 text-center text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    No
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    Tanggal
+                                  </th>
+                                  <th className="px-2 py-1.5 text-center text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    Status
+                                  </th>
+                                  <th className="px-2 py-1.5 text-center text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    Lampiran
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    Pembimbing Lapangan
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                                    Kompetensi & Keterangan
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {filteredRiwayatSiswa.length === 0 ? (
+                                  <tr>
                                     <td
-                                      className="px-3 sm:px-6 py-3 sm:py-5 max-w-[100px] sm:max-w-[150px] truncate font-semibold text-slate-700 text-[9px] sm:text-sm"
-                                      title={r.PEMBIMBING_LAPANGAN || "-"}
+                                      colSpan="6"
+                                      className="py-8 text-center text-slate-400 font-bold text-xs sm:text-sm bg-white"
                                     >
-                                      {r.PEMBIMBING_LAPANGAN || "-"}
-                                    </td>
-                                    <td className="px-3 sm:px-6 py-3 sm:py-5 text-[9px] sm:text-sm">
-                                      <p
-                                        className="max-w-[100px] sm:max-w-[200px] truncate font-bold text-slate-800"
-                                        title={
-                                          r.KOMPETENSI_YANG_DIKUASAI || "-"
-                                        }
-                                      >
-                                        {r.KOMPETENSI_YANG_DIKUASAI || "-"}
-                                      </p>
-                                      {r.KETERANGAN && (
-                                        <p
-                                          className="max-w-[100px] sm:max-w-[200px] truncate text-[8px] sm:text-xs text-slate-500 mt-1"
-                                          title={r.KETERANGAN}
-                                        >
-                                          Catatan: {r.KETERANGAN}
-                                        </p>
-                                      )}
+                                      Tidak ada data di bulan ini
                                     </td>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                ) : (
+                                  filteredRiwayatSiswa.map((r, i) => {
+                                    const { hari, tanggal } = getHariDanTanggal(
+                                      r.TIMESTAMP,
+                                    );
+                                    const status = r.STATUS || "-";
+                                    const fotoUrl = r.FOTO;
+                                    const mapUrl = r.MAP;
+
+                                    return (
+                                      <tr
+                                        key={i}
+                                        className="hover:bg-slate-50 transition-colors"
+                                      >
+                                        <td className="px-2 py-1 sm:py-1.5 text-center font-bold text-slate-400 text-[10px] sm:text-xs">
+                                          {i + 1}
+                                        </td>
+                                        <td className="px-2 py-1 sm:py-1.5 whitespace-nowrap">
+                                          <p className="font-bold text-slate-800 text-[10px] sm:text-xs leading-none">
+                                            {tanggal}
+                                          </p>
+                                          <p className="text-[8px] sm:text-[9px] text-slate-500 font-semibold uppercase mt-0.5 leading-none">
+                                            {hari}
+                                          </p>
+                                        </td>
+                                        <td className="px-2 py-1 sm:py-1.5 text-center whitespace-nowrap">
+                                          <span
+                                            className={`inline-flex rounded px-1.5 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase border ${
+                                              status === "Hadir"
+                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : status === "Izin"
+                                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                  : "bg-blue-50 text-blue-700 border-blue-200"
+                                            }`}
+                                          >
+                                            {status}
+                                          </span>
+                                        </td>
+                                        <td className="px-2 py-1 sm:py-1.5 text-center">
+                                          <div className="flex items-center justify-center gap-1">
+                                            {fotoUrl ? (
+                                              <a
+                                                href={getSafeFreshUrl(fotoUrl)}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors border border-blue-100"
+                                              >
+                                                <span className="text-[9px] sm:text-[10px]">
+                                                  📸
+                                                </span>
+                                              </a>
+                                            ) : (
+                                              <span className="h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center text-slate-300 text-[9px]">
+                                                -
+                                              </span>
+                                            )}
+                                            {mapUrl && (
+                                              <a
+                                                href={mapUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-colors border border-rose-100"
+                                              >
+                                                <span className="text-[9px] sm:text-[10px]">
+                                                  📍
+                                                </span>
+                                              </a>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td
+                                          className="px-2 py-1 sm:py-1.5 max-w-[100px] sm:max-w-[120px] truncate font-semibold text-slate-700 text-[9px] sm:text-[11px]"
+                                          title={r.PEMBIMBING_LAPANGAN || "-"}
+                                        >
+                                          {r.PEMBIMBING_LAPANGAN || "-"}
+                                        </td>
+                                        <td className="px-2 py-1 sm:py-1.5">
+                                          <p
+                                            className="max-w-[120px] sm:max-w-[200px] truncate font-bold text-slate-800 text-[9px] sm:text-[11px] leading-tight"
+                                            title={
+                                              r.KOMPETENSI_YANG_DIKUASAI || "-"
+                                            }
+                                          >
+                                            {r.KOMPETENSI_YANG_DIKUASAI || "-"}
+                                          </p>
+                                          {r.KETERANGAN && (
+                                            <p
+                                              className="max-w-[120px] sm:max-w-[200px] truncate text-[8px] sm:text-[9px] text-slate-500 leading-tight mt-0.5"
+                                              title={r.KETERANGAN}
+                                            >
+                                              {r.KETERANGAN}
+                                            </p>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="border-t border-slate-200 bg-white p-4 sm:p-6 flex justify-end z-10">
+                  {/* FOOTER (TUTUP) */}
+                  <div className="border-t border-slate-200 bg-white p-2 flex justify-end shrink-0">
                     <button
                       onClick={() => setSelectedSiswa(null)}
-                      className="rounded-lg sm:rounded-xl border-2 border-slate-200 bg-white px-6 sm:px-8 py-2.5 sm:py-3 font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all focus:outline-none text-sm sm:text-base"
+                      className="w-full sm:w-auto rounded-md border border-slate-300 bg-slate-50 px-4 py-1.5 font-bold text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none text-[10px] sm:text-xs"
                     >
                       Tutup Riwayat
                     </button>
