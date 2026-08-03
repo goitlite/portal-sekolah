@@ -11,6 +11,7 @@ import { getSession } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { toBlob } from "html-to-image";
+import { generateLaporanPDF } from "./pdf/laporanMagang";
 
 const NamaBadge = ({ rawName }) => {
   if (!rawName) return null;
@@ -46,6 +47,7 @@ const NamaBadge = ({ rawName }) => {
 export default function RekapPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [bulan, setBulan] = useState("");
   const [mode, setMode] = useState("card");
   const [tempat, setTempat] = useState("Semua");
@@ -58,6 +60,9 @@ export default function RekapPage() {
   const [guruDipilih, setGuruDipilih] = useState("");
   const [guruList, setGuruList] = useState([]);
 
+  // 👇 TAMBAHKAN STATE INI UNTUK TOMBOL PDF
+  const [showPdfButton, setShowPdfButton] = useState(false);
+
   // Tambahan state untuk filter Nama dan Kelas
   const [filterNama, setFilterNama] = useState("");
   const [filterKelas, setFilterKelas] = useState("Semua");
@@ -67,6 +72,12 @@ export default function RekapPage() {
 
   // Menangkap request auto-select dari Dashboard Guru
   useEffect(() => {
+    // 👇 TAMBAHKAN 4 BARIS INI UNTUK MENGECEK URL
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("source") === "dashboard_guru") {
+      setShowPdfButton(true);
+    }
+
     const autoSelectTempat = localStorage.getItem("targetTempatRekap");
     const autoSelectGuru = localStorage.getItem("targetGuruRekap");
     const autoSelectBulan = localStorage.getItem("targetBulanRekap");
@@ -152,6 +163,58 @@ export default function RekapPage() {
       } else {
         setLoading(false);
       }
+    }
+  }
+
+  async function handleDownloadPDF() {
+    if (!guruDipilih || filteredDataToRender.length === 0) {
+      alert(
+        "Silakan pilih Guru Pembimbing dan pastikan ada data untuk dicetak.",
+      );
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    const guruObj = guruList.find((g) => {
+      const finalId =
+        g.id ||
+        g.ID ||
+        g.ID_GURU ||
+        g.id_guru ||
+        g.idGuru ||
+        g.NAMA_GURU ||
+        g.nama ||
+        "";
+      return finalId === guruDipilih;
+    });
+
+    const namaGuru = guruObj
+      ? guruObj.NAMA || guruObj.nama || guruObj.NAMA_GURU || guruObj.nama_guru
+      : guruDipilih;
+
+    // AMBIL DATA PERNYATAAN DARI LOCAL STORAGE
+    const dataPernyataanStr = localStorage.getItem("dataPernyataanMutlak");
+    const dataPernyataan = dataPernyataanStr
+      ? JSON.parse(dataPernyataanStr)
+      : null;
+
+    try {
+      await generateLaporanPDF({
+        data: filteredDataToRender,
+        guruDipilih,
+        namaGuru,
+        bulan: bulan || "Semua Bulan",
+        guruList,
+        dataPernyataan, // TAMBAHKAN INI SEBAGAI PARAMETER BARU
+      });
+    } catch (error) {
+      console.error("Gagal membuat PDF:", error);
+      alert(
+        "Terjadi kesalahan teknis saat menyusun PDF. Pastikan koneksi internet lancar.",
+      );
+    } finally {
+      setIsGeneratingPDF(false);
     }
   }
 
@@ -539,6 +602,23 @@ export default function RekapPage() {
             >
               🔄 Refresh
             </button>
+            {/* 👇 BUNGKUS TOMBOL DENGAN STATE showPdfButton */}
+            {showPdfButton && (
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isGeneratingPDF || loading}
+                className="w-full sm:w-auto rounded-lg sm:rounded-xl px-4 sm:px-6 py-2.5 sm:py-3.5 text-sm sm:text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all flex items-center justify-center gap-2 mt-auto sm:h-[54px] disabled:opacity-70"
+              >
+                {isGeneratingPDF ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Menyusun Laporan...
+                  </>
+                ) : (
+                  <>📄 Download Laporan PDF</>
+                )}
+              </button>
+            )}
           </div>
 
           {loading ? (

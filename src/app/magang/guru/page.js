@@ -59,6 +59,31 @@ export default function DashboardGuru() {
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [isFullScreen, setIsFullScreen] = useState(false);
 
+  const [showCetakModal, setShowCetakModal] = useState(false);
+  const [formDataCetak, setFormDataCetak] = useState({
+    nip: "",
+    pangkat: "",
+    jabatan: "",
+    spt: "",
+  });
+  // 👇 TAMBAHKAN KODE INI UNTUK MENGINGAT ISIAN FORM
+  useEffect(() => {
+    const savedData = localStorage.getItem("dataPernyataanMutlak");
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setFormDataCetak({
+          nip: parsed.nip || "",
+          pangkat: parsed.pangkat || "",
+          jabatan: parsed.jabatan || "",
+          spt: parsed.spt || "",
+        });
+      } catch (e) {
+        console.error("Gagal membaca data dari localStorage", e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     async function loadDashboard() {
       if (!isLoggedIn()) {
@@ -404,7 +429,7 @@ export default function DashboardGuru() {
             subtitle="Ekspor data PDF / Excel"
             icon="🖨️"
             bgGrad="from-purple-500 to-indigo-600 shadow-purple-500/20"
-            onClick={() => alert("Fitur cetak sedang dikembangkan")}
+            onClick={() => setShowCetakModal(true)} // Tampilkan modal isian
           />
         </div>
 
@@ -689,6 +714,145 @@ export default function DashboardGuru() {
           >
             ▶
           </button>
+        </div>
+      )}
+
+      {/* MODAL ISIAN CETAK LAPORAN */}
+      {showCetakModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-5 flex items-center justify-between">
+              <h3 className="text-lg font-black text-white">
+                Kelengkapan Cetak Laporan
+              </h3>
+              <button
+                onClick={() => setShowCetakModal(false)}
+                className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500">Nama</label>
+                <input
+                  type="text"
+                  value={user?.nama || ""}
+                  readOnly
+                  className="w-full mt-1 p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">NIP</label>
+                <input
+                  type="text"
+                  placeholder="Masukkan NIP"
+                  value={formDataCetak.nip}
+                  onChange={(e) =>
+                    setFormDataCetak({ ...formDataCetak, nip: e.target.value })
+                  }
+                  className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">
+                  Pangkat / Golongan
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Penata Tk. I / III.d"
+                  value={formDataCetak.pangkat}
+                  onChange={(e) =>
+                    setFormDataCetak({
+                      ...formDataCetak,
+                      pangkat: e.target.value,
+                    })
+                  }
+                  className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">
+                  Jabatan
+                </label>
+                <input
+                  type="text"
+                  placeholder="Masukkan Jabatan"
+                  value={formDataCetak.jabatan}
+                  onChange={(e) =>
+                    setFormDataCetak({
+                      ...formDataCetak,
+                      jabatan: e.target.value,
+                    })
+                  }
+                  className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">
+                  Nomor Surat Perintah Tugas (SPT)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Masukkan Nomor SPT"
+                  value={formDataCetak.spt}
+                  onChange={(e) =>
+                    setFormDataCetak({ ...formDataCetak, spt: e.target.value })
+                  }
+                  className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={() => setShowCetakModal(false)}
+                className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  // Simpan form ke localStorage
+                  localStorage.setItem(
+                    "dataPernyataanMutlak",
+                    JSON.stringify({
+                      nama: user?.nama,
+                      ...formDataCetak,
+                    }),
+                  );
+
+                  // Logika pindah halaman yang asli
+                  const date = new Date();
+                  const namaBulan = [
+                    "Januari",
+                    "Februari",
+                    "Maret",
+                    "April",
+                    "Mei",
+                    "Juni",
+                    "Juli",
+                    "Agustus",
+                    "September",
+                    "Oktober",
+                    "November",
+                    "Desember",
+                  ];
+                  const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
+
+                  localStorage.setItem("targetTempatRekap", "Semua");
+                  localStorage.setItem("targetGuruRekap", user.id);
+                  localStorage.setItem("targetBulanRekap", bulanTerbaru);
+
+                  window.location.href = "/magang/rekap?source=dashboard_guru";
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-indigo-200"
+              >
+                Lanjutkan Cetak
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
