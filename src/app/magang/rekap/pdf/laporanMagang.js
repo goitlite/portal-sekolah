@@ -138,6 +138,7 @@ export const generateLaporanPDF = async ({
   bulan,
   guruList = [],
   dataPernyataan, // Parameter baru
+  dataPerjalanan, // 👈 TAMBAHKAN PARAMETER INI
 }) => {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -222,7 +223,7 @@ export const generateLaporanPDF = async ({
     align: "center",
   });
   doc.setFontSize(22);
-  doc.text("LAPORAN REKAP PRESENSI MAGANG", pageWidth / 2, 50, {
+  doc.text("LAPORAN MONITORING MAGANG", pageWidth / 2, 50, {
     align: "center",
   });
   doc.setFontSize(14);
@@ -413,7 +414,7 @@ export const generateLaporanPDF = async ({
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("SMKN 1 TELUK KUANTAN - LAPORAN PRESENSI MAGANG", 15, 11);
+  doc.text("SMKN 1 TELUK KUANTAN - LAPORAN MONITORING MAGANG", 15, 11);
 
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(18);
@@ -542,7 +543,86 @@ export const generateLaporanPDF = async ({
     doc.text(`NIP. ${dataPernyataan.nip || "-"}`, 120, py + 6);
   }
 
+  if (dataPerjalanan) {
+    doc.addPage();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LAPORAN PERJALANAN DINAS", pageWidth / 2, 20, {
+      align: "center",
+    });
+
+    // Struktur diubah menjadi 2 kolom agar garis tengah tabel hanya ada satu
+    const rowsPerjalanan = [
+      ["Nama", ":  " + (dataPernyataan?.nama || teksNamaGuru)],
+      ["NIP", ":  " + (dataPernyataan?.nip || "-")],
+      ["Jabatan", ":  " + (dataPernyataan?.jabatan || "-")],
+      ["I. Dasar", ":  " + (dataPerjalanan.dasar || "-")],
+      ["II. Tempat Kegiatan", ":  " + (dataPerjalanan.tempatKegiatan || "-")],
+      [
+        "III. Tanggal Pelaksanaan",
+        ":  " + (dataPerjalanan.tanggalPelaksanaan || "-"),
+      ],
+      [
+        "IV. Pelaksana Kegiatan",
+        ":  " + (dataPerjalanan.pelaksanaKegiatan || "-"),
+      ],
+      ["V. Nama kegiatan", ":  " + (dataPerjalanan.namaKegiatan || "-")],
+      ["VI. No. Surat Tugas", ":  " + (dataPernyataan?.spt || "-")],
+      ["VII. Tujuan Kegiatan", ":  " + (dataPerjalanan.tujuanKegiatan || "-")],
+      [
+        "VIII. Sasaran Kegiatan",
+        ":  " + (dataPerjalanan.sasaranKegiatan || "-"),
+      ],
+      ["IX. Proses Kegiatan", ":  " + (dataPerjalanan.prosesKegiatan || "-")],
+      ["X. Hasil Kegiatan", ":  " + (dataPerjalanan.hasilKegiatan || "-")],
+      ["XI. Saran – saran", ":  " + (dataPerjalanan.saranSaran || "-")],
+    ];
+
+    autoTable(doc, {
+      startY: 28,
+      body: rowsPerjalanan,
+      theme: "grid",
+      styles: {
+        fontSize: 9.5, // Ukuran font ideal
+        cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 }, // Memberikan ruang lega yang pas pada tiap baris
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        valign: "top", // Teks tetap rapat ke atas (penting untuk baris yang isinya panjang)
+      },
+      columnStyles: {
+        0: { cellWidth: 55, fontStyle: "normal" }, // Lebar kolom kiri pas untuk tulisan "III. Tanggal Pelaksanaan"
+        1: { cellWidth: "auto" }, // Kolom kanan menyesuaikan sisa lebar kertas
+      },
+      margin: { left: 15, right: 15 },
+    });
+
+    let finalPerjalananY = doc.lastAutoTable.finalY + 12; // Jarak aman ke tanda tangan
+
+    // Antisipasi jika tabel melampaui batas halaman
+    if (finalPerjalananY > 250) {
+      doc.addPage();
+      finalPerjalananY = 25;
+    }
+
+    const ttdTanggal = dataPerjalanan.tanggalTtd || "04 Agustus 2026";
+
+    // Bagian Tanda Tangan
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Teluk Kuantan, ${ttdTanggal}`, 125, finalPerjalananY);
+    doc.text("Yang Melaksanakan Perjalanan Dinas", 125, finalPerjalananY + 5);
+
+    finalPerjalananY += 25;
+    doc.setFont("helvetica", "bold");
+    doc.text(dataPernyataan?.nama || teksNamaGuru, 125, finalPerjalananY);
+    doc.setFont("helvetica", "normal");
+    doc.text(`NIP. ${dataPernyataan?.nip || "-"}`, 125, finalPerjalananY + 5);
+  }
+
   const namaFileAman = teksNamaGuru.replace(/[^a-zA-Z0-9_]/g, "_");
   const bulanFileAman = teksBulan.replace(/[^a-zA-Z0-9_]/g, "_");
+
   doc.save(`Laporan_Magang_${namaFileAman}_${bulanFileAman}.pdf`);
 };

@@ -66,6 +66,26 @@ export default function DashboardGuru() {
     jabatan: "",
     spt: "",
   });
+
+  // 👇 TAMBAHAN STATE UNTUK LAPORAN PERJALANAN DINAS
+  const [includePerjalananDinas, setIncludePerjalananDinas] = useState(false);
+  const [formPerjalananDinas, setFormPerjalananDinas] = useState({
+    dasar: "Surat Perintah Tugas Kepala Sekolah tentang Siswa PKL 2026",
+    tempatKegiatan: "Pekanbaru",
+    tanggalPelaksanaan: "16 - 17 Agustus 2026",
+    pelaksanaKegiatan: "Panitia PKL SMKN 1 Teluk Kuantan",
+    namaKegiatan: "Monitoring Siswa PKL 2026",
+    tujuanKegiatan: "Melakukan Monitoring Siswa PKL 2026",
+    sasaranKegiatan: "Siswa PKL 2026 SMKN 1 Teluk Kuantan",
+    prosesKegiatan:
+      "Kegiatan Monitoring siswa Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan Tahun Pelajaran 2026/2027 dilaksanakan pada tanggal 16–17 Juli 2026 di Pekanbaru. Diawali dengan monitoring lapangan ke PT. Telkom Pekanbaru dan kemudian PT. Mayatama Pekanbaru. Dalam Kegiatan tersebut guru pembimbing Memantau perkembangan kompetensi yang dicapai, jurnal dan berbagai permasalahan yang dihadapi siswa serta berkoordinasi Bersama pihak pihak dunia usaha dan dunia industri (DUDI) menyangkut perkembangan siswa di Tempat PKL",
+    hasilKegiatan:
+      "Kegiatan Monitoring siswa PKL berjalan sesuai dengan rencana. Seluruh siswa PKL mampu beradaptasi di lingkungan dunia usaha dan dunia industri (DUDI) sehingga diharapkan memberikan pengalaman kerja yang bermanfaat bagi peserta siswa",
+    saranSaran:
+      "Diperlukan kerja sama dengan DUDI yang lebih banyak lagi dan profesional sebagai mitra strategis dalam mendukung peningkatan kompetensi peserta didik.",
+    tanggalTtd: "18 Juli 2026",
+  });
+
   // 👇 TAMBAHKAN KODE INI UNTUK MENGINGAT ISIAN FORM
   useEffect(() => {
     const savedData = localStorage.getItem("dataPernyataanMutlak");
@@ -733,7 +753,8 @@ export default function DashboardGuru() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            {/* Mengubah p-5 space-y-4 agar scrollable jika form perjalanan dinas dibuka */}
+            <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
               <div>
                 <label className="text-xs font-bold text-slate-500">Nama</label>
                 <input
@@ -803,6 +824,238 @@ export default function DashboardGuru() {
                   className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
                 />
               </div>
+
+              {/* 👇 CHECKBOX & FORM LAPORAN PERJALANAN DINAS */}
+              <div className="pt-3 border-t border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includePerjalananDinas}
+                    onChange={(e) =>
+                      setIncludePerjalananDinas(e.target.checked)
+                    }
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-xs font-black text-slate-800">
+                    📝 Buat Laporan Perjalanan Dinas
+                  </span>
+                </label>
+              </div>
+
+              {includePerjalananDinas && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                  <p className="font-bold text-indigo-700 uppercase text-[11px] mb-1">
+                    Form Input Laporan Perjalanan Dinas
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 bg-slate-100 p-2 rounded-lg text-slate-600 font-medium text-[11px]">
+                    <div>
+                      <span className="font-bold">Nama:</span>{" "}
+                      {user?.nama || "Otomatis"}
+                    </div>
+                    <div>
+                      <span className="font-bold">NIP:</span>{" "}
+                      {formDataCetak.nip || "Otomatis"}
+                    </div>
+                    <div>
+                      <span className="font-bold">Jabatan:</span>{" "}
+                      {formDataCetak.jabatan || "Otomatis"}
+                    </div>
+                    <div>
+                      <span className="font-bold">No. Surat Tugas:</span>{" "}
+                      {formDataCetak.spt || "Otomatis"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      I. Dasar
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.dasar}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          dasar: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      II. Tempat Kegiatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.tempatKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          tempatKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      III. Tanggal Pelaksanaan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.tanggalPelaksanaan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          tanggalPelaksanaan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      IV. Pelaksana Kegiatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.pelaksanaKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          pelaksanaKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      V. Nama Kegiatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.namaKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          namaKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      VII. Tujuan Kegiatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.tujuanKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          tujuanKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      VIII. Sasaran Kegiatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.sasaranKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          sasaranKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      IX. Proses Kegiatan
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={formPerjalananDinas.prosesKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          prosesKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      X. Hasil Kegiatan
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={formPerjalananDinas.hasilKegiatan}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          hasilKegiatan: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      XI. Saran – saran
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formPerjalananDinas.saranSaran}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          saranSaran: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600">
+                      Tanggal TTD / Laporan
+                    </label>
+                    <input
+                      type="text"
+                      value={formPerjalananDinas.tanggalTtd}
+                      onChange={(e) =>
+                        setFormPerjalananDinas({
+                          ...formPerjalananDinas,
+                          tanggalTtd: e.target.value,
+                        })
+                      }
+                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
+                      placeholder="Contoh: 18 Juli 2026"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
@@ -822,6 +1075,15 @@ export default function DashboardGuru() {
                       ...formDataCetak,
                     }),
                   );
+
+                  if (includePerjalananDinas) {
+                    localStorage.setItem(
+                      "dataPerjalananDinas",
+                      JSON.stringify(formPerjalananDinas),
+                    );
+                  } else {
+                    localStorage.removeItem("dataPerjalananDinas");
+                  }
 
                   // Logika pindah halaman yang asli
                   const date = new Date();

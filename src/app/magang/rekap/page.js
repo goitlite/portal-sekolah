@@ -199,6 +199,12 @@ export default function RekapPage() {
       ? JSON.parse(dataPernyataanStr)
       : null;
 
+    // 2. 👇 PASTIKAN KODE INI ADA: AMBIL DATA PERJALANAN DINAS DARI LOCAL STORAGE
+    const dataPerjalananStr = localStorage.getItem("dataPerjalananDinas");
+    const dataPerjalanan = dataPerjalananStr
+      ? JSON.parse(dataPerjalananStr)
+      : null;
+
     try {
       await generateLaporanPDF({
         data: filteredDataToRender,
@@ -207,6 +213,7 @@ export default function RekapPage() {
         bulan: bulan || "Semua Bulan",
         guruList,
         dataPernyataan, // TAMBAHKAN INI SEBAGAI PARAMETER BARU
+        dataPerjalanan, // 👈 OPER PARAMETER BARU INI
       });
     } catch (error) {
       console.error("Gagal membuat PDF:", error);
