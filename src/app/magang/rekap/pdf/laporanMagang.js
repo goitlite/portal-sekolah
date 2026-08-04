@@ -405,7 +405,7 @@ export const generateLaporanPDF = async ({
   }
 
   // ==========================================
-  // HALAMAN TERAKHIR: REKAP AKHIR & TTD
+  // HALAMAN TERAKHIR: REKAP AKHIR & TTDd
   // ==========================================
   doc.addPage();
 
