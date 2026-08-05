@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
@@ -7,6 +8,7 @@ import Carousel from "@/components/features/Carousel";
 
 export default function Home() {
   const router = useRouter();
+  const [showApkModal, setShowApkModal] = useState(false);
 
   async function handleMasukAsesmen(e) {
     // Deteksi apakah perangkat menggunakan layar sentuh
@@ -335,17 +337,14 @@ export default function Home() {
                 onClick={handleMasukAsesmen}
               />
 
-              {/* Card 2: Asesmen Android (Baru Ditambahkan) */}
+              {/* Card 2: Asesmen Android (Klik membuka Modal Info Update) */}
               <ServiceCard
                 icon="📱"
                 title="Asesmen Online Android"
                 description="update : Timer kirim bisa di non aktifkan dari admin"
                 themeColor="cyan"
                 isNew={true}
-                onClick={() =>
-                  (window.location.href =
-                    "https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20V3.apk")
-                }
+                onClick={() => setShowApkModal(true)}
               />
 
               {/* Card 3: Presensi Kelas */}
@@ -409,6 +408,124 @@ export default function Home() {
             </p>
           </div>
         </footer>
+
+        {/* MODAL POPUP UPDATE APLIKASI ANDROID */}
+        {showApkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-200 relative overflow-hidden">
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl p-2 bg-cyan-100 rounded-xl">
+                    📱
+                  </span>
+                  <div>
+                    <h3 className="font-extrabold text-stone-900 text-base sm:text-lg leading-tight">
+                      Update Aplikasi Asesmen
+                    </h3>
+                    <p className="text-[11px] font-bold text-cyan-600">
+                      Versi Terbaru (V3)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowApkModal(false)}
+                  className="text-stone-400 hover:text-stone-700 text-xl font-bold w-8 h-8 rounded-lg hover:bg-stone-100 flex items-center justify-center transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* List Keterangan Update */}
+              <div className="my-4 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                <p className="text-xs font-bold text-stone-700 mb-2">
+                  Pembaruan & Fitur Terbaru:
+                </p>
+                <ol className="space-y-2 text-xs text-stone-600 font-medium">
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>
+                      Sudah menggunakan nomor ID untuk mendaftar ujian
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>Sudah bisa hapus akun</span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      Timer waktu kirim jawaban bisa dimatikan dari admin
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      4
+                    </span>
+                    <span>Pendeteksi kendala jaringan saat ujian</span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      5
+                    </span>
+                    <span>
+                      Tidak bisa keluar aplikasi saat ujian lebih stabil
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      6
+                    </span>
+                    <span>Pencatatan kecurangan lebih stabil</span>
+                  </li>
+                  <li className="flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="bg-amber-400 text-amber-950 font-black rounded-md w-5 h-5 flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      7
+                    </span>
+                    <span>Fitur pesan pengaduan lebih stabil</span>
+                  </li>
+                </ol>
+              </div>
+
+              {/* Tombol Aksi */}
+              <div className="pt-3 border-t border-stone-200 flex gap-2.5">
+                <button
+                  onClick={() => setShowApkModal(false)}
+                  className="w-1/3 py-2.5 px-3 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs hover:bg-stone-100 active:bg-stone-200 transition-colors"
+                >
+                  Batal
+                </button>
+                <a
+                  href="https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20V3.apk"
+                  onClick={() => setShowApkModal(false)}
+                  className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md shadow-blue-500/30 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                >
+                  <span>Download APK</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                    />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
