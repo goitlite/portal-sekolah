@@ -8,7 +8,10 @@ import Carousel from "@/components/features/Carousel";
 
 export default function Home() {
   const router = useRouter();
+
+  // State untuk mengontrol Modal
   const [showApkModal, setShowApkModal] = useState(false);
+  const [showPcWarningModal, setShowPcWarningModal] = useState(false);
 
   async function handleMasukAsesmen(e) {
     // Deteksi apakah perangkat menggunakan layar sentuh
@@ -18,11 +21,10 @@ export default function Home() {
         "ontouchstart" in window ||
         navigator.maxTouchPoints > 0);
 
+    // Jika perangkat layar sentuh, munculkan Modal PC, bukan alert bawaan browser
     if (isTouchDevice) {
-      alert(
-        "Asesmen ini hanya untuk PC gunakan aplikasi asesmen Android UNTUK MELANJUTKAN Asesmen menggunakan pc",
-      );
-      return; // Hentikan proses masuk jika menggunakan layar sentuh
+      setShowPcWarningModal(true);
+      return; // Hentikan proses masuk
     }
 
     try {
@@ -332,7 +334,7 @@ export default function Home() {
               <ServiceCard
                 icon="💻"
                 title="Asesmen Online Komputer"
-                description="Ujian digital terstruktur dan aman."
+                description="Asesmen anti curang untuk PC / Komputer"
                 themeColor="yellow"
                 onClick={handleMasukAsesmen}
               />
@@ -341,7 +343,7 @@ export default function Home() {
               <ServiceCard
                 icon="📱"
                 title="Asesmen Online Android"
-                description="update : Timer kirim bisa di non aktifkan dari admin"
+                description="Asesmen anti curang untuk smartphone Android"
                 themeColor="cyan"
                 isNew={true}
                 onClick={() => setShowApkModal(true)}
@@ -409,7 +411,43 @@ export default function Home() {
           </div>
         </footer>
 
-        {/* MODAL POPUP UPDATE APLIKASI ANDROID */}
+        {/* ------------------------------------------------------------- */}
+        {/* MODAL 1: POPUP PERINGATAN AKSES PC (Untuk Asesmen Komputer)   */}
+        {/* ------------------------------------------------------------- */}
+        {showPcWarningModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 relative overflow-hidden flex flex-col items-center text-center">
+              {/* Ikon Peringatan Besar */}
+              <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center text-3xl mb-4 shadow-inner border border-rose-200">
+                ⚠️
+              </div>
+
+              <h3 className="font-extrabold text-stone-900 text-lg mb-2">
+                Akses Ditolak
+              </h3>
+
+              <p className="text-sm font-medium text-stone-600 mb-6 leading-relaxed">
+                Asesmen ini hanya bisa diakses menggunakan{" "}
+                <strong>PC/Komputer</strong>. <br />
+                <br />
+                Jika Anda menggunakan smartphone, silakan gunakan menu{" "}
+                <strong>Asesmen Online Android</strong>.
+              </p>
+
+              {/* Tombol Aksi */}
+              <button
+                onClick={() => setShowPcWarningModal(false)}
+                className="w-full py-3 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 active:bg-stone-300 text-stone-700 font-extrabold text-sm transition-colors border border-stone-200"
+              >
+                Mengerti
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* MODAL 2: POPUP UPDATE APLIKASI ANDROID                        */}
+        {/* ------------------------------------------------------------- */}
         {showApkModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fadeIn">
             <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-200 relative overflow-hidden">
