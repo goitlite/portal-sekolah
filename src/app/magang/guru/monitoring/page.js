@@ -24,6 +24,10 @@ export default function MonitoringPage() {
 
   const [cameraReady, setCameraReady] = useState(false);
 
+  // STATE UNTUK PANDUAN LANDSCAPE
+  const [showLandscapeGuide, setShowLandscapeGuide] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
   const [alamat, setAlamat] = useState("-");
@@ -40,6 +44,27 @@ export default function MonitoringPage() {
   const streamRef = useRef(null);
 
   const [tempatMagang, setTempatMagang] = useState("");
+
+  // DETEKSI ORIENTASI LAYAR OTOMATIS (Aman untuk Android & iOS)
+  useEffect(() => {
+    function handleOrientation() {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    }
+
+    handleOrientation();
+
+    window.addEventListener("resize", handleOrientation);
+    window.addEventListener("orientationchange", handleOrientation);
+
+    return () => {
+      window.removeEventListener("resize", handleOrientation);
+      window.removeEventListener("orientationchange", handleOrientation);
+    };
+  }, []);
+
+  function handleLandscapeClick() {
+    setShowLandscapeGuide(true);
+  }
 
   // FUNGSI BACK DENGAN STOP KAMERA
   function handleBack() {
@@ -397,10 +422,7 @@ export default function MonitoringPage() {
     init();
   }, [router]);
 
-  // KODE AUTO-START KAMERA TELAH DIHAPUS
-  // Sekarang tombol "Ketuk Untuk Aktifkan Kamera" akan selalu muncul di awal.
-
-  // Kosongkan array dependency agar cleanup mati dengan sempurna hanya saat pindah halaman
+  // Cleanup stream saat berpindah halaman
   useEffect(() => {
     return () => {
       if (streamRef.current) {
@@ -535,7 +557,6 @@ export default function MonitoringPage() {
                       muted
                       className="w-full h-full object-cover"
                     />
-                    {/* Tombol manual di atas video agar izin selalu tereksekusi bila ada kendala akses otomatis */}
                     {!cameraReady && (
                       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-4 text-center">
                         <div className="mb-3 text-3xl">📷</div>
@@ -572,10 +593,20 @@ export default function MonitoringPage() {
               </div>
             )}
 
+            {/* TOMBOL PANDUAN LANDSCAPE */}
+            <button
+              type="button"
+              onClick={handleLandscapeClick}
+              className="mt-4 w-full rounded-2xl bg-blue-100 border border-blue-200 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-200 active:scale-95 flex items-center justify-center gap-2"
+            >
+              🔄 Panduan Foto Landscape
+            </button>
+
+            {/* TOMBOL AMBIL FOTO */}
             <button
               onClick={capturePhoto}
               disabled={!cameraReady && !photo}
-              className={`mt-4 w-full rounded-2xl py-4 text-base font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] ${
+              className={`mt-3 w-full rounded-2xl py-4 text-base font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] ${
                 photo
                   ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-orange-500/20 hover:brightness-110"
                   : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:scale-100 disabled:cursor-not-allowed"
@@ -725,6 +756,57 @@ export default function MonitoringPage() {
           </div>
         </section>
       </div>
+
+      {/* MODAL INDIKATOR LANDSCAPE OTOMATIS */}
+      {showLandscapeGuide && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm transition-all">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            {!isLandscape ? (
+              <>
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-3xl animate-pulse">
+                  📱
+                </div>
+                <h2 className="mt-4 text-xl font-black text-slate-900">
+                  Mode Portrait
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                  Area foto sempit. Silakan putar HP Anda ke posisi mendatar
+                  agar area lingkungan tempat magang terlihat lebih luas.
+                </p>
+                <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm font-black text-amber-700 flex items-center justify-center gap-2">
+                  <span className="animate-spin">🔄</span> Putar HP →
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLandscapeGuide(false)}
+                  className="mt-6 w-full rounded-2xl bg-slate-100 py-3.5 font-bold text-slate-600 shadow-sm transition active:scale-95 hover:bg-slate-200"
+                >
+                  Tutup Panduan
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-3xl">
+                  ✅
+                </div>
+                <h2 className="mt-4 text-xl font-black text-emerald-700">
+                  Landscape Aktif
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                  Posisi layar sudah mendatar. Silakan ambil foto lingkungan.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowLandscapeGuide(false)}
+                  className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 font-bold text-white shadow-md transition active:scale-95 hover:brightness-110"
+                >
+                  Silakan Ambil Foto
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
