@@ -530,7 +530,11 @@ export default function MonitoringPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div
+          className={`grid gap-6 ${
+            isLandscape ? "grid-cols-1" : "md:grid-cols-2"
+          }`}
+        >
           {/* SECTION KAMERA DENGAN LAYOUT DINAMIS (KIRI & KANAN SAAT LANDSCAPE) */}
           <section className="rounded-[2rem] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
