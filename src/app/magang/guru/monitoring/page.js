@@ -45,7 +45,7 @@ export default function MonitoringPage() {
 
   const [tempatMagang, setTempatMagang] = useState("");
 
-  // DETEKSI ORIENTASI LAYAR OTOMATIS (Aman untuk Android & iOS)
+  // DETEKSI ORIENTASI LAYAR OTOMATIS
   useEffect(() => {
     function handleOrientation() {
       setIsLandscape(window.innerWidth > window.innerHeight);
@@ -74,7 +74,7 @@ export default function MonitoringPage() {
     router.replace("/magang/guru");
   }
 
-  // PERBAIKAN: Sistem Fallback & Pengecekan Akses Kamera yang Jauh Lebih Stabil
+  // AKSES KAMERA
   async function startCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert(
@@ -83,7 +83,6 @@ export default function MonitoringPage() {
       return;
     }
 
-    // Bersihkan stream lama agar tidak bentrok
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -92,7 +91,6 @@ export default function MonitoringPage() {
     setCameraReady(false);
 
     try {
-      // Coba akses kamera BELAKANG (environment) dengan opsi HD
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
@@ -101,7 +99,6 @@ export default function MonitoringPage() {
         },
         audio: false,
       });
-
       attachStream(stream);
     } catch (err) {
       console.warn(
@@ -109,12 +106,10 @@ export default function MonitoringPage() {
         err,
       );
       try {
-        // Fallback: Jika HP menolak resolusi HD atau facingMode, panggil mode paling dasar
         const fallbackStream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
         });
-
         attachStream(fallbackStream);
       } catch (fallbackErr) {
         console.error("Semua percobaan akses kamera gagal:", fallbackErr);
@@ -125,7 +120,6 @@ export default function MonitoringPage() {
     }
   }
 
-  // Helper function untuk menyambungkan stream ke elemen video
   function attachStream(stream) {
     streamRef.current = stream;
     if (!videoRef.current) return;
@@ -175,7 +169,6 @@ export default function MonitoringPage() {
 
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(boxX, boxY, boxW, boxH);
-
         ctx.fillStyle = "#FFFFFF";
 
         const titleX = boxX + 20;
@@ -195,7 +188,6 @@ export default function MonitoringPage() {
         const startY = boxY + 95;
 
         ctx.font = "18px Arial";
-
         ctx.fillText("Guru : " + user.nama, col1, startY);
         ctx.fillText("Tempat : " + tempatMagang, col1, startY + 30);
         ctx.fillText("Status : " + status, col1, startY + 60);
@@ -278,7 +270,6 @@ export default function MonitoringPage() {
     setPhoto(image);
     setPhotoSuccess(true);
 
-    // Matikan stream setelah difoto untuk hemat RAM/Baterai
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -422,7 +413,6 @@ export default function MonitoringPage() {
     init();
   }, [router]);
 
-  // Cleanup stream saat berpindah halaman
   useEffect(() => {
     return () => {
       if (streamRef.current) {
@@ -541,81 +531,102 @@ export default function MonitoringPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
+          {/* SECTION KAMERA DENGAN LAYOUT DINAMIS (KIRI & KANAN SAAT LANDSCAPE) */}
+          <section className="rounded-[2rem] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
                 📸 Foto Lingkungan
               </h2>
 
-              <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
-                {!photo ? (
-                  <>
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    {!cameraReady && (
-                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-4 text-center">
-                        <div className="mb-3 text-3xl">📷</div>
-                        <button
-                          onClick={startCamera}
-                          className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-3 text-sm font-black text-white shadow-lg animate-pulse hover:brightness-110 active:scale-95 transition-all"
-                        >
-                          Ketuk Untuk Aktifkan Kamera
-                        </button>
-                        <p className="mt-3 text-[10px] font-semibold text-slate-300">
-                          Wajib ditekan manual untuk izin keamanan HP
-                        </p>
-                      </div>
+              <div
+                className={`flex ${isLandscape ? "flex-row items-center" : "flex-col"} gap-3 sm:gap-4 w-full`}
+              >
+                {/* AREA KAMERA (KIRI SAAT LANDSCAPE) */}
+                <div
+                  className={`${isLandscape ? "w-[60%]" : "w-full"} flex flex-col gap-3`}
+                >
+                  <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
+                    {!photo ? (
+                      <>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover"
+                        />
+                        {!cameraReady && (
+                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-3 text-center">
+                            <div className="mb-2 text-2xl sm:text-3xl">📷</div>
+                            <button
+                              onClick={startCamera}
+                              className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-3 py-2 sm:px-5 sm:py-3 text-[10px] sm:text-sm font-black text-white shadow-lg animate-pulse hover:brightness-110 active:scale-95 transition-all"
+                            >
+                              Aktifkan Kamera
+                            </button>
+                            <p className="mt-2 text-[9px] sm:text-xs font-semibold text-slate-300">
+                              Wajib ditekan manual
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <img
+                        src={photo}
+                        alt="Monitoring"
+                        className="w-full h-full object-cover"
+                      />
                     )}
-                  </>
-                ) : (
-                  <img
-                    src={photo}
-                    alt="Monitoring"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                <canvas ref={canvasRef} className="hidden" />
-                <canvas ref={watermarkCanvasRef} className="hidden" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    <canvas ref={watermarkCanvasRef} className="hidden" />
+                  </div>
+
+                  {photoSuccess && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 shadow-sm flex items-center justify-center gap-2">
+                      <span className="text-base sm:text-lg">✅</span>
+                      <p className="text-[11px] sm:text-sm font-black text-emerald-700 tracking-wide">
+                        FOTO TEREKAM
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* AREA TOMBOL (KANAN SAAT LANDSCAPE) */}
+                <div
+                  className={`${isLandscape ? "w-[40%] flex-col justify-center" : "w-full flex-col"} flex gap-2 sm:gap-3`}
+                >
+                  {/* TOMBOL PANDUAN */}
+                  <button
+                    type="button"
+                    onClick={handleLandscapeClick}
+                    className="w-full rounded-2xl bg-blue-100 border border-blue-200 px-2 py-3 text-[11px] sm:text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-200 active:scale-95 flex items-center justify-center gap-1.5 leading-tight"
+                  >
+                    🔄 Panduan Landscape
+                  </button>
+
+                  {/* TOMBOL AMBIL FOTO */}
+                  <button
+                    onClick={capturePhoto}
+                    disabled={!cameraReady && !photo}
+                    className={`w-full rounded-2xl px-2 py-3.5 text-[11px] sm:text-sm font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] flex flex-row items-center justify-center gap-1.5 leading-tight ${
+                      photo
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-orange-500/20 hover:brightness-110"
+                        : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:scale-100 disabled:cursor-not-allowed"
+                    }`}
+                  >
+                    <span className="text-lg sm:text-xl shrink-0">
+                      {photo ? "🔄" : "📸"}
+                    </span>
+                    <span className="text-center">
+                      {photo ? "AMBIL ULANG" : "AMBIL FOTO & GPS"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
-
-            {photoSuccess && (
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm flex items-center justify-center gap-2">
-                <span className="text-xl">✅</span>
-                <p className="text-sm font-black text-emerald-700 tracking-wide">
-                  FOTO TEREKAM
-                </p>
-              </div>
-            )}
-
-            {/* TOMBOL PANDUAN LANDSCAPE */}
-            <button
-              type="button"
-              onClick={handleLandscapeClick}
-              className="mt-4 w-full rounded-2xl bg-blue-100 border border-blue-200 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-200 active:scale-95 flex items-center justify-center gap-2"
-            >
-              🔄 Panduan Foto Landscape
-            </button>
-
-            {/* TOMBOL AMBIL FOTO */}
-            <button
-              onClick={capturePhoto}
-              disabled={!cameraReady && !photo}
-              className={`mt-3 w-full rounded-2xl py-4 text-base font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] ${
-                photo
-                  ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-orange-500/20 hover:brightness-110"
-                  : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:scale-100 disabled:cursor-not-allowed"
-              }`}
-            >
-              {photo ? "🔄 AMBIL ULANG FOTO" : "📸 AMBIL FOTO & TITIK GPS"}
-            </button>
           </section>
 
+          {/* SECTION PELACAKAN LOKASI (GPS) */}
           <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-800 mb-1">
@@ -675,6 +686,7 @@ export default function MonitoringPage() {
           </section>
         </div>
 
+        {/* LAPORAN AKTIVITAS */}
         <section className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
           <h2 className="text-2xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
             📝 Laporan Aktivitas
