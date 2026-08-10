@@ -69,9 +69,27 @@ export default function DashboardGuru() {
 
   // 👇 TAMBAHAN STATE UNTUK LAPORAN PERJALANAN DINAS
   const [includePerjalananDinas, setIncludePerjalananDinas] = useState(false);
+  // Generate tanggal otomatis sesuai saat form dibuka
+  const hariIni = new Date();
+  const namaBulanMap = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  const tanggalOtomatisInit = `${hariIni.getDate()} ${namaBulanMap[hariIni.getMonth()]} ${hariIni.getFullYear()}`;
+
   const [formPerjalananDinas, setFormPerjalananDinas] = useState({
     dasar: "Surat Perintah Tugas Kepala Sekolah tentang Siswa PKL 2026",
-    tempatKegiatan: "Pekanbaru",
+    tempatKegiatan: "Teluk Kuantan",
     tanggalPelaksanaan: "16 - 17 Agustus 2026",
     pelaksanaKegiatan: "Panitia PKL SMKN 1 Teluk Kuantan",
     namaKegiatan: "Monitoring Siswa PKL 2026",
@@ -83,7 +101,7 @@ export default function DashboardGuru() {
       "Kegiatan Monitoring siswa PKL berjalan sesuai dengan rencana. Seluruh siswa PKL mampu beradaptasi di lingkungan dunia usaha dan dunia industri (DUDI) sehingga diharapkan memberikan pengalaman kerja yang bermanfaat bagi peserta siswa",
     saranSaran:
       "Diperlukan kerja sama dengan DUDI yang lebih banyak lagi dan profesional sebagai mitra strategis dalam mendukung peningkatan kompetensi peserta didik.",
-    tanggalTtd: "18 Juli 2026",
+    tanggalTtd: tanggalOtomatisInit, // <-- Form akan terisi secara otomatis mengikuti tanggal hari ini
   });
 
   // 👇 TAMBAHKAN KODE INI UNTUK MENGINGAT ISIAN FORM
@@ -1034,24 +1052,6 @@ export default function DashboardGuru() {
                         })
                       }
                       className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-600">
-                      Tanggal TTD / Laporan
-                    </label>
-                    <input
-                      type="text"
-                      value={formPerjalananDinas.tanggalTtd}
-                      onChange={(e) =>
-                        setFormPerjalananDinas({
-                          ...formPerjalananDinas,
-                          tanggalTtd: e.target.value,
-                        })
-                      }
-                      className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
-                      placeholder="Contoh: 18 Juli 2026"
                     />
                   </div>
                 </div>

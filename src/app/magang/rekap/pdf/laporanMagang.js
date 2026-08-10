@@ -606,7 +606,33 @@ export const generateLaporanPDF = async ({
       finalPerjalananY = 25;
     }
 
-    const ttdTanggal = dataPerjalanan.tanggalTtd || "04 Agustus 2026";
+    // Buat format tanggal otomatis layaknya pada SPT
+    const cetakDateLaporan = new Date();
+    const namaBulanLaporan = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    const tanggalOtomatisLaporan = `${cetakDateLaporan.getDate()} ${namaBulanLaporan[cetakDateLaporan.getMonth()]} ${cetakDateLaporan.getFullYear()}`;
+
+    // Gunakan tanggal otomatis jika data kosong atau masih mengandung data bawaan lama (hardcode)
+    let ttdTanggal = dataPerjalanan.tanggalTtd;
+    if (
+      !ttdTanggal ||
+      ttdTanggal === "04 Agustus 2026" ||
+      ttdTanggal === "18 Juli 2026"
+    ) {
+      ttdTanggal = tanggalOtomatisLaporan;
+    }
 
     // Bagian Tanda Tangan
     doc.setFontSize(10);
