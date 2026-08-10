@@ -783,11 +783,12 @@ export default function MonitoringPage() {
                   📱
                 </div>
                 <h2 className="mt-4 text-xl font-black text-slate-900">
-                  Mode Portrait
+                  Ubah Mode Foto Mendatar
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                  Area foto sempit. Silakan putar HP Anda ke posisi mendatar
-                  agar area lingkungan tempat magang terlihat lebih luas.
+                  Silahkan ubah setting di notifikasi HP menjadi ROTASI OTOMATIS
+                  dan putar HP Anda ke posisi mendatar agar area lingkungan
+                  tempat magang terlihat lebih luas.
                 </p>
                 <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm font-black text-amber-700 flex items-center justify-center gap-2">
                   <span className="animate-spin">🔄</span> Putar HP →
