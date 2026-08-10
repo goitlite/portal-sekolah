@@ -540,7 +540,7 @@ export default function Home() {
                   Batal
                 </button>
                 <a
-                  href="https://tjktsmkn1telukkuantan.web.id/wp-content/uploads/upf-docs/ASESMEN%20V3.apk"
+                  href="https://drive.google.com/file/d/1kE8mZUbzQcrsRgdQs7H99lX_4DHDBE7F/view?usp=drive_link"
                   onClick={() => setShowApkModal(false)}
                   className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md shadow-blue-500/30 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                 >
