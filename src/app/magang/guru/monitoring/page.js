@@ -332,10 +332,6 @@ export default function MonitoringPage() {
       alert("Lokasi GPS belum diperoleh.");
       return;
     }
-    if (keterangan.trim() === "") {
-      alert("Keterangan monitoring wajib diisi.");
-      return;
-    }
 
     try {
       setSaving(true);

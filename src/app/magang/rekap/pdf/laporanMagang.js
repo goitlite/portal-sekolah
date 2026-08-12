@@ -457,7 +457,7 @@ export const generateLaporanPDF = async ({
 
   autoTable(doc, {
     startY: rekapY + 72,
-    head: [["No", "Tempat Magang", "Keterangan Terbaru"]],
+    head: [["No", "Tempat Magang", "Hasil Monitoring"]],
     body: tabelKeterangan,
     theme: "grid",
 
