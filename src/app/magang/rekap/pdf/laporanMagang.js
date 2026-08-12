@@ -444,17 +444,85 @@ export const generateLaporanPDF = async ({
   addRekapRow("Total Sakit", totalSGlobal, rekapY + 48);
   addRekapRow("Total Alfa", totalAGlobal, rekapY + 60);
 
-  const ttdY = 175;
+  // ==========================================
+  // TABEL KETERANGAN MONITORING TERBARU
+  // BERDASARKAN TEMPAT MAGANG
+  // ==========================================
+
+  const tabelKeterangan = dataProcessed.map((item, index) => [
+    index + 1,
+    item.tempat || "-",
+    item.keterangan || "-",
+  ]);
+
+  autoTable(doc, {
+    startY: rekapY + 72,
+    head: [["No", "Tempat Magang", "Keterangan Terbaru"]],
+    body: tabelKeterangan,
+    theme: "grid",
+
+    styles: {
+      fontSize: 9,
+      cellPadding: 2.5,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      valign: "top",
+    },
+
+    headStyles: {
+      fontStyle: "bold",
+      fillColor: [240, 240, 240],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      halign: "center",
+    },
+
+    columnStyles: {
+      0: {
+        cellWidth: 12,
+        halign: "center",
+      },
+      1: {
+        cellWidth: 55,
+      },
+      2: {
+        cellWidth: "auto",
+      },
+    },
+
+    margin: {
+      left: 15,
+      right: 15,
+    },
+  });
+
+  // ==========================================
+  // TANDA TANGAN GURU PEMBIMBING
+  // ==========================================
+
+  let ttdY = doc.lastAutoTable.finalY + 18;
+
+  // Jika tabel terlalu panjang, tanda tangan pindah ke halaman berikutnya
+  if (ttdY > 245) {
+    doc.addPage();
+    ttdY = 30;
+  }
+
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
+
   doc.text("Mengetahui,", 145, ttdY);
   doc.text("Guru Pembimbing", 145, ttdY + 5);
 
   doc.setFont("helvetica", "bold");
   doc.text(teksNamaGuru, 145, ttdY + 32);
+
   doc.setDrawColor(0);
   doc.setLineWidth(0.4);
   doc.line(145, ttdY + 33, 195, ttdY + 33);
+
   doc.setFont("helvetica", "normal");
   doc.text(`NIP. ${" ".repeat(25)}`, 145, ttdY + 38);
 
