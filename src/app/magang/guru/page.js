@@ -456,11 +456,11 @@ export default function DashboardGuru() {
             onClick={() => router.push("/magang/tambah")}
           />
           <MenuCard
-            title="Rekap Bulanan"
-            subtitle="Pantau performa presensi"
-            icon="📅"
+            title="Guru Wali"
+            subtitle="Kelola dan pantau siswa wali"
+            icon="👨‍🏫"
             bgGrad="from-amber-500 to-orange-600 shadow-amber-500/20"
-            onClick={() => router.push("/magang/rekap")}
+            onClick={() => router.push("/magang/guru/guru-wali")}
           />
           <MenuCard
             title="Cetak Laporan"

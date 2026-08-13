@@ -115,6 +115,22 @@ export async function addSiswa(data) {
 }
 
 // ==========================================
+// AKTIFKAN SISWA MENJADI MAGANG
+// ==========================================
+
+export async function aktifkanSiswaMagang(data) {
+  return request("aktifkanSiswaMagang", data);
+}
+
+// ==========================================
+// SEMUA TEMPAT MAGANG
+// ==========================================
+
+export async function getSemuaTempatMagang() {
+  return request("getSemuaTempatMagang");
+}
+
+// ==========================================
 // EDIT SISWA
 // ==========================================
 
@@ -212,6 +228,16 @@ export function getRekapSemua(bulan, tempat = "", idGuru = "") {
   return request("getRekapSemua", {
     bulan,
     tempat,
+    idGuru,
+  });
+}
+
+// ==========================================
+// GURU WALI
+// ==========================================
+
+export async function getDataSiswaWali(idGuru) {
+  return request("getDataSiswaWali", {
     idGuru,
   });
 }
