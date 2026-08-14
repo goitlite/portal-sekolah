@@ -241,3 +241,48 @@ export async function getDataSiswaWali(idGuru) {
     idGuru,
   });
 }
+
+// ==========================================
+// BIODATA SISWA
+// ==========================================
+
+export async function getBiodataSiswa(idSiswa) {
+  return request("getBiodataSiswa", {
+    idSiswa,
+  });
+}
+
+export async function updateBiodataSiswa(data) {
+  return request("updateBiodataSiswa", {
+    idSiswa: data.idSiswa,
+
+    data: {
+      tempatLahir: data.tempatLahir,
+      tglLahir: data.tglLahir,
+
+      ayah: data.ayah,
+      pekerjaanAyah: data.pekerjaanAyah,
+      kontakAyah: data.kontakAyah,
+
+      ibu: data.ibu,
+      pekerjaanIbu: data.pekerjaanIbu,
+      kontakIbu: data.kontakIbu,
+
+      anakKe: data.anakKe,
+      alamat: data.alamat,
+
+      hobi: data.hobi,
+      citaCita: data.citaCita,
+      bakatKeahlian: data.bakatKeahlian,
+      transportasi: data.transportasi,
+
+      pelajaranDisukai: data.pelajaranDisukai,
+      alasanDisukai: data.alasanDisukai,
+
+      pelajaranTidakDisukai: data.pelajaranTidakDisukai,
+      alasanTidakDisukai: data.alasanTidakDisukai,
+
+      harapan: data.harapan,
+    },
+  });
+}

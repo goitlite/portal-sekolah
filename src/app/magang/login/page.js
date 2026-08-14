@@ -65,7 +65,13 @@ export default function LoginMagang() {
           return;
 
         case "siswa":
-          router.replace("presensi");
+          if (!result.data.tempatMagang || !result.data.tempatMagang.trim()) {
+            // Belum magang → langsung dashboard siswa
+            router.replace("/magang/dashboard_siswa");
+          } else {
+            // Sudah magang → masuk presensi
+            router.replace("/magang/presensi");
+          }
           return;
 
         default:

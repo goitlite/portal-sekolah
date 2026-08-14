@@ -290,53 +290,35 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* STATISTIK CARD GRID (Klik Untuk Lihat Nama) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card
-            title="Jumlah Siswa"
-            value={dashboard?.jumlahSiswa ?? "--"}
-            accentColor="border-indigo-500"
-            textColor="text-indigo-600"
-            icon="👥"
-            onClick={() =>
-              handleCardClick("Daftar Jumlah Siswa", dashboard?.listJumlahSiswa)
-            }
+        {/* MENU TAMPILAN UTAMA */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <MenuCard
+            title="Daftar Siswa"
+            subtitle="Kelola profil siswa magang"
+            icon="🗂️"
+            bgGrad="from-sky-500 to-blue-600 shadow-blue-500/20"
+            onClick={() => router.push("/magang/siswa")}
           />
-          <Card
-            title="Hadir Hari Ini"
-            value={dashboard?.hadirHariIni ?? "--"}
-            accentColor="border-emerald-500"
-            textColor="text-emerald-600"
-            icon="✅"
-            onClick={() =>
-              handleCardClick(
-                "Siswa Hadir Hari Ini",
-                dashboard?.listHadirHariIni,
-              )
-            }
+          <MenuCard
+            title="Tambah Siswa"
+            subtitle="Registrasi akun siswa baru"
+            icon="➕"
+            bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
+            onClick={() => router.push("/magang/tambah")}
           />
-          <Card
-            title="Total Kehadiran"
-            value={dashboard?.totalHadir ?? "--"}
-            accentColor="border-blue-500"
-            textColor="text-blue-600"
-            icon="📊"
-            onClick={() =>
-              handleCardClick("Log Total Kehadiran", dashboard?.listTotalHadir)
-            }
+          <MenuCard
+            title="Guru Wali"
+            subtitle="Kelola dan pantau siswa wali"
+            icon="👨‍🏫"
+            bgGrad="from-amber-500 to-orange-600 shadow-amber-500/20"
+            onClick={() => router.push("/magang/guru/guru-wali")}
           />
-          <Card
-            title="Izin / Sakit"
-            value={dashboard?.izinSakit ?? "--"}
-            accentColor="border-amber-500"
-            textColor="text-amber-600"
-            icon="🤒"
-            onClick={() =>
-              handleCardClick(
-                "Daftar Siswa Izin / Sakit",
-                dashboard?.listIzinSakit,
-              )
-            }
+          <MenuCard
+            title="Cetak Laporan"
+            subtitle="Ekspor data PDF / Excel"
+            icon="🖨️"
+            bgGrad="from-purple-500 to-indigo-600 shadow-purple-500/20"
+            onClick={() => setShowCetakModal(true)} // Tampilkan modal isian
           />
         </div>
 
@@ -439,35 +421,53 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* MENU TAMPILAN UTAMA */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <MenuCard
-            title="Daftar Siswa"
-            subtitle="Kelola profil siswa magang"
-            icon="🗂️"
-            bgGrad="from-sky-500 to-blue-600 shadow-blue-500/20"
-            onClick={() => router.push("/magang/siswa")}
+        {/* STATISTIK CARD GRID (Klik Untuk Lihat Nama) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Card
+            title="Jumlah Siswa"
+            value={dashboard?.jumlahSiswa ?? "--"}
+            accentColor="border-indigo-500"
+            textColor="text-indigo-600"
+            icon="👥"
+            onClick={() =>
+              handleCardClick("Daftar Jumlah Siswa", dashboard?.listJumlahSiswa)
+            }
           />
-          <MenuCard
-            title="Tambah Siswa"
-            subtitle="Registrasi akun siswa baru"
-            icon="➕"
-            bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
-            onClick={() => router.push("/magang/tambah")}
+          <Card
+            title="Hadir Hari Ini"
+            value={dashboard?.hadirHariIni ?? "--"}
+            accentColor="border-emerald-500"
+            textColor="text-emerald-600"
+            icon="✅"
+            onClick={() =>
+              handleCardClick(
+                "Siswa Hadir Hari Ini",
+                dashboard?.listHadirHariIni,
+              )
+            }
           />
-          <MenuCard
-            title="Guru Wali"
-            subtitle="Kelola dan pantau siswa wali"
-            icon="👨‍🏫"
-            bgGrad="from-amber-500 to-orange-600 shadow-amber-500/20"
-            onClick={() => router.push("/magang/guru/guru-wali")}
+          <Card
+            title="Total Kehadiran"
+            value={dashboard?.totalHadir ?? "--"}
+            accentColor="border-blue-500"
+            textColor="text-blue-600"
+            icon="📊"
+            onClick={() =>
+              handleCardClick("Log Total Kehadiran", dashboard?.listTotalHadir)
+            }
           />
-          <MenuCard
-            title="Cetak Laporan"
-            subtitle="Ekspor data PDF / Excel"
-            icon="🖨️"
-            bgGrad="from-purple-500 to-indigo-600 shadow-purple-500/20"
-            onClick={() => setShowCetakModal(true)} // Tampilkan modal isian
+          <Card
+            title="Izin / Sakit"
+            value={dashboard?.izinSakit ?? "--"}
+            accentColor="border-amber-500"
+            textColor="text-amber-600"
+            icon="🤒"
+            onClick={() =>
+              handleCardClick(
+                "Daftar Siswa Izin / Sakit",
+                dashboard?.listIzinSakit,
+              )
+            }
           />
         </div>
 

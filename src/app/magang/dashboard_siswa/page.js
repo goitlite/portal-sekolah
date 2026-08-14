@@ -196,6 +196,8 @@ export default function DashboardSiswa() {
     router.replace("/magang/login");
   }
 
+  const sudahMagang = !!user?.tempatMagang?.trim();
+
   const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal;
   const fotoTerbaru = riwayat.length > 0 ? riwayat[0].FOTO : null;
 
@@ -271,52 +273,16 @@ export default function DashboardSiswa() {
         </div>
 
         {/* STATUS PRESENSI HARI INI */}
-        <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF5D9] to-[#F7E7A7] p-5 sm:p-6 border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(214,178,63,0.18)]">
-          <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-4">
-            Status Kehadiran Hari Ini
-          </h2>
-
-          {isSudahPresensi ? (
-            <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-emerald-500/30 mb-2">
-                  ✅ Sudah Presensi
-                </div>
-                <p className="text-sm font-semibold text-emerald-800/80">
-                  Kamu sudah melakukan presensi hari ini. Tetap semangat
-                  menjalani kegiatan magang!
-                </p>
-              </div>
-              <button
-                disabled
-                className="rounded-xl bg-slate-300 px-6 py-3 text-sm font-black text-slate-500 cursor-not-allowed whitespace-nowrap"
-              >
-                ✔️ SELESAI HARI INI
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wide shadow-sm shadow-rose-500/30 mb-2">
-                  ❌ Belum Presensi
-                </div>
-                <p className="text-sm font-semibold text-rose-800/80">
-                  Kamu belum melakukan presensi hari ini. Silakan isi sekarang!
-                </p>
-              </div>
-              <button
-                onClick={() => router.push("/magang/presensi")}
-                className="rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/40 active:scale-[0.96] transition-all whitespace-nowrap"
-              >
-                📸 ISI PRESENSI
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* MENU UTAMA */}
-        <div className="grid gap-4 grid-cols-2">
-          {isSudahPresensi ? (
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
+          {!sudahMagang ? (
+            <MenuCardDisabled
+              title="Presensi Terkunci"
+              subtitle="Belum memiliki tempat magang"
+              icon="🔒"
+            />
+          ) : isSudahPresensi ? (
             <MenuCardDisabled
               title="Presensi Selesai"
               subtitle="Telah diisi hari ini"
@@ -338,6 +304,15 @@ export default function DashboardSiswa() {
             icon="📋"
             bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30"
             onClick={() => router.push("/magang/rekap")}
+          />
+
+          {/* BIODATA */}
+          <MenuCard
+            title="Biodata Saya"
+            subtitle="Lihat & edit data pribadi"
+            icon="👤"
+            bgGrad="from-violet-500 to-purple-600 shadow-violet-500/30"
+            onClick={() => router.push("/magang/siswa/biodata")}
           />
         </div>
 
