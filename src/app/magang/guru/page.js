@@ -294,27 +294,27 @@ export default function DashboardGuru() {
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <MenuCard
             title="Daftar Siswa"
-            subtitle="Kelola profil siswa magang"
+            subtitle="Kelola siswa bimbingan magang dan guru wali"
             icon="🗂️"
             bgGrad="from-sky-500 to-blue-600 shadow-blue-500/20"
             onClick={() => router.push("/magang/siswa")}
           />
           <MenuCard
-            title="Tambah Siswa"
+            title="Tambah Siswa Magang"
             subtitle="Registrasi akun siswa baru"
             icon="➕"
             bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
             onClick={() => router.push("/magang/tambah")}
           />
           <MenuCard
-            title="Guru Wali"
-            subtitle="Kelola dan pantau siswa wali"
+            title="Kelola Guru Wali"
+            subtitle="Kelola dan pantau siswa bimbingan wali"
             icon="👨‍🏫"
             bgGrad="from-amber-500 to-orange-600 shadow-amber-500/20"
             onClick={() => router.push("/magang/guru/guru-wali")}
           />
           <MenuCard
-            title="Cetak Laporan"
+            title="Cetak Laporan PKL"
             subtitle="Ekspor data PDF / Excel"
             icon="🖨️"
             bgGrad="from-purple-500 to-indigo-600 shadow-purple-500/20"

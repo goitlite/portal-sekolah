@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-import { addSiswa, getSemuaTempatMagang } from "../../../lib/api";
+import { addSiswa, getTempatMagangGuru } from "../../../lib/api";
 import { getSession, isLoggedIn } from "../../../lib/auth";
 
 export default function TambahSiswaWaliPage() {
@@ -88,13 +88,7 @@ export default function TambahSiswaWaliPage() {
             if (!item) return "";
 
             if (typeof item === "object") {
-              return (
-                item.tempat ||
-                item.TEMPAT ||
-                item.nama ||
-                item.TEMPAT_MAGANG ||
-                ""
-              );
+              return item.tempat || item.TEMPAT || item.nama || "";
             }
 
             return String(item);
@@ -109,6 +103,7 @@ export default function TambahSiswaWaliPage() {
       }
     } catch (error) {
       console.error("Gagal menarik data tempat magang", error);
+
       setDaftarTempatDb([]);
     }
 
