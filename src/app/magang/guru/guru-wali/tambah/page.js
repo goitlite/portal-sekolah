@@ -7,6 +7,7 @@ import Image from "next/image";
 import { getSession, isLoggedIn } from "../../../lib/auth";
 import {
   addSiswa,
+  editSiswa,
   getTempatMagangGuru,
   getSiswa,
   getGuru,
@@ -17,6 +18,8 @@ function TambahSiswaWaliContent() {
   const searchParams = useSearchParams();
   const editId = searchParams?.get("editId");
   const editKelas = searchParams?.get("kelas");
+
+  const isEditMode = Boolean(editId);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,56 +120,96 @@ function TambahSiswaWaliContent() {
   }, [router]);
 
   // =========================================================
-  // EFEK AUTO-FILL DARI TOMBOL "EDIT DATA"
+  // EFEK AUTO-FILL MODE EDIT
   // =========================================================
   useEffect(() => {
-    if (editId && dataSiswaSpreadsheet.length > 0) {
-      setActiveTab(1);
+    if (!editId || dataSiswaSpreadsheet.length === 0) return;
 
+    const student = dataSiswaSpreadsheet.find(
+      (s) => String(s.id || s.ID) === String(editId),
+    );
+
+    if (!student) return;
+
+    // Mode edit tidak menggunakan Tab 2
+    setActiveTab(1);
+
+    // ID siswa tetap
+    setPilihSiswaId(editId);
+
+    // ==========================================
+    // NAMA + KELAS
+    // ==========================================
+    const rawNama = student.nama || student.NAMA || "";
+
+    const match = rawNama.match(/^(.*?)\s*\[(.*?)\]\s*$/);
+
+    if (match) {
+      setNama(match[1].trim().toUpperCase());
+      setKelas(match[2].trim());
+    } else {
+      setNama(rawNama.trim().toUpperCase());
+
+      // fallback kalau nama tidak memiliki [kelas]
       if (editKelas) {
         setKelas(editKelas);
       }
+    }
 
-      setPilihSiswaId(editId);
+    // ==========================================
+    // GURU PEMBIMBING
+    // ==========================================
+    let extractedIdGuru = String(
+      student.idGuru || student.ID_GURU || student["ID GURU"] || "",
+    ).trim();
 
-      const student = dataSiswaSpreadsheet.find(
-        (s) => String(s.id || s.ID) === String(editId),
-      );
+    let extractedNamaGuru = String(
+      student.namaGuru || student.NAMA_GURU || student["NAMA GURU"] || "",
+    ).trim();
 
-      if (student) {
-        const rawNama = student.nama || student.NAMA || "";
-        const bersihNama = rawNama.replace(/\[.*?\]/g, "").trim();
-        setNama(bersihNama);
+    // Bersihkan karakter aneh/strip dari spreadsheet agar terdeteksi benar-benar kosong
+    if (
+      extractedIdGuru === "-" ||
+      extractedIdGuru.toLowerCase().includes("belum") ||
+      extractedIdGuru.toLowerCase() === "null" ||
+      extractedIdGuru === "0"
+    ) {
+      extractedIdGuru = "";
+      extractedNamaGuru = "";
+    }
 
-        const extractedIdGuru =
-          student.idGuru || student.ID_GURU || student["ID GURU"] || "";
-        const extractedNamaGuru =
-          student.namaGuru || student.NAMA_GURU || student["NAMA GURU"] || "";
+    setPilihGuruPembimbing(extractedIdGuru);
+    setNamaGuruPembimbing(extractedNamaGuru);
 
-        setPilihGuruPembimbing(extractedIdGuru);
-        setNamaGuruPembimbing(extractedNamaGuru);
+    // ==========================================
+    // STATUS + TEMPAT MAGANG
+    // ==========================================
+    const rawStatus = String(
+      student.status ||
+        student.STATUS ||
+        student.statusMagang ||
+        student.STATUS_MAGANG ||
+        "",
+    )
+      .toUpperCase()
+      .replace(" ", "_");
 
-        const rawStatus = String(
-          student.status || student.STATUS || "",
-        ).toUpperCase();
-        const rawTempat =
-          student.tempatMagang ||
-          student.TEMPAT_MAGANG ||
-          student.tempat ||
-          student.TEMPAT ||
-          "";
+    const rawTempat =
+      student.tempatMagang ||
+      student.TEMPAT_MAGANG ||
+      student.tempat ||
+      student.TEMPAT ||
+      "";
 
-        if (
-          rawStatus === "MAGANG" ||
-          (rawStatus === "" && rawTempat.trim() !== "")
-        ) {
-          setStatus("MAGANG");
-          setTempatMagang(rawTempat);
-        } else {
-          setStatus("BELUM_MAGANG");
-          setTempatMagang("");
-        }
-      }
+    if (
+      rawStatus === "MAGANG" ||
+      (rawStatus === "" && String(rawTempat).trim() !== "")
+    ) {
+      setStatus("MAGANG");
+      setTempatMagang(rawTempat);
+    } else {
+      setStatus("BELUM_MAGANG");
+      setTempatMagang("");
     }
   }, [editId, editKelas, dataSiswaSpreadsheet]);
 
@@ -327,12 +370,16 @@ function TambahSiswaWaliContent() {
   // SIMPAN SISWA
   // =========================================================
   async function simpanSiswa() {
-    if (activeTab === 1 && !pilihSiswaId) {
+    if (!isEditMode && activeTab === 1 && !pilihSiswaId) {
       alert("Silakan pilih siswa dari dropdown terlebih dahulu.");
       return;
     }
-    if (activeTab === 2 && nama.trim() === "") {
+    if (!isEditMode && activeTab === 2 && nama.trim() === "") {
       alert("Nama siswa belum diisi.");
+      return;
+    }
+    if (isEditMode && nama.trim() === "") {
+      alert("Nama lengkap tidak boleh kosong.");
       return;
     }
     if (status === "MAGANG" && tempatMagang.trim() === "") {
@@ -343,33 +390,68 @@ function TambahSiswaWaliContent() {
     setSaving(true);
     try {
       const namaSiswaDenganKelas = `${nama.trim()} [${kelas}]`;
+      let result;
 
-      const result = await addSiswa({
-        id: activeTab === 1 ? pilihSiswaId : "",
-        nama: namaSiswaDenganKelas,
-        idGuru: activeTab === 1 ? pilihGuruPembimbing : "",
-        namaGuru: activeTab === 1 ? namaGuruPembimbing : "",
-        tempatMagang: status === "MAGANG" ? tempatMagang : "",
-        status: status,
-        isGuruWali: true,
-        idGuruWali: guru.id,
-      });
+      if (isEditMode) {
+        // =====================================================
+        // MODE EDIT
+        // =====================================================
+        result = await editSiswa({
+          id: editId,
+          nama: namaSiswaDenganKelas,
+          // Jika kosong, kirim "-" agar lolos dari validasi backend
+          idGuru: pilihGuruPembimbing
+            ? String(pilihGuruPembimbing).trim()
+            : "-",
+          namaGuru: namaGuruPembimbing
+            ? String(namaGuruPembimbing).trim()
+            : "-",
+          tempatMagang: status === "MAGANG" ? tempatMagang : "",
+          status: status,
+          isGuruWali: true,
+          idGuruWali: guru.id,
+        });
+      } else {
+        // =====================================================
+        // MODE TAMBAH
+        // =====================================================
+        result = await addSiswa({
+          id: activeTab === 1 ? pilihSiswaId : "",
+          nama: namaSiswaDenganKelas,
+          idGuru: activeTab === 1 ? pilihGuruPembimbing : "",
+          namaGuru: activeTab === 1 ? namaGuruPembimbing : "",
+          tempatMagang: status === "MAGANG" ? tempatMagang : "",
+          status: status,
+          isGuruWali: true,
+          idGuruWali: guru.id,
+        });
+      }
 
       if (result.success) {
-        if (status === "MAGANG" && tempatMagang)
+        if (status === "MAGANG" && tempatMagang) {
           saveToLocalStorage(tempatMagang);
+        }
+
         alert(
-          `Siswa berhasil ditambahkan.\n\nID Siswa : ${result.data.id}\nStatus : ${status}`,
+          `Siswa berhasil ${isEditMode ? "diperbarui" : "ditambahkan"}.\n\n` +
+            `ID Siswa : ${result.data?.id || editId}\n` +
+            `Status : ${status}`,
         );
+
         router.replace("/magang/guru/guru-wali");
       } else {
         alert(result.message);
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan saat menyimpan data siswa.");
+      alert(
+        isEditMode
+          ? "Terjadi kesalahan saat memperbarui data siswa."
+          : "Terjadi kesalahan saat menyimpan data siswa.",
+      );
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   // =========================================================
@@ -408,7 +490,7 @@ function TambahSiswaWaliContent() {
             </div>
             <div>
               <h1 className="text-sm sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
-                TAMBAH / EDIT SISWA WALI
+                {isEditMode ? "EDIT SISWA WALI" : "TAMBAH SISWA WALI"}
               </h1>
               <p className="text-[10px] sm:text-xs font-medium text-blue-300 tracking-wide mt-0.5">
                 Guru Wali: {guru.nama}
@@ -428,50 +510,52 @@ function TambahSiswaWaliContent() {
         <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
           <div className="mb-6 border-b border-slate-100 pb-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2">
-              Registrasi Siswa Wali
+              {isEditMode ? "Pembaruan Data Siswa" : "Registrasi Siswa Wali"}
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
               Formulir Data Siswa
             </h2>
           </div>
 
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-6 sm:mb-8">
-            <button
-              onClick={() => {
-                setActiveTab(1);
-                setPilihSiswaId("");
-                setNama("");
-                setPilihGuruPembimbing("");
-                setNamaGuruPembimbing("");
-                setStatus("BELUM_MAGANG");
-                setTempatMagang("");
-              }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
-                activeTab === 1
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              1. Tambah siswa dari Database
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab(2);
-                setNama("");
-                setPilihGuruPembimbing("");
-                setNamaGuruPembimbing("");
-                setStatus("BELUM_MAGANG");
-                setTempatMagang("");
-              }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
-                activeTab === 2
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              2. Tambah Siswa secara Manual
-            </button>
-          </div>
+          {!isEditMode && (
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6 sm:mb-8">
+              <button
+                onClick={() => {
+                  setActiveTab(1);
+                  setPilihSiswaId("");
+                  setNama("");
+                  setPilihGuruPembimbing("");
+                  setNamaGuruPembimbing("");
+                  setStatus("BELUM_MAGANG");
+                  setTempatMagang("");
+                }}
+                className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                  activeTab === 1
+                    ? "bg-white text-blue-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                1. Tambah siswa dari Database
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab(2);
+                  setNama("");
+                  setPilihGuruPembimbing("");
+                  setNamaGuruPembimbing("");
+                  setStatus("BELUM_MAGANG");
+                  setTempatMagang("");
+                }}
+                className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                  activeTab === 2
+                    ? "bg-white text-blue-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                2. Tambah Siswa secara Manual
+              </button>
+            </div>
+          )}
 
           <div className="space-y-5 sm:space-y-6">
             <div>
@@ -544,7 +628,22 @@ function TambahSiswaWaliContent() {
               </div>
             </div>
 
-            {activeTab === 1 && (
+            {isEditMode && (
+              <div>
+                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  value={nama}
+                  onChange={(e) => setNama(e.target.value.toUpperCase())}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 font-medium focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  placeholder="MASUKKAN NAMA SISWA..."
+                />
+              </div>
+            )}
+
+            {activeTab === 1 && !isEditMode && (
               <div>
                 <label className="block mb-1.5 text-sm font-bold text-slate-700">
                   Pilih Nama Siswa (Kelas {kelas})
@@ -568,121 +667,118 @@ function TambahSiswaWaliContent() {
                         </option>
                       ))}
                     </select>
-
-                    {pilihSiswaId && (
-                      <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
-                        <div className="flex justify-between items-center mb-2">
-                          <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider">
-                            Guru Pembimbing Magang
-                          </p>
-                          <div className="flex gap-2">
-                            {!modeGantiGuru && (
-                              <button
-                                type="button"
-                                onClick={handleKlikGantiPembimbing}
-                                className="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm"
-                              >
-                                Ganti
-                              </button>
-                            )}
-                            {pilihGuruPembimbing && (
-                              <button
-                                type="button"
-                                onClick={handleKlikHapusPembimbing}
-                                className="text-[10px] bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm"
-                              >
-                                Hapus
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {!modeGantiGuru ? (
-                          <p className="text-sm font-semibold text-indigo-900">
-                            {namaGuruPembimbing || (
-                              <span className="italic text-slate-500 font-normal">
-                                Belum ada pembimbing magang
-                              </span>
-                            )}
-                          </p>
-                        ) : (
-                          <div className="mt-2">
-                            <select
-                              className="w-full rounded-lg border border-indigo-200 p-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
-                              value={pilihGuruPembimbing}
-                              onChange={(e) => {
-                                const selectedId = e.target.value;
-                                setPilihGuruPembimbing(selectedId);
-                                const guruTerpilih = daftarGuru.find(
-                                  (g) =>
-                                    String(g.id || g.ID) === String(selectedId),
-                                );
-                                if (guruTerpilih) {
-                                  setNamaGuruPembimbing(
-                                    guruTerpilih.nama || guruTerpilih.NAMA,
-                                  );
-                                } else {
-                                  setNamaGuruPembimbing("");
-                                }
-                                setModeGantiGuru(false);
-                              }}
-                            >
-                              <option value="">-- Pilih Guru Baru --</option>
-                              {daftarGuru.map((g, idx) => (
-                                <option
-                                  key={g.id || g.ID || idx}
-                                  value={g.id || g.ID}
-                                >
-                                  {g.nama || g.NAMA}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => setModeGantiGuru(false)}
-                              className="mt-2 text-[10px] text-slate-500 underline"
-                            >
-                              Batal Ganti
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {pilihSiswaId && (
-                      <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
-                        <div className="text-xl">ℹ️</div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            Status & Tempat Magang (Otomatis dari Spreadsheet)
-                          </p>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                status === "MAGANG"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {status === "MAGANG"
-                                ? "🏢 MAGANG"
-                                : "🎓 BELUM MAGANG"}
-                            </span>
-                            {status === "MAGANG" && tempatMagang && (
-                              <span className="text-sm font-semibold text-slate-800">
-                                di {tempatMagang}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === 2 && (
+            {/* Guru Pembimbing tampil saat edit, atau jika sudah pilih siswa di tab 1 */}
+            {((activeTab === 1 && pilihSiswaId && !isEditMode) ||
+              isEditMode) && (
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider">
+                    Guru Pembimbing Magang
+                  </p>
+                  <div className="flex gap-2">
+                    {!modeGantiGuru && (
+                      <button
+                        type="button"
+                        onClick={handleKlikGantiPembimbing}
+                        className="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm"
+                      >
+                        Ganti
+                      </button>
+                    )}
+                    {pilihGuruPembimbing && (
+                      <button
+                        type="button"
+                        onClick={handleKlikHapusPembimbing}
+                        className="text-[10px] bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {!modeGantiGuru ? (
+                  <p className="text-sm font-semibold text-indigo-900">
+                    {namaGuruPembimbing || (
+                      <span className="italic text-slate-500 font-normal">
+                        Belum ada pembimbing magang
+                      </span>
+                    )}
+                  </p>
+                ) : (
+                  <div className="mt-2">
+                    <select
+                      className="w-full rounded-lg border border-indigo-200 p-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+                      value={pilihGuruPembimbing}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setPilihGuruPembimbing(selectedId);
+                        const guruTerpilih = daftarGuru.find(
+                          (g) => String(g.id || g.ID) === String(selectedId),
+                        );
+                        if (guruTerpilih) {
+                          setNamaGuruPembimbing(
+                            guruTerpilih.nama || guruTerpilih.NAMA,
+                          );
+                        } else {
+                          setNamaGuruPembimbing("");
+                        }
+                        setModeGantiGuru(false);
+                      }}
+                    >
+                      <option value="">-- Pilih Guru Baru --</option>
+                      {daftarGuru.map((g, idx) => (
+                        <option key={g.id || g.ID || idx} value={g.id || g.ID}>
+                          {g.nama || g.NAMA}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setModeGantiGuru(false)}
+                      className="mt-2 text-[10px] text-slate-500 underline"
+                    >
+                      Batal Ganti
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Info Status Spreadsheet asli hanya muncul di mode tambah tab 1 */}
+            {activeTab === 1 && pilihSiswaId && !isEditMode && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
+                <div className="text-xl">ℹ️</div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Status & Tempat Magang (Otomatis dari Spreadsheet)
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        status === "MAGANG"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {status === "MAGANG" ? "🏢 MAGANG" : "🎓 BELUM MAGANG"}
+                    </span>
+                    {status === "MAGANG" && tempatMagang && (
+                      <span className="text-sm font-semibold text-slate-800">
+                        di {tempatMagang}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 2 && !isEditMode && (
               <div>
                 <label className="block mb-1.5 text-sm font-bold text-slate-700">
                   Nama Lengkap Siswa Baru
@@ -697,7 +793,8 @@ function TambahSiswaWaliContent() {
               </div>
             )}
 
-            {activeTab === 2 && (
+            {/* Form Status Manual selalu tampil saat tambah Tab 2 ATAU saat Edit Mode */}
+            {(activeTab === 2 || isEditMode) && (
               <>
                 <div>
                   <label className="block mb-1.5 text-sm font-bold text-slate-700">
@@ -819,8 +916,12 @@ function TambahSiswaWaliContent() {
                 </>
               ) : (
                 <>
-                  <span className="text-lg leading-none">+</span>
-                  <span>Simpan Data Siswa</span>
+                  <span className="text-lg leading-none">
+                    {isEditMode ? "✏️" : "+"}
+                  </span>
+                  <span>
+                    {isEditMode ? "Perbarui Data Siswa" : "Simpan Data Siswa"}
+                  </span>
                 </>
               )}
             </button>
@@ -967,6 +1068,7 @@ function TambahSiswaWaliContent() {
     </main>
   );
 }
+
 export default function TambahSiswaWaliPage() {
   return (
     <Suspense
