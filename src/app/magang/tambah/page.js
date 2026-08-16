@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-import { addSiswa, getTempatMagangGuru } from "../lib/api";
+// Pastikan getSiswa sudah diexport di ../lib/api
+import { addSiswa, getTempatMagangGuru, getSiswa } from "../lib/api";
 import { getSession, isLoggedIn } from "../lib/auth";
 
 export default function TambahSiswaPage() {
@@ -12,13 +13,22 @@ export default function TambahSiswaPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [guru, setGuru] = useState(null);
 
+  // =========================================================
+  // STATE TAB & DATA SISWA SPREADSHEET (ADAPTASI DARI WALI)
+  // =========================================================
+  const [activeTab, setActiveTab] = useState(1); // 1 = Pilih Data, 2 = Input Manual
+  const [dataSiswaSpreadsheet, setDataSiswaSpreadsheet] = useState([]);
+  const [loadingDataSiswa, setLoadingDataSiswa] = useState(false);
+  const [pilihSiswaId, setPilihSiswaId] = useState("");
+
+  // State Form Umum
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("TJKT 1");
   const [tempatMagang, setTempatMagang] = useState("");
 
+  // Modal tempat magang
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [recentPlaces, setRecentPlaces] = useState([]);
   const [inputTempatBaru, setInputTempatBaru] = useState("");
@@ -51,6 +61,24 @@ export default function TambahSiswaPage() {
         console.error("Gagal membaca history", e);
       }
     }
+
+    // Mengambil data master siswa dari spreadsheet untuk Tab 1
+    async function fetchMasterSiswa() {
+      setLoadingDataSiswa(true);
+      try {
+        if (typeof getSiswa === "function") {
+          const res = await getSiswa();
+          if (res.success) {
+            setDataSiswaSpreadsheet(res.data);
+          }
+        }
+      } catch (error) {
+        console.error("Gagal menarik data siswa spreadsheet", error);
+      }
+      setLoadingDataSiswa(false);
+    }
+
+    fetchMasterSiswa();
   }, [router]);
 
   useEffect(() => {
@@ -58,6 +86,51 @@ export default function TambahSiswaPage() {
       fetchTempatMagangDb();
     }
   }, [isModalOpen, guru]);
+
+  // === FILTERING SISWA BERDASARKAN KELAS ===
+  const siswaFiltered = (dataSiswaSpreadsheet || [])
+    .filter((s) => {
+      const namaLengkap = String(s.nama || s.NAMA || "").toUpperCase();
+      const targetKelas = `[${kelas.toUpperCase()}]`;
+      return namaLengkap.includes(targetKelas);
+    })
+    .sort((a, b) => {
+      const namaA = String(a.nama || a.NAMA || "");
+      const namaB = String(b.nama || b.NAMA || "");
+      return namaA.localeCompare(namaB);
+    });
+
+  const handlePilihSiswa = (e) => {
+    const selectedId = e.target.value;
+    setPilihSiswaId(selectedId);
+
+    const student = siswaFiltered.find(
+      (s) => String(s.id || s.ID) === String(selectedId),
+    );
+
+    if (student) {
+      const rawNama = student.nama || student.NAMA || "";
+      const bersihNama = rawNama.replace(/\[.*?\]/g, "").trim();
+      setNama(bersihNama);
+
+      // Auto-fill tempat magang jika sudah ada di database sebelumnya
+      const rawTempat =
+        student.tempatMagang ||
+        student.TEMPAT_MAGANG ||
+        student.tempat ||
+        student.TEMPAT ||
+        "";
+
+      if (rawTempat.trim() !== "") {
+        setTempatMagang(rawTempat);
+      } else {
+        setTempatMagang("");
+      }
+    } else {
+      setNama("");
+      setTempatMagang("");
+    }
+  };
 
   // === PERBAIKAN UTAMA: EKSTRAKSI DATA OBJEK MENJADI TEKS ===
   async function fetchTempatMagangDb() {
@@ -73,7 +146,6 @@ export default function TambahSiswaPage() {
           .map((item) => {
             if (!item) return "";
             if (typeof item === "object") {
-              // Ambil properti 'tempat' atau 'TEMPAT'
               return item.tempat || item.TEMPAT || item.nama || "";
             }
             return String(item);
@@ -114,7 +186,11 @@ export default function TambahSiswaPage() {
   };
 
   async function simpanSiswa() {
-    if (nama.trim() === "") {
+    if (activeTab === 1 && !pilihSiswaId) {
+      alert("Silakan pilih siswa dari dropdown terlebih dahulu.");
+      return;
+    }
+    if (activeTab === 2 && nama.trim() === "") {
       alert("Nama siswa belum diisi.");
       return;
     }
@@ -127,6 +203,7 @@ export default function TambahSiswaPage() {
     try {
       const namaSiswaDenganKelas = `${nama.trim()} [${kelas}]`;
       const result = await addSiswa({
+        id: activeTab === 1 ? pilihSiswaId : "",
         nama: namaSiswaDenganKelas,
         idGuru: guru.id,
         namaGuru: guru.nama,
@@ -208,41 +285,94 @@ export default function TambahSiswaPage() {
             </p>
           </div>
 
+          {/* NAVIGASI TAB */}
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-6 sm:mb-8">
+            <button
+              onClick={() => {
+                setActiveTab(1);
+                setPilihSiswaId("");
+                setNama("");
+                setTempatMagang("");
+              }}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                activeTab === 1
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              1. Pilih dari Sistem
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab(2);
+                setNama("");
+                setTempatMagang("");
+              }}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                activeTab === 2
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              2. Input Manual Baru
+            </button>
+          </div>
+
           <div className="space-y-5 sm:space-y-6">
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
-                Nama Lengkap
-              </label>
-              <input
-                type="text"
-                value={nama}
-                onChange={(e) => setNama(e.target.value.toUpperCase())}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
-                placeholder="MASUKKAN NAMA SISWA..."
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1.5 text-sm font-bold text-slate-700">
-                Kelas
+                Pilih Kelas Terlebih Dahulu
               </label>
               <div className="relative">
                 <select
                   value={kelas}
-                  onChange={(e) => setKelas(e.target.value)}
+                  onChange={(e) => {
+                    setKelas(e.target.value);
+                    setPilihSiswaId("");
+                    setNama("");
+                    setTempatMagang("");
+                  }}
                   className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 pr-10 text-sm sm:text-base text-slate-900 font-medium focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                 >
-                  <option value="TJKT 1">TJKT 1</option>
-                  <option value="TJKT 2">TJKT 2</option>
-                  <option value="TDPIB">TDPIB</option>
-                  <option value="TE">TAV</option>
-                  <option value="GEO">GEO</option>
-                  <option value="TBSM1">TBSM1</option>
-                  <option value="TBSM2">TBSM2</option>
-                  <option value="TAB">TAB</option>
-                  <option value="TKRO">TKRO</option>
-                  <option value="TPL">TPL</option>
-                  <option value="TDPIB">TITL</option>
+                  <option value="X TKJ 1">X TJKT 1</option>
+                  <option value="X TKJ 2">X TJKT 2</option>
+                  <option value="X DPIB">X DPIB</option>
+                  <option value="X TAV">X TAV</option>
+                  <option value="X GEOMATIKA">X GEOMATIKA</option>
+                  <option value="X TO 1">X TO1</option>
+                  <option value="X TO 2">X TO2</option>
+                  <option value="X TO 3">X TO3</option>
+                  <option value="X TO 4">X TO4</option>
+                  <option value="X TPL">X TPL</option>
+                  <option value="X TITL 1">X TITL 1</option>
+                  <option value="X TITL 2">X TITL 2</option>
+
+                  <option value="XI TKJ 1">XI TJKT 1</option>
+                  <option value="XI TKJ 2">XI TJKT 2</option>
+                  <option value="XI DPIB">XI DPIB</option>
+                  <option value="XI TAV">XI TAV</option>
+                  <option value="XI GEOMATIKA">XI GEOMATIKA</option>
+                  <option value="XI TBSM 1">XI TBSM 1</option>
+                  <option value="XI TBSM 2">XI TBSM 2</option>
+                  <option value="XI TAB">XI TAB</option>
+                  <option value="XI TKR">XI TKRO</option>
+                  <option value="XI TPL">XI TPL</option>
+                  <option value="XI TITL 1">XI TITL 1</option>
+                  <option value="XI TITL 2">XI TITL 2</option>
+
+                  <option value="TKJ 1">XII TJKT 1</option>
+                  <option value="TKJ 2">XII TJKT 2</option>
+                  <option value="DPIB">XII DPIB</option>
+                  <option value="TAV">XII TAV</option>
+                  <option value="GEOMATIKA">XII GEOMATIKA</option>
+                  <option value="TBSM 1">XII TBSM 1</option>
+                  <option value="TBSM 2">XII TBSM 2</option>
+                  <option value="TAB">XII TAB</option>
+                  <option value="TKR">XII TKRO</option>
+                  <option value="TPL">XII TPL</option>
+                  <option value="TITL">XII TITL</option>
+                  <option value="TJKT 1">XII TJKT CONTOH</option>
+                  <option value="TJKT 2">XII TJKT CONTOH</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                   <svg
@@ -255,6 +385,50 @@ export default function TambahSiswaPage() {
                 </div>
               </div>
             </div>
+
+            {/* TAB 1: PILIH NAMA SISWA DARI SPREADSHEET */}
+            {activeTab === 1 && (
+              <div>
+                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                  Pilih Nama Siswa (Kelas {kelas})
+                </label>
+                {loadingDataSiswa ? (
+                  <div className="p-3 text-sm text-blue-600 bg-blue-50 rounded-xl border border-blue-100 flex items-center gap-2">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    Memuat data sistem...
+                  </div>
+                ) : (
+                  <select
+                    value={pilihSiswaId}
+                    onChange={handlePilihSiswa}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                  >
+                    <option value="">-- Pilih Siswa --</option>
+                    {siswaFiltered.map((s, idx) => (
+                      <option key={s.id || s.ID || idx} value={s.id || s.ID}>
+                        {s.nama || s.NAMA}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: INPUT NAMA MANUAL */}
+            {activeTab === 2 && (
+              <div>
+                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                  Nama Lengkap Siswa Baru
+                </label>
+                <input
+                  type="text"
+                  value={nama}
+                  onChange={(e) => setNama(e.target.value.toUpperCase())}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  placeholder="MASUKKAN NAMA SISWA..."
+                />
+              </div>
+            )}
 
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
@@ -410,7 +584,6 @@ export default function TambahSiswaPage() {
                   <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                     {daftarTempatDb.length > 0 ? (
                       daftarTempatDb
-                        // === PERLINDUNGAN EKSTRA: String() mencegah .toUpperCase() error ===
                         .filter((item) =>
                           String(item).toUpperCase().includes(searchQuery),
                         )

@@ -15,11 +15,14 @@ export default function EditSiswaPage() {
   const [saving, setSaving] = useState(false);
   const [guru, setGuru] = useState(null);
 
+  // State Form Siswa
   const [idSiswa, setIdSiswa] = useState("");
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("TJKT 1");
   const [tempatMagang, setTempatMagang] = useState("");
+  const [status, setStatus] = useState("BELUM_MAGANG"); // Menggunakan format underscore
 
+  // State Modal Tempat Magang
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [recentPlaces, setRecentPlaces] = useState([]);
   const [inputTempatBaru, setInputTempatBaru] = useState("");
@@ -28,6 +31,9 @@ export default function EditSiswaPage() {
   const [loadingDb, setLoadingDb] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // =========================================================
+  // LOGIN / SESSION & FETCH DATA SISWA
+  // =========================================================
   useEffect(() => {
     async function loadData() {
       if (!isLoggedIn()) {
@@ -60,10 +66,10 @@ export default function EditSiswaPage() {
         }
 
         const data = result.data;
-        setIdSiswa(data.ID);
-        setTempatMagang(data.TEMPAT_MAGANG || "");
+        setIdSiswa(data.ID || data.id || "");
 
-        const rawName = data.NAMA || "";
+        // Ekstrak Nama dan Kelas
+        const rawName = data.NAMA || data.nama || "";
         const match = rawName.match(/(.+?)\s*\[(.*?)\]/);
 
         if (match) {
@@ -71,6 +77,25 @@ export default function EditSiswaPage() {
           setKelas(match[2].trim());
         } else {
           setNama(rawName.toUpperCase());
+        }
+
+        // Setup Tempat & Status Sesuai Logika TambahSiswaWali
+        const rawTempat =
+          data.TEMPAT_MAGANG || data.tempatMagang || data.TEMPAT || "";
+        let rawStatus = String(
+          data.STATUS_MAGANG || data.STATUS || data.status || "",
+        ).toUpperCase();
+        rawStatus = rawStatus.replace(" ", "_"); // Normalisasi ke format underscore
+
+        if (
+          rawStatus === "MAGANG" ||
+          (rawStatus === "" && rawTempat.trim() !== "")
+        ) {
+          setStatus("MAGANG");
+          setTempatMagang(rawTempat);
+        } else {
+          setStatus("BELUM_MAGANG");
+          setTempatMagang("");
         }
       } catch (err) {
         console.error(err);
@@ -82,6 +107,9 @@ export default function EditSiswaPage() {
     loadData();
   }, [params.id, router]);
 
+  // =========================================================
+  // LOGIKA TEMPAT MAGANG & MODAL (SAMA PERSIS DENGAN TAMBAH SISWA)
+  // =========================================================
   useEffect(() => {
     if (isModalOpen && guru?.id) {
       fetchTempatMagangDb();
@@ -95,7 +123,6 @@ export default function EditSiswaPage() {
 
       if (res.success && res.data) {
         const rawArray = Array.isArray(res.data) ? res.data : [res.data];
-
         const normalizedData = rawArray
           .map((item) => {
             if (!item) return "";
@@ -106,46 +133,60 @@ export default function EditSiswaPage() {
           })
           .filter((item) => typeof item === "string" && item.trim() !== "");
 
-        const uniqueData = [...new Set(normalizedData)];
-        setDaftarTempatDb(uniqueData);
+        setDaftarTempatDb([...new Set(normalizedData)]);
+      } else {
+        setDaftarTempatDb([]);
       }
     } catch (error) {
       console.error("Gagal menarik data tempat magang", error);
+      setDaftarTempatDb([]);
     }
     setLoadingDb(false);
   }
 
   const saveToLocalStorage = (newPlace) => {
     if (!newPlace) return;
-    let currentPlaces = [...recentPlaces];
-    currentPlaces = currentPlaces.filter((p) => p !== newPlace);
+    let currentPlaces = [...recentPlaces].filter((p) => p !== newPlace);
     currentPlaces.unshift(newPlace);
-    if (currentPlaces.length > 8) {
-      currentPlaces = currentPlaces.slice(0, 8);
-    }
+    if (currentPlaces.length > 8) currentPlaces = currentPlaces.slice(0, 8);
     setRecentPlaces(currentPlaces);
     localStorage.setItem("recentTempatMagang", JSON.stringify(currentPlaces));
   };
 
   const handlePilihTempat = (place) => {
     setTempatMagang(place);
+    setStatus("MAGANG");
     setIsModalOpen(false);
   };
 
   const handleGunakanTempatBaru = () => {
     if (inputTempatBaru.trim() === "") return;
-    setTempatMagang(inputTempatBaru.trim().toUpperCase());
+    const tempat = inputTempatBaru.trim().toUpperCase();
+    setTempatMagang(tempat);
+    setStatus("MAGANG");
+    saveToLocalStorage(tempat);
     setInputTempatBaru("");
     setIsModalOpen(false);
   };
 
+  const handleStatusChange = (newStatus) => {
+    setStatus(newStatus);
+    if (newStatus === "BELUM_MAGANG") {
+      setTempatMagang("");
+    }
+  };
+
+  // =========================================================
+  // SIMPAN PERUBAHAN
+  // =========================================================
   async function simpan() {
     if (nama.trim() === "") {
       alert("Nama siswa belum diisi.");
       return;
     }
-    if (tempatMagang.trim() === "") {
-      alert("Tempat magang belum diisi.");
+
+    if (status === "MAGANG" && tempatMagang.trim() === "") {
+      alert("Silakan pilih tempat magang terlebih dahulu.");
       return;
     }
 
@@ -153,15 +194,20 @@ export default function EditSiswaPage() {
     try {
       const namaSiswaDenganKelas = `${nama.trim()} [${kelas}]`;
 
+      // Menyamakan Payload seperti addSiswa di TambahSiswaWali
       const result = await editSiswa({
         id: idSiswa,
         nama: namaSiswaDenganKelas,
         namaGuru: guru.nama,
-        tempatMagang: tempatMagang,
+        tempatMagang: status === "MAGANG" ? tempatMagang : "",
+        status: status,
+        statusMagang: status, // Fallback untuk memastikan backend menangkap parameter
       });
 
       if (result.success) {
-        saveToLocalStorage(tempatMagang);
+        if (status === "MAGANG" && tempatMagang) {
+          saveToLocalStorage(tempatMagang);
+        }
         alert("Data siswa berhasil diperbarui.");
         router.push("/magang/siswa");
       } else {
@@ -174,6 +220,9 @@ export default function EditSiswaPage() {
     setSaving(false);
   }
 
+  // =========================================================
+  // UI LOADING
+  // =========================================================
   if (loading || !guru) {
     return (
       <main className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -188,9 +237,11 @@ export default function EditSiswaPage() {
     );
   }
 
+  // =========================================================
+  // UI UTAMA
+  // =========================================================
   return (
     <main className="min-h-screen bg-slate-50 font-sans selection:bg-blue-200 flex flex-col relative">
-      {/* HEADER YANG SUDAH DISAMAKAN DENGAN JS SISWA & TAMBAH */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-lg border-b border-blue-700/50">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -231,8 +282,8 @@ export default function EditSiswaPage() {
               Edit Formulir Siswa
             </h2>
             <p className="mt-1 text-slate-500 font-medium text-sm">
-              Perbarui informasi nama, kelas, atau tempat magang siswa di bawah
-              ini.
+              Perbarui informasi nama, kelas, tempat, atau status magang siswa
+              di bawah ini.
             </p>
           </div>
 
@@ -272,17 +323,45 @@ export default function EditSiswaPage() {
                   onChange={(e) => setKelas(e.target.value)}
                   className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 pr-10 text-sm sm:text-base text-slate-900 font-medium focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                 >
-                  <option value="TJKT 1">TJKT 1</option>
-                  <option value="TJKT 2">TJKT 2</option>
-                  <option value="TDPIB">TDPIB</option>
-                  <option value="TE">TAV</option>
-                  <option value="GEO">GEO</option>
-                  <option value="TBSM1">TBSM1</option>
-                  <option value="TBSM2">TBSM2</option>
-                  <option value="TAB">TAB</option>
-                  <option value="TKRO">TKRO</option>
-                  <option value="TPL">TPL</option>
-                  <option value="TITL">TITL</option>
+                  <option value="X TKJ 1">X TJKT 1</option>
+                  <option value="X TKJ 2">X TJKT 2</option>
+                  <option value="X DPIB">X DPIB</option>
+                  <option value="X TAV">X TAV</option>
+                  <option value="X GEOMATIKA">X GEOMATIKA</option>
+                  <option value="X TO 1">X TO1</option>
+                  <option value="X TO 2">X TO2</option>
+                  <option value="X TO 3">X TO3</option>
+                  <option value="X TO 4">X TO4</option>
+                  <option value="X TPL">X TPL</option>
+                  <option value="X TITL 1">X TITL 1</option>
+                  <option value="X TITL 2">X TITL 2</option>
+
+                  <option value="XI TKJ 1">XI TJKT 1</option>
+                  <option value="XI TKJ 2">XI TJKT 2</option>
+                  <option value="XI DPIB">XI DPIB</option>
+                  <option value="XI TAV">XI TAV</option>
+                  <option value="XI GEOMATIKA">XI GEOMATIKA</option>
+                  <option value="XI TBSM 1">XI TBSM 1</option>
+                  <option value="XI TBSM 2">XI TBSM 2</option>
+                  <option value="XI TAB">XI TAB</option>
+                  <option value="XI TKR">XI TKRO</option>
+                  <option value="XI TPL">XI TPL</option>
+                  <option value="XI TITL 1">XI TITL 1</option>
+                  <option value="XI TITL 2">XI TITL 2</option>
+
+                  <option value="TKJ 1">XII TJKT 1</option>
+                  <option value="TKJ 2">XII TJKT 2</option>
+                  <option value="DPIB">XII DPIB</option>
+                  <option value="TAV">XII TAV</option>
+                  <option value="GEOMATIKA">XII GEOMATIKA</option>
+                  <option value="TBSM 1">XII TBSM 1</option>
+                  <option value="TBSM 2">XII TBSM 2</option>
+                  <option value="TAB">XII TAB</option>
+                  <option value="TKR">XII TKRO</option>
+                  <option value="TPL">XII TPL</option>
+                  <option value="TITL">XII TITL</option>
+                  <option value="TJKT 1">XII TJKT CONTOH</option>
+                  <option value="TJKT 2">XII TJKT CONTOH</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                   <svg
@@ -296,29 +375,86 @@ export default function EditSiswaPage() {
               </div>
             </div>
 
+            {/* STATUS SISWA MENGGUNAKAN DUA TOMBOL (SEPERTI TAMBAH SISWA) */}
             <div>
               <label className="block mb-1.5 text-sm font-bold text-slate-700">
-                Tempat Magang (DUDI)
+                Status Siswa
               </label>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="w-full text-left rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all flex items-center justify-between group hover:bg-slate-100"
-              >
-                <span
-                  className={
-                    tempatMagang
-                      ? "text-slate-900 font-medium"
-                      : "text-slate-400"
-                  }
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange("BELUM_MAGANG")}
+                  className={`rounded-xl border-2 p-3 sm:p-4 text-sm font-bold transition-all ${
+                    status === "BELUM_MAGANG"
+                      ? "border-amber-500 bg-amber-50 text-amber-700"
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
+                  }`}
                 >
-                  {tempatMagang ? tempatMagang : "📍 Pilih Tempat Magang"}
-                </span>
-                <span className="text-slate-400 group-hover:text-blue-500 transition-colors">
-                  ▼
-                </span>
-              </button>
+                  <div className="text-lg mb-1">🎓</div>
+                  BELUM MAGANG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatus("MAGANG");
+                    if (!tempatMagang) setIsModalOpen(true);
+                  }}
+                  className={`rounded-xl border-2 p-3 sm:p-4 text-sm font-bold transition-all ${
+                    status === "MAGANG"
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="text-lg mb-1">🏢</div>
+                  MAGANG
+                </button>
+              </div>
             </div>
+
+            {/* TEMPAT MAGANG: HANYA DITAMPILKAN JIKA STATUS = MAGANG */}
+            {status === "MAGANG" && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                  Tempat Magang (DUDI)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="w-full text-left rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all flex items-center justify-between group hover:bg-slate-100"
+                >
+                  <span
+                    className={
+                      tempatMagang
+                        ? "text-slate-900 font-medium"
+                        : "text-slate-400"
+                    }
+                  >
+                    {tempatMagang ? tempatMagang : "📍 Pilih Tempat Magang"}
+                  </span>
+                  <span className="text-slate-400 group-hover:text-blue-500 transition-colors">
+                    ▼
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* INFO JIKA BELUM MAGANG */}
+            {status === "BELUM_MAGANG" && (
+              <div className="animate-in fade-in duration-200 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex gap-3">
+                  <div className="text-xl">ℹ️</div>
+                  <div>
+                    <p className="text-sm font-bold text-amber-800">
+                      Siswa belum magang
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Tempat magang tidak dicatat. Status dapat diubah menjadi
+                      MAGANG jika siswa sudah memiliki tempat magang.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -368,7 +504,7 @@ export default function EditSiswaPage() {
         </div>
       </div>
 
-      {/* MODAL TEMPAT MAGANG YANG DISESUAIKAN TEMA BIRU */}
+      {/* MODAL TEMPAT MAGANG (PERSIS TAMBAH SISWA) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm transition-opacity p-0 sm:p-4">
           <div className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95">
@@ -471,10 +607,10 @@ export default function EditSiswaPage() {
                     ) : (
                       <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                         <p className="text-sm font-medium text-slate-500">
-                          Belum ada siswa terdaftar
+                          Belum ada data DUDI
                         </p>
                         <p className="text-xs text-slate-400 mt-1">
-                          Data DUDI akan muncul setelah siswa ditambahkan.
+                          Tempat yang diketik akan otomatis masuk database.
                         </p>
                       </div>
                     )}

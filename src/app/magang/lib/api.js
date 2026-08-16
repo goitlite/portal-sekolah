@@ -257,32 +257,71 @@ export async function updateBiodataSiswa(data) {
     idSiswa: data.idSiswa,
 
     data: {
+      // DATA SISWA
+      noHp: data.noHp,
       tempatLahir: data.tempatLahir,
       tglLahir: data.tglLahir,
 
+      // DATA AYAH
       ayah: data.ayah,
       pekerjaanAyah: data.pekerjaanAyah,
       kontakAyah: data.kontakAyah,
 
+      // DATA IBU
       ibu: data.ibu,
       pekerjaanIbu: data.pekerjaanIbu,
       kontakIbu: data.kontakIbu,
 
+      // DATA PRIBADI
       anakKe: data.anakKe,
       alamat: data.alamat,
-
       hobi: data.hobi,
-      citaCita: data.citaCita,
       bakatKeahlian: data.bakatKeahlian,
       transportasi: data.transportasi,
 
+      // DATA PELAJARAN
       pelajaranDisukai: data.pelajaranDisukai,
       alasanDisukai: data.alasanDisukai,
 
       pelajaranTidakDisukai: data.pelajaranTidakDisukai,
       alasanTidakDisukai: data.alasanTidakDisukai,
 
+      // HARAPAN
       harapan: data.harapan,
     },
+  });
+}
+
+export async function getSiswa() {
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST", // Menggunakan POST sesuai requirement doPost() di WebApp.gs
+      headers: {
+        // Gunakan text/plain untuk menghindari preflight CORS error di Google Apps Script
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "getSiswa",
+      }),
+    });
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Gagal mengambil data siswa:", error);
+    return { success: false, data: [] };
+  }
+}
+
+// =========================================================
+// API HAPUS SISWA WALI
+// =========================================================
+// =========================================================
+// API HAPUS SISWA WALI
+// =========================================================
+export async function hapusSiswaWali({ idSiswa, idGuru }) {
+  return request("hapusSiswaWali", {
+    idSiswa,
+    idGuru,
   });
 }
