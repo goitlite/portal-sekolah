@@ -361,8 +361,8 @@ export default function Home() {
               {/* Card 4: Presensi Magang */}
               <ServiceCard
                 icon="💼"
-                title="Presensi Magang"
-                description="Monitoring jurnal & kehadiran PKL."
+                title="Portal Magang/Guru Wali/Kelulusan"
+                description="Monitoring jurnal & kehadiran PKL Beserta Guru Wali/Kelulusan."
                 themeColor="orange"
                 isNew={true}
                 onClick={() => router.push("/magang/login")}
