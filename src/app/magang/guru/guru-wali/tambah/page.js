@@ -535,7 +535,7 @@ function TambahSiswaWaliContent() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                1. Tambah siswa dari Database
+                Pilih siswa dari Database
               </button>
               <button
                 onClick={() => {
@@ -552,7 +552,7 @@ function TambahSiswaWaliContent() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                2. Tambah Siswa secara Manual
+                Tambah Siswa secara Manual jika tidak ada di database
               </button>
             </div>
           )}

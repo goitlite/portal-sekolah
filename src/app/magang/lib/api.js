@@ -206,14 +206,18 @@ export async function getAktivitasGuru(idGuru) {
 }
 
 // ==========================================
-// UPLOAD FOTO KE GOOGLE DRIVE
+// UPLOAD FOTO KE GOOGLE DRIVE (SERBAGUNA)
 // ==========================================
 
-export async function uploadPhoto(base64Data, fileName) {
+export async function uploadPhoto(
+  base64Data,
+  fileName,
+  mimeType = "image/jpeg",
+) {
   return request("uploadPhoto", {
     base64Data,
     fileName,
-    mimeType: "image/jpeg",
+    mimeType,
   });
 }
 
@@ -258,6 +262,7 @@ export async function updateBiodataSiswa(data) {
 
     data: {
       // DATA SISWA
+      fotoProfil: data.fotoProfil, // ---> TAMBAHKAN BARIS INI
       noHp: data.noHp,
       tempatLahir: data.tempatLahir,
       tglLahir: data.tglLahir,
@@ -288,6 +293,7 @@ export async function updateBiodataSiswa(data) {
 
       // HARAPAN
       harapan: data.harapan,
+      ijazahSmp: data.ijazahSmp, // ---> TAMBAHKAN BARIS INI
     },
   });
 }
@@ -323,5 +329,59 @@ export async function hapusSiswaWali({ idSiswa, idGuru }) {
   return request("hapusSiswaWali", {
     idSiswa,
     idGuru,
+  });
+}
+
+// =========================================================
+// JURNAL GURU WALI
+// =========================================================
+
+// ---------------------------------------------------------
+// SIMPAN JURNAL GURU WALI
+// ---------------------------------------------------------
+// Nama dan kelas TIDAK dikirim dari frontend.
+// Apps Script akan mengambilnya berdasarkan ID_SISWA.
+// ---------------------------------------------------------
+
+export async function saveJurnalGuruWali(data) {
+  return request("saveJurnalGuruWali", {
+    idGuru: data.idGuru,
+    idSiswa: data.idSiswa,
+    idSiswaList: data.idSiswaList, // 🔥 TAMBAHKAN BARIS INI
+
+    tanggal: data.tanggal,
+
+    formatPertemuan: data.formatPertemuan || "Individu",
+
+    topik: data.topik || "",
+
+    tindakLanjut: data.tindakLanjut || "",
+
+    keterangan: data.keterangan || "",
+
+    fotoUrl: data.fotoUrl || "",
+
+    fotoId: data.fotoId || "",
+  });
+}
+
+// ---------------------------------------------------------
+// AMBIL SEMUA JURNAL GURU
+// ---------------------------------------------------------
+
+export async function getJurnalGuruWali(idGuru) {
+  return request("getJurnalGuruWali", {
+    idGuru,
+  });
+}
+
+// ---------------------------------------------------------
+// AMBIL JURNAL SATU SISWA
+// ---------------------------------------------------------
+
+export async function getJurnalSiswa(idGuru, idSiswa) {
+  return request("getJurnalSiswa", {
+    idGuru,
+    idSiswa,
   });
 }

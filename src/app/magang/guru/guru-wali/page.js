@@ -436,7 +436,7 @@ ID: ${idSiswa}`;
           {/* =====================================================
       MENU GURU WALI
   ===================================================== */}
-          <div className="mb-5 sm:mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             {/* TAMBAH SISWA */}
             <button
               onClick={() => router.push("/magang/guru/guru-wali/tambah")}
@@ -457,11 +457,7 @@ ID: ${idSiswa}`;
 
             {/* ISI JURNAL */}
             <button
-              onClick={() =>
-                alert(
-                  "📝 Fitur Isi Jurnal Guru Wali sedang dalam proses pengembangan.",
-                )
-              }
+              onClick={() => router.push("/magang/guru/guru-wali/jurnal")} // Diubah dari alert ke router.push
               className="group flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-4 text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-1 hover:shadow-xl active:scale-[0.98]"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-2xl">
@@ -472,7 +468,22 @@ ID: ${idSiswa}`;
                 <span className="text-sm font-black">ISI JURNAL GURU WALI</span>
 
                 <span className="text-[10px] font-medium text-white/80">
-                  Sedang dikembangkan
+                  Klik untuk mulai
+                </span>
+              </span>
+            </button>
+            {/* Tombol 2: Rekap Guru Wali */}
+            <button
+              onClick={() => router.push("/magang/guru/guru-wali/rekap")}
+              className="group flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-4 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-1 hover:shadow-xl active:scale-[0.98]"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-2xl">
+                📊
+              </span>
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-black">REKAP GURU WALI</span>
+                <span className="text-[10px] font-medium text-white/80">
+                  Lihat data rekap
                 </span>
               </span>
             </button>
@@ -540,10 +551,24 @@ ID: ${idSiswa}`;
                               onClick={() =>
                                 kirimLoginWhatsApp(siswa.idSiswa, siswa.nama)
                               }
-                              title="Kirim informasi login melalui WhatsApp"
-                              className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-sm shadow-md transition-all hover:scale-110 hover:bg-green-600 active:scale-95"
+                              title="Bagikan informasi login via WhatsApp"
+                              className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-md transition-all hover:scale-110 hover:bg-blue-700 active:scale-95"
                             >
-                              🟢
+                              {/* Icon SVG Share */}
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 100-2.684 3 3 0 000 2.684zm0 9.316a3 3 0 100-2.684 3 3 0 000 2.684z"
+                                />
+                              </svg>
                             </button>
                           )}
                         </div>
