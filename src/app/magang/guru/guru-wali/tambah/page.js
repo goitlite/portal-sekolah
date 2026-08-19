@@ -8,6 +8,7 @@ import { getSession, isLoggedIn } from "../../../lib/auth";
 import {
   addSiswa,
   editSiswa,
+  simpanGuruWaliSiswa,
   getTempatMagangGuru,
   getSiswa,
   getGuru,
@@ -415,16 +416,51 @@ function TambahSiswaWaliContent() {
         // =====================================================
         // MODE TAMBAH
         // =====================================================
-        result = await addSiswa({
-          id: activeTab === 1 ? pilihSiswaId : "",
-          nama: namaSiswaDenganKelas,
-          idGuru: activeTab === 1 ? pilihGuruPembimbing : "",
-          namaGuru: activeTab === 1 ? namaGuruPembimbing : "",
-          tempatMagang: status === "MAGANG" ? tempatMagang : "",
-          status: status,
-          isGuruWali: true,
-          idGuruWali: guru.id,
-        });
+
+        if (activeTab === 1) {
+          // ===================================================
+          // SISWA SUDAH ADA DI DATABASE
+          // ===================================================
+          //
+          // JANGAN menggunakan addSiswa().
+          //
+          // Yang diubah hanya relasi:
+          //
+          // ID_SISWA -> ID_GURU WALI
+          //
+          // Jika siswa milik guru lain:
+          //     pindahkan ke guru saat ini.
+          //
+          // Jika siswa belum punya guru:
+          //     buat relasi baru.
+          //
+          // Jika sudah milik guru ini:
+          //     tidak membuat baris baru.
+          // ===================================================
+
+          result = await simpanGuruWaliSiswa({
+            idSiswa: String(pilihSiswaId).trim(),
+            idGuru: String(guru.id).trim(),
+          });
+        } else {
+          // ===================================================
+          // SISWA BARU
+          // ===================================================
+          //
+          // Hanya Tab 2 yang boleh menggunakan addSiswa().
+          // ===================================================
+
+          result = await addSiswa({
+            id: "",
+            nama: namaSiswaDenganKelas,
+            idGuru: "",
+            namaGuru: "",
+            tempatMagang: status === "MAGANG" ? tempatMagang : "",
+            status: status,
+            isGuruWali: true,
+            idGuruWali: guru.id,
+          });
+        }
       }
 
       if (result.success) {
@@ -432,10 +468,26 @@ function TambahSiswaWaliContent() {
           saveToLocalStorage(tempatMagang);
         }
 
+        let pesanBerhasil = "Siswa berhasil ditambahkan.";
+
+        if (isEditMode) {
+          pesanBerhasil = "Data siswa berhasil diperbarui.";
+        } else if (activeTab === 1) {
+          if (result.data?.action === "update") {
+            pesanBerhasil = "Siswa berhasil dipindahkan ke Guru Wali ini.";
+          } else if (result.data?.action === "already") {
+            pesanBerhasil = "Siswa sudah menjadi siswa Guru Wali ini.";
+          } else if (result.data?.action === "insert") {
+            pesanBerhasil = "Siswa berhasil ditambahkan sebagai siswa wali.";
+          }
+        }
+
         alert(
-          `Siswa berhasil ${isEditMode ? "diperbarui" : "ditambahkan"}.\n\n` +
-            `ID Siswa : ${result.data?.id || editId}\n` +
-            `Status : ${status}`,
+          pesanBerhasil +
+            "\n\nID Siswa : " +
+            (result.data?.idSiswa || result.data?.id || editId) +
+            "\nStatus : " +
+            status,
         );
 
         router.replace("/magang/guru/guru-wali");

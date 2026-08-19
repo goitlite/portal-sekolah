@@ -247,6 +247,20 @@ export async function getDataSiswaWali(idGuru) {
 }
 
 // ==========================================
+// SIMPAN / PINDAHKAN SISWA GURU WALI
+// ==========================================
+// ATURAN:
+// 1 ID_SISWA hanya boleh memiliki 1 GURU WALI
+// ==========================================
+
+export async function simpanGuruWaliSiswa({ idSiswa, idGuru }) {
+  return request("simpanGuruWaliSiswa", {
+    idSiswa,
+    idGuru,
+  });
+}
+
+// ==========================================
 // BIODATA SISWA
 // ==========================================
 

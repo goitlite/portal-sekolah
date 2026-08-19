@@ -156,7 +156,7 @@ export default function RekapGuruWaliPage() {
         {/* HEADER */}
         <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900 to-blue-700 p-4 sm:p-8 text-white shadow-xl flex flex-col gap-3 relative">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.replace("/magang/guru/guru-wali")}
             className="absolute top-4 right-4 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm"
           >
             ⬅️ Kembali

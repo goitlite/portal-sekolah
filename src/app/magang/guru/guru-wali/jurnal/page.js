@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { getSession } from "../../../lib/auth";
 import { getDataSiswaWali, saveJurnalGuruWali } from "../../../lib/api";
 
 export default function JurnalGuruWaliPage() {
+  const router = useRouter();
   console.log("🔥 JURNAL GURU WALI PAGE AKTIF");
 
   const [idGuru, setIdGuru] = useState("");
@@ -449,12 +451,35 @@ export default function JurnalGuruWaliPage() {
             padding: "24px",
             borderRadius: "18px",
             marginBottom: "20px",
+            position: "relative",
           }}
         >
+          {/* TOMBOL KEMBALI */}
+          <button
+            type="button"
+            onClick={() => router.push("/magang/guru/guru-wali")}
+            style={{
+              position: "absolute",
+              top: "18px",
+              right: "18px",
+              border: "1px solid rgba(255,255,255,0.35)",
+              borderRadius: "10px",
+              padding: "8px 14px",
+              background: "rgba(255,255,255,0.12)",
+              color: "white",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            ⬅️ Kembali
+          </button>
+
           <h1
             style={{
               margin: 0,
               fontSize: "25px",
+              paddingRight: "100px",
             }}
           >
             📘 Jurnal Guru Wali
@@ -464,6 +489,7 @@ export default function JurnalGuruWaliPage() {
             style={{
               margin: "8px 0 0",
               opacity: 0.9,
+              paddingRight: "100px",
             }}
           >
             Dokumentasi kegiatan dan pembinaan siswa wali
@@ -490,17 +516,17 @@ export default function JurnalGuruWaliPage() {
               color: "#64748b",
             }}
           >
-            Guru Wali:
+            <span>Guru Wali:</span>
+
             <strong
               style={{
                 marginLeft: "6px",
                 color: "#1e293b",
               }}
             >
-              {namaGuru || "Memuat..."}
+              {namaGuru || "-"}
             </strong>
           </div>
-
           {/* FORMAT */}
 
           <div

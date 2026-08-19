@@ -398,7 +398,7 @@ ID: ${idSiswa}`;
           {/* HEADER DIPERBAIKI MENJADI WARNA BLUE-NAVY FORMAL SEKOLAH */}
           <div className="mb-5 sm:mb-6 overflow-hidden rounded-2xl sm:rounded-[2rem] bg-gradient-to-r from-blue-900 to-blue-700 p-5 sm:p-8 text-white shadow-xl flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between relative">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.replace("/magang/guru")}
               className="absolute top-4 right-4 sm:top-6 sm:right-6 rounded-xl bg-white/10 px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm flex items-center gap-2"
             >
               ⬅️ Kembali

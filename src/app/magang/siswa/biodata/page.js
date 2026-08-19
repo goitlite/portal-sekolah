@@ -156,57 +156,135 @@ export default function BiodataSiswa() {
   }
 
   // Fungsi khusus upload Ijazah SMP
+  // =====================================================
+  // UPLOAD DOKUMEN IJAZAH SMP
+  // Support PDF + FOTO
+  // =====================================================
+
   async function handleIjazahChange(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 1. Validasi Ekstensi (Hanya PDF)
-    if (file.type !== "application/pdf") {
-      setError("❌ File harus berformat PDF!");
+    // ---------------------------------------------------
+    // FORMAT YANG DIIZINKAN
+    // ---------------------------------------------------
+
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      setError(
+        "❌ Format file tidak didukung. Gunakan PDF, JPG/JPEG, PNG, atau WEBP.",
+      );
+
       e.target.value = null;
       return;
     }
 
-    // 2. Validasi Ukuran (Maksimal 2 MB)
+    // ---------------------------------------------------
+    // MAKSIMAL 2 MB
+    // ---------------------------------------------------
+
     if (file.size > 2 * 1024 * 1024) {
-      setError("❌ Ukuran file Ijazah maksimal 2MB!");
+      setError("❌ Ukuran file maksimal 2MB.");
+
       e.target.value = null;
       return;
     }
 
     setUploadingIjazah(true);
     setError("");
+    setMessage("");
 
     try {
-      const base64 = await getBase64(file);
-      const fileName = `ijazah_smp_${user.id}_${Date.now()}.pdf`;
+      // -------------------------------------------------
+      // KONVERSI FILE KE BASE64
+      // -------------------------------------------------
 
-      // 3. Upload File ke Drive
-      const result = await uploadPhoto(base64, fileName, "application/pdf");
+      const base64 = await getBase64(file);
+
+      // -------------------------------------------------
+      // AMBIL EKSTENSI FILE
+      // -------------------------------------------------
+
+      let extension = "bin";
+
+      if (file.type === "application/pdf") {
+        extension = "pdf";
+      } else if (file.type === "image/jpeg") {
+        extension = "jpg";
+      } else if (file.type === "image/png") {
+        extension = "png";
+      } else if (file.type === "image/webp") {
+        extension = "webp";
+      }
+
+      // -------------------------------------------------
+      // NAMA FILE
+      // -------------------------------------------------
+
+      const fileName = `ijazah_smp_${user.id}_${Date.now()}.${extension}`;
+
+      console.log("📄 FILE:", file.name);
+      console.log("📦 MIME:", file.type);
+      console.log("📏 UKURAN:", file.size);
+      console.log("📝 NAMA BARU:", fileName);
+
+      // -------------------------------------------------
+      // UPLOAD KE GOOGLE DRIVE
+      // -------------------------------------------------
+
+      const result = await uploadPhoto(base64, fileName, file.type);
+
+      console.log("📥 HASIL UPLOAD IJAZAH:", result);
 
       if (result.success && result.data?.url) {
         const fileUrl = result.data.url;
 
-        // Update State Lokal
-        setForm((prev) => ({ ...prev, ijazahSmp: fileUrl }));
+        // -------------------------------------------------
+        // UPDATE STATE
+        // -------------------------------------------------
 
-        // 4. OTOMATIS SIMPAN KE GOOGLE SHEETS (Auto Save)
-        await updateBiodataSiswa({
+        setForm((prev) => ({
+          ...prev,
+          ijazahSmp: fileUrl,
+        }));
+
+        // -------------------------------------------------
+        // AUTO SAVE KE GOOGLE SHEETS
+        // -------------------------------------------------
+
+        const saveResult = await updateBiodataSiswa({
           ...form,
           idSiswa: user.id,
-          ijazahSmp: fileUrl, // Mengirim URL Ijazah yang baru saja diupload
+          ijazahSmp: fileUrl,
         });
 
-        setMessage(
-          "✅ Ijazah SMP berhasil diupload & otomatis tersimpan ke database!",
-        );
+        console.log("💾 HASIL SIMPAN BIODATA:", saveResult);
+
+        if (saveResult?.success) {
+          setMessage(`✅ Dokumen berhasil diupload dan tersimpan otomatis.`);
+        } else {
+          setError(
+            saveResult?.message ||
+              "Dokumen berhasil diupload, tetapi gagal menyimpan URL ke database.",
+          );
+        }
       } else {
-        setError(result.message || "Gagal upload Ijazah.");
+        setError(result.message || "Gagal upload dokumen.");
       }
     } catch (err) {
+      console.error("❌ ERROR UPLOAD DOKUMEN:", err);
+
       setError("Terjadi kesalahan saat mengupload dokumen.");
     } finally {
       setUploadingIjazah(false);
+
+      // Reset input
       e.target.value = null;
     }
   }
@@ -545,11 +623,15 @@ export default function BiodataSiswa() {
           <Section title="📄 Dokumen Pendukung">
             <label className="block w-full">
               <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">
-                Upload Ijazah SMP (Hanya PDF, Max 2MB)
+                Upload Ijazah SMP / Dokumen Pendukung
+                <span className="block normal-case text-[9px] text-slate-400 mt-1">
+                  PDF, JPG, JPEG, PNG, WEBP • Maksimal 2MB
+                </span>
               </span>
+
               <input
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                 onChange={handleIjazahChange}
                 disabled={uploadingIjazah}
                 className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-100 file:px-4 file:py-2 file:text-xs file:font-bold file:text-blue-700 hover:file:bg-blue-200 cursor-pointer disabled:cursor-not-allowed"
