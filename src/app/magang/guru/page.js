@@ -30,6 +30,8 @@ function formatTanggal(waktu) {
 export default function DashboardGuru() {
   const router = useRouter();
   const CACHE_KEY = "dashboardGuruCache";
+  // --- STATE UNTUK TAB MENU UTAMA ---
+  const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -252,7 +254,7 @@ export default function DashboardGuru() {
             </div>
             <div>
               <h1 className="text-sm sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
-                PRESENSI MAGANG
+                PORTAL AKADEMIK
               </h1>
               <p className="text-[10px] sm:text-xs font-medium text-blue-300">
                 SMKN 1 TELUK KUANTAN
@@ -290,36 +292,118 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* MENU TAMPILAN UTAMA */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <MenuCard
-            title="Daftar Siswa"
-            subtitle="Kelola siswa bimbingan magang dan guru wali"
-            icon="🗂️"
-            bgGrad="from-sky-500 to-blue-600 shadow-blue-500/20"
-            onClick={() => router.push("/magang/siswa")}
-          />
-          <MenuCard
-            title="Tambah Siswa Magang"
-            subtitle="Registrasi akun siswa baru"
-            icon="➕"
-            bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
-            onClick={() => router.push("/magang/tambah")}
-          />
-          <MenuCard
-            title="Kelola Guru Wali"
-            subtitle="Kelola dan pantau siswa bimbingan wali"
-            icon="👨‍🏫"
-            bgGrad="from-amber-500 to-orange-600 shadow-amber-500/20"
-            onClick={() => router.push("/magang/guru/guru-wali")}
-          />
-          <MenuCard
-            title="Cetak Laporan PKL"
-            subtitle="Ekspor data PDF / Excel"
-            icon="🖨️"
-            bgGrad="from-purple-500 to-indigo-600 shadow-purple-500/20"
-            onClick={() => setShowCetakModal(true)} // Tampilkan modal isian
-          />
+        {/* MENU TAMPILAN UTAMA - DIBUNGKUS BACKGROUND GRADIENT HEADER & TAB EMAS */}
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-4 sm:p-6 shadow-xl border border-blue-700/50 space-y-5 mt-2">
+          {/* Ornamen Glow Emas di Background Utama */}
+          <div className="absolute -right-10 -bottom-10 w-44 h-44 bg-amber-400/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS CANTIK DI UJUNG KANAN */}
+          <div className="relative flex p-1.5 sm:p-2 bg-blue-950/70 backdrop-blur-md rounded-2xl border border-amber-400/30 shadow-inner overflow-hidden">
+            {/* Hiasan Lengkungan Emas Menutupi Ujung Kanan Container Tab */}
+            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent rounded-r-2xl pointer-events-none z-0"></div>
+            <div className="absolute -right-3 -top-3 w-12 h-12 bg-amber-300/40 rounded-full blur-md pointer-events-none z-0"></div>
+
+            <button
+              onClick={() => setActiveMenuTab("pembimbing")}
+              className={`relative z-10 flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 rounded-xl transition-all duration-300 ${
+                activeMenuTab === "pembimbing"
+                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-[0_4px_15px_rgba(191,149,63,0.5)] scale-[1.02] border border-[#FBF5B7]"
+                  : "text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 border border-amber-400/20"
+              }`}
+            >
+              <span className="text-base sm:text-lg">👔</span>
+              <span className="text-[11px] sm:text-sm font-black tracking-tight">
+                Pembimbing PKL
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveMenuTab("wali")}
+              className={`relative z-10 flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 rounded-xl transition-all duration-300 ${
+                activeMenuTab === "wali"
+                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-[0_4px_15px_rgba(191,149,63,0.5)] scale-[1.02] border border-[#FBF5B7]"
+                  : "text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 border border-amber-400/20"
+              }`}
+            >
+              <span className="text-base sm:text-lg">👨‍🏫</span>
+              <span className="text-[11px] sm:text-sm font-black tracking-tight">
+                Guru Wali
+              </span>
+            </button>
+          </div>
+
+          {/* 2. KONTEN TAB PEMBIMBING PKL */}
+          {activeMenuTab === "pembimbing" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <SolidCompactCard
+                title="Daftar Murid"
+                desc="Lihat & kelola siswa bimbingan"
+                icon="🗂️"
+                bgGrad="from-blue-600 to-indigo-700 shadow-blue-600/20"
+                onClick={() => router.push("/magang/siswa")}
+              />
+              <SolidCompactCard
+                title="Tambah Murid"
+                desc="Registrasi akun siswa baru"
+                icon="➕"
+                bgGrad="from-sky-500 to-cyan-600 shadow-sky-500/20"
+                onClick={() => router.push("/magang/tambah")}
+              />
+              <SolidCompactCard
+                title="Rekap Seluruh"
+                desc="Rekapitulasi kehadiran & log"
+                icon="📊"
+                bgGrad="from-violet-600 to-purple-800 shadow-violet-600/20"
+                onClick={() => router.push("/magang/rekap")}
+              />
+              <SolidCompactCard
+                title="Cetak Laporan"
+                desc="Ekspor data ke PDF / Excel"
+                icon="🖨️"
+                bgGrad="from-fuchsia-500 to-pink-600 shadow-pink-500/20"
+                onClick={() => setShowCetakModal(true)}
+              />
+            </div>
+          )}
+
+          {/* 3. KONTEN TAB GURU WALI */}
+          {activeMenuTab === "wali" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <SolidCompactCard
+                title="Daftar Murid"
+                desc="Kelola daftar murid perwalian"
+                icon="👥"
+                bgGrad="from-orange-500 to-red-600 shadow-orange-500/20"
+                onClick={() => router.push("/magang/guru/guru-wali")}
+              />
+              <SolidCompactCard
+                title="Rekap Murid"
+                desc="Pantau aktivitas harian"
+                icon="📈"
+                bgGrad="from-amber-500 to-orange-500 shadow-amber-500/20"
+                onClick={() => router.push("/magang/guru/guru-wali/rekap")}
+              />
+              <SolidCompactCard
+                title="Isi Jurnal"
+                desc="Catat agenda jurnal harian"
+                icon="📝"
+                bgGrad="from-rose-500 to-pink-600 shadow-rose-500/20"
+                onClick={() => router.push("/magang/guru/guru-wali/jurnal")}
+              />
+              <SolidCompactCard
+                title="Cetak Laporan"
+                desc="Fitur dalam pengembangan"
+                icon="📑"
+                bgGrad="from-slate-500 to-slate-700 shadow-slate-500/20"
+                onClick={() =>
+                  alert(
+                    "Fitur Cetak Laporan Guru Wali sedang dalam pengembangan.",
+                  )
+                }
+                disabled={true}
+              />
+            </div>
+          )}
         </div>
 
         {/* MONITORING LAPANGAN */}
@@ -1205,6 +1289,57 @@ function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
           {subtitle}
         </p>
       </div>
+    </button>
+  );
+}
+function SolidCompactCard({
+  title,
+  desc,
+  icon,
+  bgGrad,
+  onClick,
+  disabled = false,
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        relative overflow-hidden w-full flex items-center p-3.5 sm:p-4 rounded-2xl
+        bg-gradient-to-br ${bgGrad} text-white shadow-lg border border-white/10
+        transition-all duration-300 text-left group
+        ${disabled ? "opacity-75 cursor-not-allowed grayscale-[30%]" : "hover:-translate-y-1 hover:shadow-xl active:scale-[0.97]"}
+      `}
+    >
+      {/* Efek Hover Kaca */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+      {/* Box Ikon */}
+      <div className="relative flex-shrink-0 bg-white/20 backdrop-blur-sm p-3 rounded-xl border border-white/20 shadow-inner mr-3.5 sm:mr-4 text-xl sm:text-2xl flex items-center justify-center transition-transform group-hover:scale-110">
+        {icon}
+      </div>
+
+      {/* Teks Konten */}
+      <div className="relative flex-1 min-w-0">
+        <h3 className="text-[13px] sm:text-sm font-black tracking-wide leading-tight truncate flex items-center gap-2">
+          {title}
+          {disabled && (
+            <span className="bg-black/30 text-white px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider border border-white/10 flex-shrink-0">
+              Dev
+            </span>
+          )}
+        </h3>
+        <p className="text-[10px] sm:text-[11px] font-medium text-white/85 line-clamp-1 mt-0.5">
+          {desc}
+        </p>
+      </div>
+
+      {/* Panah (Hanya terlihat jika tidak disabled) */}
+      {!disabled && (
+        <div className="relative text-white/40 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300 ml-2">
+          ▶
+        </div>
+      )}
     </button>
   );
 }
