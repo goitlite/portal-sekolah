@@ -293,40 +293,57 @@ export default function DashboardGuru() {
         </div>
 
         {/* MENU TAMPILAN UTAMA - DIBUNGKUS BACKGROUND GRADIENT HEADER & TAB EMAS */}
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-4 sm:p-6 shadow-xl border border-blue-700/50 space-y-5 mt-2">
-          {/* Ornamen Glow Emas di Background Utama */}
-          <div className="absolute -right-10 -bottom-10 w-44 h-44 bg-amber-400/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="relative mt-2 space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2.5 shadow-xl sm:p-5">
+          {/* Ornamen Glow Emas */}
+          <div className="pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl"></div>
 
-          {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS CANTIK DI UJUNG KANAN */}
-          <div className="relative flex p-1.5 sm:p-2 bg-blue-950/70 backdrop-blur-md rounded-2xl border border-amber-400/30 shadow-inner overflow-hidden">
-            {/* Hiasan Lengkungan Emas Menutupi Ujung Kanan Container Tab */}
-            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent rounded-r-2xl pointer-events-none z-0"></div>
-            <div className="absolute -right-3 -top-3 w-12 h-12 bg-amber-300/40 rounded-full blur-md pointer-events-none z-0"></div>
+          {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS */}
+          <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-1 shadow-inner backdrop-blur-md">
+            <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-12 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent sm:w-16"></div>
+            <div className="pointer-events-none absolute -right-3 -top-3 z-0 h-10 w-10 rounded-full bg-amber-300/40 blur-md"></div>
 
+            {/* Tab: Pembimbing PKL */}
             <button
               onClick={() => setActiveMenuTab("pembimbing")}
-              className={`relative z-10 flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 rounded-xl transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "pembimbing"
-                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-[0_4px_15px_rgba(191,149,63,0.5)] scale-[1.02] border border-[#FBF5B7]"
-                  : "text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 border border-amber-400/20"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
               }`}
             >
-              <span className="text-base sm:text-lg">👔</span>
-              <span className="text-[11px] sm:text-sm font-black tracking-tight">
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "pembimbing" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  👔
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
                 Pembimbing PKL
               </span>
             </button>
 
+            {/* Tab: Guru Wali */}
             <button
               onClick={() => setActiveMenuTab("wali")}
-              className={`relative z-10 flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 rounded-xl transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "wali"
-                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-[0_4px_15px_rgba(191,149,63,0.5)] scale-[1.02] border border-[#FBF5B7]"
-                  : "text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 border border-amber-400/20"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
               }`}
             >
-              <span className="text-base sm:text-lg">👨‍🏫</span>
-              <span className="text-[11px] sm:text-sm font-black tracking-tight">
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "wali" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  👨‍🏫
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
                 Guru Wali
               </span>
             </button>
@@ -334,7 +351,7 @@ export default function DashboardGuru() {
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
           {activeMenuTab === "pembimbing" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
               <SolidCompactCard
                 title="Daftar Murid"
                 desc="Lihat & kelola siswa bimbingan"
@@ -368,7 +385,7 @@ export default function DashboardGuru() {
 
           {/* 3. KONTEN TAB GURU WALI */}
           {activeMenuTab === "wali" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
               <SolidCompactCard
                 title="Daftar Murid"
                 desc="Kelola daftar murid perwalian"
@@ -1302,44 +1319,31 @@ function SolidCompactCard({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`
-        relative overflow-hidden w-full flex items-center p-3.5 sm:p-4 rounded-2xl
-        bg-gradient-to-br ${bgGrad} text-white shadow-lg border border-white/10
-        transition-all duration-300 text-left group
-        ${disabled ? "opacity-75 cursor-not-allowed grayscale-[30%]" : "hover:-translate-y-1 hover:shadow-xl active:scale-[0.97]"}
-      `}
+      className={`group relative flex flex-col justify-center min-h-[76px] rounded-xl p-3 text-left transition-all duration-300 overflow-hidden shadow-lg ${
+        disabled
+          ? "opacity-60 cursor-not-allowed bg-slate-800 text-slate-400 border border-slate-700"
+          : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
+      }`}
     >
-      {/* Efek Hover Kaca */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-      {/* Box Ikon */}
-      <div className="relative flex-shrink-0 bg-white/20 backdrop-blur-sm p-3 rounded-xl border border-white/20 shadow-inner mr-3.5 sm:mr-4 text-xl sm:text-2xl flex items-center justify-center transition-transform group-hover:scale-110">
-        {icon}
+      {/* Ikon Transparan Transparan (Watermark Latar Belakang) */}
+      <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+        <span className="text-5xl sm:text-6xl rotate-12 select-none">
+          {icon}
+        </span>
       </div>
 
-      {/* Teks Konten */}
-      <div className="relative flex-1 min-w-0">
-        <h3 className="text-[13px] sm:text-sm font-black tracking-wide leading-tight truncate flex items-center gap-2">
+      {/* Konten Teks Depan (Mengisi Seluruh Area Tombol) */}
+      <div className="relative z-10 w-full space-y-0.5">
+        <h4 className="text-xs font-extrabold leading-tight tracking-wide sm:text-sm text-white drop-shadow-sm">
           {title}
-          {disabled && (
-            <span className="bg-black/30 text-white px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider border border-white/10 flex-shrink-0">
-              Dev
-            </span>
-          )}
-        </h3>
-        <p className="text-[10px] sm:text-[11px] font-medium text-white/85 line-clamp-1 mt-0.5">
+        </h4>
+        <p className="text-[10px] text-white/80 leading-tight sm:text-xs font-medium">
           {desc}
         </p>
       </div>
-
-      {/* Panah (Hanya terlihat jika tidak disabled) */}
-      {!disabled && (
-        <div className="relative text-white/40 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300 ml-2">
-          ▶
-        </div>
-      )}
     </button>
   );
 }
