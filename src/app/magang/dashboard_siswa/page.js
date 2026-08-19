@@ -8,6 +8,7 @@ import {
   getStatistikSiswa,
   getRiwayatSiswa,
   getPresensiHariIni,
+  getDataSiswaWali,
 } from "../lib/api";
 
 import { getSession, isLoggedIn, logout } from "../lib/auth";
@@ -97,6 +98,7 @@ export default function DashboardSiswa() {
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [guruWali, setGuruWali] = useState("-");
   const [statistik, setStatistik] = useState(null);
   const [riwayat, setRiwayat] = useState([]);
 
@@ -118,6 +120,25 @@ export default function DashboardSiswa() {
       }
 
       setUser(session);
+      // ==========================================
+      // AMBIL NAMA GURU WALI
+      // ==========================================
+
+      try {
+        const waliResult = await getDataSiswaWali(session.idGuru);
+
+        if (waliResult?.success && Array.isArray(waliResult.data)) {
+          const siswaSaya = waliResult.data.find(
+            (item) => String(item.idSiswa).trim() === String(session.id).trim(),
+          );
+
+          if (siswaSaya) {
+            setGuruWali(siswaSaya.namaGuru || "-");
+          }
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data guru wali:", error);
+      }
 
       // --- CEK PREFERENCE LOKAL ---
       const lastPresensiDate = localStorage.getItem(
@@ -275,6 +296,11 @@ export default function DashboardSiswa() {
         {/* STATUS PRESENSI HARI INI */}
 
         {/* MENU UTAMA */}
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3"></div>
+
+        {/* STATUS PRESENSI HARI INI */}
+
+        {/* MENU UTAMA */}
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
           {!sudahMagang ? (
             <MenuCardDisabled
@@ -299,7 +325,7 @@ export default function DashboardSiswa() {
           )}
 
           <MenuCard
-            title="Riwayat Lengkap"
+            title="Riwayat Presensi Magang"
             subtitle="Lihat semua datamu"
             icon="📋"
             bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30"
@@ -314,6 +340,99 @@ export default function DashboardSiswa() {
             bgGrad="from-violet-500 to-purple-600 shadow-violet-500/30"
             onClick={() => router.push("/magang/siswa/biodata")}
           />
+          {/* ==========================================
+            MENU KELULUSAN
+        ========================================== */}
+
+          <button
+            type="button"
+            onClick={() => router.push("/magang/siswa/kelulusan")}
+            className="
+            group
+            w-full
+            overflow-hidden
+            rounded-2xl
+            sm:rounded-3xl
+            bg-gradient-to-r
+            from-amber-500
+            via-yellow-500
+            to-orange-500
+            p-4
+            sm:p-5
+            text-left
+            text-white
+            shadow-lg
+            shadow-amber-500/20
+            border
+            border-amber-300/50
+            transition-all
+            duration-200
+            hover:shadow-xl
+            hover:shadow-amber-500/30
+            hover:-translate-y-0.5
+            active:scale-[0.98]
+          "
+          >
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* ICON */}
+              <div
+                className="
+                shrink-0
+                flex
+                h-12
+                w-12
+                sm:h-14
+                sm:w-14
+                items-center
+                justify-center
+                rounded-xl
+                sm:rounded-2xl
+                bg-white/20
+                border
+                border-white/30
+                text-2xl
+                sm:text-3xl
+                shadow-inner
+              "
+              >
+                🎓
+              </div>
+
+              {/* TEXT */}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base sm:text-xl font-black tracking-tight">
+                  KELULUSAN
+                </h2>
+
+                <p className="mt-0.5 text-[11px] sm:text-sm font-medium text-white/90">
+                  Lihat informasi kelulusan dan nilai
+                </p>
+              </div>
+
+              {/* ARROW */}
+              <div
+                className="
+                shrink-0
+                flex
+                h-9
+                w-9
+                sm:h-10
+                sm:w-10
+                items-center
+                justify-center
+                rounded-full
+                bg-white/15
+                border
+                border-white/20
+                text-lg
+                transition-transform
+                group-hover:translate-x-1
+              "
+              >
+                →
+              </div>
+            </div>
+          </button>
         </div>
 
         {/* INFORMASI & STATISTIK SISWA */}
@@ -353,9 +472,10 @@ export default function DashboardSiswa() {
             />
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+          <div className="grid sm:grid-cols-4 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <Info label="ID Siswa" value={user.id} />
             <Info label="Guru Pembimbing" value={user.namaGuru} />
+            <Info label="Guru Wali" value={guruWali} />
             <Info label="Tempat Magang" value={user.tempatMagang} />
           </div>
         </div>
