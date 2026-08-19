@@ -705,13 +705,14 @@ export default function BiodataSiswa() {
               <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">
                 Upload Ijazah SMP / Dokumen Pendukung
                 <span className="block normal-case text-[9px] text-slate-400 mt-1">
-                  PDF, JPG, JPEG, PNG, WEBP
+                  JPG, JPEG, PNG, WEBP, PDF
                 </span>
               </span>
 
               <input
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                accept="image/*,application/pdf"
+                capture="environment"
                 onChange={handleIjazahChange}
                 disabled={uploadingIjazah}
                 className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-100 file:px-4 file:py-2 file:text-xs file:font-bold file:text-blue-700 hover:file:bg-blue-200 cursor-pointer disabled:cursor-not-allowed"
