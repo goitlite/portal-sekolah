@@ -353,28 +353,28 @@ export default function DashboardGuru() {
           {activeMenuTab === "pembimbing" && (
             <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
               <SolidCompactCard
-                title="Daftar Murid"
+                title="Daftar Murid PKL"
                 desc="Lihat & kelola siswa bimbingan"
                 icon="🗂️"
                 bgGrad="from-blue-600 to-indigo-700 shadow-blue-600/20"
                 onClick={() => router.push("/magang/siswa")}
               />
               <SolidCompactCard
-                title="Tambah Murid"
+                title="Tambah Murid PKL"
                 desc="Registrasi akun siswa baru"
                 icon="➕"
                 bgGrad="from-sky-500 to-cyan-600 shadow-sky-500/20"
                 onClick={() => router.push("/magang/tambah")}
               />
               <SolidCompactCard
-                title="Rekap Seluruh"
+                title="Rekap PKL"
                 desc="Rekapitulasi kehadiran & log"
                 icon="📊"
                 bgGrad="from-violet-600 to-purple-800 shadow-violet-600/20"
                 onClick={() => router.push("/magang/rekap")}
               />
               <SolidCompactCard
-                title="Cetak Laporan"
+                title="Cetak Laporan Monitoring PKL"
                 desc="Ekspor data ke PDF / Excel"
                 icon="🖨️"
                 bgGrad="from-fuchsia-500 to-pink-600 shadow-pink-500/20"
@@ -387,28 +387,28 @@ export default function DashboardGuru() {
           {activeMenuTab === "wali" && (
             <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
               <SolidCompactCard
-                title="Daftar Murid"
+                title="Daftar Murid Wali"
                 desc="Kelola daftar murid perwalian"
                 icon="👥"
                 bgGrad="from-orange-500 to-red-600 shadow-orange-500/20"
                 onClick={() => router.push("/magang/guru/guru-wali")}
               />
               <SolidCompactCard
-                title="Rekap Murid"
+                title="Rekap Guru Wali"
                 desc="Pantau aktivitas harian"
                 icon="📈"
                 bgGrad="from-amber-500 to-orange-500 shadow-amber-500/20"
                 onClick={() => router.push("/magang/guru/guru-wali/rekap")}
               />
               <SolidCompactCard
-                title="Isi Jurnal"
+                title="Isi Jurnal Guru Wali"
                 desc="Catat agenda jurnal harian"
                 icon="📝"
                 bgGrad="from-rose-500 to-pink-600 shadow-rose-500/20"
                 onClick={() => router.push("/magang/guru/guru-wali/jurnal")}
               />
               <SolidCompactCard
-                title="Cetak Laporan"
+                title="Cetak Laporan Guru Wali"
                 desc="Fitur dalam pengembangan"
                 icon="📑"
                 bgGrad="from-slate-500 to-slate-700 shadow-slate-500/20"
