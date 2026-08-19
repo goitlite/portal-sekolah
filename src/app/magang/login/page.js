@@ -120,7 +120,7 @@ export default function LoginMagang() {
 
           <div className="relative z-10">
             <h1 className="text-2xl font-black text-white tracking-tight drop-shadow-md">
-              PRESENSI MAGANG
+              PORTAL AKADEMIK
             </h1>
             <div className="flex items-center justify-center gap-2 mt-1">
               <span className="h-[1px] w-8 bg-white/40"></span>
@@ -155,7 +155,7 @@ export default function LoginMagang() {
           >
             <div className="mb-6">
               <label className="mb-2 block text-[11px] font-black text-blue-950 uppercase tracking-widest text-center opacity-85">
-                ID Pengguna
+                ID Pengguna Guru dan Siswa
               </label>
               <div className="relative group">
                 <input
@@ -317,7 +317,7 @@ export default function LoginMagang() {
           {/* FOOTER INFO */}
           <div className="p-5 text-center border-t border-amber-600/20 bg-black/10">
             <p className="text-[11px] sm:text-xs font-bold text-amber-950/80 leading-relaxed">
-              ID diperoleh dari Admin atau Pembimbing Lapangan.
+              ID siswa dibuat otomatis dari Akun Pembimbing/Guru wali
             </p>
           </div>
         </div>
