@@ -568,12 +568,14 @@ export default function Home() {
                 >
                   Batal
                 </button>
+                {/* GANTI TOMBOL DOWNLOAD GOOGLE DRIVE ANDA DENGAN INI */}
                 <a
-                  href="https://drive.google.com/file/d/1kE8mZUbzQcrsRgdQs7H99lX_4DHDBE7F/view?usp=drive_link"
+                  href="/asesmen.apk" // Mengarah langsung ke file di folder public
+                  download="Asesmen-SMKN1.apk" // Memaksa browser langsung mendownload
                   onClick={() => setShowApkModal(false)}
                   className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md shadow-blue-500/30 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                 >
-                  <span>Download APK</span>
+                  <span>Download & Instal</span>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
