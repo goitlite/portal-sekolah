@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { login } from "../lib/api";
-import { saveSession } from "../lib/auth";
+// 1. IMPORT DIPERBARUI: Menambahkan isLoggedIn dan getSession
+import { saveSession, isLoggedIn, getSession } from "../lib/auth";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default function LoginMagang() {
@@ -14,6 +15,26 @@ export default function LoginMagang() {
   const [id, setId] = useState("");
   const [loading, setLoading] = useState(false);
   const [recentIds, setRecentIds] = useState([]);
+
+  // 2. STATE BARU: Untuk menahan tampilan form saat sedang mengecek sesi
+  const [isChecking, setIsChecking] = useState(true);
+
+  // 3. USE-EFFECT BARU: Logika auto-redirect
+  useEffect(() => {
+    if (isLoggedIn()) {
+      const session = getSession();
+      if (session?.role === "guru") {
+        router.replace("/magang/guru");
+      } else if (session?.role === "siswa") {
+        router.replace("/magang/dashboard_siswa");
+      } else if (session?.role === "admin") {
+        router.replace("/magang/admin");
+      }
+    } else {
+      // Jika ternyata tidak ada sesi aktif, matikan loading agar form login muncul
+      setIsChecking(false);
+    }
+  }, [router]);
 
   // Ambil data dari localStorage saat halaman dibuka
   useEffect(() => {
@@ -86,6 +107,40 @@ export default function LoginMagang() {
     }
   }
 
+  // 4. TAMPILAN LOADING: Muncul sebentar saat sistem mengecek sesi user
+  if (isChecking) {
+    return (
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <svg
+            className="animate-spin h-10 w-10 text-blue-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <p className="text-slate-500 font-semibold animate-pulse tracking-wide">
+            Memeriksa sesi login...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // JIKA TIDAK ADA SESI AKTIF (BELUM LOGIN), TAMPILKAN FORM LOGIN
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6">
       {/* Card Login */}
@@ -131,7 +186,7 @@ export default function LoginMagang() {
             </div>
           </div>
 
-          {/* SHAPE LENGKUNGAN SIMETRIS HALUS (Warna disamakan dengan awal gradasi emas) */}
+          {/* SHAPE LENGKUNGAN SIMETRIS HALUS */}
           <div className="absolute bottom-[-1px] left-0 w-full overflow-hidden leading-[0]">
             <svg
               className="relative block w-full h-[40px] sm:h-[50px]"
@@ -146,7 +201,7 @@ export default function LoginMagang() {
           </div>
         </div>
 
-        {/* AREA BAWAH LENGKUNGAN (Dominan Kuning Emas Mewah) */}
+        {/* AREA BAWAH LENGKUNGAN */}
         <div className="bg-gradient-to-b from-amber-400 via-amber-500 to-yellow-500 relative z-10">
           {/* FORM LOGIN */}
           <form
@@ -177,7 +232,7 @@ export default function LoginMagang() {
               </datalist>
             </div>
 
-            {/* TOMBOL MASUK (Biru Navy Kontras Tinggi) */}
+            {/* TOMBOL MASUK */}
             <button
               type="submit"
               disabled={loading}
@@ -232,7 +287,6 @@ export default function LoginMagang() {
               )}
             </button>
 
-            {/* TOMBOL LIHAT REKAP */}
             {/* CARD MENU TAMBAHAN (Rekap & Home) */}
             <div className="mt-6 rounded-2xl bg-white/20 border border-white/30 backdrop-blur-sm p-1.5 shadow-sm overflow-hidden flex flex-col sm:flex-row gap-1">
               {/* Tombol Lihat Rekap */}
@@ -258,14 +312,13 @@ export default function LoginMagang() {
                 LIHAT REKAP
               </Link>
 
-              {/* Garis Pemisah (Hanya terlihat di layar agak besar, hilang di layar kecil) */}
+              {/* Garis Pemisah */}
               <div className="hidden sm:block w-[1px] bg-white/40 my-2"></div>
-              {/* Garis Pemisah untuk layar kecil (Horizontal) */}
               <div className="block sm:hidden h-[1px] bg-white/40 mx-4"></div>
 
               {/* Tombol Halaman Utama */}
               <Link
-                href="/" // Pastikan rute beranda Anda benar
+                href="/"
                 className="flex-1 group flex items-center justify-center gap-2 text-[11px] sm:text-xs font-black text-amber-950/80 hover:text-white transition-all py-3 px-2 rounded-xl hover:bg-slate-900/10 active:scale-[0.98]"
               >
                 <div className="bg-white/30 p-1.5 rounded-lg group-hover:bg-slate-900/20 transition-colors">
@@ -292,7 +345,7 @@ export default function LoginMagang() {
 
               {/* Tombol Buat Akun Guru Pembimbing */}
               <Link
-                href="/magang/admin" // Sesuaikan rute ini
+                href="/magang/admin"
                 className="flex-1 group flex items-center justify-center gap-2 text-[11px] sm:text-xs font-black text-emerald-950 hover:text-white transition-all py-3 px-2 rounded-xl hover:bg-slate-900/10 active:scale-[0.98]"
               >
                 <div className="bg-white/30 p-1.5 rounded-lg group-hover:bg-slate-900/20 transition-colors">
