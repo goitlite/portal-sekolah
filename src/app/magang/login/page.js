@@ -20,18 +20,23 @@ export default function LoginMagang() {
   const [isChecking, setIsChecking] = useState(true);
 
   // 3. USE-EFFECT BARU: Logika auto-redirect
+  // USE-EFFECT PERBAIKAN
   useEffect(() => {
     if (isLoggedIn()) {
       const session = getSession();
       if (session?.role === "guru") {
         router.replace("/magang/guru");
       } else if (session?.role === "siswa") {
-        router.replace("/magang/dashboard_siswa");
+        // Tambahkan pengecekan tempatMagang di sini
+        if (!session.tempatMagang || !session.tempatMagang.trim()) {
+          router.replace("/magang/dashboard_siswa"); // Belum magang
+        } else {
+          router.replace("/magang/presensi"); // Sudah magang
+        }
       } else if (session?.role === "admin") {
         router.replace("/magang/admin");
       }
     } else {
-      // Jika ternyata tidak ada sesi aktif, matikan loading agar form login muncul
       setIsChecking(false);
     }
   }, [router]);
