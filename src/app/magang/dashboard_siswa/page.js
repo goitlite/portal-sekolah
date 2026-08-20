@@ -106,6 +106,9 @@ export default function DashboardSiswa() {
   const [hasPresensiTodayLocal, setHasPresensiTodayLocal] = useState(false);
 
   useEffect(() => {
+    // 1. TAMBAHKAN FLAG ISMOUNTED UNTUK KEAMANAN MEMORY LEAK
+    let isMounted = true;
+
     async function loadDashboard() {
       if (!isLoggedIn()) {
         router.replace("/magang/login");
@@ -119,15 +122,19 @@ export default function DashboardSiswa() {
         return;
       }
 
-      setUser(session);
+      if (isMounted) setUser(session);
+
       // ==========================================
       // AMBIL NAMA GURU WALI
       // ==========================================
-
       try {
         const waliResult = await getDataSiswaWali(session.idGuru);
 
-        if (waliResult?.success && Array.isArray(waliResult.data)) {
+        if (
+          isMounted &&
+          waliResult?.success &&
+          Array.isArray(waliResult.data)
+        ) {
           const siswaSaya = waliResult.data.find(
             (item) => String(item.idSiswa).trim() === String(session.id).trim(),
           );
@@ -145,13 +152,13 @@ export default function DashboardSiswa() {
         "magang_last_presensi_date",
       );
       const todayStr = new Date().toLocaleDateString("id-ID");
-      if (lastPresensiDate === todayStr) {
+      if (lastPresensiDate === todayStr && isMounted) {
         setHasPresensiTodayLocal(true);
       }
 
       // 1. LOAD DATA DARI CACHE
       const cachedDataStr = localStorage.getItem(CACHE_KEY);
-      if (cachedDataStr) {
+      if (cachedDataStr && isMounted) {
         try {
           const cachedData = JSON.parse(cachedDataStr);
           setStatistik(cachedData.statistik);
@@ -163,27 +170,37 @@ export default function DashboardSiswa() {
         }
       }
 
-      // 2. AMBIL DATA TERBARU DARI SERVER
+      // 2. AMBIL DATA TERBARU DARI SERVER SECARA PARALEL (LEBIH CEPAT)
       try {
+        const [stat, history, today] = await Promise.allSettled([
+          getStatistikSiswa(session.id),
+          getRiwayatSiswa(session.id),
+          getPresensiHariIni(session.idGuru),
+        ]);
+
+        if (!isMounted) return; // Hentikan jika user sudah pindah halaman
+
         let currentStatistik = statistik;
         let currentRiwayat = riwayat;
         let currentPresensi = presensiHariIni;
 
-        const stat = await getStatistikSiswa(session.id);
-        if (stat.success) {
-          currentStatistik = stat.data;
+        // Cek Hasil Statistik
+        if (stat.status === "fulfilled" && stat.value?.success) {
+          currentStatistik = stat.value.data;
           setStatistik(currentStatistik);
         }
 
-        const history = await getRiwayatSiswa(session.id);
-        if (history.success) {
-          currentRiwayat = history.data.slice(0, 5);
+        // Cek Hasil Riwayat
+        if (history.status === "fulfilled" && history.value?.success) {
+          currentRiwayat = history.value.data.slice(0, 5);
           setRiwayat(currentRiwayat);
         }
 
-        const today = await getPresensiHariIni(session.idGuru);
-        if (today.success) {
-          const dataSaya = today.data.find((x) => x.ID_SISWA === session.id);
+        // Cek Hasil Presensi Hari Ini
+        if (today.status === "fulfilled" && today.value?.success) {
+          const dataSaya = today.value.data.find(
+            (x) => x.ID_SISWA === session.id,
+          );
           if (dataSaya) {
             currentPresensi = dataSaya;
             setPresensiHariIni(currentPresensi);
@@ -194,6 +211,7 @@ export default function DashboardSiswa() {
           }
         }
 
+        // Simpan Cache Baru
         const serverData = {
           statistik: currentStatistik,
           riwayat: currentRiwayat,
@@ -203,11 +221,16 @@ export default function DashboardSiswa() {
       } catch (err) {
         console.error("Error fetching dashboard:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadDashboard();
+
+    // 2. CLEANUP FUNCTION SAAT KOMPONEN DITUTUP
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   function handleLogout() {
