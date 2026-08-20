@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Carousel from "@/components/features/Carousel";
+// 1. Tambahkan import InstallPrompt
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default function Home() {
   const router = useRouter();
@@ -565,6 +567,9 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* 2. Tambahkan Komponen InstallPrompt sebelum penutup tag main */}
+      <InstallPrompt />
     </main>
   );
 }
