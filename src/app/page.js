@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Carousel from "@/components/features/Carousel";
-// 1. Tambahkan import InstallPrompt
-import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default function Home() {
   const router = useRouter();
@@ -47,6 +45,34 @@ export default function Home() {
     }
     router.push("/login");
   }
+
+  // --- TAMBAHAN: FUNGSI UNTUK BUKA APLIKASI ANDROID ATAU DOWNLOAD ---
+  const handleBukaAplikasiAndroid = () => {
+    // Skema URI khusus aplikasi Anda (harus disetting di aplikasi Android)
+    const appScheme = "asesmensmkn1://buka";
+
+    let appOpened = false;
+
+    // Jika web tiba-tiba tidak fokus (masuk background), berarti aplikasi berhasil dibuka
+    const onBlur = () => {
+      appOpened = true;
+    };
+    window.addEventListener("blur", onBlur);
+
+    // 1. Coba panggil/buka aplikasi
+    window.location.href = appScheme;
+
+    // 2. Beri waktu tunggu 1.5 detik.
+    // Jika lewat 1.5 detik aplikasi tidak terbuka, berarti belum diinstal.
+    setTimeout(() => {
+      window.removeEventListener("blur", onBlur);
+      if (!appOpened) {
+        // Jika gagal buka aplikasi, munculkan Modal Download
+        setShowApkModal(true);
+      }
+    }, 1500);
+  };
+  // ------------------------------------------------------------------
 
   // Card Layanan: Base Biru Cerah + Garis Atas Dinamis + Judul Badge + Label "Baru" + Background Icon
   const ServiceCard = ({
@@ -341,15 +367,16 @@ export default function Home() {
                 onClick={handleMasukAsesmen}
               />
 
-              {/* Card 2: Asesmen Android (Klik membuka Modal Info Update) */}
+              {/* --- Card 2: Asesmen Android (DIUBAH FUNGSI ONCLICK-NYA DI SINI) --- */}
               <ServiceCard
                 icon="📱"
                 title="Asesmen Online Android"
                 description="Asesmen anti curang untuk smartphone Android"
                 themeColor="cyan"
                 isNew={true}
-                onClick={() => setShowApkModal(true)}
+                onClick={handleBukaAplikasiAndroid}
               />
+              {/* ------------------------------------------------------------------- */}
 
               {/* Card 3: Presensi Kelas */}
               <ServiceCard
@@ -567,9 +594,6 @@ export default function Home() {
           </div>
         )}
       </div>
-
-      {/* 2. Tambahkan Komponen InstallPrompt sebelum penutup tag main */}
-      <InstallPrompt />
     </main>
   );
 }
