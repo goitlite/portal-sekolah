@@ -457,7 +457,13 @@ export default function JurnalGuruWaliPage() {
           {/* TOMBOL KEMBALI */}
           <button
             type="button"
-            onClick={() => router.push("/magang/guru/guru-wali")}
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/magang/guru/guru-wali");
+              }
+            }}
             style={{
               position: "absolute",
               top: "18px",

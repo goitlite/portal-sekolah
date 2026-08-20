@@ -134,11 +134,22 @@ export default function RekapGuruWaliPage() {
     return matchKelas && matchGuru;
   });
 
+  // =====================================================
+  // LOADING: DIGANTI MENJADI SPINNER AMBER
+  // =====================================================
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-800 border-slate-200"></div>
-      </div>
+      <main className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="relative mx-auto h-14 w-14">
+            <div className="absolute inset-0 rounded-full border-4 border-amber-200"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+          </div>
+          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+            Memuat Rekap Data...
+          </p>
+        </div>
+      </main>
     );
   }
 
@@ -156,7 +167,7 @@ export default function RekapGuruWaliPage() {
         {/* HEADER */}
         <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900 to-blue-700 p-4 sm:p-8 text-white shadow-xl flex flex-col gap-3 relative">
           <button
-            onClick={() => router.replace("/magang/guru/guru-wali")}
+            onClick={() => router.back()}
             className="absolute top-4 right-4 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm"
           >
             ⬅️ Kembali

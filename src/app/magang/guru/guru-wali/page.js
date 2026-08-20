@@ -309,21 +309,22 @@ export default function GuruWaliPage() {
     setShowWelcome(false);
   }
 
+  // =====================================================
+  // LOADING: DIGANTI MENJADI SAMA SEPERTI JS GURU
+  // =====================================================
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 text-center shadow-sm">
-            <div className="mx-auto mb-4 h-8 w-8 sm:h-10 sm:w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-800" />
-            <p className="text-sm sm:text-base font-bold text-slate-700">
-              Memuat data siswa wali...
-            </p>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500">
-              Mohon tunggu sebentar.
-            </p>
+      <main className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="relative mx-auto h-14 w-14">
+            <div className="absolute inset-0 rounded-full border-4 border-amber-200"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
           </div>
+          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+            Memuat Data Siswa Wali...
+          </p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -512,6 +513,17 @@ ID: ${idSiswa}`;
               </span>
             </button>
           </div>
+          {/* =====================================================
+              TAMBAHAN GARIS PEMBATAS DAN SPASI
+              ===================================================== */}
+          <div className="my-10 flex items-center justify-center gap-4">
+            <div className="h-[2px] flex-1 bg-slate-200"></div>
+            <span className="text-xs sm:text-sm font-bold uppercase tracking-widest text-slate-400">
+              Daftar Nama Siswa
+            </span>
+            <div className="h-[2px] flex-1 bg-slate-200"></div>
+          </div>
+          {/* ===================================================== */}
           {/* LIST SISWA */}
           {dataSiswa.length === 0 ? (
             <div className="rounded-2xl sm:rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 sm:p-10 text-center shadow-sm">

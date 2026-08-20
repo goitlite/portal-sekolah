@@ -559,18 +559,21 @@ function TambahSiswaWaliContent() {
       </header>
 
       <div className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
-          <div className="mb-6 border-b border-slate-100 pb-5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2">
+        {/* Background diubah ke kuning cerah (bg-yellow-400) */}
+        <div className="rounded-2xl sm:rounded-3xl bg-yellow-400 border border-yellow-500 p-6 sm:p-8 shadow-md">
+          <div className="mb-6 border-b border-yellow-500 pb-5">
+            {/* Badge disesuaikan ke warna netral agar cocok dengan kuning */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-yellow-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 shadow-sm">
               {isEditMode ? "Pembaruan Data Siswa" : "Registrasi Siswa Wali"}
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-              Formulir Data Siswa
+            {/* Teks ditebalkan dan digelapkan (text-slate-900) agar sangat jelas */}
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Formulir Data Siswa Wali
             </h2>
           </div>
 
           {!isEditMode && (
-            <div className="flex bg-slate-100 p-1 rounded-xl mb-6 sm:mb-8">
+            <div className="flex bg-slate-200 p-1.5 rounded-xl mb-6 sm:mb-8 shadow-inner border border-slate-300">
               <button
                 onClick={() => {
                   setActiveTab(1);
@@ -583,8 +586,8 @@ function TambahSiswaWaliContent() {
                 }}
                 className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
                   activeTab === 1
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : "bg-transparent text-slate-500 hover:bg-slate-300 hover:text-slate-700"
                 }`}
               >
                 Pilih siswa dari Database
@@ -600,8 +603,8 @@ function TambahSiswaWaliContent() {
                 }}
                 className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
                   activeTab === 2
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : "bg-transparent text-slate-500 hover:bg-slate-300 hover:text-slate-700"
                 }`}
               >
                 Tambah Siswa secara Manual jika tidak ada di database
@@ -611,7 +614,7 @@ function TambahSiswaWaliContent() {
 
           <div className="space-y-5 sm:space-y-6">
             <div>
-              <label className="block mb-1.5 text-sm font-bold text-slate-700">
+              <label className="block mb-1.5 text-sm font-bold text-slate-900">
                 Kelas
               </label>
               <div className="relative">
@@ -682,7 +685,7 @@ function TambahSiswaWaliContent() {
 
             {isEditMode && (
               <div>
-                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                <label className="block mb-1.5 text-sm font-bold text-slate-900">
                   Nama Lengkap
                 </label>
                 <input
@@ -697,7 +700,7 @@ function TambahSiswaWaliContent() {
 
             {activeTab === 1 && !isEditMode && (
               <div>
-                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                <label className="block mb-1.5 text-sm font-bold text-slate-900">
                   Pilih Nama Siswa (Kelas {kelas})
                 </label>
                 {loadingDataSiswa ? (
@@ -712,7 +715,9 @@ function TambahSiswaWaliContent() {
                       onChange={handlePilihSiswa}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 text-sm sm:text-base text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
-                      <option value="">-- Pilih Siswa --</option>
+                      <option value="">
+                        -- Pilih Siswa yang akan dijadikan siswa wali --
+                      </option>
                       {siswaFiltered.map((s, idx) => (
                         <option key={s.id || s.ID || idx} value={s.id || s.ID}>
                           {s.nama || s.NAMA}
@@ -832,7 +837,7 @@ function TambahSiswaWaliContent() {
 
             {activeTab === 2 && !isEditMode && (
               <div>
-                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                <label className="block mb-1.5 text-sm font-bold text-slate-900">
                   Nama Lengkap Siswa Baru
                 </label>
                 <input
@@ -849,7 +854,7 @@ function TambahSiswaWaliContent() {
             {(activeTab === 2 || isEditMode) && (
               <>
                 <div>
-                  <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                  <label className="block mb-1.5 text-sm font-bold text-slate-900">
                     Status Siswa
                   </label>
                   <div className="grid grid-cols-2 gap-3">
@@ -885,7 +890,7 @@ function TambahSiswaWaliContent() {
 
                 {status === "MAGANG" && (
                   <div>
-                    <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                    <label className="block mb-1.5 text-sm font-bold text-slate-900">
                       Tempat Magang (DUDI)
                     </label>
                     <button
@@ -940,7 +945,7 @@ function TambahSiswaWaliContent() {
             <button
               onClick={simpanSiswa}
               disabled={saving}
-              className="w-full sm:w-2/3 group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="w-full sm:w-2/3 group relative overflow-hidden rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>

@@ -271,22 +271,24 @@ export default function TambahSiswaPage() {
       </header>
 
       <div className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
-          <div className="mb-6 sm:mb-8 border-b border-slate-100 pb-5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2">
+        {/* Background diubah ke biru cerah (bg-blue-500) */}
+        <div className="rounded-2xl sm:rounded-3xl bg-blue-500 border border-blue-400 p-6 sm:p-8 shadow-md">
+          <div className="mb-6 sm:mb-8 border-b border-blue-400 pb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-blue-600 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 shadow-sm">
               Registrasi Baru
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-              Formulir Data Siswa
+            {/* Teks diubah ke putih (text-white & text-blue-50) agar kontras */}
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Formulir Data Siswa Bimbingan PKL
             </h2>
-            <p className="mt-1 text-slate-500 font-medium text-sm">
+            <p className="mt-1 text-blue-50 font-medium text-sm">
               Lengkapi informasi di bawah ini untuk menambahkan siswa magang
               baru.
             </p>
           </div>
 
           {/* NAVIGASI TAB */}
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-6 sm:mb-8">
+          <div className="flex bg-slate-200 p-1.5 rounded-xl mb-6 sm:mb-8 shadow-inner border border-slate-300">
             <button
               onClick={() => {
                 setActiveTab(1);
@@ -296,11 +298,11 @@ export default function TambahSiswaPage() {
               }}
               className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
                 activeTab === 1
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
+                  ? "bg-emerald-500 text-white shadow-md"
+                  : "bg-transparent text-slate-500 hover:bg-slate-300 hover:text-slate-700"
               }`}
             >
-              1. Pilih dari Sistem
+              Pilih siswa dari Database
             </button>
             <button
               onClick={() => {
@@ -310,17 +312,17 @@ export default function TambahSiswaPage() {
               }}
               className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
                 activeTab === 2
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
+                  ? "bg-emerald-500 text-white shadow-md"
+                  : "bg-transparent text-slate-500 hover:bg-slate-300 hover:text-slate-700"
               }`}
             >
-              2. Input Manual Baru
+              Tambah Siswa secara Manual jika tidak ada di database
             </button>
           </div>
 
           <div className="space-y-5 sm:space-y-6">
             <div>
-              <label className="block mb-1.5 text-sm font-bold text-slate-700">
+              <label className="block mb-1.5 text-sm font-bold text-white">
                 Pilih Kelas Terlebih Dahulu
               </label>
               <div className="relative">
@@ -389,7 +391,7 @@ export default function TambahSiswaPage() {
             {/* TAB 1: PILIH NAMA SISWA DARI SPREADSHEET */}
             {activeTab === 1 && (
               <div>
-                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                <label className="block mb-1.5 text-sm font-bold text-white">
                   Pilih Nama Siswa (Kelas {kelas})
                 </label>
                 {loadingDataSiswa ? (
@@ -417,7 +419,7 @@ export default function TambahSiswaPage() {
             {/* TAB 2: INPUT NAMA MANUAL */}
             {activeTab === 2 && (
               <div>
-                <label className="block mb-1.5 text-sm font-bold text-slate-700">
+                <label className="block mb-1.5 text-sm font-bold text-white">
                   Nama Lengkap Siswa Baru
                 </label>
                 <input
@@ -431,7 +433,7 @@ export default function TambahSiswaPage() {
             )}
 
             <div>
-              <label className="block mb-1.5 text-sm font-bold text-slate-700">
+              <label className="block mb-1.5 text-sm font-bold text-white">
                 Tempat Magang (DUDI)
               </label>
               <button
@@ -465,7 +467,7 @@ export default function TambahSiswaPage() {
             <button
               onClick={simpanSiswa}
               disabled={saving}
-              className="w-full sm:w-2/3 group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="w-full sm:w-2/3 group relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>

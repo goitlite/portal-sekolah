@@ -125,6 +125,8 @@ export default function DashboardGuru() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadDashboard() {
       if (!isLoggedIn()) {
         router.replace("/magang/login");
@@ -138,54 +140,87 @@ export default function DashboardGuru() {
         return;
       }
 
-      setUser(session);
+      if (isMounted) {
+        setUser(session);
+      }
 
-      // 1. LOAD DATA DARI CACHE (INSTAN / TANPA SPINNER)
+      // 1. LOAD CACHE
       const cachedDataStr = localStorage.getItem(CACHE_KEY);
-      if (cachedDataStr) {
+
+      if (cachedDataStr && isMounted) {
         try {
           const cachedData = JSON.parse(cachedDataStr);
+
           setDashboard(cachedData.dashboard);
           setTempatMagang(cachedData.tempatMagang);
           setAktivitas(cachedData.aktivitas);
-          setLoading(false); // Hilangkan loading screen agar responsif
+          setLoading(false);
         } catch (error) {
           console.error("Gagal membaca cache dashboard:", error);
         }
       }
 
-      // 2. TETAP AMBIL DATA TERBARU DARI SERVER DI LATAR BELAKANG (BACKGROUND REFRESH)
+      // 2. FETCH DATA PARALEL
       try {
-        const result = await getDashboardGuru(session.id);
+        const [result, tempat, aktivitasResult] = await Promise.allSettled([
+          getDashboardGuru(session.id),
+          getTempatMagangGuru(session.id),
+          getAktivitasGuru(session.id),
+        ]);
 
-        if (result.success && result.data) {
-          const tempat = await getTempatMagangGuru(session.id);
-          const aktivitasResult = await getAktivitasGuru(session.id);
+        if (!isMounted) return;
 
+        // Dashboard
+        const dashboardData =
+          result.status === "fulfilled" &&
+          result.value?.success &&
+          result.value?.data
+            ? result.value.data
+            : null;
+
+        // Tempat Magang
+        const tempatData =
+          tempat.status === "fulfilled" && tempat.value?.success
+            ? tempat.value.data
+            : [];
+
+        // Aktivitas
+        const aktivitasData =
+          aktivitasResult.status === "fulfilled" &&
+          aktivitasResult.value?.success
+            ? aktivitasResult.value.data
+            : [];
+
+        // Jika dashboard berhasil
+        if (dashboardData) {
           const serverData = {
-            dashboard: result.data,
-            tempatMagang: tempat.success ? tempat.data : [],
-            aktivitas: aktivitasResult.success ? aktivitasResult.data : [],
+            dashboard: dashboardData,
+            tempatMagang: tempatData,
+            aktivitas: aktivitasData,
           };
 
-          // Update State & Simpan Ke Cache Terbaru
           setDashboard(serverData.dashboard);
           setTempatMagang(serverData.tempatMagang);
           setAktivitas(serverData.aktivitas);
+
           localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
-        } else {
-          if (!cachedDataStr) {
-            alert(result.message || "Data dashboard tidak ditemukan.");
-          }
+        } else if (!cachedDataStr) {
+          alert("Data dashboard tidak ditemukan.");
         }
       } catch (err) {
         console.error("Error fetching dashboard:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   function handleLogout() {
@@ -297,6 +332,15 @@ export default function DashboardGuru() {
           {/* Ornamen Glow Emas */}
           <div className="pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl"></div>
 
+          {/* TAMBAHKAN KODE GARIS EMAS DI SINI */}
+          <div className="flex items-center gap-3 my-1 w-full px-1">
+            <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-amber-400 to-yellow-300 rounded-full opacity-80"></div>
+            <h3 className="text-xs sm:text-sm font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-100 uppercase whitespace-nowrap drop-shadow-sm">
+              PILIH JENIS PEMBIMBING
+            </h3>
+            <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-amber-400 to-yellow-300 rounded-full opacity-80"></div>
+          </div>
+
           {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS */}
           <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-1 shadow-inner backdrop-blur-md">
             <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-12 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent sm:w-16"></div>
@@ -385,13 +429,20 @@ export default function DashboardGuru() {
 
           {/* 3. KONTEN TAB GURU WALI */}
           {activeMenuTab === "wali" && (
-            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
                 title="Daftar Murid Wali"
                 desc="Kelola daftar murid perwalian"
                 icon="👥"
                 bgGrad="from-orange-500 to-red-600 shadow-orange-500/20"
                 onClick={() => router.push("/magang/guru/guru-wali")}
+              />
+              <SolidCompactCard
+                title="Tambah Siswa Wali"
+                desc="Registrasi siswa wali baru"
+                icon="➕"
+                bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                onClick={() => router.push("/magang/guru/guru-wali/tambah")}
               />
               <SolidCompactCard
                 title="Rekap Guru Wali"
@@ -1317,6 +1368,28 @@ function SolidCompactCard({
   onClick,
   disabled = false,
 }) {
+  // Fungsi untuk memberikan badge/highlight stabilo emas pada kata PKL dan WALI
+  const formatTitleWithBadge = (text) => {
+    if (!text) return text;
+    // Regex mendeteksi kata PKL atau WALI (case-insensitive)
+    const regex = /(PKL|WALI)/gi;
+    const parts = text.split(regex);
+
+    return parts.map((part, index) => {
+      if (part.toUpperCase() === "PKL" || part.toUpperCase() === "WALI") {
+        return (
+          <span
+            key={index}
+            className="inline-block px-1.5 py-0.5 mx-0.5 rounded bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-amber-950 font-black shadow-sm border border-amber-200/60 leading-none"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
     <button
       type="button"
@@ -1328,17 +1401,17 @@ function SolidCompactCard({
           : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
       }`}
     >
-      {/* Ikon Transparan Transparan (Watermark Latar Belakang) */}
+      {/* Ikon Transparan Watermark */}
       <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
         <span className="text-5xl sm:text-6xl rotate-12 select-none">
           {icon}
         </span>
       </div>
 
-      {/* Konten Teks Depan (Mengisi Seluruh Area Tombol) */}
+      {/* Konten Teks Depan */}
       <div className="relative z-10 w-full space-y-0.5">
-        <h4 className="text-xs font-extrabold leading-tight tracking-wide sm:text-sm text-white drop-shadow-sm">
-          {title}
+        <h4 className="text-xs font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-sm flex flex-wrap items-center">
+          {formatTitleWithBadge(title)}
         </h4>
         <p className="text-[10px] text-white/80 leading-tight sm:text-xs font-medium">
           {desc}
