@@ -72,64 +72,45 @@ export default function RekapGuruWaliPage() {
     loadDataRekap();
   }, []);
 
-  // Fungsi pembantu untuk memproses data agar tidak mengulang kode
-  const processAndSetData = (data) => {
-    setDataSiswa(data);
-    const extractedClasses = new Set();
-    const extractedGurus = new Set();
-
-    data.forEach((siswa) => {
-      const match = (siswa.nama || "").match(/\[(.*?)\]/);
-      if (match && match[1]) extractedClasses.add(match[1].trim());
-
-      const namaGuruWali = (siswa.namaGuru || "").trim();
-      if (namaGuruWali) extractedGurus.add(namaGuruWali);
-    });
-
-    setKelasOptions(Array.from(extractedClasses).sort());
-    setGuruWaliOptions(Array.from(extractedGurus).sort());
-  };
-
   async function loadDataRekap() {
-    const session = getSession();
-
-    if (!session || session.role !== "guru") {
-      setError("Sesi guru tidak valid.");
-      setLoading(false);
-      return;
-    }
-
-    const CACHE_KEY = "rekap_semua_siswa_cache";
-    const cachedData = localStorage.getItem(CACHE_KEY);
-
-    // 1. TAMPILKAN CACHE LOKAL JIKA ADA (Instant Load)
-    if (cachedData) {
-      try {
-        const parsedData = JSON.parse(cachedData);
-        processAndSetData(parsedData);
-        setLoading(false); // Matikan loading seketika karena data cache sudah ada
-      } catch (err) {
-        console.error("Gagal membaca cache:", err);
-      }
-    } else {
-      // Jika tidak ada cache, baru tampilkan layar loading
-      setLoading(true);
-    }
-
-    // 2. AMBIL DATA TERBARU DARI SERVER DI LATAR BELAKANG (Stale-While-Revalidate)
     try {
+      setLoading(true);
+      const session = getSession();
+
+      if (!session || session.role !== "guru") {
+        setError("Sesi guru tidak valid.");
+        return;
+      }
+
+      // Memanggil ALL agar seluruh siswa & kelas tampil
       const result = await getDataSiswaWali("ALL");
 
-      if (result.success) {
-        const freshData = result.data || [];
-        processAndSetData(freshData); // Perbarui tampilan dengan data terbaru
-        localStorage.setItem(CACHE_KEY, JSON.stringify(freshData)); // Simpan ke cache
-      } else if (!cachedData) {
+      if (!result.success) {
         setError(result.message || "Gagal mengambil data.");
+        return;
       }
+
+      const data = result.data || [];
+      setDataSiswa(data);
+
+      const extractedClasses = new Set();
+      const extractedGurus = new Set();
+
+      data.forEach((siswa) => {
+        // Ekstrak Kelas dari Nama [NAMA_KELAS]
+        const match = (siswa.nama || "").match(/\[(.*?)\]/);
+        if (match && match[1]) extractedClasses.add(match[1].trim());
+
+        // Ekstrak Nama Guru Wali
+        const namaGuruWali = (siswa.namaGuru || "").trim();
+        if (namaGuruWali) extractedGurus.add(namaGuruWali);
+      });
+
+      setKelasOptions(Array.from(extractedClasses).sort());
+      setGuruWaliOptions(Array.from(extractedGurus).sort());
     } catch (err) {
       console.error("ERROR REKAP WALI:", err);
-      if (!cachedData) setError("Terjadi kesalahan sistem.");
+      setError("Terjadi kesalahan sistem.");
     } finally {
       setLoading(false);
     }
