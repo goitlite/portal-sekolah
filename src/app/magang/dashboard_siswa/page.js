@@ -106,7 +106,6 @@ export default function DashboardSiswa() {
   const [hasPresensiTodayLocal, setHasPresensiTodayLocal] = useState(false);
 
   useEffect(() => {
-    // 1. TAMBAHKAN FLAG ISMOUNTED UNTUK KEAMANAN MEMORY LEAK
     let isMounted = true;
 
     async function loadDashboard() {
@@ -124,30 +123,7 @@ export default function DashboardSiswa() {
 
       if (isMounted) setUser(session);
 
-      // ==========================================
-      // AMBIL NAMA GURU WALI
-      // ==========================================
-      try {
-        const waliResult = await getDataSiswaWali(session.idGuru);
-
-        if (
-          isMounted &&
-          waliResult?.success &&
-          Array.isArray(waliResult.data)
-        ) {
-          const siswaSaya = waliResult.data.find(
-            (item) => String(item.idSiswa).trim() === String(session.id).trim(),
-          );
-
-          if (siswaSaya) {
-            setGuruWali(siswaSaya.namaGuru || "-");
-          }
-        }
-      } catch (error) {
-        console.error("Gagal mengambil data guru wali:", error);
-      }
-
-      // --- CEK PREFERENCE LOKAL ---
+      // CEK PREFERENCE LOKAL
       const lastPresensiDate = localStorage.getItem(
         "magang_last_presensi_date",
       );
@@ -156,47 +132,66 @@ export default function DashboardSiswa() {
         setHasPresensiTodayLocal(true);
       }
 
-      // 1. LOAD DATA DARI CACHE
+      // --- PERBAIKAN: Buat variabel lokal penampung fallback ---
+      let fallbackStatistik = null;
+      let fallbackRiwayat = [];
+      let fallbackPresensi = null;
+      let fallbackGuruWali = "-";
+
+      // 1. BACA CACHE & INSTANT RENDER
       const cachedDataStr = localStorage.getItem(CACHE_KEY);
       if (cachedDataStr && isMounted) {
         try {
           const cachedData = JSON.parse(cachedDataStr);
-          setStatistik(cachedData.statistik);
-          setRiwayat(cachedData.riwayat);
-          setPresensiHariIni(cachedData.presensiHariIni);
+
+          // Simpan ke variabel lokal agar aman dari stale closure
+          fallbackStatistik = cachedData.statistik || null;
+          fallbackRiwayat = cachedData.riwayat || [];
+          fallbackPresensi = cachedData.presensiHariIni || null;
+          fallbackGuruWali = cachedData.guruWali || "-";
+
+          // Tampilkan ke UI
+          setStatistik(fallbackStatistik);
+          setRiwayat(fallbackRiwayat);
+          setPresensiHariIni(fallbackPresensi);
+          setGuruWali(fallbackGuruWali);
+
           setLoading(false);
         } catch (error) {
           console.error("Gagal membaca cache dashboard siswa:", error);
         }
       }
 
-      // 2. AMBIL DATA TERBARU DARI SERVER SECARA PARALEL (LEBIH CEPAT)
+      // 2. FETCH PARALEL (BACKGROUND SYNC)
       try {
-        const [stat, history, today] = await Promise.allSettled([
+        const [stat, history, today, waliResult] = await Promise.allSettled([
           getStatistikSiswa(session.id),
           getRiwayatSiswa(session.id),
           getPresensiHariIni(session.idGuru),
+          getDataSiswaWali(session.idGuru),
         ]);
 
-        if (!isMounted) return; // Hentikan jika user sudah pindah halaman
+        if (!isMounted) return;
 
-        let currentStatistik = statistik;
-        let currentRiwayat = riwayat;
-        let currentPresensi = presensiHariIni;
+        // --- PERBAIKAN: Gunakan variabel lokal sebagai default ---
+        let currentStatistik = fallbackStatistik;
+        let currentRiwayat = fallbackRiwayat;
+        let currentPresensi = fallbackPresensi;
+        let currentGuruWali = fallbackGuruWali;
 
-        // Cek Hasil Statistik
+        // Hasil Statistik
         if (stat.status === "fulfilled" && stat.value?.success) {
           currentStatistik = stat.value.data;
           setStatistik(currentStatistik);
         }
 
-        // Cek Hasil Riwayat
+        // Hasil Riwayat
         if (history.status === "fulfilled" && history.value?.success) {
           currentRiwayat = history.value.data.slice(0, 5);
           setRiwayat(currentRiwayat);
         }
 
-        // Cek Hasil Presensi Hari Ini
+        // Hasil Presensi Hari Ini
         if (today.status === "fulfilled" && today.value?.success) {
           const dataSaya = today.value.data.find(
             (x) => x.ID_SISWA === session.id,
@@ -211,11 +206,27 @@ export default function DashboardSiswa() {
           }
         }
 
-        // Simpan Cache Baru
+        // Hasil Guru Wali
+        if (
+          waliResult.status === "fulfilled" &&
+          waliResult.value?.success &&
+          Array.isArray(waliResult.value.data)
+        ) {
+          const siswaSaya = waliResult.value.data.find(
+            (item) => String(item.idSiswa).trim() === String(session.id).trim(),
+          );
+          if (siswaSaya?.namaGuru) {
+            currentGuruWali = siswaSaya.namaGuru;
+            setGuruWali(currentGuruWali);
+          }
+        }
+
+        // Simpan Cache Lengkap Terbaru
         const serverData = {
           statistik: currentStatistik,
           riwayat: currentRiwayat,
           presensiHariIni: currentPresensi,
+          guruWali: currentGuruWali,
         };
         localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
       } catch (err) {
@@ -227,7 +238,6 @@ export default function DashboardSiswa() {
 
     loadDashboard();
 
-    // 2. CLEANUP FUNCTION SAAT KOMPONEN DITUTUP
     return () => {
       isMounted = false;
     };
