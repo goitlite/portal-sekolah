@@ -82,6 +82,9 @@ export default function RekapPage() {
     const autoSelectGuru = localStorage.getItem("targetGuruRekap");
     const autoSelectBulan = localStorage.getItem("targetBulanRekap");
 
+    // 👇 TAMBAHAN: Ambil data target siswa untuk membuka popup otomatis
+    const targetSiswaPopup = localStorage.getItem("targetSiswaPopup");
+
     let hasAutoSelect = false;
 
     if (autoSelectGuru) {
@@ -97,11 +100,24 @@ export default function RekapPage() {
       hasAutoSelect = true;
     }
 
+    // 👇 TAMBAHAN: Eksekusi buka popup jika ada data targetSiswaPopup
+    if (targetSiswaPopup) {
+      try {
+        const siswa = JSON.parse(targetSiswaPopup);
+        // Memanggil fungsi popup secara otomatis
+        handleSiswaClick(siswa.id, siswa.nama, siswa.guru, siswa.tempat);
+      } catch (error) {
+        console.error("Gagal membuka popup siswa otomatis:", error);
+      }
+      hasAutoSelect = true;
+    }
+
     // Bersihkan memori agar jika halaman direfresh, filter tidak terkunci
     if (hasAutoSelect) {
       localStorage.removeItem("targetTempatRekap");
       localStorage.removeItem("targetGuruRekap");
       localStorage.removeItem("targetBulanRekap");
+      localStorage.removeItem("targetSiswaPopup"); // 👇 TAMBAHAN: Bersihkan cache popup
     }
   }, []);
 

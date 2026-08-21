@@ -362,7 +362,31 @@ export default function DashboardSiswa() {
             subtitle="Lihat semua datamu"
             icon="📋"
             bgGrad="from-blue-500 to-indigo-600 shadow-blue-500/30"
-            onClick={() => router.push("/magang/rekap")}
+            onClick={() => {
+              if (user) {
+                // 1. Set filter otomatis untuk halaman rekap
+                localStorage.setItem(
+                  "targetGuruRekap",
+                  user.idGuru || user.namaGuru,
+                );
+                localStorage.setItem(
+                  "targetTempatRekap",
+                  user.tempatMagang || "Semua",
+                );
+
+                // 2. Set trigger untuk langsung membuka popup siswa
+                localStorage.setItem(
+                  "targetSiswaPopup",
+                  JSON.stringify({
+                    id: user.id,
+                    nama: user.nama,
+                    guru: user.namaGuru,
+                    tempat: user.tempatMagang,
+                  }),
+                );
+              }
+              router.push("/magang/rekap");
+            }}
           />
 
           {/* BIODATA */}
