@@ -9,7 +9,9 @@ import {
   getDashboardGuru,
   getTempatMagangGuru,
   getAktivitasGuru,
+  getJurnalGuruWali,
 } from "../lib/api";
+import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
 
 function formatTanggal(waktu) {
   if (!waktu) return "-";
@@ -60,6 +62,8 @@ export default function DashboardGuru() {
   const [showGallery, setShowGallery] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  const [loadingCetakWali, setLoadingCetakWali] = useState(false);
 
   const [showCetakModal, setShowCetakModal] = useState(false);
   const [formDataCetak, setFormDataCetak] = useState({
@@ -254,6 +258,35 @@ export default function DashboardGuru() {
   const handlePrevImage = (e) => {
     e.stopPropagation();
     setGalleryIndex((prev) => (prev - 1 + aktivitas.length) % aktivitas.length);
+  };
+
+  // --- CETAK LAPORAN JURNAL GURU WALI (PDF) ---
+  const handleCetakLaporanGuruWali = async () => {
+    if (!user?.id || loadingCetakWali) return;
+
+    setLoadingCetakWali(true);
+
+    try {
+      const res = await getJurnalGuruWali(user.id);
+      const daftarJurnal = res?.data || res || [];
+
+      if (!Array.isArray(daftarJurnal) || daftarJurnal.length === 0) {
+        alert("Belum ada jurnal pertemuan yang tercatat untuk dicetak.");
+        return;
+      }
+
+      await generateLaporanGuruWaliPDF({
+        data: daftarJurnal,
+        namaGuru: user?.nama || daftarJurnal[0]?.namaGuru,
+      });
+    } catch (error) {
+      console.error("Gagal mencetak laporan guru wali:", error);
+      alert(
+        "Gagal mencetak laporan: " + (error?.message || "Terjadi kesalahan"),
+      );
+    } finally {
+      setLoadingCetakWali(false);
+    }
   };
 
   if (loading || !user) {
@@ -460,15 +493,15 @@ export default function DashboardGuru() {
               />
               <SolidCompactCard
                 title="Cetak Laporan Guru Wali"
-                desc="Fitur dalam pengembangan"
+                desc={
+                  loadingCetakWali
+                    ? "Menyiapkan PDF..."
+                    : "Ekspor rekap pertemuan ke PDF"
+                }
                 icon="📑"
                 bgGrad="from-slate-500 to-slate-700 shadow-slate-500/20"
-                onClick={() =>
-                  alert(
-                    "Fitur Cetak Laporan Guru Wali sedang dalam pengembangan.",
-                  )
-                }
-                disabled={true}
+                onClick={handleCetakLaporanGuruWali}
+                disabled={loadingCetakWali}
               />
             </div>
           )}

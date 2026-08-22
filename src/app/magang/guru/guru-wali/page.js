@@ -3,9 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSession } from "../../lib/auth";
-import { getDataSiswaWali, hapusSiswaWali } from "../../lib/api";
+import {
+  getDataSiswaWali,
+  hapusSiswaWali,
+  getJurnalGuruWali,
+} from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { generateLaporanGuruWaliPDF } from "./generateLaporanGuruWaliPDF";
 
 // =========================================================
 // HELPER: Mengambil Base64 Gambar (Untuk Logo di Kop Surat)
@@ -220,6 +225,7 @@ export default function GuruWaliPage() {
   const [error, setError] = useState("");
   const [selectedSiswa, setSelectedSiswa] = useState(null);
   const [isPrinting, setIsPrinting] = useState(null);
+  const [loadingCetakJurnal, setLoadingCetakJurnal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
@@ -301,6 +307,51 @@ export default function GuruWaliPage() {
       alert("Terjadi kesalahan saat membuat file PDF.");
     } finally {
       setIsPrinting(null);
+    }
+  }
+
+  // =====================================================
+  // CETAK JURNAL GURU WALI (REKAP PERTEMUAN)
+  // =====================================================
+  async function handleCetakJurnalGuruWali() {
+    if (loadingCetakJurnal) return;
+
+    try {
+      setLoadingCetakJurnal(true);
+
+      const session = getSession();
+
+      if (!session || session.role !== "guru") {
+        alert("Sesi guru tidak ditemukan.");
+        return;
+      }
+
+      const idGuru = session.id;
+
+      const result = await getJurnalGuruWali(idGuru);
+      const daftarJurnal = result?.data || [];
+
+      if (!result.success) {
+        alert(result.message || "Gagal mengambil data jurnal.");
+        return;
+      }
+
+      if (!Array.isArray(daftarJurnal) || daftarJurnal.length === 0) {
+        alert("Belum ada jurnal pertemuan yang tercatat untuk dicetak.");
+        return;
+      }
+
+      await generateLaporanGuruWaliPDF({
+        data: daftarJurnal,
+        namaGuru: session?.nama || dataSiswa[0]?.namaGuru,
+      });
+    } catch (error) {
+      console.error("Gagal mencetak jurnal guru wali:", error);
+      alert(
+        "Gagal mencetak laporan: " + (error?.message || "Terjadi kesalahan"),
+      );
+    } finally {
+      setLoadingCetakJurnal(false);
     }
   }
 
@@ -491,12 +542,9 @@ ID: ${idSiswa}`;
 
             {/* CETAK JURNAL */}
             <button
-              onClick={() =>
-                alert(
-                  "🖨️ Fitur Cetak Jurnal Guru Wali sedang dalam proses pengembangan.",
-                )
-              }
-              className="group flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-4 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-1 hover:shadow-xl active:scale-[0.98]"
+              onClick={handleCetakJurnalGuruWali}
+              disabled={loadingCetakJurnal}
+              className="group flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-4 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-1 hover:shadow-xl active:scale-[0.98] disabled:opacity-60 disabled:hover:translate-y-0"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-2xl">
                 🖨️
@@ -508,7 +556,9 @@ ID: ${idSiswa}`;
                 </span>
 
                 <span className="text-[10px] font-medium text-white/80">
-                  Sedang dikembangkan
+                  {loadingCetakJurnal
+                    ? "Menyiapkan PDF..."
+                    : "Ekspor rekap pertemuan ke PDF"}
                 </span>
               </span>
             </button>
