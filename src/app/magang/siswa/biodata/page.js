@@ -42,6 +42,7 @@ export default function BiodataSiswa() {
     pelajaranTidakDisukai: "",
     alasanTidakDisukai: "",
     harapan: "",
+    ijazahSmp: "",
   });
 
   useEffect(() => {
@@ -162,104 +163,137 @@ export default function BiodataSiswa() {
   // =====================================================
 
   async function handleIjazahChange(e) {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
 
     if (!file) return;
 
-    // =====================================================
-    // FORMAT YANG DIIZINKAN
-    // =====================================================
-
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      setError(
-        "❌ Format file tidak didukung. Gunakan PDF, JPG/JPEG, PNG, atau WEBP.",
-      );
-
-      e.target.value = null;
-      return;
-    }
-
-    setUploadingIjazah(true);
     setError("");
     setMessage("");
 
     try {
-      let base64;
-      let extension;
-      let mimeType;
-
       // =====================================================
-      // JIKA PDF
-      // PDF TIDAK DIKOMPRES
+      // DETEKSI EKSTENSI FILE
       // =====================================================
 
-      if (file.type === "application/pdf") {
-        // Batasi PDF 10 MB
-        if (file.size > 10 * 1024 * 1024) {
-          setError("❌ Ukuran PDF maksimal 10MB.");
+      const fileName = file.name || "";
+      const extension = fileName.includes(".")
+        ? fileName.split(".").pop().toLowerCase()
+        : "";
 
-          e.target.value = null;
-          return;
-        }
+      // =====================================================
+      // FORMAT YANG DIIZINKAN
+      // HANYA JPG / JPEG / PNG / PDF
+      // =====================================================
 
-        console.log("📄 PDF asli:", (file.size / 1024 / 1024).toFixed(2), "MB");
+      const allowedExtensions = ["jpg", "jpeg", "png", "pdf"];
 
-        base64 = await getBase64(file);
+      const allowedMimeTypes = ["application/pdf", "image/jpeg", "image/png"];
 
-        extension = "pdf";
-        mimeType = "application/pdf";
+      const validByExtension = allowedExtensions.includes(extension);
+      const validByMime = allowedMimeTypes.includes(file.type);
+
+      // Beberapa browser/HP bisa memberikan file.type kosong.
+      if (!validByExtension && !validByMime) {
+        setError(
+          "❌ Format tidak didukung. Silakan pilih file JPG, JPEG, PNG, atau PDF.",
+        );
+
+        e.target.value = "";
+        return;
       }
 
       // =====================================================
-      // JIKA FOTO
-      // FOTO OTOMATIS DIKOMPRES
+      // TENTUKAN JENIS FILE
+      // Jangan hanya mengandalkan file.type
       // =====================================================
-      else {
-        console.log(
-          "📸 FOTO DOKUMEN ASLI:",
-          (file.size / 1024 / 1024).toFixed(2),
-          "MB",
-        );
 
-        // Kompres foto maksimal sekitar 500 KB
-        base64 = await compressImage(file, 500);
+      const isPDF = file.type === "application/pdf" || extension === "pdf";
 
-        extension = "jpg";
+      const isImage =
+        file.type === "image/jpeg" ||
+        file.type === "image/png" ||
+        ["jpg", "jpeg", "png"].includes(extension);
+
+      if (!isPDF && !isImage) {
+        setError("❌ File tidak dikenali. Gunakan JPG, JPEG, PNG, atau PDF.");
+
+        e.target.value = "";
+        return;
+      }
+
+      // =====================================================
+      // BATAS UKURAN
+      // =====================================================
+
+      if (isPDF && file.size > 10 * 1024 * 1024) {
+        setError("❌ Ukuran PDF maksimal 10 MB.");
+        e.target.value = "";
+        return;
+      }
+
+      if (isImage && file.size > 5 * 1024 * 1024) {
+        setError("❌ Ukuran foto maksimal 5 MB.");
+        e.target.value = "";
+        return;
+      }
+
+      setUploadingIjazah(true);
+
+      // =====================================================
+      // SIAPKAN FILE
+      // =====================================================
+
+      let base64;
+      let finalExtension;
+      let mimeType;
+
+      if (isPDF) {
+        // ---------------------------------------------------
+        // PDF
+        // Tidak dikompresi
+        // ---------------------------------------------------
+
+        base64 = await getBase64(file);
+
+        finalExtension = "pdf";
+        mimeType = "application/pdf";
+      } else {
+        // ---------------------------------------------------
+        // FOTO
+        // JPG / JPEG / PNG
+        // Kompres menjadi JPG
+        // ---------------------------------------------------
+
+        base64 = await compressImage(file, 900);
+
+        finalExtension = "jpg";
         mimeType = "image/jpeg";
-
-        console.log("📦 FOTO DOKUMEN SUDAH DIKOMPRES");
       }
 
       // =====================================================
       // NAMA FILE
       // =====================================================
 
-      const fileName = `ijazah_smp_${user.id}_${Date.now()}.${extension}`;
+      const uploadFileName = `ijazah_smp_${user.id}_${Date.now()}.${finalExtension}`;
 
-      console.log("📝 NAMA FILE:", fileName);
-
-      console.log("📦 MIME:", mimeType);
+      console.log("UPLOAD DOKUMEN");
+      console.log("Nama:", uploadFileName);
+      console.log("MIME:", mimeType);
+      console.log("Ukuran asli:", (file.size / 1024 / 1024).toFixed(2), "MB");
 
       // =====================================================
-      // UPLOAD KE GOOGLE DRIVE
+      // UPLOAD GOOGLE DRIVE
       // =====================================================
 
-      const result = await uploadPhoto(base64, fileName, mimeType);
+      const result = await uploadPhoto(base64, uploadFileName, mimeType);
 
-      console.log("📥 HASIL UPLOAD:", result);
+      console.log("HASIL UPLOAD:", result);
 
       // =====================================================
       // BERHASIL
       // =====================================================
 
-      if (result.success && result.data?.url) {
+      if (result?.success && result?.data?.url) {
         const fileUrl = result.data.url;
 
         // Update state
@@ -278,34 +312,36 @@ export default function BiodataSiswa() {
           ijazahSmp: fileUrl,
         });
 
-        console.log("💾 HASIL SIMPAN BIODATA:", saveResult);
+        console.log("HASIL SIMPAN BIODATA:", saveResult);
 
         if (saveResult?.success) {
-          if (file.type === "application/pdf") {
+          if (isPDF) {
             setMessage("✅ PDF berhasil diupload dan tersimpan otomatis.");
           } else {
             setMessage(
-              "✅ Foto dokumen berhasil dikompres, diupload, dan tersimpan otomatis.",
+              "✅ Foto berhasil dikompres, diupload, dan tersimpan otomatis.",
             );
           }
         } else {
           setError(
             saveResult?.message ||
-              "File berhasil diupload, tetapi URL gagal disimpan ke database.",
+              "File berhasil diupload, tetapi URL gagal disimpan.",
           );
         }
       } else {
-        setError(result.message || "Gagal upload dokumen.");
+        setError(result?.message || "❌ Gagal mengupload dokumen.");
       }
     } catch (err) {
-      console.error("❌ ERROR UPLOAD DOKUMEN:", err);
+      console.error("ERROR UPLOAD DOKUMEN:", err);
 
-      setError("Terjadi kesalahan saat memproses dokumen.");
+      setError(
+        "❌ Upload gagal. Pastikan file JPG, PNG, atau PDF dan coba lagi.",
+      );
     } finally {
       setUploadingIjazah(false);
 
       // Reset input
-      e.target.value = null;
+      e.target.value = "";
     }
   }
 
@@ -705,14 +741,13 @@ export default function BiodataSiswa() {
               <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">
                 Upload Ijazah SMP / Dokumen Pendukung
                 <span className="block normal-case text-[9px] text-slate-400 mt-1">
-                  JPG, JPEG, PNG, WEBP, PDF
+                  JPG, JPEG, PNG, atau PDF • Maks. 10 MB PDF / 5 MB foto
                 </span>
               </span>
 
               <input
                 type="file"
-                accept="image/*,application/pdf"
-                capture="environment"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                 onChange={handleIjazahChange}
                 disabled={uploadingIjazah}
                 className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-100 file:px-4 file:py-2 file:text-xs file:font-bold file:text-blue-700 hover:file:bg-blue-200 cursor-pointer disabled:cursor-not-allowed"
