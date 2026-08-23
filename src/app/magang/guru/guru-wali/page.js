@@ -8,6 +8,7 @@ import {
   hapusSiswaWali,
   getJurnalGuruWali,
   getBiodataSiswa,
+  updateBiodataSiswa,
 } from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -75,6 +76,66 @@ const ambilGambarDariDrive = async (urlAsli) => {
     if (hasil) return hasil;
   }
   return null;
+};
+
+// =========================================================
+// =========================================================
+// KONFIGURASI: CATATAN PERKEMBANGAN MURID (LAMPIRAN B)
+// =========================================================
+const ASPEK_PEMANTAUAN = [
+  { key: "akademik", label: "Akademik" },
+  { key: "karakter", label: "Karakter" },
+  { key: "sosial", label: "Sosial-Emosional" },
+  { key: "disiplin", label: "Kedisiplinan" },
+  { key: "potensi", label: "Potensi & Minat" },
+];
+
+const NAMA_BULAN_INDO = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+// Ubah "2025-07" -> "Juli 2025"
+const formatBulanTahun = (nilaiBulan) => {
+  if (!nilaiBulan) return "-";
+  const [tahun, bulan] = String(nilaiBulan).split("-");
+  const indexBulan = Number(bulan) - 1;
+  const namaBulan = NAMA_BULAN_INDO[indexBulan] || bulan;
+  return `${namaBulan} ${tahun}`;
+};
+
+// Ubah "akademik" -> "Akademik" (dipakai membentuk key des/tin/ket + Aspek)
+const capitalize = (str) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+
+const FORM_CATATAN_KOSONG = {
+  periodeAwal: "",
+  periodeAkhir: "",
+  desAkademik: "",
+  tinAkademik: "",
+  ketAkademik: "",
+  desKarakter: "",
+  tinKarakter: "",
+  ketKarakter: "",
+  desSosial: "",
+  tinSosial: "",
+  ketSosial: "",
+  desDisiplin: "",
+  tinDisiplin: "",
+  ketDisiplin: "",
+  desPotensi: "",
+  tinPotensi: "",
+  ketPotensi: "",
 };
 
 // =========================================================
@@ -265,6 +326,147 @@ export const generateBiodataPDF = async (siswa) => {
   });
   startY = doc.lastAutoTable.finalY + 10;
 
+  // =========================================================
+  // LAMPIRAN B: FORMAT CATATAN PERKEMBANGAN MURID
+  // Ditambahkan sebelum bagian tanda tangan.
+  // Semua identitas dan isi diambil otomatis dari data siswa.
+  // =========================================================
+
+  // Perkiraan ruang agar Lampiran B + tanda tangan tidak terpotong.
+  // Jika tidak cukup, Lampiran B dimulai di halaman berikutnya.
+  if (startY > 165) {
+    doc.addPage();
+    startY = 18;
+  } else {
+    startY += 2;
+  }
+
+  const periodePemantauan =
+    siswa.periodeAwal && siswa.periodeAkhir
+      ? `Bulan ${formatBulanTahun(siswa.periodeAwal)} – ${formatBulanTahun(
+          siswa.periodeAkhir,
+        )}`
+      : "-";
+
+  // Judul Lampiran B
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text("LAMPIRAN B: FORMAT CATATAN PERKEMBANGAN MURID", 15, startY);
+
+  startY += 8;
+
+  // Identitas Lampiran B - dibuat seperti format pada contoh.
+  const labelX = 15;
+  const colonX = 55;
+  const valueX = 59;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+
+  const tulisIdentitasLampiran = (label, value, y) => {
+    doc.setFont("helvetica", "normal");
+    doc.text(label, labelX, y);
+    doc.text(":", colonX, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(value || "-"), valueX, y);
+  };
+
+  tulisIdentitasLampiran("Nama Murid", namaBersih, startY);
+  tulisIdentitasLampiran("Kelas", kelas, startY + 5);
+  tulisIdentitasLampiran("Periode Pemantauan", periodePemantauan, startY + 10);
+  tulisIdentitasLampiran("Guru Wali", siswa.namaGuru || "-", startY + 15);
+
+  startY += 20;
+
+  // Tabel utama Lampiran B: 4 kolom x 5 aspek.
+  autoTable(doc, {
+    startY,
+    head: [
+      [
+        "Aspek\\nPemantauan",
+        "Deskripsi Perkembangan",
+        "Tindak Lanjut yang\\nDilakukan",
+        "Keterangan\\nTambahan",
+      ],
+    ],
+    body: [
+      [
+        "Akademik",
+        siswa.desAkademik || "-",
+        siswa.tinAkademik || "-",
+        siswa.ketAkademik || "-",
+      ],
+      [
+        "Karakter",
+        siswa.desKarakter || "-",
+        siswa.tinKarakter || "-",
+        siswa.ketKarakter || "-",
+      ],
+      [
+        "Sosial-Emosional",
+        siswa.desSosial || "-",
+        siswa.tinSosial || "-",
+        siswa.ketSosial || "-",
+      ],
+      [
+        "Kedisiplinan",
+        siswa.desDisiplin || "-",
+        siswa.tinDisiplin || "-",
+        siswa.ketDisiplin || "-",
+      ],
+      [
+        "Potensi & Minat",
+        siswa.desPotensi || "-",
+        siswa.tinPotensi || "-",
+        siswa.ketPotensi || "-",
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      fontSize: 8.2,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+      valign: "middle",
+      overflow: "linebreak",
+    },
+    headStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 8.2,
+      halign: "center",
+      valign: "middle",
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+    },
+    columnStyles: {
+      0: {
+        cellWidth: 35,
+        fontStyle: "normal",
+        halign: "left",
+      },
+      1: {
+        cellWidth: 55,
+        halign: "left",
+      },
+      2: {
+        cellWidth: 55,
+        halign: "left",
+      },
+      3: {
+        cellWidth: 35,
+        halign: "left",
+      },
+    },
+    margin: { left: 15, right: 15 },
+    tableWidth: 180,
+    rowPageBreak: "avoid",
+  });
+
+  startY = doc.lastAutoTable.finalY + 9;
+
   // --- BAGIAN TANDA TANGAN ---
   if (startY > 250) {
     doc.addPage();
@@ -307,6 +509,13 @@ export default function GuruWaliPage() {
   const [isPrinting, setIsPrinting] = useState(null);
   const [loadingCetakJurnal, setLoadingCetakJurnal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // --- STATE: CATATAN PERKEMBANGAN MURID (LAMPIRAN B) ---
+  const [showCatatanModal, setShowCatatanModal] = useState(false);
+  const [siswaCatatanAktif, setSiswaCatatanAktif] = useState(null);
+  const [loadingCatatan, setLoadingCatatan] = useState(false);
+  const [savingCatatan, setSavingCatatan] = useState(false);
+  const [formCatatan, setFormCatatan] = useState(FORM_CATATAN_KOSONG);
 
   useEffect(() => {
     loadDataSiswaWali();
@@ -410,6 +619,94 @@ export default function GuruWaliPage() {
       alert("Terjadi kesalahan saat membuat file PDF.");
     } finally {
       setIsPrinting(null);
+    }
+  }
+
+  // =====================================================
+  // CATATAN PERKEMBANGAN MURID (LAMPIRAN B)
+  // Disimpan lewat getBiodataSiswa/updateBiodataSiswa yang
+  // sudah ada (sheet DATA_SISWA_WALI), tidak perlu API baru.
+  // =====================================================
+  async function handleBukaCatatanPerkembangan(siswa) {
+    setSiswaCatatanAktif(siswa);
+    setShowCatatanModal(true);
+    setLoadingCatatan(true);
+    setFormCatatan(FORM_CATATAN_KOSONG);
+
+    try {
+      const res = await getBiodataSiswa(String(siswa.idSiswa));
+
+      if (!res?.success) {
+        console.warn("Gagal mengambil catatan perkembangan:", res?.message);
+        return;
+      }
+
+      const data = res.data || {};
+
+      setFormCatatan({
+        periodeAwal: data.periodeAwal || "",
+        periodeAkhir: data.periodeAkhir || "",
+        desAkademik: data.desAkademik || "",
+        tinAkademik: data.tinAkademik || "",
+        ketAkademik: data.ketAkademik || "",
+        desKarakter: data.desKarakter || "",
+        tinKarakter: data.tinKarakter || "",
+        ketKarakter: data.ketKarakter || "",
+        desSosial: data.desSosial || "",
+        tinSosial: data.tinSosial || "",
+        ketSosial: data.ketSosial || "",
+        desDisiplin: data.desDisiplin || "",
+        tinDisiplin: data.tinDisiplin || "",
+        ketDisiplin: data.ketDisiplin || "",
+        desPotensi: data.desPotensi || "",
+        tinPotensi: data.tinPotensi || "",
+        ketPotensi: data.ketPotensi || "",
+      });
+    } catch (error) {
+      console.error("Gagal mengambil catatan perkembangan:", error);
+      alert("Gagal mengambil data catatan perkembangan sebelumnya.");
+    } finally {
+      setLoadingCatatan(false);
+    }
+  }
+
+  function tutupCatatanModal() {
+    setShowCatatanModal(false);
+    setSiswaCatatanAktif(null);
+    setFormCatatan(FORM_CATATAN_KOSONG);
+  }
+
+  function updateFieldCatatan(key, value) {
+    setFormCatatan((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSimpanCatatanPerkembangan() {
+    if (!siswaCatatanAktif) return;
+
+    if (!formCatatan.periodeAwal || !formCatatan.periodeAkhir) {
+      alert("Pilih periode pemantauan (bulan awal dan bulan akhir) dulu.");
+      return;
+    }
+
+    setSavingCatatan(true);
+    try {
+      const res = await updateBiodataSiswa({
+        idSiswa: siswaCatatanAktif.idSiswa,
+        ...formCatatan,
+      });
+
+      if (!res?.success) {
+        alert(res?.message || "Gagal menyimpan catatan perkembangan.");
+        return;
+      }
+
+      alert("Catatan perkembangan berhasil disimpan.");
+      tutupCatatanModal();
+    } catch (error) {
+      console.error("Gagal menyimpan catatan perkembangan:", error);
+      alert("Terjadi kesalahan saat menyimpan catatan perkembangan.");
+    } finally {
+      setSavingCatatan(false);
     }
   }
 
@@ -836,6 +1133,14 @@ ID: ${idSiswa}`;
                         🗑️ HAPUS
                       </button>
                     </div>
+
+                    {/* TOMBOL CATATAN PERKEMBANGAN (LAMPIRAN B) - full width, responsif */}
+                    <button
+                      onClick={() => handleBukaCatatanPerkembangan(siswa)}
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-indigo-600 px-2 py-2.5 sm:py-3 text-[10px] sm:text-xs font-black text-white shadow-md shadow-indigo-500/20 transition-all hover:bg-indigo-700 active:scale-[0.97]"
+                    >
+                      📈 CATATAN PERKEMBANGAN
+                    </button>
                   </div>
                 </div>
               ))}
@@ -995,6 +1300,184 @@ ID: ${idSiswa}`;
           </div>
         )}
       </div>
+
+      {/* MODAL: CATATAN PERKEMBANGAN MURID (LAMPIRAN B) */}
+      {showCatatanModal && siswaCatatanAktif && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-2 sm:p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl max-h-[92vh] flex-col overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl">
+            {/* HEADER */}
+            <div className="shrink-0 bg-gradient-to-r from-indigo-700 to-indigo-600 px-4 py-4 sm:px-6 sm:py-5 text-white">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm sm:text-base font-black">
+                    LAMPIRAN B: CATATAN PERKEMBANGAN MURID
+                  </h2>
+                  <p className="mt-1 text-[11px] sm:text-xs text-indigo-100">
+                    {(siswaCatatanAktif.nama || "-").replace(
+                      /\s*\[.*?\]\s*/,
+                      "",
+                    )}{" "}
+                    &middot;{" "}
+                    {(siswaCatatanAktif.nama || "").match(/\[(.*?)\]/)?.[1] ||
+                      siswaCatatanAktif.kelas ||
+                      "-"}
+                  </p>
+                </div>
+                <button
+                  onClick={tutupCatatanModal}
+                  className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-black text-white hover:bg-white/20"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* BODY (scrollable) */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+              {loadingCatatan ? (
+                <div className="flex items-center justify-center py-16 text-sm font-bold text-slate-400">
+                  Memuat catatan sebelumnya...
+                </div>
+              ) : (
+                <>
+                  {/* INFO GURU WALI */}
+                  <div className="mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs sm:text-sm">
+                    <p className="font-bold text-slate-700">
+                      Guru Wali:{" "}
+                      <span className="font-black text-slate-900">
+                        {siswaCatatanAktif.namaGuru || "-"}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* PERIODE PEMANTAUAN */}
+                  <div className="mb-5">
+                    <label className="mb-1.5 block text-xs sm:text-sm font-black text-slate-700">
+                      Periode Pemantauan
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                          Bulan Awal
+                        </span>
+                        <input
+                          type="month"
+                          value={formCatatan.periodeAwal}
+                          onChange={(e) =>
+                            updateFieldCatatan("periodeAwal", e.target.value)
+                          }
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+                      <div>
+                        <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                          Bulan Akhir
+                        </span>
+                        <input
+                          type="month"
+                          value={formCatatan.periodeAkhir}
+                          onChange={(e) =>
+                            updateFieldCatatan("periodeAkhir", e.target.value)
+                          }
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+                    </div>
+                    {formCatatan.periodeAwal && formCatatan.periodeAkhir && (
+                      <p className="mt-1.5 text-[11px] sm:text-xs font-semibold text-indigo-600">
+                        {formatBulanTahun(formCatatan.periodeAwal)} —{" "}
+                        {formatBulanTahun(formCatatan.periodeAkhir)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* ASPEK PEMANTAUAN */}
+                  <div className="space-y-4">
+                    {ASPEK_PEMANTAUAN.map((aspek) => (
+                      <div
+                        key={aspek.key}
+                        className="rounded-xl border border-slate-200 overflow-hidden"
+                      >
+                        <div className="bg-indigo-50 px-3 py-2 text-xs sm:text-sm font-black text-indigo-800">
+                          {aspek.label}
+                        </div>
+                        <div className="p-3 space-y-2.5">
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                              Deskripsi Perkembangan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`des${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `des${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            />
+                          </div>
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                              Tindak Lanjut yang Dilakukan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`tin${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `tin${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            />
+                          </div>
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                              Keterangan Tambahan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`ket${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `ket${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* FOOTER */}
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-3 sm:p-4 flex gap-2.5">
+              <button
+                onClick={tutupCatatanModal}
+                disabled={savingCatatan}
+                className="flex-1 rounded-lg bg-white border border-slate-300 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-slate-600 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSimpanCatatanPerkembangan}
+                disabled={loadingCatatan || savingCatatan}
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white transition hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50"
+              >
+                {savingCatatan ? "Menyimpan..." : "💾 Simpan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POPUP WELCOME GURU WALI */}
       {showWelcome && (

@@ -308,6 +308,32 @@ export async function updateBiodataSiswa(data) {
       // HARAPAN
       harapan: data.harapan,
       ijazahSmp: data.ijazahSmp, // ---> TAMBAHKAN BARIS INI
+
+      // ===================================================
+      // CATATAN PERKEMBANGAN MURID (LAMPIRAN B) - TAMBAHAN BARU
+      // ===================================================
+      periodeAwal: data.periodeAwal,
+      periodeAkhir: data.periodeAkhir,
+
+      desAkademik: data.desAkademik,
+      tinAkademik: data.tinAkademik,
+      ketAkademik: data.ketAkademik,
+
+      desKarakter: data.desKarakter,
+      tinKarakter: data.tinKarakter,
+      ketKarakter: data.ketKarakter,
+
+      desSosial: data.desSosial,
+      tinSosial: data.tinSosial,
+      ketSosial: data.ketSosial,
+
+      desDisiplin: data.desDisiplin,
+      tinDisiplin: data.tinDisiplin,
+      ketDisiplin: data.ketDisiplin,
+
+      desPotensi: data.desPotensi,
+      tinPotensi: data.tinPotensi,
+      ketPotensi: data.ketPotensi,
     },
   });
 }
