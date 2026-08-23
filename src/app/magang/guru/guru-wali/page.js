@@ -7,6 +7,7 @@ import {
   getDataSiswaWali,
   hapusSiswaWali,
   getJurnalGuruWali,
+  getBiodataSiswa,
 } from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -45,77 +46,156 @@ const getBase64Image = async (url) => {
 };
 
 // =========================================================
+// HELPER: Konversi & ambil gambar dari link Google Drive.
+// Link "https://drive.google.com/file/.../view" TIDAK bisa
+// langsung di-fetch sebagai byte gambar (hanya membuka halaman
+// preview HTML), jadi dicoba beberapa format URL alternatif
+// yang lebih ramah CORS/fetch sampai salah satu berhasil.
+// =========================================================
+const ambilGambarDariDrive = async (urlAsli) => {
+  if (!urlAsli) return null;
+
+  const str = String(urlAsli).trim();
+  const match =
+    str.match(/\/d\/([a-zA-Z0-9_-]+)/) || // .../file/d/ID/view
+    str.match(/[?&]id=([a-zA-Z0-9_-]+)/); // .../uc?id=ID atau open?id=ID
+
+  const fileId = match ? match[1] : null;
+
+  const kandidat = fileId
+    ? [
+        `https://lh3.googleusercontent.com/d/${fileId}`,
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`,
+        `https://drive.google.com/uc?export=view&id=${fileId}`,
+      ]
+    : [str];
+
+  for (const url of kandidat) {
+    const hasil = await getBase64Image(url);
+    if (hasil) return hasil;
+  }
+  return null;
+};
+
+// =========================================================
 // FUNGSI UTAMA: GENERATE PDF BIODATA
 // =========================================================
 export const generateBiodataPDF = async (siswa) => {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // --- KOP SURAT ---
-  const logoImg = await getBase64Image("/logo.png"); // Pastikan file logo.png ada di folder public
+  // --- Pisahkan Nama & Kelas dari format "Nama [Kelas]" ---
+  const namaMentah = siswa.nama || "-";
+  const matchKelas = namaMentah.match(/\[(.*?)\]/);
+  const kelas = matchKelas ? matchKelas[1] : siswa.kelas || "-";
+  const namaBersih =
+    namaMentah.replace(/\s*\[.*?\]\s*/, "").trim() || namaMentah;
+
+  // --- Ambil logo & foto profil secara paralel ---
+  const [logoImg, fotoImg] = await Promise.all([
+    getBase64Image("/logo.png"),
+    ambilGambarDariDrive(siswa.fotoProfil),
+  ]);
+
+  // --- KOP SURAT (dipadatkan) ---
   if (logoImg) {
-    doc.addImage(logoImg.data, "PNG", 15, 12, 22, 22);
+    doc.addImage(logoImg.data, "PNG", 15, 10, 18, 18);
   }
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("SMK NEGERI 1 TELUK KUANTAN", pageWidth / 2, 18, {
+  doc.setFontSize(14);
+  doc.text("SMK NEGERI 1 TELUK KUANTAN", pageWidth / 2, 15, {
     align: "center",
   });
 
-  doc.setFontSize(14);
-  doc.text("BIODATA LENGKAP SISWA WALI", pageWidth / 2, 25, {
+  doc.setFontSize(12);
+  doc.text("BIODATA LENGKAP SISWA WALI", pageWidth / 2, 21, {
     align: "center",
   });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("Tahun Pelajaran 2026/2027", pageWidth / 2, 31, { align: "center" });
+  doc.setFontSize(9.5);
+  doc.text("Tahun Pelajaran 2026/2027", pageWidth / 2, 26, { align: "center" });
 
-  // Garis Bawah Kop
-  doc.setLineWidth(0.8);
-  doc.line(15, 37, pageWidth - 15, 37);
-  doc.setLineWidth(0.3);
-  doc.line(15, 38.5, pageWidth - 15, 38.5);
+  // Garis Bawah Kop (dipadatkan)
+  doc.setLineWidth(0.6);
+  doc.line(15, 30, pageWidth - 15, 30);
+  doc.setLineWidth(0.25);
+  doc.line(15, 31.2, pageWidth - 15, 31.2);
 
-  let startY = 46;
+  let startY = 36;
 
   // Helper Pembuat Tabel - Warna Headernya diubah ke Biru Navy Formal
-  const createTable = (title, bodyData, headColor = [30, 58, 138]) => {
+  // (dipadatkan: cellPadding & fontSize dikecilkan, jarak antar tabel dirapatkan)
+  const createTable = (title, bodyData, opts = {}) => {
     autoTable(doc, {
       startY: startY,
       head: [[{ content: title, colSpan: 2 }]],
       body: bodyData,
       theme: "grid",
       styles: {
-        fontSize: 9.5,
-        cellPadding: 3.5,
+        fontSize: 9,
+        cellPadding: 2,
         textColor: [0, 0, 0],
         lineColor: [200, 200, 200],
         lineWidth: 0.2,
       },
       headStyles: {
-        fillColor: headColor,
+        fillColor: [30, 58, 138],
         textColor: [255, 255, 255],
         fontStyle: "bold",
         halign: "center",
       },
       columnStyles: {
-        0: { cellWidth: 55, fontStyle: "bold", fillColor: [248, 248, 250] },
-        1: { cellWidth: "auto" },
+        0: { cellWidth: 42, fontStyle: "bold", fillColor: [248, 248, 250] },
+        1: { cellWidth: opts.col1Width || "auto" },
       },
-      margin: { left: 15, right: 15 },
+      margin: { left: 15, right: opts.rightMargin ?? 15 },
+      tableWidth: opts.tableWidth || undefined,
     });
-    startY = doc.lastAutoTable.finalY + 6;
+    startY = doc.lastAutoTable.finalY + 4;
   };
 
-  // --- ISI BIODATA ---
-  createTable("I. DATA SEKOLAH & MAGANG", [
-    ["ID Siswa", siswa.idSiswa || "-"],
-    ["Nama Lengkap", siswa.nama || "-"],
-    ["Guru Pembimbing", siswa.namaGuru || "-"],
-    ["Tempat Magang", siswa.tempatMagang || "-"],
-  ]);
+  // --- I. IDENTITAS SISWA (dipersempit agar foto muat di kanan) ---
+  const identitasTableY = startY;
+
+  createTable(
+    "I. IDENTITAS SISWA",
+    [
+      ["ID Siswa", siswa.idSiswa || "-"],
+      ["Nama Lengkap", namaBersih],
+      ["Kelas", kelas],
+    ],
+    { tableWidth: 125 },
+  );
+
+  // --- FOTO PROFIL (kanan atas, sejajar tabel identitas) ---
+  const fotoW = 32;
+  const fotoH = 40;
+  const fotoX = pageWidth - 15 - fotoW;
+  const fotoY = identitasTableY;
+
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.3);
+  doc.rect(fotoX, fotoY, fotoW, fotoH);
+
+  if (fotoImg) {
+    try {
+      doc.addImage(fotoImg.data, "JPEG", fotoX, fotoY, fotoW, fotoH);
+    } catch (e) {
+      // biarkan kotak kosong jika gambar gagal ditempel
+    }
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.text("Tidak ada foto", fotoX + fotoW / 2, fotoY + fotoH / 2, {
+      align: "center",
+      baseline: "middle",
+    });
+  }
+
+  // Pastikan konten berikutnya tidak bertumpuk dengan kotak foto
+  startY = Math.max(startY, fotoY + fotoH + 4);
 
   // NO HP dimasukkan ke Data Pribadi
   createTable("II. DATA PRIBADI", [
@@ -142,9 +222,9 @@ export const generateBiodataPDF = async (siswa) => {
   ]);
 
   // Cek jika halaman hampir penuh, pindah ke halaman 2
-  if (startY > 220) {
+  if (startY > 235) {
     doc.addPage();
-    startY = 20;
+    startY = 15;
   }
 
   createTable("V. PROFIL, MINAT & BAKAT", [
@@ -170,8 +250,8 @@ export const generateBiodataPDF = async (siswa) => {
     body: [[siswa.harapan || "-"]],
     theme: "grid",
     styles: {
-      fontSize: 10,
-      cellPadding: 5,
+      fontSize: 9,
+      cellPadding: 3,
       textColor: [0, 0, 0],
       lineColor: [200, 200, 200],
       lineWidth: 0.2,
@@ -183,12 +263,12 @@ export const generateBiodataPDF = async (siswa) => {
     },
     margin: { left: 15, right: 15 },
   });
-  startY = doc.lastAutoTable.finalY + 15;
+  startY = doc.lastAutoTable.finalY + 10;
 
   // --- BAGIAN TANDA TANGAN ---
-  if (startY > 240) {
+  if (startY > 250) {
     doc.addPage();
-    startY = 30;
+    startY = 25;
   }
 
   const tanggalCetak = new Intl.DateTimeFormat("id-ID", {
@@ -197,20 +277,20 @@ export const generateBiodataPDF = async (siswa) => {
     year: "numeric",
   }).format(new Date());
 
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setFont("helvetica", "normal");
   doc.text(`Teluk Kuantan, ${tanggalCetak}`, 130, startY);
-  doc.text("Mengetahui,", 130, startY + 5);
-  doc.text("Guru Wali,", 130, startY + 10);
+  doc.text("Mengetahui,", 130, startY + 4.5);
+  doc.text("Guru Wali,", 130, startY + 9);
 
   doc.setFont("helvetica", "bold");
-  doc.text(siswa.namaGuru || "___________________", 130, startY + 30);
+  doc.text(siswa.namaGuru || "___________________", 130, startY + 26);
   doc.setLineWidth(0.3);
-  doc.line(130, startY + 31, 190, startY + 31);
+  doc.line(130, startY + 27, 190, startY + 27);
 
   // Penamaan file yang rapi
-  const namaFileSafe = siswa.nama
-    ? siswa.nama.replace(/[^a-zA-Z0-9]/g, "_")
+  const namaFileSafe = namaBersih
+    ? namaBersih.replace(/[^a-zA-Z0-9]/g, "_")
     : "Siswa";
   doc.save(`Biodata_${namaFileSafe}.pdf`);
 };
@@ -301,7 +381,30 @@ export default function GuruWaliPage() {
   async function handleCetakPDF(siswa) {
     try {
       setIsPrinting(siswa.idSiswa);
-      await generateBiodataPDF(siswa);
+
+      // Ambil biodata lengkap (fotoProfil, noHp, ayah/ibu, dll) dari
+      // sheet DATA_SISWA_WALI. Data di "siswa" (roster) hanya berisi
+      // idSiswa/nama/namaGuru/tempatMagang, jadi harus digabung dulu.
+      const resBiodata = await getBiodataSiswa(String(siswa.idSiswa));
+
+      if (!resBiodata?.success) {
+        console.warn("Gagal mengambil biodata:", resBiodata?.message);
+      }
+
+      const biodata = resBiodata?.success ? resBiodata.data : {};
+
+      const siswaLengkap = {
+        ...siswa,
+        ...biodata,
+        // Jaga-jaga: pastikan field identitas dari roster tidak
+        // tertimpa nilai kosong dari biodata jika ada bentrok nama field.
+        idSiswa: siswa.idSiswa,
+        nama: siswa.nama,
+        namaGuru: siswa.namaGuru,
+        tempatMagang: siswa.tempatMagang,
+      };
+
+      await generateBiodataPDF(siswaLengkap);
     } catch (error) {
       console.error("Gagal mencetak PDF", error);
       alert("Terjadi kesalahan saat membuat file PDF.");
@@ -719,7 +822,9 @@ ID: ${idSiswa}`;
                         disabled={isPrinting === siswa.idSiswa}
                         className="flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-emerald-50 border border-emerald-200 px-2 py-2.5 sm:py-3 text-[10px] sm:text-xs font-black text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-300 active:scale-[0.97] disabled:opacity-50"
                       >
-                        {isPrinting === siswa.idSiswa ? "⏳ LOAD" : "🖨️ CETAK"}
+                        {isPrinting === siswa.idSiswa
+                          ? "⏳ LOAD"
+                          : "🖨️ CETAK BIODATA"}
                       </button>
 
                       <button

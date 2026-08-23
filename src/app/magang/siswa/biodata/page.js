@@ -653,7 +653,7 @@ export default function BiodataSiswa() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
                 <p className="text-[10px] font-bold text-slate-400">
-                  DATA AYAH
+                  DATA AYAH/ WALI
                 </p>
                 <Input
                   label="Nama Ayah"
@@ -675,7 +675,9 @@ export default function BiodataSiswa() {
                 />
               </div>
               <div className="space-y-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                <p className="text-[10px] font-bold text-slate-400">DATA IBU</p>
+                <p className="text-[10px] font-bold text-slate-400">
+                  DATA IBU/ WALI
+                </p>
                 <Input
                   label="Nama Ibu"
                   name="ibu"
