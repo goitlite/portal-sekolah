@@ -62,7 +62,7 @@ const getBase64Image = async (url) => {
 const buildBarcodeUrl = (fotoUrl) => {
   if (!fotoUrl) return null;
   return (
-    "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" +
+    "https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=" +
     encodeURIComponent(fotoUrl)
   );
 };
@@ -105,7 +105,7 @@ const parseTanggal = (tanggalString) => {
     return { year: Number(matchISO[1]), month: Number(matchISO[2]) - 1 };
   }
 
-  // 3. Fallback JS Date (sangat berguna untuk parse CREATED_AT mis: 8/17/2026 21:31)
+  // 3. Fallback JS Date
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
     return { year: d.getFullYear(), month: d.getMonth() };
@@ -129,7 +129,6 @@ const getSesiKelompokKey = (item) => {
 // ============================================================
 const tentukanSemesterTahunAjaran = (data) => {
   const tanggalValid = data
-    // [PERBAIKAN]: Prioritaskan referensi createdAt
     .map((item) =>
       parseTanggal(item.createdAt || item.CREATED_AT || item.tanggal),
     )
@@ -164,11 +163,9 @@ const tentukanSemesterTahunAjaran = (data) => {
 const susunRekapBulananPerSiswa = (data) => {
   const totalSesiKelompokPerBulan = new Map();
 
-  // 1. Hitung total sesi Kelompok unik PER BULAN lintas siswa (penyebut persentase)
   data.forEach((item) => {
     if ((item.formatPertemuan || "").toLowerCase() !== "kelompok") return;
 
-    // [PERBAIKAN]: Memakai kolom CREATED_AT untuk bulan
     const tgl = parseTanggal(item.createdAt || item.CREATED_AT || item.tanggal);
     const sesiKey = getSesiKelompokKey(item);
     if (!tgl || !sesiKey) return;
@@ -180,7 +177,6 @@ const susunRekapBulananPerSiswa = (data) => {
     totalSesiKelompokPerBulan.get(bulanKey).add(sesiKey);
   });
 
-  // 2. Kelompokkan data per siswa
   const perSiswa = new Map();
 
   data.forEach((item) => {
@@ -196,7 +192,6 @@ const susunRekapBulananPerSiswa = (data) => {
     }
 
     const siswaEntry = perSiswa.get(idSiswa);
-    // [PERBAIKAN]: Memakai kolom CREATED_AT untuk bulan
     const tgl = parseTanggal(item.createdAt || item.CREATED_AT || item.tanggal);
     if (!tgl) return;
 
@@ -224,7 +219,6 @@ const susunRekapBulananPerSiswa = (data) => {
     }
   });
 
-  // 3. Bentuk struktur akhir siap-cetak
   const hasil = [];
 
   perSiswa.forEach((siswaEntry) => {
@@ -233,10 +227,8 @@ const susunRekapBulananPerSiswa = (data) => {
     );
 
     let totalPertemuan = 0;
-    // [PERBAIKAN]: Tracking total individu & kelompok untuk breakdown baris Total
     let totalIndividu = 0;
     let totalKelompok = 0;
-
     let totalSesiDiikuti = 0;
     let totalSesiTersedia = 0;
 
@@ -248,7 +240,6 @@ const susunRekapBulananPerSiswa = (data) => {
 
       const jumlahPertemuan = b.individu + b.kelompok;
 
-      // Hitung total keseluruhan
       totalPertemuan += jumlahPertemuan;
       totalIndividu += b.individu;
       totalKelompok += b.kelompok;
@@ -278,7 +269,6 @@ const susunRekapBulananPerSiswa = (data) => {
       kelas: siswaEntry.kelas,
       baris,
       totalPertemuan,
-      // [PERBAIKAN]: Kirim string gabungan total untuk kolom Format Total
       totalFormatBreakdown: `Individu: ${totalIndividu} / Kelompok: ${totalKelompok}`,
       persentaseTotal,
     });
@@ -302,25 +292,25 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
     const pageWidth = doc.internal.pageSize.getWidth();
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
+    doc.setFontSize(11); // Diperkecil dari 13
     doc.text(
       "LAMPIRAN D: FORMAT PELAPORAN SEMESTER GURU WALI",
       pageWidth / 2,
-      16,
+      12, // Margin atas dikurangi
       { align: "center" },
     );
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9); // Diperkecil dari 10
     const labelX = 14;
-    const colonX = 65;
-    let y = 28;
-    const lineGap = 6;
+    const colonX = 55; // Disesuaikan agar lebih rapat
+    let y = 20; // Mulai lebih ke atas
+    const lineGap = 4.5; // Jarak antar baris diperkecil
 
     const rows = [
       ["Nama Guru Wali", teksNamaGuru],
       [
-        "Kelas/Murid Dampingan",
+        "Murid Dampingan/ Kelas",
         `${siswa.namaSiswa}${siswa.kelas && siswa.kelas !== "-" ? " (" + siswa.kelas + ")" : ""}`,
       ],
       ["Semester", semester],
@@ -333,11 +323,11 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
       y += lineGap;
     });
 
-    y += 4;
+    y += 3;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(9); // Diperkecil
     doc.text("1. Rekapitulasi Pertemuan", labelX, y);
-    y += 4;
+    y += 3;
 
     const body = siswa.baris.map((b) => [
       b.bulan,
@@ -346,18 +336,17 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
       b.persentase,
     ]);
 
-    // [PERBAIKAN]: Menampilkan breakdown di baris Total juga
     body.push([
       "Total",
       String(siswa.totalPertemuan),
-      siswa.totalFormatBreakdown, // Sebelumnya string kosong ""
+      siswa.totalFormatBreakdown,
       siswa.persentaseTotal,
     ]);
 
     const totalRowIndex = body.length - 1;
 
     autoTable(doc, {
-      startY: y + 2,
+      startY: y + 1,
       head: [
         [
           "Bulan",
@@ -370,11 +359,11 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
       theme: "grid",
 
       styles: {
-        fontSize: 9.5,
-        cellPadding: 3,
+        fontSize: 8.5, // Diperkecil
+        cellPadding: 1.5, // Padding dikurangi drastis
         textColor: [0, 0, 0],
         lineColor: [0, 0, 0],
-        lineWidth: 0.2,
+        lineWidth: 0.15,
         valign: "middle",
         halign: "center",
       },
@@ -384,7 +373,7 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
         fillColor: [240, 240, 240],
         textColor: [0, 0, 0],
         lineColor: [0, 0, 0],
-        lineWidth: 0.3,
+        lineWidth: 0.15,
       },
 
       columnStyles: {
@@ -394,7 +383,7 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
         3: { cellWidth: 45 },
       },
 
-      margin: { left: 14, right: 14 },
+      margin: { left: 14, right: 14, bottom: 10 }, // Margin disesuaikan
 
       didParseCell: (cellData) => {
         if (
@@ -411,9 +400,6 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
 
 /**
  * generateLaporanGuruWaliPDF
- * @param {Object} opts
- * @param {Array}  opts.data - Pastikan objek data berisi createdAt atau CREATED_AT.
- * @param {String} opts.namaGuru
  */
 export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
   if (!Array.isArray(data) || data.length === 0) {
@@ -435,28 +421,23 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
     year: "numeric",
   }).format(new Date());
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("SMK NEGERI 1 TELUK KUANTAN", pageWidth / 2, 14, {
-    align: "center",
-  });
-
-  doc.setFontSize(12);
+  doc.setFontSize(11); // Diperkecil
+  doc.setFont("helvetica", "bold"); // Bold untuk judul
   doc.text(
     "LAMPIRAN C: FORMAT REKAP PERTEMUAN DENGAN MURID",
     pageWidth / 2,
-    21,
-    { align: "center" },
+    12, // Lebih naik
+    { align: "center" }, // Diganti ke center agar lebih rapi
   );
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Guru Wali`, 14, 30);
-  doc.text(`: ${teksNamaGuru}`, 40, 30);
-  doc.text(`Tanggal Cetak`, 14, 36);
-  doc.text(`: ${tanggalCetak}`, 40, 36);
-  doc.text(`Jumlah Pertemuan`, 200, 30);
-  doc.text(`: ${data.length}`, 235, 30);
+  doc.setFontSize(9); // Diperkecil
+  doc.text(`Guru Wali`, 14, 20);
+  doc.text(`: ${teksNamaGuru}`, 40, 20);
+  doc.text(`Tanggal Cetak`, 14, 25);
+  doc.text(`: ${tanggalCetak}`, 40, 25);
+  doc.text(`Jumlah Pertemuan`, 200, 20);
+  doc.text(`: ${data.length}`, 235, 20);
 
   const barcodeImages = await Promise.all(
     data.map((item) => {
@@ -477,29 +458,29 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
   ]);
 
   autoTable(doc, {
-    startY: 42,
+    startY: 30, // Tabel mulai lebih atas
     head: [
       [
         "No.",
-        "Tanggal Pertemuan",
+        "Tanggal", // Disingkat
         "Nama Murid",
-        "Topik atau Masalah yang Dibahas",
+        "Topik Pembahasan", // Disingkat
         "Tindak Lanjut",
         "Keterangan",
-        "Bukti Foto",
+        "Bukti", // Disingkat
       ],
     ],
     body,
     theme: "grid",
 
     styles: {
-      fontSize: 8.5,
-      cellPadding: 2.5,
+      fontSize: 7.5, // Diperkecil signifikan untuk memuat teks lebih banyak
+      cellPadding: 1.5, // Padding sangat tipis agar padat
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
-      lineWidth: 0.2,
+      lineWidth: 0.15, // Garis lebih tipis
       valign: "middle",
-      minCellHeight: 22,
+      minCellHeight: 14, // Minimum height dikurangi agar row lebih rapat
     },
 
     headStyles: {
@@ -507,22 +488,23 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
-      lineWidth: 0.3,
+      lineWidth: 0.15,
       halign: "center",
       valign: "middle",
+      fontSize: 8,
     },
 
     columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 28, halign: "center" },
-      2: { cellWidth: 40 },
-      3: { cellWidth: "auto" },
-      4: { cellWidth: 45 },
-      5: { cellWidth: 45 },
-      6: { cellWidth: 26, halign: "center" },
+      0: { cellWidth: 8, halign: "center" }, // No. diperkecil
+      1: { cellWidth: 18, halign: "center" }, // Tanggal diperkecil
+      2: { cellWidth: 35 }, // Nama Murid
+      3: { cellWidth: "auto" }, // Topik (akan mengambil sisa ruang)
+      4: { cellWidth: 50 }, // Tindak Lanjut sedikit diperlebar
+      5: { cellWidth: 40 }, // Keterangan dikurangi sedikit
+      6: { cellWidth: 16, halign: "center" }, // Kolom Bukti/Barcode dikompresi
     },
 
-    margin: { left: 14, right: 14 },
+    margin: { left: 10, right: 10, bottom: 10 }, // Margin kanan/kiri/bawah lebih kecil
 
     didDrawCell: (cellData) => {
       if (
@@ -535,10 +517,10 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
       const imgObj = barcodeImages[cellData.row.index];
 
       if (!imgObj) {
-        doc.setFontSize(7);
+        doc.setFontSize(6);
         doc.setFont("helvetica", "italic");
         doc.text(
-          "Tidak ada",
+          "-",
           cellData.cell.x + cellData.cell.width / 2,
           cellData.cell.y + cellData.cell.height / 2,
           { align: "center", baseline: "middle" },
@@ -546,9 +528,10 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
         return;
       }
 
+      // Perkecil ukuran maksimal gambar barcode agar pas di sel kecil
       const maxSize = Math.min(
-        cellData.cell.width - 4,
-        cellData.cell.height - 4,
+        cellData.cell.width - 2, // Margin barcode sangat tipis
+        cellData.cell.height - 2,
       );
 
       const imgX = cellData.cell.x + (cellData.cell.width - maxSize) / 2;
@@ -558,23 +541,24 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
     },
   });
 
-  let ttdY = doc.lastAutoTable.finalY + 16;
+  let ttdY = doc.lastAutoTable.finalY + 12; // Jarak TTD dikurangi
   if (ttdY > 185) {
+    // Threshold page break disesuaikan landscape
     doc.addPage("a4", "landscape");
-    ttdY = 30;
+    ttdY = 20;
   }
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text("Mengetahui,", 220, ttdY);
-  doc.text("Guru Wali", 220, ttdY + 5);
+  doc.text("Mengetahui,", 230, ttdY); // Posisi X digeser karena margin beda
+  doc.text("Guru Wali", 230, ttdY + 4);
   doc.setFont("helvetica", "bold");
-  doc.text(teksNamaGuru, 220, ttdY + 30);
+  doc.text(teksNamaGuru, 230, ttdY + 22); // Ruang tanda tangan dikurangi sedikit
   doc.setDrawColor(0);
-  doc.setLineWidth(0.4);
-  doc.line(220, ttdY + 31, 270, ttdY + 31);
+  doc.setLineWidth(0.3);
+  doc.line(230, ttdY + 23, 276, ttdY + 23); // Panjang garis NIP disesuaikan
   doc.setFont("helvetica", "normal");
-  doc.text(`NIP. ${" ".repeat(25)}`, 220, ttdY + 36);
+  doc.text(`NIP. ${" ".repeat(20)}`, 230, ttdY + 27);
 
   // Lampiran D
   tambahHalamanLampiranD(doc, { data, namaGuru: teksNamaGuru });
