@@ -383,10 +383,10 @@ export const generateBiodataPDF = async (siswa) => {
     startY,
     head: [
       [
-        "Aspek\\nPemantauan",
+        "Aspek Pemantauan",
         "Deskripsi Perkembangan",
-        "Tindak Lanjut yang\\nDilakukan",
-        "Keterangan\\nTambahan",
+        "Tindak Lanjut yang Dilakukan",
+        "Keterangan Tambahan",
       ],
     ],
     body: [
@@ -999,9 +999,30 @@ ID: ${idSiswa}`;
                         👨‍🎓
                       </div>
                       <div className="min-w-0">
-                        <h2 className="truncate text-sm sm:text-base font-black">
-                          {siswa.nama || "-"}
-                        </h2>
+                        {/* PEMISAH NAMA & BADGE KELAS EMAS */}
+                        {(() => {
+                          const namaMentah = siswa.nama || "-";
+                          const matchKelas = namaMentah.match(/\[(.*?)\]/);
+                          const kelas = matchKelas
+                            ? matchKelas[1]
+                            : siswa.kelas;
+                          const namaBersih = namaMentah
+                            .replace(/\s*\[.*?\]\s*/, "")
+                            .trim();
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-2 min-w-0">
+                              <h2 className="truncate text-sm sm:text-base font-black text-white">
+                                {namaBersih || "-"}
+                              </h2>
+                              {kelas && (
+                                <span className="inline-flex items-center shrink-0 rounded-md bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2 py-0.5 text-[10px] sm:text-xs font-black text-amber-950 border border-amber-200 shadow-sm">
+                                  {kelas}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="mt-1 flex items-center gap-2">
                           <p className="text-[10px] sm:text-xs font-bold text-blue-200">
                             ID: {siswa.idSiswa || "-"}
@@ -1014,12 +1035,12 @@ ID: ${idSiswa}`;
                                 kirimLoginWhatsApp(siswa.idSiswa, siswa.nama)
                               }
                               title="Bagikan informasi login via WhatsApp"
-                              className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-md transition-all hover:scale-110 hover:bg-blue-700 active:scale-95"
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-[10px] sm:text-xs font-bold text-white shadow-sm transition-all hover:scale-105 active:scale-95"
                             >
                               {/* Icon SVG Share */}
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                className="h-3.5 w-3.5"
+                                className="h-3.5 w-3.5 shrink-0"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -1031,6 +1052,7 @@ ID: ${idSiswa}`;
                                   d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 100-2.684 3 3 0 000 2.684zm0 9.316a3 3 0 100-2.684 3 3 0 000 2.684z"
                                 />
                               </svg>
+                              <span>Bagikan id ke Siswa</span>
                             </button>
                           )}
                         </div>
@@ -1038,7 +1060,8 @@ ID: ${idSiswa}`;
                     </div>
                   </div>
 
-                  <div className="flex flex-1 flex-col p-4 sm:p-5">
+                  {/* BAGIAN DI BAWAH NAVY (DIBUAT GRADIENT EMAS HALUS) */}
+                  <div className="flex flex-1 flex-col p-4 sm:p-5 bg-gradient-to-b from-amber-50 via-yellow-100/60 to-amber-100 border-t border-amber-200">
                     <div className="flex-1 space-y-2.5 sm:space-y-3">
                       <div>
                         {/* WHATSAPP */}
@@ -1096,7 +1119,7 @@ ID: ${idSiswa}`;
                     <div className="mt-4 sm:mt-5 grid grid-cols-2 xl:grid-cols-4 gap-2">
                       <button
                         onClick={() => setSelectedSiswa(siswa)}
-                        className="flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-blue-600 px-2 py-2.5 sm:py-3 text-[10px] sm:text-xs font-black text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-[0.97]"
+                        className="flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-blue-50 border border-blue-200 px-2 py-2.5 sm:py-3 text-[10px] sm:text-xs font-black text-blue-700 transition-all hover:bg-blue-100 hover:border-blue-300 active:scale-[0.97]"
                       >
                         👁️ PROFIL
                       </button>
