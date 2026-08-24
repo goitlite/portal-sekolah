@@ -34,7 +34,7 @@ export default function JurnalGuruWaliPage() {
   // STATE & REF BUKTI FOTO (KAMERA & UPLOAD)
   // =====================================================
   const [opsiFoto, setOpsiFoto] = useState(false);
-  const [modeFoto, setModeFoto] = useState("kamera"); // 'kamera' atau 'upload'
+  const [modeFoto, setModeFoto] = useState("kamera");
   const [photo, setPhoto] = useState("");
   const [cameraReady, setCameraReady] = useState(false);
 
@@ -345,7 +345,7 @@ export default function JurnalGuruWaliPage() {
       const result = await saveJurnalGuruWali(data);
 
       if (result?.success) {
-        setMessage("Jurnal berhasil disimpan.");
+        setMessage("✅ Jurnal berhasil disimpan.");
         setMessageType("success");
         setTanggal("");
         setTopik("");
@@ -376,164 +376,192 @@ export default function JurnalGuruWaliPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50/60 py-6 sm:py-10 px-4 sm:px-6 lg:px-8 font-sans text-slate-800">
-      <div className="mx-auto max-w-3xl space-y-6">
+    <main
+      style={{ minHeight: "100vh", background: "#f5f7fb", padding: "24px" }}
+    >
+      <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* HEADER */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl shadow-blue-500/10">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-2xl shadow-inner backdrop-blur-md">
-                📘
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                  Jurnal Guru Wali
-                </h1>
-                <p className="mt-0.5 text-xs sm:text-sm text-blue-100/90 font-medium">
-                  Dokumentasi kegiatan dan pembinaan siswa bimbingan
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (window.history.length > 1) router.back();
-                else router.push("/magang/guru/guru-wali");
-              }}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-md transition-all hover:bg-white/20 active:scale-95"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-                />
-              </svg>
-              <span>Kembali</span>
-            </button>
-          </div>
+        <div
+          style={{
+            background: "linear-gradient(135deg,#2563eb,#0ea5e9)",
+            color: "white",
+            padding: "24px",
+            borderRadius: "18px",
+            marginBottom: "20px",
+            position: "relative",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) router.back();
+              else router.push("/magang/guru/guru-wali");
+            }}
+            style={{
+              position: "absolute",
+              top: "18px",
+              right: "18px",
+              border: "1px solid rgba(255,255,255,0.35)",
+              borderRadius: "10px",
+              padding: "8px 14px",
+              background: "rgba(255,255,255,0.12)",
+              color: "white",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            ⬅️ Kembali
+          </button>
+          <h1 style={{ margin: 0, fontSize: "25px", paddingRight: "100px" }}>
+            📘 Jurnal Guru Wali
+          </h1>
+          <p style={{ margin: "8px 0 0", opacity: 0.9 }}>
+            Dokumentasi kegiatan dan pembinaan siswa wali
+          </p>
         </div>
 
-        {/* IDENTITAS GURU WALI CARD */}
-        <div className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 font-bold text-sm">
-              👨‍🏫
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Guru Wali Bimbingan
-              </span>
-              <p className="text-sm sm:text-base font-bold text-slate-800">
-                {namaGuru || "-"}
-              </p>
-            </div>
-          </div>
-          <span className="hidden sm:inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-100">
-            ID: {idGuru || "-"}
-          </span>
-        </div>
-
-        {/* FORM UTAMA */}
+        {/* FORM */}
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-6"
+          style={{
+            background: "white",
+            padding: "24px",
+            borderRadius: "18px",
+            boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
+          }}
         >
-          {/* FORMAT PERTEMUAN */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Format Pertemuan <span className="text-rose-500">*</span>
+          {/* IDENTITAS */}
+          <div
+            style={{ marginBottom: "18px", fontSize: "13px", color: "#64748b" }}
+          >
+            <span>Guru Wali:</span>
+            <strong style={{ marginLeft: "6px", color: "#1e293b" }}>
+              {namaGuru || "-"}
+            </strong>
+          </div>
+
+          <div style={{ marginBottom: "18px" }}>
+            <label>
+              <strong>Format Pertemuan</strong>
             </label>
             <select
               value={formatPertemuan}
               onChange={handleFormatChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              style={inputStyle}
             >
-              <option value="Individu">Individu (1 Siswa)</option>
-              <option value="Kelompok">Kelompok (Banyak Siswa)</option>
+              <option value="Individu">Individu</option>
+              <option value="Kelompok">Kelompok</option>
             </select>
           </div>
 
-          {/* INDIVIDU SELECTOR */}
+          {/* INDIVIDU / KELOMPOK SELECTOR */}
           {formatPertemuan === "Individu" && (
-            <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50/40 p-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                  Pilih Siswa <span className="text-rose-500">*</span>
+            <>
+              <div style={{ marginBottom: "18px" }}>
+                <label>
+                  <strong>Siswa</strong>
                 </label>
-                <select
-                  value={idSiswa}
-                  onChange={handlePilihSiswa}
-                  disabled={loadingSiswa}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
-                >
-                  <option value="">
-                    {loadingSiswa
-                      ? "Memuat daftar siswa..."
-                      : "-- Pilih Siswa Wali --"}
-                  </option>
-                  {siswa.map((item, index) => {
-                    const parsed = parseNamaKelas(item.nama);
-                    return (
+                {/* [PERBAIKAN]: Input Select Siswa + Tombol Tambah Siswa */}
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <select
+                    value={idSiswa}
+                    onChange={handlePilihSiswa}
+                    disabled={loadingSiswa}
+                    style={{ ...inputStyle, marginTop: 0, flex: 1 }}
+                  >
+                    <option value="">
+                      {loadingSiswa ? "Memuat siswa..." : "Pilih siswa"}
+                    </option>
+                    {siswa.map((item, index) => (
                       <option key={item.idSiswa || index} value={item.idSiswa}>
-                        {parsed.nama} {parsed.kelas ? `[${parsed.kelas}]` : ""}
+                        {parseNamaKelas(item.nama).nama} {" ["}
+                        {parseNamaKelas(item.nama).kelas}
+                        {"]"}
                       </option>
-                    );
-                  })}
-                </select>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push("/magang/guru/guru-wali/tambah")}
+                    title="Tambah Data Siswa"
+                    style={{
+                      background: "#10b981",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "10px",
+                      padding: "0 16px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+                    }}
+                  >
+                    ➕ Tambah Siswa
+                  </button>
+                </div>
               </div>
 
               {idSiswa && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Nama Siswa
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr",
+                    gap: "12px",
+                    marginBottom: "18px",
+                  }}
+                >
+                  <div>
+                    <label>
+                      <strong>Nama</strong>
                     </label>
                     <input
                       value={namaSiswa}
                       readOnly
-                      className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                      style={{ ...inputStyle, background: "#f3f4f6" }}
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Kelas
+                    <label>
+                      <strong>Kelas</strong>
                     </label>
                     <input
-                      value={kelas || "-"}
+                      value={kelas}
                       readOnly
-                      className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                      style={{ ...inputStyle, background: "#f3f4f6" }}
                     />
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
 
-          {/* KELOMPOK SELECTOR */}
           {formatPertemuan === "Kelompok" && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Daftar Siswa Peserta Kelompok
-                </label>
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                  {siswaKelompok.length} Siswa
-                </span>
-              </div>
-
-              <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div style={{ marginBottom: "20px" }}>
+              <label>
+                <strong>Siswa yang Mengikuti Pertemuan</strong>
+              </label>
+              <div
+                style={{
+                  marginTop: "8px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                }}
+              >
                 {siswaKelompok.length === 0 ? (
-                  <div className="p-6 text-center text-xs font-medium text-slate-400">
-                    Tidak ada siswa terpilih dalam kelompok ini.
+                  <div
+                    style={{
+                      padding: "18px",
+                      color: "#64748b",
+                      textAlign: "center",
+                    }}
+                  >
+                    Tidak ada siswa.
                   </div>
                 ) : (
                   siswaKelompok.map((item, index) => {
@@ -541,27 +569,38 @@ export default function JurnalGuruWaliPage() {
                     return (
                       <div
                         key={item.idSiswa || index}
-                        className="flex items-center justify-between p-3.5 transition-colors hover:bg-slate-50/80"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "11px 13px",
+                          borderBottom:
+                            index < siswaKelompok.length - 1
+                              ? "1px solid #e2e8f0"
+                              : "none",
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                            {index + 1}
+                        <div>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>
+                            {identitas.nama}
                           </div>
-                          <div>
-                            <p className="text-xs sm:text-sm font-bold text-slate-800">
-                              {identitas.nama}
-                            </p>
-                            <p className="text-[11px] font-medium text-slate-400">
-                              Kelas: {identitas.kelas || "-"}
-                            </p>
+                          <div style={{ fontSize: "12px", color: "#64748b" }}>
+                            Kelas: {identitas.kelas || "-"}
                           </div>
                         </div>
-
                         <button
                           type="button"
                           onClick={() => hapusSiswaKelompok(item.idSiswa)}
-                          title="Hapus siswa dari kelompok"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-95 transition-all"
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            border: "none",
+                            borderRadius: "50%",
+                            background: "#fee2e2",
+                            color: "#dc2626",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
                         >
                           ✕
                         </button>
@@ -573,193 +612,289 @@ export default function JurnalGuruWaliPage() {
             </div>
           )}
 
-          {/* TANGGAL PERTEMUAN */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Tanggal Pertemuan <span className="text-rose-500">*</span>
+          <div style={{ marginBottom: "18px" }}>
+            <label>
+              <strong>Tanggal Pertemuan</strong>
             </label>
             <input
               type="date"
               value={tanggal}
               onChange={(e) => setTanggal(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              style={inputStyle}
             />
           </div>
 
-          {/* TOPIK / MASALAH */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Topik / Masalah Bimbingan <span className="text-rose-500">*</span>
+          <div style={{ marginBottom: "18px" }}>
+            <label>
+              <strong>Topik / Masalah</strong>
             </label>
             <textarea
               value={topik}
               onChange={(e) => setTopik(e.target.value)}
               rows={3}
-              placeholder="Tuliskan topik atau masalah yang dibahas..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              placeholder="Tuliskan topik pembahasan..."
+              style={inputStyle}
             />
           </div>
 
-          {/* TINDAK LANJUT */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Rencana Tindak Lanjut
+          <div style={{ marginBottom: "18px" }}>
+            <label>
+              <strong>Tindak Lanjut</strong>
             </label>
             <textarea
               value={tindakLanjut}
               onChange={(e) => setTindakLanjut(e.target.value)}
               rows={2}
-              placeholder="Tuliskan rencana atau arahan tindak lanjut..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              placeholder="Tuliskan tindak lanjut..."
+              style={inputStyle}
             />
           </div>
 
-          {/* KETERANGAN */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Keterangan Tambahan
+          <div style={{ marginBottom: "22px" }}>
+            <label>
+              <strong>Keterangan</strong>
             </label>
             <textarea
               value={keterangan}
               onChange={(e) => setKeterangan(e.target.value)}
               rows={2}
-              placeholder="Tambahkan catatan atau keterangan lain jika ada..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              style={inputStyle}
             />
           </div>
 
-          {/* OPSI BUKTI FOTO */}
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-4 sm:p-5">
-            <label className="flex cursor-pointer items-center gap-3">
+          {/* =================================================
+              TOGGLE & UI KAMERA + UPLOAD FILE
+          ================================================= */}
+          <div
+            style={{
+              marginBottom: "24px",
+              padding: "16px",
+              borderRadius: "12px",
+              border: "1px dashed #cbd5e1",
+              background: "#f8fafc",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                cursor: "pointer",
+                fontWeight: "bold",
+                color: "#334155",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={opsiFoto}
                 onChange={handleToggleFoto}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                style={{ marginRight: "10px", width: "18px", height: "18px" }}
               />
-              <span className="text-sm font-bold text-slate-800">
-                📷 Lampirkan Bukti Foto Kegiatan (Opsional)
-              </span>
+              📷 Sertakan Bukti Foto (Opsional)
             </label>
 
             {opsiFoto && (
-              <div className="mt-4 space-y-4 pt-2">
-                {/* TAB KAMERA / UPLOAD */}
-                <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-200/60 p-1">
+              <div style={{ marginTop: "16px" }}>
+                {/* TAB SELECTOR: KAMERA vs UPLOAD */}
+                <div
+                  style={{ display: "flex", gap: "10px", marginBottom: "16px" }}
+                >
                   <button
                     type="button"
                     onClick={() => ubahModeFoto("kamera")}
-                    className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-bold transition-all ${
-                      modeFoto === "kamera"
-                        ? "bg-white text-blue-600 shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border:
+                        modeFoto === "kamera"
+                          ? "2px solid #2563eb"
+                          : "1px solid #cbd5e1",
+                      background: modeFoto === "kamera" ? "#eff6ff" : "white",
+                      color: modeFoto === "kamera" ? "#2563eb" : "#64748b",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      transition: "0.2s",
+                    }}
                   >
-                    📸 Pakai Kamera
+                    📸 Kamera
                   </button>
                   <button
                     type="button"
                     onClick={() => ubahModeFoto("upload")}
-                    className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-bold transition-all ${
-                      modeFoto === "upload"
-                        ? "bg-white text-blue-600 shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border:
+                        modeFoto === "upload"
+                          ? "2px solid #2563eb"
+                          : "1px solid #cbd5e1",
+                      background: modeFoto === "upload" ? "#eff6ff" : "white",
+                      color: modeFoto === "upload" ? "#2563eb" : "#64748b",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      transition: "0.2s",
+                    }}
                   >
                     📁 Unggah File
                   </button>
                 </div>
 
-                {/* AREA TAMPILAN KAMERA / UPLOAD */}
-                <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-900 min-h-[220px] flex items-center justify-center">
+                {/* CONTAINER PREVIEW / INPUT */}
+                <div
+                  style={{
+                    position: "relative",
+                    overflow: "hidden",
+                    borderRadius: "12px",
+                    background:
+                      modeFoto === "kamera" && !photo ? "#0f172a" : "#f1f5f9",
+                    aspectRatio:
+                      modeFoto === "kamera" && !photo ? "4/3" : "auto",
+                    width: "100%",
+                    border: "1px solid #cbd5e1",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   {modeFoto === "kamera" ? (
                     !photo ? (
-                      <div className="relative w-full aspect-[4/3] flex items-center justify-center bg-slate-950">
+                      <>
                         <video
                           ref={videoRef}
                           autoPlay
                           muted
                           playsInline
-                          className="h-full w-full object-cover"
+                          style={{
+                            height: "100%",
+                            width: "100%",
+                            objectFit: "cover",
+                          }}
                         />
                         {!cameraReady && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-4 text-center">
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "rgba(15,23,42,0.9)",
+                              color: "white",
+                            }}
+                          >
                             <button
                               type="button"
                               onClick={startKamera}
-                              className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-500 active:scale-95"
+                              style={{
+                                padding: "10px 20px",
+                                borderRadius: "8px",
+                                background: "#2563eb",
+                                color: "white",
+                                border: "none",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                              }}
                             >
-                              Aktifkan Kamera
+                              Ketuk untuk Aktifkan Kamera Belakang
                             </button>
                           </div>
                         )}
-                      </div>
+                      </>
                     ) : (
                       <img
                         src={photo}
                         alt="Hasil Kamera"
-                        className="w-full h-auto object-cover"
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          display: "block",
+                        }}
                       />
                     )
                   ) : !photo ? (
-                    <div className="w-full py-8 text-center bg-white border border-dashed border-slate-300 rounded-xl">
+                    <div
+                      style={{
+                        width: "100%",
+                        padding: "40px 20px",
+                        textAlign: "center",
+                      }}
+                    >
                       <input
                         type="file"
                         accept="image/*"
                         onChange={handleUploadFile}
                         id="file-upload"
-                        className="hidden"
+                        style={{ display: "none" }}
                       />
                       <label
                         htmlFor="file-upload"
-                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer active:scale-95"
+                        style={{
+                          display: "inline-block",
+                          padding: "14px 28px",
+                          background: "#10b981",
+                          color: "white",
+                          borderRadius: "10px",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                          boxShadow: "0 4px 6px rgba(16, 185, 129, 0.2)",
+                        }}
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                          />
-                        </svg>
-                        <span>Pilih Foto dari Galeri</span>
+                        Pilih Foto dari Galeri
                       </label>
-                      <p className="mt-2 text-[11px] font-medium text-slate-400">
-                        Format didukung: JPG, PNG
+                      <p
+                        style={{
+                          marginTop: "12px",
+                          fontSize: "13px",
+                          color: "#64748b",
+                        }}
+                      >
+                        Format: JPG, PNG
                       </p>
                     </div>
                   ) : (
                     <img
                       src={photo}
                       alt="Hasil Upload"
-                      className="w-full h-auto object-cover"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                      }}
                     />
                   )}
 
-                  {/* Canvas tersembunyi untuk pemrosesan watermark */}
-                  <canvas ref={canvasRef} className="hidden" />
-                  <canvas ref={watermarkCanvasRef} className="hidden" />
+                  <canvas ref={canvasRef} style={{ display: "none" }} />
+                  <canvas
+                    ref={watermarkCanvasRef}
+                    style={{ display: "none" }}
+                  />
                 </div>
 
-                {/* TOMBOL AKSI FOTO */}
                 {modeFoto === "kamera" && (
                   <button
                     type="button"
                     onClick={ambilFoto}
                     disabled={!cameraReady && !photo}
-                    className={`w-full rounded-xl py-3 text-xs font-bold text-white shadow-md transition-all active:scale-98 ${
-                      photo
-                        ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
-                        : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    style={{
+                      marginTop: "12px",
+                      width: "100%",
+                      padding: "12px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: photo ? "#f59e0b" : "#2563eb",
+                      color: "white",
+                      fontWeight: "bold",
+                      cursor:
+                        !cameraReady && !photo ? "not-allowed" : "pointer",
+                    }}
                   >
-                    {photo ? "🔄 Ulangi Ambil Foto" : "📸 Ambil Foto Bukti"}
+                    {photo ? "🔄 Ulangi Foto" : "📸 Ambil Foto Bukti"}
                   </button>
                 )}
 
@@ -767,41 +902,76 @@ export default function JurnalGuruWaliPage() {
                   <button
                     type="button"
                     onClick={() => setPhoto("")}
-                    className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-3 text-xs font-bold text-white shadow-md shadow-amber-500/20 transition-all active:scale-98"
+                    style={{
+                      marginTop: "12px",
+                      width: "100%",
+                      padding: "12px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: "#f59e0b",
+                      color: "white",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
                   >
-                    🔄 Ganti File Foto
+                    🔄 Ganti Foto
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* PESAN FEEDBACK */}
           {message && (
             <div
-              className={`flex items-center gap-2 rounded-xl p-4 text-xs font-bold border ${
-                messageType === "success"
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                  : "bg-rose-50 text-rose-800 border-rose-200"
-              }`}
+              style={{
+                padding: "12px 14px",
+                marginBottom: "18px",
+                borderRadius: "10px",
+                background: messageType === "success" ? "#dcfce7" : "#fee2e2",
+                color: messageType === "success" ? "#166534" : "#991b1b",
+              }}
             >
-              <span>{messageType === "success" ? "✅" : "⚠️"}</span>
-              <span>{message}</span>
+              {message}
             </div>
           )}
 
-          {/* TOMBOL SIMPAN */}
           <button
             type="submit"
             disabled={loading || loadingSiswa || (opsiFoto && !photo)}
-            className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: "12px",
+              padding: "14px",
+              background:
+                loading || loadingSiswa || (opsiFoto && !photo)
+                  ? "#94a3b8"
+                  : "#2563eb",
+              color: "white",
+              fontSize: "16px",
+              fontWeight: 600,
+              cursor:
+                loading || loadingSiswa || (opsiFoto && !photo)
+                  ? "not-allowed"
+                  : "pointer",
+            }}
           >
-            {loading
-              ? "Menyimpan Jurnal & Foto..."
-              : "💾 Simpan Jurnal Bimbingan"}
+            {loading ? "Menyimpan Data & Foto..." : "💾 Simpan Jurnal"}
           </button>
         </form>
       </div>
     </main>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "11px 12px",
+  marginTop: "6px",
+  border: "1px solid #d1d5db",
+  borderRadius: "10px",
+  fontSize: "14px",
+  outline: "none",
+  fontFamily: "inherit",
+};
