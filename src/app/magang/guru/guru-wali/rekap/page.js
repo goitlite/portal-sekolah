@@ -68,6 +68,9 @@ export default function RekapGuruWaliPage() {
   const [guruWaliOptions, setGuruWaliOptions] = useState([]);
   const [selectedGuruWali, setSelectedGuruWali] = useState("Semua");
 
+  // State untuk pencarian berdasarkan nama
+  const [searchNama, setSearchNama] = useState("");
+
   useEffect(() => {
     loadDataRekap();
   }, []);
@@ -135,23 +138,37 @@ export default function RekapGuruWaliPage() {
     }
   }
 
-  // Filter berdasarkan KELAS dan GURU WALI
-  const filteredData = dataSiswa.filter((siswa) => {
-    let matchKelas = true;
-    if (selectedKelas !== "Semua") {
-      const match = (siswa.nama || "").match(/\[(.*?)\]/);
-      const kelasSiswa = match ? match[1].trim() : "Tanpa Kelas";
-      matchKelas = kelasSiswa === selectedKelas;
-    }
+  // Filter berdasarkan NAMA, KELAS, dan GURU WALI serta Sorting Abjad
+  const filteredData = dataSiswa
+    .filter((siswa) => {
+      let matchKelas = true;
+      if (selectedKelas !== "Semua") {
+        const match = (siswa.nama || "").match(/\[(.*?)\]/);
+        const kelasSiswa = match ? match[1].trim() : "Tanpa Kelas";
+        matchKelas = kelasSiswa === selectedKelas;
+      }
 
-    let matchGuru = true;
-    if (selectedGuruWali !== "Semua") {
-      const namaWaliSiswa = (siswa.namaGuru || "").trim();
-      matchGuru = namaWaliSiswa === selectedGuruWali;
-    }
+      let matchGuru = true;
+      if (selectedGuruWali !== "Semua") {
+        const namaWaliSiswa = (siswa.namaGuru || "").trim();
+        matchGuru = namaWaliSiswa === selectedGuruWali;
+      }
 
-    return matchKelas && matchGuru;
-  });
+      let matchNama = true;
+      if (searchNama.trim() !== "") {
+        matchNama = (siswa.nama || "")
+          .toLowerCase()
+          .includes(searchNama.toLowerCase());
+      }
+
+      return matchKelas && matchGuru && matchNama;
+    })
+    .sort((a, b) => {
+      // Fungsi pengurutan abjad berdasarkan nama siswa
+      const namaA = (a.nama || "").toLowerCase();
+      const namaB = (b.nama || "").toLowerCase();
+      return namaA.localeCompare(namaB);
+    });
 
   // =====================================================
   // LOADING: DIGANTI MENJADI SPINNER AMBER
@@ -207,9 +224,23 @@ export default function RekapGuruWaliPage() {
           </div>
         </div>
 
-        {/* TOOLBAR FILTER (KELAS & GURU WALI) */}
-        <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+        {/* TOOLBAR FILTER (NAMA, KELAS & GURU WALI) */}
+        <div className="mb-4 flex flex-col lg:flex-row items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full lg:w-auto">
+            {/* Filter Nama */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 whitespace-nowrap">
+                Cari Nama:
+              </label>
+              <input
+                type="text"
+                placeholder="Ketik nama siswa..."
+                value={searchNama}
+                onChange={(e) => setSearchNama(e.target.value)}
+                className="flex-1 w-full sm:w-48 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+              />
+            </div>
+
             {/* Filter Kelas */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <label className="text-xs sm:text-sm font-bold text-slate-700 whitespace-nowrap">
@@ -249,7 +280,7 @@ export default function RekapGuruWaliPage() {
             </div>
           </div>
 
-          <div className="text-xs sm:text-sm font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl w-full sm:w-auto text-center">
+          <div className="text-xs sm:text-sm font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl w-full lg:w-auto text-center">
             Total Menampilkan:{" "}
             <span className="text-blue-700">{filteredData.length}</span> Siswa
           </div>
