@@ -559,33 +559,113 @@ export default function GuruWaliPage() {
     }
   }
 
+  // ============================================================
+  // FUNGSI HAPUS SISWA (UPDATED)
+  // Tambahkan di JS_GURUWALI_FIX3 menggantikan fungsi lama
+  // ============================================================
+
   async function handleHapusSiswa(idSiswa, namaSiswa) {
     const isConfirm = window.confirm(
-      `Peringatan!\n\nApakah Bapak/Ibu yakin ingin menghapus siswa ${namaSiswa} dari daftar wali? Data hubungan guru wali ini akan dihapus secara permanen dari spreadsheet sistem.`,
+      `⚠️ PERHATIAN!\n\n` +
+        `Anda akan menghapus siswa:\n"${namaSiswa}"\n\n` +
+        `• Jika siswa sudah punya guru pembimbing:\n` +
+        `  → Dihapus dari: Guru Wali + Biodata Wali\n` +
+        `  → Data siswa tetap aman di sistem\n\n` +
+        `• Jika siswa belum punya guru pembimbing:\n` +
+        `  → Dihapus dari: Guru Wali + Biodata + Data Siswa\n` +
+        `  → Siswa benar-benar dihapus dari sistem\n\n` +
+        `Apakah Anda yakin?`,
     );
 
     if (!isConfirm) return;
 
     try {
       const session = getSession();
+
+      // Call API hapusSiswaWali
       const result = await hapusSiswaWali({
         idSiswa: idSiswa,
         idGuru: session.id,
       });
 
+      // ====================================================
+      // SUCCESS CASE
+      // ====================================================
       if (result.success) {
-        alert(`Siswa ${namaSiswa} berhasil dihapus dari daftar wali.`);
+        // CEK TIPE ACTION
+        if (result.data.action === "hapus_wali_dan_biodata") {
+          // Guru pembimbing masih ada
+          alert(
+            `✅ DIHAPUS DARI WALI!\n\n` +
+              `Siswa "${namaSiswa}" dihapus dari daftar wali.\n\n` +
+              `Dihapus dari:\n` +
+              `• Daftar Guru Wali\n` +
+              `• Biodata Siswa (Guru Wali)\n\n` +
+              `ℹ️ Data siswa tetap tersimpan karena:\n` +
+              `${result.data.pesan_tambahan}`,
+          );
+        } else if (result.data && result.data.action === "hapus_lengkap") {
+          // Tidak ada guru pembimbing: hapus dari 3 sheets
+          alert(
+            `✅ BERHASIL DIHAPUS SEPENUHNYA!\n\n` +
+              `Siswa "${namaSiswa}" dihapus dari:\n` +
+              `• Daftar Guru Wali\n` +
+              `• Data Siswa\n` +
+              `• Biodata Siswa\n\n` +
+              `⚠️ Tindakan ini tidak dapat dibatalkan.`,
+          );
+        } else {
+          // Default success message
+          alert(`✅ Siswa "${namaSiswa}" berhasil dihapus dari daftar wali.`);
+        }
+
+        // HAPUS DARI LIST DI FRONTEND
         setDataSiswa((prev) =>
           prev.filter((siswa) => siswa.idSiswa !== idSiswa),
         );
-      } else {
-        alert(`Gagal menghapus data: ${result.message}`);
+      }
+      // ====================================================
+      // ERROR CASE
+      // ====================================================
+      else {
+        alert(`❌ Gagal menghapus data: ${result.message}`);
       }
     } catch (error) {
       console.error("Error Hapus Siswa:", error);
-      alert("Terjadi kesalahan sistem saat mencoba menghapus siswa.");
+      alert(
+        "❌ Terjadi kesalahan sistem saat mencoba menghapus siswa.\n" +
+          error.message,
+      );
     }
   }
+
+  // ============================================================
+  // CATATAN IMPLEMENTASI
+  // ============================================================
+  /*
+   * PERUBAHAN:
+   * 1. Pesan konfirmasi diperpanjang dengan penjelasan logika
+   * 2. Menampilkan pesan berbeda berdasarkan action:
+   *    - hapus_wali_dan_biodata: guru pembimbing masih ada
+   *      └─ Hapus dari: GURU_WALI + DATA_SISWA_WALI
+   *      └─ Pertahankan: SISWA (data aman)
+   *
+   *    - hapus_lengkap: tidak ada guru pembimbing
+   *      └─ Hapus dari: GURU_WALI + SISWA + DATA_SISWA_WALI (lengkap)
+   *
+   * 3. Icon emoji ditambahkan untuk clarity
+   * 4. Pesan error lebih informatif
+   * 5. Biodata Wali (DATA_SISWA_WALI) selalu dihapus saat Guru Wali dicopot
+   *
+   * BACKEND REQUIREMENT:
+   * - Perlu update function hapusSiswaWali() di gs_guru_wali.gs
+   * - Lihat file SOLUSI_HAPUS_SISWA_WALI.gs untuk implementasi lengkap
+   *
+   * HUBUNGAN DENGAN GS_BIODATA.gs:
+   * - Ketika data di DATA_SISWA_WALI dihapus melalui hapusSiswaWali()
+   * - Biodata siswa dibersihkan tapi data di sheet SISWA tetap aman
+   * - Fungsi getBiodataSiswa() & updateBiodataSiswa() tidak terpengaruh
+   */
 
   async function handleCetakPDF(siswa) {
     try {
