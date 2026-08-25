@@ -1141,56 +1141,52 @@ ID: ${idSiswa}`;
                   </div>
 
                   {/* BAGIAN DI BAWAH NAVY (DIBUAT GRADIENT EMAS HALUS) */}
-                  <div className="flex flex-1 flex-col p-4 sm:p-5 bg-gradient-to-b from-amber-50 via-yellow-100/60 to-amber-100 border-t border-amber-200">
-                    <div className="flex-1 space-y-2.5 sm:space-y-3">
+                  <div className="flex flex-1 flex-col p-3 sm:p-4 bg-gradient-to-b from-amber-50 via-yellow-100/60 to-amber-100 border-t border-amber-200">
+                    <div className="flex-1 grid grid-cols-2 gap-2 sm:gap-4 items-start mb-4">
+                      {/* WHATSAPP */}
                       <div>
-                        {/* WHATSAPP */}
-                        <div>
-                          <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-400">
-                            WhatsApp
-                          </p>
-
-                          {siswa.noHp ? (
-                            <a
-                              href={getWhatsAppUrl(siswa.noHp)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-0.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-green-600 hover:text-green-700 hover:underline"
-                            >
-                              💬 {siswa.noHp}
-                            </a>
-                          ) : (
-                            <>
-                              <p className="mt-0.5 text-xs sm:text-sm font-bold text-slate-400">
-                                💬 -
-                              </p>
-
-                              <p className="mt-1 text-[10px] italic font-medium text-amber-600">
-                                Harus diisi di akun siswa
-                              </p>
-                            </>
-                          )}
-                        </div>
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          WhatsApp
+                        </p>
+                        {siswa.noHp ? (
+                          <a
+                            href={getWhatsAppUrl(siswa.noHp)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-0.5 inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold text-green-600 hover:text-green-700 hover:underline break-all"
+                          >
+                            💬 {siswa.noHp}
+                          </a>
+                        ) : (
+                          <div className="mt-0.5">
+                            <p className="text-[11px] sm:text-xs font-bold text-slate-400">
+                              💬 -
+                            </p>
+                            <p className="text-[9px] italic font-medium text-amber-600 leading-tight">
+                              Harus diisi akun siswa
+                            </p>
+                          </div>
+                        )}
                       </div>
+
+                      {/* TEMPAT MAGANG */}
                       <div>
                         <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-400">
                           Tempat Magang
                         </p>
-
                         {siswa.tempatMagang ? (
-                          <p className="mt-0.5 text-xs sm:text-sm font-bold text-slate-700">
+                          <p className="mt-0.5 text-[11px] sm:text-xs font-bold text-slate-700 leading-snug line-clamp-2">
                             📍 {siswa.tempatMagang}
                           </p>
                         ) : (
-                          <>
-                            <p className="mt-0.5 text-xs sm:text-sm font-bold text-slate-400">
+                          <div className="mt-0.5">
+                            <p className="text-[11px] sm:text-xs font-bold text-slate-400">
                               📍 -
                             </p>
-
-                            <p className="mt-1 text-[10px] italic font-medium text-amber-600">
-                              Harus diisi di akun siswa
+                            <p className="text-[9px] italic font-medium text-amber-600 leading-tight">
+                              Harus diisi akun siswa
                             </p>
-                          </>
+                          </div>
                         )}
                       </div>
                     </div>

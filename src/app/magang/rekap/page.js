@@ -638,7 +638,7 @@ export default function RekapPage() {
                     Menyusun Laporan...
                   </>
                 ) : (
-                  <>📄 Download Laporan PDF</>
+                  <>📄 Print Laporan PDF</>
                 )}
               </button>
             )}
