@@ -425,3 +425,20 @@ export async function getJurnalSiswa(idGuru, idSiswa) {
     idSiswa,
   });
 }
+
+export async function saveJurnalPKL(data) {
+  return request("saveJurnalPKL", {
+    idGuru: data.idGuru,
+    items: data.items || [],
+  });
+}
+
+// ---------------------------------------------------------
+// AMBIL SEMUA JURNAL PKL MILIK GURU PEMBIMBING
+// ---------------------------------------------------------
+
+export async function getJurnalPKL(idGuru) {
+  return request("getJurnalPKL", {
+    idGuru,
+  });
+}

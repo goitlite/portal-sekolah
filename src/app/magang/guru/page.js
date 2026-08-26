@@ -11,16 +11,21 @@ import {
   getAktivitasGuru,
   getJurnalGuruWali,
   getDataSiswaWali,
+  getJurnalPKL,
 } from "../lib/api";
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
+import IsiJurnalPklModal from "./IsiJurnalPklModal";
+import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
 function formatTanggal(waktu) {
   if (!waktu) return "-";
   const tanggal = new Date(waktu);
+  if (isNaN(tanggal.getTime())) return waktu;
   return (
     tanggal.toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
+      weekday: "long",
       day: "2-digit",
       month: "long",
       year: "numeric",
@@ -36,6 +41,13 @@ export default function DashboardGuru() {
   const CACHE_KEY = "dashboardGuruCache";
   // --- STATE UNTUK TAB MENU UTAMA ---
   const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
+
+  const [showPilihCetakPklModal, setShowPilihCetakPklModal] = useState(false);
+
+  // --- STATE BARU JURNAL PKL ---
+  const [showJurnalPklModal, setShowJurnalPklModal] = useState(false);
+  const [includeCetakJurnalPkl, setIncludeCetakJurnalPkl] = useState(false);
+  const [loadingCetakJurnalPkl, setLoadingCetakJurnalPkl] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -292,11 +304,31 @@ export default function DashboardGuru() {
     }
   };
 
+  // --- FUNGSI CETAK JURNAL PKL ---
+  const handleCetakJurnalPkl = async () => {
+    if (!user?.id || loadingCetakJurnalPkl) return;
+    setLoadingCetakJurnalPkl(true);
+    try {
+      const res = await getJurnalPKL(user.id);
+      const daftarJurnal = res?.data || [];
+      if (!Array.isArray(daftarJurnal) || daftarJurnal.length === 0) {
+        alert("Belum ada jurnal PKL yang tercatat untuk dicetak.");
+        return;
+      }
+      await generateLaporanJurnalPKL({
+        data: daftarJurnal,
+        namaGuru: user?.nama,
+      });
+    } catch (error) {
+      alert(
+        "Gagal mencetak jurnal PKL: " + (error?.message || "Terjadi kesalahan"),
+      );
+    } finally {
+      setLoadingCetakJurnalPkl(false);
+    }
+  };
+
   // --- AMBIL DAFTAR SISWA WALI (untuk pilihan cetak Lampiran A & B) ---
-  // Dashboard guru ini tidak memuat daftar siswa wali di awal render,
-  // jadi diambil secara lazy hanya saat modal cetak dibuka & menu
-  // "Lampiran A & B" diklik (lihat prop fetchDaftarSiswaWali pada
-  // CetakLaporanGuruWaliModal).
   const fetchDaftarSiswaWaliDashboard = async () => {
     if (!user?.id) return [];
     const result = await getDataSiswaWali(user.id);
@@ -373,7 +405,7 @@ export default function DashboardGuru() {
             </h3>
             <p className="mt-2 text-sm text-blue-200 max-w-md font-medium">
               Sistem kendali monitoring, verifikasi, dan rekapitulasi data
-              aktivitas siswa magang.
+              aktivitas Murid
             </p>
           </div>
         </div>
@@ -446,7 +478,7 @@ export default function DashboardGuru() {
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
           {activeMenuTab === "pembimbing" && (
-            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
                 title="Kelola Murid PKL"
                 desc="Lihat & kelola siswa bimbingan"
@@ -469,11 +501,18 @@ export default function DashboardGuru() {
                 onClick={() => router.push("/magang/rekap")}
               />
               <SolidCompactCard
-                title="Cetak Laporan Monitoring PKL"
-                desc="Ekspor data ke PDF / Excel"
+                title="Isi Jurnal PKL"
+                desc="Catat jurnal pembimbingan individual"
+                icon="📝"
+                bgGrad="from-rose-500 to-pink-600 shadow-rose-500/20"
+                onClick={() => setShowJurnalPklModal(true)}
+              />
+              <SolidCompactCard
+                title="Cetak Laporan PKL"
+                desc="Monitoring atau Jurnal PKL"
                 icon="🖨️"
                 bgGrad="from-fuchsia-500 to-pink-600 shadow-pink-500/20"
-                onClick={() => setShowCetakModal(true)}
+                onClick={() => setShowPilihCetakPklModal(true)}
               />
             </div>
           )}
@@ -548,7 +587,7 @@ export default function DashboardGuru() {
                   className="rounded-2xl border border-[#D9B44A]/60 bg-white/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA (TETAP / TIDAK BERUBAH) */}
+                    {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA */}
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
                         <span className="text-sm sm:text-base">📍</span>{" "}
@@ -562,12 +601,10 @@ export default function DashboardGuru() {
                       </p>
                     </div>
 
-                    {/* BAGIAN TOMBOL (DIBUNGKUS FLEX AGAR BISA BERJAJAR) */}
+                    {/* BAGIAN TOMBOL */}
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto mt-3 sm:mt-0">
-                      {/* TOMBOL BARU: Lihat Aktifitas */}
                       <button
                         onClick={() => {
-                          // Dapatkan format "Bulan Terbaru" (contoh: Agustus 2026)
                           const date = new Date();
                           const namaBulan = [
                             "Januari",
@@ -585,7 +622,6 @@ export default function DashboardGuru() {
                           ];
                           const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
 
-                          // Kirim data Guru, Tempat, dan Bulan ke localStorage
                           localStorage.setItem(
                             "targetTempatRekap",
                             item.tempat,
@@ -596,7 +632,6 @@ export default function DashboardGuru() {
                             bulanTerbaru,
                           );
 
-                          // Pindah halaman
                           router.push("/magang/rekap");
                         }}
                         className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-orange-500/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
@@ -604,7 +639,6 @@ export default function DashboardGuru() {
                         👁️ LIHAT AKTIVITAS
                       </button>
 
-                      {/* TOMBOL LAMA: Monitoring Area */}
                       <button
                         onClick={() => mulaiMonitoring(item.tempat)}
                         className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-blue-600/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
@@ -619,7 +653,7 @@ export default function DashboardGuru() {
           </div>
         </div>
 
-        {/* STATISTIK CARD GRID (Klik Untuk Lihat Nama) */}
+        {/* STATISTIK CARD GRID */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card
             title="Jumlah Siswa"
@@ -681,7 +715,6 @@ export default function DashboardGuru() {
                 lapangan.
               </p>
             </div>
-            {/* Tombol Lihat Semuanya (Ditambahkan di sini) */}
             {aktivitas.length > 0 && (
               <button
                 onClick={() => {
@@ -862,7 +895,6 @@ export default function DashboardGuru() {
             </div>
 
             <div className="p-4 flex flex-col items-center relative">
-              {/* Gambar (Klik untuk Fullscreen) */}
               <div
                 className="relative w-full h-64 sm:h-96 bg-slate-100 rounded-xl overflow-hidden cursor-zoom-in group border border-slate-200 shadow-inner"
                 onClick={() => setIsFullScreen(true)}
@@ -879,7 +911,6 @@ export default function DashboardGuru() {
                 </div>
               </div>
 
-              {/* Data Siswa */}
               <div className="mt-5 text-center px-4 w-full">
                 <span
                   className={`inline-block mb-1.5 rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
@@ -901,7 +932,6 @@ export default function DashboardGuru() {
                 </p>
               </div>
 
-              {/* Tombol Sebelumnya / Selanjutnya */}
               <button
                 onClick={handlePrevImage}
                 className="absolute left-2 sm:left-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-200"
@@ -937,7 +967,6 @@ export default function DashboardGuru() {
             className="max-w-full max-h-full object-contain rounded-lg select-none"
           />
 
-          {/* Tombol Sebelumnya / Selanjutnya (Fullscreen) */}
           <button
             onClick={handlePrevImage}
             className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
@@ -950,6 +979,66 @@ export default function DashboardGuru() {
           >
             ▶
           </button>
+        </div>
+      )}
+
+      {/* MODAL PILIHAN: CETAK LAPORAN MONITORING atau CETAK JURNAL PKL */}
+      {showPilihCetakPklModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-fuchsia-500 to-pink-600 p-5 flex items-center justify-between">
+              <h3 className="text-lg font-black text-white">
+                Cetak Laporan PKL
+              </h3>
+              <button
+                onClick={() => setShowPilihCetakPklModal(false)}
+                className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => {
+                  setShowPilihCetakPklModal(false);
+                  setShowCetakModal(true);
+                }}
+                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors flex items-center gap-3"
+              >
+                <span className="text-2xl">📊</span>
+                <span>
+                  <span className="block font-bold text-slate-800">
+                    Cetak Laporan Monitoring
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Rekap kehadiran & data pernyataan mutlak (PDF/Excel)
+                  </span>
+                </span>
+              </button>
+
+              <button
+                disabled={loadingCetakJurnalPkl}
+                onClick={async () => {
+                  setShowPilihCetakPklModal(false);
+                  await handleCetakJurnalPkl();
+                }}
+                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-rose-400 hover:bg-rose-50 transition-colors flex items-center gap-3 disabled:opacity-60"
+              >
+                <span className="text-2xl">📘</span>
+                <span>
+                  <span className="block font-bold text-slate-800">
+                    {loadingCetakJurnalPkl
+                      ? "Menyiapkan PDF..."
+                      : "Cetak Jurnal PKL"}
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Format Pembimbingan Individual, langsung unduh PDF
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -969,7 +1058,6 @@ export default function DashboardGuru() {
               </button>
             </div>
 
-            {/* Mengubah p-5 space-y-4 agar scrollable jika form perjalanan dinas dibuka */}
             <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
               <div>
                 <label className="text-xs font-bold text-slate-500">Nama</label>
@@ -1264,7 +1352,11 @@ export default function DashboardGuru() {
                 Batal
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  if (includeCetakJurnalPkl) {
+                    await handleCetakJurnalPkl();
+                  }
+
                   // Simpan form ke localStorage
                   localStorage.setItem(
                     "dataPernyataanMutlak",
@@ -1324,6 +1416,15 @@ export default function DashboardGuru() {
         fetchDaftarSiswaWali={fetchDaftarSiswaWaliDashboard}
         onCetakLampiranCD={handleCetakLaporanGuruWali}
         loadingLampiranCD={loadingCetakWali}
+      />
+
+      {/* MODAL ISIKAN JURNAL PKL */}
+      <IsiJurnalPklModal
+        isOpen={showJurnalPklModal}
+        onClose={() => setShowJurnalPklModal(false)}
+        idGuru={user?.id}
+        namaGuru={user?.nama}
+        onSaved={() => setShowJurnalPklModal(false)}
       />
     </main>
   );
@@ -1416,6 +1517,7 @@ function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
     </button>
   );
 }
+
 function SolidCompactCard({
   title,
   desc,
@@ -1424,10 +1526,8 @@ function SolidCompactCard({
   onClick,
   disabled = false,
 }) {
-  // Fungsi untuk memberikan badge/highlight stabilo emas pada kata PKL dan WALI
   const formatTitleWithBadge = (text) => {
     if (!text) return text;
-    // Regex mendeteksi kata PKL atau WALI (case-insensitive)
     const regex = /(PKL|WALI)/gi;
     const parts = text.split(regex);
 
@@ -1457,14 +1557,12 @@ function SolidCompactCard({
           : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
       }`}
     >
-      {/* Ikon Transparan Watermark */}
       <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
         <span className="text-5xl sm:text-6xl rotate-12 select-none">
           {icon}
         </span>
       </div>
 
-      {/* Konten Teks Depan */}
       <div className="relative z-10 w-full space-y-0.5">
         <h4 className="text-xs font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-sm flex flex-wrap items-center">
           {formatTitleWithBadge(title)}
