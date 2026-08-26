@@ -10,8 +10,10 @@ import {
   getTempatMagangGuru,
   getAktivitasGuru,
   getJurnalGuruWali,
+  getDataSiswaWali,
 } from "../lib/api";
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
+import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
 
 function formatTanggal(waktu) {
   if (!waktu) return "-";
@@ -64,6 +66,7 @@ export default function DashboardGuru() {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   const [loadingCetakWali, setLoadingCetakWali] = useState(false);
+  const [showLaporanWaliModal, setShowLaporanWaliModal] = useState(false);
 
   const [showCetakModal, setShowCetakModal] = useState(false);
   const [formDataCetak, setFormDataCetak] = useState({
@@ -289,6 +292,21 @@ export default function DashboardGuru() {
     }
   };
 
+  // --- AMBIL DAFTAR SISWA WALI (untuk pilihan cetak Lampiran A & B) ---
+  // Dashboard guru ini tidak memuat daftar siswa wali di awal render,
+  // jadi diambil secara lazy hanya saat modal cetak dibuka & menu
+  // "Lampiran A & B" diklik (lihat prop fetchDaftarSiswaWali pada
+  // CetakLaporanGuruWaliModal).
+  const fetchDaftarSiswaWaliDashboard = async () => {
+    if (!user?.id) return [];
+    const result = await getDataSiswaWali(user.id);
+    if (!result?.success) {
+      console.warn("Gagal mengambil daftar siswa wali:", result?.message);
+      return [];
+    }
+    return result.data || [];
+  };
+
   if (loading || !user) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -493,15 +511,10 @@ export default function DashboardGuru() {
               />
               <SolidCompactCard
                 title="Cetak Laporan Guru Wali"
-                desc={
-                  loadingCetakWali
-                    ? "Menyiapkan PDF..."
-                    : "Ekspor rekap pertemuan ke PDF"
-                }
+                desc="Pilih Cover / Lampiran A&B / Lampiran C&D"
                 icon="📑"
                 bgGrad="from-slate-500 to-slate-700 shadow-slate-500/20"
-                onClick={handleCetakLaporanGuruWali}
-                disabled={loadingCetakWali}
+                onClick={() => setShowLaporanWaliModal(true)}
               />
             </div>
           )}
@@ -1302,6 +1315,16 @@ export default function DashboardGuru() {
           </div>
         </div>
       )}
+
+      {/* MODAL PILIHAN CETAK LAPORAN GURU WALI */}
+      <CetakLaporanGuruWaliModal
+        isOpen={showLaporanWaliModal}
+        onClose={() => setShowLaporanWaliModal(false)}
+        namaGuru={user?.nama}
+        fetchDaftarSiswaWali={fetchDaftarSiswaWaliDashboard}
+        onCetakLampiranCD={handleCetakLaporanGuruWali}
+        loadingLampiranCD={loadingCetakWali}
+      />
     </main>
   );
 }
