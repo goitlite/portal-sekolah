@@ -448,7 +448,7 @@ export default function DashboardGuru() {
           {activeMenuTab === "pembimbing" && (
             <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-4">
               <SolidCompactCard
-                title="Daftar Murid PKL"
+                title="Kelola Murid PKL"
                 desc="Lihat & kelola siswa bimbingan"
                 icon="🗂️"
                 bgGrad="from-blue-600 to-indigo-700 shadow-blue-600/20"
@@ -482,8 +482,8 @@ export default function DashboardGuru() {
           {activeMenuTab === "wali" && (
             <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
-                title="Daftar Murid Wali"
-                desc="Kelola daftar murid perwalian"
+                title="Kelola Murid Wali"
+                desc="Lihat & Kelola murid perwalian"
                 icon="👥"
                 bgGrad="from-orange-500 to-red-600 shadow-orange-500/20"
                 onClick={() => router.push("/magang/guru/guru-wali")}
