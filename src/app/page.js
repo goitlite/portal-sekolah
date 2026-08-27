@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Carousel from "@/components/features/Carousel";
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
 
   // State untuk mengontrol Modal
@@ -90,42 +90,42 @@ export default function Home() {
         hoverBorder: "hover:border-t-yellow-300",
         badgeHover:
           "group-hover:bg-yellow-400 group-hover:text-yellow-950 group-hover:border-yellow-300",
-        titleBadge: "bg-yellow-400 text-yellow-950 shadow-yellow-400/50",
+        titleBadge: "bg-yellow-400 text-yellow-950",
       },
       emerald: {
         border: "border-t-emerald-400",
         hoverBorder: "hover:border-t-emerald-300",
         badgeHover:
           "group-hover:bg-emerald-400 group-hover:text-emerald-950 group-hover:border-emerald-300",
-        titleBadge: "bg-emerald-400 text-emerald-950 shadow-emerald-400/50",
+        titleBadge: "bg-emerald-400 text-emerald-950",
       },
       orange: {
         border: "border-t-orange-400",
         hoverBorder: "hover:border-t-orange-300",
         badgeHover:
           "group-hover:bg-orange-400 group-hover:text-orange-950 group-hover:border-orange-300",
-        titleBadge: "bg-orange-400 text-orange-950 shadow-orange-400/50",
+        titleBadge: "bg-orange-400 text-orange-950",
       },
       pink: {
         border: "border-t-pink-400",
         hoverBorder: "hover:border-t-pink-300",
         badgeHover:
           "group-hover:bg-pink-400 group-hover:text-pink-950 group-hover:border-pink-300",
-        titleBadge: "bg-pink-400 text-pink-950 shadow-pink-400/50",
+        titleBadge: "bg-pink-400 text-pink-950",
       },
       violet: {
         border: "border-t-violet-400",
         hoverBorder: "hover:border-t-violet-300",
         badgeHover:
           "group-hover:bg-violet-400 group-hover:text-white group-hover:border-violet-300",
-        titleBadge: "bg-violet-400 text-white shadow-violet-400/50",
+        titleBadge: "bg-violet-400 text-white",
       },
       cyan: {
         border: "border-t-cyan-400",
         hoverBorder: "hover:border-t-cyan-300",
         badgeHover:
           "group-hover:bg-cyan-400 group-hover:text-cyan-950 group-hover:border-cyan-300",
-        titleBadge: "bg-cyan-400 text-cyan-950 shadow-cyan-400/50",
+        titleBadge: "bg-cyan-400 text-cyan-950",
       },
     };
 
@@ -135,8 +135,8 @@ export default function Home() {
       <div className="relative w-full h-full flex">
         {/* Label "Baru" diletakkan di luar struktur button agar bisa menonjol keluar sudut */}
         {isNew && (
-          <div className="absolute -top-2.5 -right-2.5 z-20 animate-bounce">
-            <span className="bg-rose-500 text-white text-[10px] font-black tracking-widest uppercase px-2 py-1 rounded-full shadow-lg shadow-rose-500/40 border-2 border-white flex items-center justify-center">
+          <div className="absolute -top-2.5 -right-2.5 z-20">
+            <span className="bg-rose-500 text-white text-[10px] font-black tracking-widest uppercase px-2 py-1 rounded-full shadow-lg border-2 border-white flex items-center justify-center">
               Baru
             </span>
           </div>
@@ -149,10 +149,10 @@ export default function Home() {
             bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600
             border-x border-b border-blue-300/40
             border-t-[4px] ${style.border}
-            rounded-2xl p-3.5 sm:p-5 shadow-lg shadow-blue-500/30 
+            rounded-2xl p-3.5 sm:p-5 shadow-lg 
             transition-all duration-300 active:scale-[0.98]
             flex flex-col justify-between w-full
-            hover:-translate-y-1.5 hover:shadow-xl hover:shadow-blue-500/40 ${style.hoverBorder}
+            hover:shadow-md hover: ${style.hoverBorder}
             overflow-hidden
           `}
         >
@@ -160,7 +160,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"></div>
 
           {/* BACKGROUND ICON BESAR TRANSPARAN DI KIRI */}
-          <div className="absolute -right-6 top-1/2 -translate-y-1/2 text-[110px] sm:text-[140px] leading-none opacity-[0.5] z-0 pointer-events-none select-none transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-12">
+          <div className="absolute -right-6 top-1/2 -translate-y-1/2 text-[110px] sm:text-[140px] leading-none opacity-[0.5] z-0 pointer-events-none select-none transition-transform duration-500 group-hover:-rotate-12">
             {icon}
           </div>
 
@@ -168,13 +168,13 @@ export default function Home() {
           <div className="relative z-10 w-full">
             {/* Icon & Action Badge */}
             <div className="flex items-center justify-between mb-4">
-              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-white/20 text-white shadow-inner backdrop-blur-md border border-white/30">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-white/20 text-white shadow-inner border border-white/30">
                 {icon}
               </div>
 
               {/* Badge menyesuaikan warna tema saat disentuh */}
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/30 bg-white/10 text-white flex items-center gap-1 backdrop-blur-sm transition-all duration-300 shadow-sm ${style.badgeHover}`}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/30 bg-white/10 text-white flex items-center gap-1 transition-all duration-300 shadow-sm ${style.badgeHover}`}
               >
                 Akses
                 <span className="group-hover:translate-x-1 transition-transform duration-300">
@@ -223,22 +223,9 @@ export default function Home() {
         <div className="h-full w-full bg-[linear-gradient(to_right,#f59e0b_1px,transparent_1px),linear-gradient(to_bottom,#f59e0b_1px,transparent_1px)] bg-[size:44px_44px] opacity-[0.05]" />
       </div>
 
-      {/* Soft Ambient Light Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div
-          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[950px] h-[450px]
-          bg-gradient-to-b from-orange-300/30 via-amber-200/20 to-transparent
-          blur-[100px] rounded-full"
-        />
-        <div
-          className="absolute -bottom-24 -left-20 w-[420px] h-[350px]
-          bg-yellow-300/25 blur-[90px] rounded-full"
-        />
-        <div
-          className="absolute top-1/4 -right-24 w-[380px] h-[380px]
-          bg-amber-400/15 blur-[90px] rounded-full"
-        />
-      </div>
+      {/* Soft Ambient Light Background dihapus - blur radius 90-100px pada
+          elemen fixed full-viewport adalah biang utama lag di HP kelas bawah.
+          Warna hangat sudah cukup didapat dari gradient dasar di <main>. */}
 
       <div className="relative z-10 flex flex-col min-h-screen">
         <Navbar />
@@ -250,9 +237,9 @@ export default function Home() {
               {/* Left Column: Headline */}
               <div className="md:col-span-5 text-center md:text-left z-20 order-2 md:order-1 flex flex-col items-center md:items-start">
                 {/* Badge/Label Atas */}
-                <div className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-md border border-amber-200/80 shadow-sm rounded-full px-3.5 py-1.5 mb-4">
+                <div className="inline-flex items-center gap-2 bg-white/70 border border-amber-200/80 shadow-sm rounded-full px-3.5 py-1.5 mb-4">
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                   <span className="text-amber-900 text-[11px] font-bold tracking-wider uppercase">
@@ -273,11 +260,11 @@ export default function Home() {
                 </p>
 
                 {/* Status Quick Bar - Emas Menyala */}
-                <div className="mt-6 w-full grid grid-cols-2 gap-3 text-left bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-500 p-3.5 rounded-2xl border border-yellow-200 shadow-[0_0_20px_rgba(250,204,21,0.6)] relative overflow-hidden">
+                <div className="mt-6 w-full grid grid-cols-2 gap-3 text-left bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-500 p-3.5 rounded-2xl border border-yellow-200 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/40 to-transparent pointer-events-none"></div>
 
                   <div className="flex items-center gap-3 relative z-10">
-                    <div className="w-3 h-3 rounded-full bg-emerald-400 border-2 border-white shadow-[0_0_10px_rgba(52,211,153,0.9)] animate-pulse"></div>
+                    <div className="w-3 h-3 rounded-full bg-emerald-400 border-2 border-white"></div>
                     <div>
                       <p className="text-[10px] text-yellow-950/70 font-extrabold uppercase tracking-wider leading-none">
                         Status Server
@@ -289,7 +276,7 @@ export default function Home() {
                   </div>
 
                   <div className="flex items-center gap-3 border-l-2 border-yellow-500/30 pl-3 relative z-10">
-                    <div className="w-3 h-3 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)]"></div>
+                    <div className="w-3 h-3 rounded-full bg-white"></div>
                     <div>
                       <p className="text-[10px] text-yellow-950/70 font-extrabold uppercase tracking-wider leading-none">
                         Instansi
@@ -304,7 +291,7 @@ export default function Home() {
 
               {/* Right Column: Carousel */}
               <div className="md:col-span-7 order-1 md:order-2 w-full">
-                <div className="p-2 bg-white/60 backdrop-blur-lg rounded-[1.5rem] shadow-xl shadow-amber-900/5 border border-amber-100/50 relative">
+                <div className="p-2 bg-white/60 rounded-[1.5rem] shadow-md border border-amber-100/50 relative">
                   <div className="overflow-hidden rounded-xl aspect-video md:aspect-[16/9] shadow-inner">
                     <Carousel />
                   </div>
@@ -321,7 +308,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-4 border-b border-amber-200/50 pb-2">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-stone-900 flex items-center gap-2">
-                  <span className="w-2 h-5 bg-blue-500 rounded-full inline-block shadow-sm shadow-blue-500/50"></span>
+                  <span className="w-2 h-5 bg-blue-500 rounded-full inline-block shadow-sm"></span>
                   Layanan Akademik & Siswa
                 </h2>
               </div>
@@ -336,7 +323,7 @@ export default function Home() {
                   }
                   window.location.reload();
                 }}
-                className="text-[11px] text-white font-bold uppercase tracking-wide flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-3 py-1 rounded-full shadow-sm shadow-emerald-500/30 border border-emerald-400 transition-all cursor-pointer"
+                className="text-[11px] text-white font-bold uppercase tracking-wide flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-3 py-1 rounded-full shadow-sm border border-emerald-400 transition-all cursor-pointer"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -429,7 +416,7 @@ export default function Home() {
         </section>
 
         {/* FOOTER */}
-        <footer className="mt-auto py-6 text-center text-stone-500 text-xs font-medium w-full border-t border-amber-200/50 bg-white/30 backdrop-blur-md">
+        <footer className="mt-auto py-6 text-center text-stone-500 text-xs font-medium w-full border-t border-amber-200/50 bg-white/30">
           <div className="max-w-7xl mx-auto px-4">
             <p className="text-stone-800 font-bold tracking-wide">
               © 2026 SMKN 1 TELUK KUANTAN
@@ -444,8 +431,8 @@ export default function Home() {
         {/* MODAL 1: POPUP PERINGATAN AKSES PC (Untuk Asesmen Komputer)   */}
         {/* ------------------------------------------------------------- */}
         {showPcWarningModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 relative overflow-hidden flex flex-col items-center text-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-md border border-rose-200 relative overflow-hidden flex flex-col items-center text-center">
               {/* Ikon Peringatan Besar */}
               <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center text-3xl mb-4 shadow-inner border border-rose-200">
                 ⚠️
@@ -478,8 +465,8 @@ export default function Home() {
         {/* MODAL 2: POPUP UPDATE APLIKASI ANDROID                        */}
         {/* ------------------------------------------------------------- */}
         {showApkModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-200 relative overflow-hidden">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/75">
+            <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-md border border-amber-200 relative overflow-hidden">
               {/* Header Modal */}
               <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                 <div className="flex items-center gap-2.5">
@@ -573,7 +560,7 @@ export default function Home() {
                   href="/asesmen.apk" // Mengarah langsung ke file di folder public
                   download="Asesmen-SMKN1.apk" // Memaksa browser langsung mendownload
                   onClick={() => setShowApkModal(false)}
-                  className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md shadow-blue-500/30 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                  className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                 >
                   <span>Download & Instal</span>
                   <svg
@@ -597,5 +584,74 @@ export default function Home() {
         )}
       </div>
     </main>
+  );
+}
+
+// --- JARING PENGAMAN TERAKHIR ---
+// Kalau terjadi error runtime tak terduga saat render Home (misalnya dari aset
+// Service Worker/PWA yang korup), pengguna tidak terjebak layar gagal permanen.
+// Tombol reset membersihkan cache Service Worker (jika ada) + reload paksa.
+class HomeErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("Home page crash:", error, info);
+  }
+
+  handleReset = async () => {
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((reg) => reg.unregister()));
+      }
+    } catch (e) {
+      console.warn("Gagal membersihkan cache/SW:", e);
+    }
+    window.location.reload(true);
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="min-h-screen flex items-center justify-center bg-orange-50 p-6">
+          <div className="text-center max-w-sm">
+            <p className="text-4xl mb-3">⚠️</p>
+            <h2 className="text-lg font-black text-stone-800 mb-2">
+              Halaman Gagal Dimuat
+            </h2>
+            <p className="text-sm text-stone-500 mb-5">
+              Terjadi kendala saat menampilkan halaman ini. Tekan tombol di
+              bawah untuk membersihkan data aplikasi tersimpan dan memuat ulang.
+            </p>
+            <button
+              onClick={this.handleReset}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors"
+            >
+              🔄 Bersihkan & Muat Ulang
+            </button>
+          </div>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function Home() {
+  return (
+    <HomeErrorBoundary>
+      <HomeContent />
+    </HomeErrorBoundary>
   );
 }
