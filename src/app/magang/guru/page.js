@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSession, isLoggedIn, logout } from "../lib/auth";
@@ -17,6 +17,29 @@ import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliP
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
 import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
+
+// --- OPTIMASI FOTO: paksa Google mengirim versi kecil, bukan resolusi asli ---
+// Foto asli dari kamera HP bisa 3-8MB / 4000x3000px. Ditampilkan di thumbnail kecil
+// tetap saja didekode browser di resolusi aslinya -> bisa habiskan ratusan MB RAM
+// dan bikin tab crash/blank di HP dengan memori terbatas.
+function optimizeFotoUrl(url, size = 300) {
+  if (!url || typeof url !== "string") return url;
+
+  // Format: https://lh3.googleusercontent.com/d/FILE_ID
+  if (url.includes("googleusercontent.com")) {
+    // Buang parameter ukuran lama kalau ada, lalu pasang yang baru
+    const base = url.split("=")[0];
+    return `${base}=w${size}-h${size}-c`;
+  }
+
+  // Format: https://drive.google.com/uc?id=FILE_ID atau /file/d/FILE_ID/view
+  const driveIdMatch = url.match(/[-\w]{25,}/);
+  if (url.includes("drive.google.com") && driveIdMatch) {
+    return `https://lh3.googleusercontent.com/d/${driveIdMatch[0]}=w${size}-h${size}-c`;
+  }
+
+  return url;
+}
 
 function formatTanggal(waktu) {
   if (!waktu) return "-";
@@ -36,9 +59,11 @@ function formatTanggal(waktu) {
   );
 }
 
-export default function DashboardGuru() {
+function DashboardGuruContent() {
   const router = useRouter();
-  const CACHE_KEY = "dashboardGuruCache";
+  // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
+  // otomatis diabaikan begitu fix ini live, tanpa perlu user hapus data browser manual.
+  const CACHE_KEY = "dashboardGuruCache_v2";
   // --- STATE UNTUK TAB MENU UTAMA ---
   const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
 
@@ -170,12 +195,36 @@ export default function DashboardGuru() {
         try {
           const cachedData = JSON.parse(cachedDataStr);
 
-          setDashboard(cachedData.dashboard);
-          setTempatMagang(cachedData.tempatMagang);
-          setAktivitas(cachedData.aktivitas);
-          setLoading(false);
+          // PENTING: validasi ketat struktur cache sebelum dipakai.
+          // Ini akar masalah "sekali gagal, seterusnya selalu gagal": kalau cache
+          // pernah tersimpan dengan field yang undefined/rusak (misal karena request
+          // sempat gagal saat pertama kali disimpan), versi lama kode langsung
+          // percaya bentuk cache apa adanya. Akibatnya .length/.map dipanggil pada
+          // undefined saat render -> seluruh halaman crash, dan karena crash terjadi
+          // sebelum data baru sempat menimpa cache yang rusak, error ini berulang
+          // di SETIAP login berikutnya sampai localStorage dibersihkan manual.
+          const isValidCache =
+            cachedData &&
+            typeof cachedData === "object" &&
+            cachedData.dashboard &&
+            typeof cachedData.dashboard === "object" &&
+            Array.isArray(cachedData.tempatMagang) &&
+            Array.isArray(cachedData.aktivitas);
+
+          if (isValidCache) {
+            setDashboard(cachedData.dashboard);
+            setTempatMagang(cachedData.tempatMagang);
+            setAktivitas(cachedData.aktivitas);
+            setLoading(false);
+          } else {
+            console.warn(
+              "Cache dashboard tidak valid, diabaikan & dihapus. Menunggu data baru dari server.",
+            );
+            localStorage.removeItem(CACHE_KEY);
+          }
         } catch (error) {
-          console.error("Gagal membaca cache dashboard:", error);
+          console.error("Gagal membaca cache dashboard, cache dihapus:", error);
+          localStorage.removeItem(CACHE_KEY);
         }
       }
 
@@ -197,18 +246,22 @@ export default function DashboardGuru() {
             ? result.value.data
             : null;
 
-        // Tempat Magang
-        const tempatData =
+        // Tempat Magang (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
+        const tempatDataRaw =
           tempat.status === "fulfilled" && tempat.value?.success
             ? tempat.value.data
             : [];
+        const tempatData = Array.isArray(tempatDataRaw) ? tempatDataRaw : [];
 
-        // Aktivitas
-        const aktivitasData =
+        // Aktivitas (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
+        const aktivitasDataRaw =
           aktivitasResult.status === "fulfilled" &&
           aktivitasResult.value?.success
             ? aktivitasResult.value.data
             : [];
+        const aktivitasData = Array.isArray(aktivitasDataRaw)
+          ? aktivitasDataRaw
+          : [];
 
         // Jika dashboard berhasil
         if (dashboardData) {
@@ -222,7 +275,13 @@ export default function DashboardGuru() {
           setTempatMagang(serverData.tempatMagang);
           setAktivitas(serverData.aktivitas);
 
-          localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+          } catch (cacheErr) {
+            // Beberapa browser mobile punya kuota localStorage kecil.
+            // Gagal cache tidak boleh menghentikan render dashboard.
+            console.warn("Cache dashboard dilewati (kuota penuh?):", cacheErr);
+          }
         } else if (!cachedDataStr) {
           alert("Data dashboard tidak ditemukan.");
         }
@@ -361,7 +420,7 @@ export default function DashboardGuru() {
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
-            <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
+            <div className="bg-white/10 p-1 rounded-xl border border-white/20">
               <Image
                 src="/logo.png"
                 alt="Logo"
@@ -382,7 +441,7 @@ export default function DashboardGuru() {
 
           <button
             onClick={handleLogout}
-            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg shadow-blue-900/30 hover:scale-105 hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
+            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
           >
             ❌ LOGOUT
           </button>
@@ -391,8 +450,7 @@ export default function DashboardGuru() {
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 space-y-8">
         {/* HERO */}
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-xl border border-blue-800">
-          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-md border border-blue-800">
           <div className="relative">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-4 border border-amber-400/30">
               ✨ Workspace Guru Pembimbing
@@ -411,9 +469,8 @@ export default function DashboardGuru() {
         </div>
 
         {/* MENU TAMPILAN UTAMA - DIBUNGKUS BACKGROUND GRADIENT HEADER & TAB EMAS */}
-        <div className="relative mt-2 space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2.5 shadow-xl sm:p-5">
+        <div className="relative mt-2 space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2.5 shadow-md sm:p-5">
           {/* Ornamen Glow Emas */}
-          <div className="pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl"></div>
 
           {/* TAMBAHKAN KODE GARIS EMAS DI SINI */}
           <div className="flex items-center gap-3 my-1 w-full px-1">
@@ -425,9 +482,8 @@ export default function DashboardGuru() {
           </div>
 
           {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS */}
-          <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-1 shadow-inner backdrop-blur-md">
+          <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-1 shadow-inner">
             <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-12 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent sm:w-16"></div>
-            <div className="pointer-events-none absolute -right-3 -top-3 z-0 h-10 w-10 rounded-full bg-amber-300/40 blur-md"></div>
 
             {/* Tab: Pembimbing PKL */}
             <button
@@ -478,40 +534,40 @@ export default function DashboardGuru() {
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
           {activeMenuTab === "pembimbing" && (
-            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
                 title="Kelola Murid PKL"
                 desc="Lihat & kelola siswa bimbingan"
                 icon="🗂️"
-                bgGrad="from-blue-600 to-indigo-700 shadow-blue-600/20"
+                bgGrad="from-blue-600 to-indigo-700"
                 onClick={() => router.push("/magang/siswa")}
               />
               <SolidCompactCard
                 title="Tambah Murid PKL"
                 desc="Registrasi akun siswa baru"
                 icon="➕"
-                bgGrad="from-sky-500 to-cyan-600 shadow-sky-500/20"
+                bgGrad="from-sky-500 to-cyan-600"
                 onClick={() => router.push("/magang/tambah")}
               />
               <SolidCompactCard
                 title="Rekap PKL"
                 desc="Rekapitulasi kehadiran & log"
                 icon="📊"
-                bgGrad="from-violet-600 to-purple-800 shadow-violet-600/20"
+                bgGrad="from-violet-600 to-purple-800"
                 onClick={() => router.push("/magang/rekap")}
               />
               <SolidCompactCard
                 title="Isi Jurnal PKL"
                 desc="Catat jurnal pembimbingan individual"
                 icon="📝"
-                bgGrad="from-rose-500 to-pink-600 shadow-rose-500/20"
+                bgGrad="from-rose-500 to-pink-600"
                 onClick={() => setShowJurnalPklModal(true)}
               />
               <SolidCompactCard
                 title="Cetak Laporan PKL"
                 desc="Monitoring atau Jurnal PKL"
                 icon="🖨️"
-                bgGrad="from-fuchsia-500 to-pink-600 shadow-pink-500/20"
+                bgGrad="from-fuchsia-500 to-pink-600"
                 onClick={() => setShowPilihCetakPklModal(true)}
               />
             </div>
@@ -519,40 +575,40 @@ export default function DashboardGuru() {
 
           {/* 3. KONTEN TAB GURU WALI */}
           {activeMenuTab === "wali" && (
-            <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
                 title="Kelola Murid Wali"
                 desc="Lihat & Kelola murid perwalian"
                 icon="👥"
-                bgGrad="from-orange-500 to-red-600 shadow-orange-500/20"
+                bgGrad="from-orange-500 to-red-600"
                 onClick={() => router.push("/magang/guru/guru-wali")}
               />
               <SolidCompactCard
                 title="Tambah Siswa Wali"
                 desc="Registrasi siswa wali baru"
                 icon="➕"
-                bgGrad="from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                bgGrad="from-emerald-500 to-teal-600"
                 onClick={() => router.push("/magang/guru/guru-wali/tambah")}
               />
               <SolidCompactCard
                 title="Rekap Guru Wali"
                 desc="Pantau aktivitas harian"
                 icon="📈"
-                bgGrad="from-amber-500 to-orange-500 shadow-amber-500/20"
+                bgGrad="from-amber-500 to-orange-500"
                 onClick={() => router.push("/magang/guru/guru-wali/rekap")}
               />
               <SolidCompactCard
                 title="Isi Jurnal Guru Wali"
                 desc="Catat agenda jurnal harian"
                 icon="📝"
-                bgGrad="from-rose-500 to-pink-600 shadow-rose-500/20"
+                bgGrad="from-rose-500 to-pink-600"
                 onClick={() => router.push("/magang/guru/guru-wali/jurnal")}
               />
               <SolidCompactCard
                 title="Cetak Laporan Guru Wali"
                 desc="Pilih Cover / Lampiran A&B / Lampiran C&D"
                 icon="📑"
-                bgGrad="from-slate-500 to-slate-700 shadow-slate-500/20"
+                bgGrad="from-slate-500 to-slate-700"
                 onClick={() => setShowLaporanWaliModal(true)}
               />
             </div>
@@ -634,14 +690,14 @@ export default function DashboardGuru() {
 
                           router.push("/magang/rekap");
                         }}
-                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-orange-500/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
                       >
                         👁️ LIHAT AKTIVITAS
                       </button>
 
                       <button
                         onClick={() => mulaiMonitoring(item.tempat)}
-                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md shadow-blue-600/30 active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
                       >
                         📷 MONITORING AREA
                       </button>
@@ -704,7 +760,7 @@ export default function DashboardGuru() {
         </div>
 
         {/* TABEL AKTIVITAS TERBARU */}
-        <div className="rounded-[2rem] bg-white border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+        <div className="rounded-[2rem] bg-white border border-slate-200 shadow-md overflow-hidden">
           <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
@@ -742,9 +798,11 @@ export default function DashboardGuru() {
                   >
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
                       <img
-                        src={item.foto}
+                        src={optimizeFotoUrl(item.foto, 160)}
                         alt="Aktivitas"
                         className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           e.currentTarget.style.border = "2px solid red";
                         }}
@@ -782,8 +840,8 @@ export default function DashboardGuru() {
 
       {/* MODAL POP-UP NAMA SISWA */}
       {modalConfig.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
+          <div className="bg-white rounded-2xl shadow-md w-full max-w-md overflow-hidden transform transition-all">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-white">
                 {modalConfig.title}
@@ -880,8 +938,8 @@ export default function DashboardGuru() {
           MODAL GALERI AKTIVITAS (TAMPILAN SLIDER)
           ========================================= */}
       {showGallery && aktivitas.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80">
+          <div className="bg-white rounded-2xl shadow-md w-full max-w-2xl overflow-hidden flex flex-col relative">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-4 flex items-center justify-between text-white">
               <h3 className="font-black text-lg">
                 Galeri Aktivitas ({galleryIndex + 1}/{aktivitas.length})
@@ -900,12 +958,14 @@ export default function DashboardGuru() {
                 onClick={() => setIsFullScreen(true)}
               >
                 <img
-                  src={aktivitas[galleryIndex].foto}
+                  src={optimizeFotoUrl(aktivitas[galleryIndex].foto, 800)}
                   alt="Aktivitas"
                   className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                  loading="lazy"
+                  decoding="async"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                  <span className="opacity-0 group-hover:opacity-100 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-md transition-opacity font-bold">
+                  <span className="opacity-0 group-hover:opacity-100 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full transition-opacity font-bold">
                     🔍 Klik Gambar untuk Fullscreen
                   </span>
                 </div>
@@ -934,13 +994,13 @@ export default function DashboardGuru() {
 
               <button
                 onClick={handlePrevImage}
-                className="absolute left-2 sm:left-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-200"
+                className="absolute left-2 sm:left-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all active:scale-95 border border-slate-200"
               >
                 ◀
               </button>
               <button
                 onClick={handleNextImage}
-                className="absolute right-2 sm:right-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-200"
+                className="absolute right-2 sm:right-4 top-[40%] -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 shadow-lg p-3 sm:p-4 rounded-full flex items-center justify-center transition-all active:scale-95 border border-slate-200"
               >
                 ▶
               </button>
@@ -953,29 +1013,30 @@ export default function DashboardGuru() {
           MODAL GAMBAR FULLSCREEN
           ========================================= */}
       {isFullScreen && aktivitas.length > 0 && (
-        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-2 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-2 sm:p-6">
           <button
             onClick={() => setIsFullScreen(false)}
-            className="absolute top-4 right-4 sm:top-6 sm:right-6 z-[70] bg-white/10 hover:bg-white/20 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl transition-colors backdrop-blur-md"
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 z-[70] bg-white/10 hover:bg-white/20 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl transition-colors"
           >
             ✕
           </button>
 
           <img
-            src={aktivitas[galleryIndex].foto}
+            src={optimizeFotoUrl(aktivitas[galleryIndex].foto, 1280)}
             alt="Fullscreen Aktivitas"
             className="max-w-full max-h-full object-contain rounded-lg select-none"
+            decoding="async"
           />
 
           <button
             onClick={handlePrevImage}
-            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all"
           >
             ◀
           </button>
           <button
             onClick={handleNextImage}
-            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white shadow-md p-4 rounded-full flex items-center justify-center transition-all"
           >
             ▶
           </button>
@@ -984,8 +1045,8 @@ export default function DashboardGuru() {
 
       {/* MODAL PILIHAN: CETAK LAPORAN MONITORING atau CETAK JURNAL PKL */}
       {showPilihCetakPklModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
+          <div className="bg-white rounded-2xl shadow-md w-full max-w-md overflow-hidden transform transition-all">
             <div className="bg-gradient-to-r from-fuchsia-500 to-pink-600 p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-white">
                 Cetak Laporan PKL
@@ -1044,8 +1105,8 @@ export default function DashboardGuru() {
 
       {/* MODAL ISIAN CETAK LAPORAN */}
       {showCetakModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
+          <div className="bg-white rounded-2xl shadow-md w-full max-w-lg overflow-hidden transform transition-all">
             <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-white">
                 Kelengkapan Cetak Laporan
@@ -1430,20 +1491,80 @@ export default function DashboardGuru() {
   );
 }
 
-function Card({ title, value, accentColor, textColor, icon, onClick }) {
-  const bgMap = {
-    "border-indigo-500":
-      "from-indigo-600 via-indigo-700 to-blue-800 shadow-indigo-500/30",
-    "border-emerald-500":
-      "from-emerald-500 via-green-600 to-teal-700 shadow-emerald-500/30",
-    "border-blue-500":
-      "from-blue-600 via-sky-700 to-indigo-800 shadow-blue-500/30",
-    "border-amber-500":
-      "from-amber-500 via-orange-500 to-amber-700 shadow-orange-500/30",
+// --- JARING PENGAMAN TERAKHIR ---
+// Kalau suatu saat ada error runtime tak terduga (bukan cuma dari cache),
+// pengguna tidak lagi terjebak layar putih/kosong permanen. Tombol di bawah
+// juga membersihkan cache dashboard, jadi kalau penyebabnya cache korup lagi
+// di masa depan, pengguna bisa pulih sendiri tanpa harus tahu cara hapus
+// data browser secara manual.
+class DashboardGuruErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("Dashboard Guru crash:", error, info);
+  }
+
+  handleReset = () => {
+    try {
+      localStorage.removeItem("dashboardGuruCache_v2");
+      localStorage.removeItem("dashboardGuruCache"); // versi lama, jaga-jaga
+    } catch (e) {
+      // abaikan
+    }
+    window.location.reload();
   };
 
-  const bg =
-    bgMap[accentColor] || "from-slate-600 to-slate-700 shadow-slate-500/30";
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+          <div className="text-center max-w-sm">
+            <p className="text-4xl mb-3">⚠️</p>
+            <h2 className="text-lg font-black text-slate-800 mb-2">
+              Gagal Memuat Dashboard
+            </h2>
+            <p className="text-sm text-slate-500 mb-5">
+              Terjadi kendala saat menampilkan data. Tekan tombol di bawah untuk
+              membersihkan data sementara dan memuat ulang halaman.
+            </p>
+            <button
+              onClick={this.handleReset}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors"
+            >
+              🔄 Muat Ulang Dashboard
+            </button>
+          </div>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function DashboardGuru() {
+  return (
+    <DashboardGuruErrorBoundary>
+      <DashboardGuruContent />
+    </DashboardGuruErrorBoundary>
+  );
+}
+
+function Card({ title, value, accentColor, textColor, icon, onClick }) {
+  const bgMap = {
+    "border-indigo-500": "from-indigo-600 via-indigo-700 to-blue-800",
+    "border-emerald-500": "from-emerald-500 via-green-600 to-teal-700",
+    "border-blue-500": "from-blue-600 via-sky-700 to-indigo-800",
+    "border-amber-500": "from-amber-500 via-orange-500 to-amber-700",
+  };
+
+  const bg = bgMap[accentColor] || "from-slate-600 to-slate-700";
 
   return (
     <button
@@ -1455,22 +1576,18 @@ function Card({ title, value, accentColor, textColor, icon, onClick }) {
         text-white
         p-4
         w-full
-        shadow-xl
+        shadow-md
         active:scale-95
-        hover:-translate-y-1
         transition-all duration-300
       `}
     >
-      {/* Glow */}
-      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-3xl"></div>
-
       {/* Icon + Arrow */}
       <div className="relative flex items-start justify-between">
-        <div className="h-11 w-11 rounded-2xl bg-white/20 backdrop-blur border border-white/20 flex items-center justify-center text-xl shadow">
+        <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-xl shadow">
           {icon}
         </div>
 
-        <div className="rounded-full bg-white/20 backdrop-blur px-2.5 py-1 text-[10px] font-bold border border-white/20">
+        <div className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold border border-white/20">
           Detail
           <span className="group-hover:translate-x-1 transition-transform">
             →
@@ -1557,7 +1674,7 @@ function SolidCompactCard({
           : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
       }`}
     >
-      <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+      <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:rotate-6">
         <span className="text-5xl sm:text-6xl rotate-12 select-none">
           {icon}
         </span>
