@@ -166,21 +166,44 @@
     transform: scale(0.98);
   }
 
-  .btn-admin {
+  /* Tombol Walas (Pengganti Gear) */
+  .btn-walas {
     position: absolute;
     top: 16px;
     right: 16px;
-    font-size: 20px;
-    background: transparent;
-    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 8px;
     cursor: pointer;
-    opacity: 0.4;
     transition: all 0.2s;
-    padding: 4px;
   }
-  .btn-admin:hover {
-    opacity: 1;
-    transform: rotate(45deg);
+  .btn-walas:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* Tombol Superadmin */
+  .btn-superadmin {
+    background: var(--dark);
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s;
+  }
+  .btn-superadmin:hover {
+    background: #1e293b;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
 
   /* === Form Element === */
@@ -207,6 +230,65 @@
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  /* Warna Pilihan Presensi */
+  .select-presensi {
+    font-weight: 600;
+    transition:
+      background-color 0.3s,
+      color 0.3s;
+  }
+  .select-presensi.hadir {
+    background-color: #dcfce7 !important;
+    color: #15803d !important;
+    border-color: #bbf7d0;
+  }
+  .select-presensi.sakit {
+    background-color: #fef3c7 !important;
+    color: #b45309 !important;
+    border-color: #fde68a;
+  }
+  .select-presensi.izin {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    border-color: #bae6fd;
+  }
+  .select-presensi.alfa {
+    background-color: #ffedd5 !important;
+    color: #c2410c !important;
+    border-color: #fed7aa;
+  }
+  .select-presensi.cabut {
+    background-color: #fee2e2 !important;
+    color: #b91c1c !important;
+    border-color: #fecaca;
+  }
+
+  .opt-hadir {
+    background-color: #dcfce7;
+    color: #15803d;
+    font-weight: bold;
+  }
+  .opt-sakit {
+    background-color: #fef3c7;
+    color: #b45309;
+    font-weight: bold;
+  }
+  .opt-izin {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    font-weight: bold;
+  }
+  .opt-alfa {
+    background-color: #ffedd5;
+    color: #c2410c;
+    font-weight: bold;
+  }
+  .opt-cabut {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    font-weight: bold;
   }
 
   /* === Popup Overlay === */
@@ -580,9 +662,7 @@
 </style>
 
 <div class="presensi-root">
-  <h2>
-    📋 Presensi TJKT <span class="badge-title">SMKN 1 TELUK KUANTAN</span>
-  </h2>
+  <h2>📋 <span class="badge-title">SMKN 1 TELUK KUANTAN</span></h2>
   <div id="kelasGrid" class="presensi-grid"></div>
 </div>
 
@@ -634,38 +714,52 @@
     sub.innerHTML = `Kelas: <b>${currentSheet}</b> — Bulan: <b>${namaBulan[+m]} ${y}</b>`;
   }
 
+  // Fungsi helper untuk mewarnai dropdown presensi otomatis
+  function updateSelectColor(el) {
+    el.classList.remove("hadir", "sakit", "izin", "alfa", "cabut");
+    if (el.value) {
+      el.classList.add(el.value.toLowerCase());
+    }
+  }
+
   /* === KONFIGURASI === */
   const SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyPCKZSnnr_O6yRKBgok2XEHC9MRERDFa8t5a-SO5RPDy52xnQknAxgCFlUzouSBVfP/exec";
   const KELAS = [
-    { id: "XTJKT1", label: "X TJKT 1", cls: "tingkat-x", adminPw: "tjkt31" },
-    { id: "XTJKT2", label: "X TJKT 2", cls: "tingkat-x", adminPw: "tjkt32" },
-    { id: "XITJKT1", label: "XI TJKT 1", cls: "tingkat-xi", adminPw: "tjkt33" },
-    { id: "XITJKT2", label: "XI TJKT 2", cls: "tingkat-xi", adminPw: "tjkt34" },
-    {
-      id: "XIITJKT1",
-      label: "XII TJKT 1",
-      cls: "tingkat-xii",
-      adminPw: "tjkt35",
-    },
-    {
-      id: "XIITJKT2",
-      label: "XII TJKT 2",
-      cls: "tingkat-xii",
-      adminPw: "tjkt36",
-    },
+    // === KELAS X ===
+    { id: "XTJKT1", label: "X TJKT 1", tingkat: "X" },
+    { id: "XTJKT2", label: "X TJKT 2", tingkat: "X" },
+    { id: "XTO3", label: "X TO 3", tingkat: "X" },
+    // === KELAS XI ===
+    { id: "XITJKT1", label: "XI TJKT 1", tingkat: "XI" },
+    { id: "XITJKT2", label: "XI TJKT 2", tingkat: "XI" },
+    // === KELAS XII ===
+    { id: "XIITJKT1", label: "TJKT 1", tingkat: "XII" },
+    { id: "XIITJKT2", label: "TJKT 2", tingkat: "XII" },
   ];
 
   /* === RENDER 1 CARD SAJA === */
   const grid = document.getElementById("kelasGrid");
 
+  function buildOptgroupKelas() {
+    const tingkatUrutan = ["X", "XI", "XII"];
+    return tingkatUrutan
+      .map((tingkat) => {
+        const opsi = KELAS.filter((k) => k.tingkat === tingkat)
+          .map((k) => `<option value="${k.id}">${k.label}</option>`)
+          .join("");
+        return `<optgroup label="KELAS ${tingkat}">${opsi}</optgroup>`;
+      })
+      .join("");
+  }
+
   const el = document.createElement("div");
   el.className = "kelas-card tingkat-x";
   el.innerHTML = `
-  <h3>Presensi TJKT</h3>
+  <h3>Presensi Sekolah</h3>
 
   <select id="kelasSelect" class="input">
-    ${KELAS.map((k) => `<option value="${k.id}">${k.label}</option>`).join("")}
+    ${buildOptgroupKelas()}
   </select>
 
   <button class="btn btn-isi" onclick="openPresensi(document.getElementById('kelasSelect').value)">
@@ -676,9 +770,19 @@
     Rekap
   </button>
 
-  <button class="btn-admin" onclick="openAdminBySelect()">⚙️</button>
+  <button class="btn-walas" onclick="openAdminBySelect()">Login Walas</button>
 `;
   grid.appendChild(el);
+
+  // Ubah penempatan Tombol Superadmin ke kanan
+  const superBtnWrap = document.createElement("div");
+  superBtnWrap.style.display = "flex";
+  superBtnWrap.style.justifyContent = "flex-end";
+  superBtnWrap.style.maxWidth = "1100px";
+  superBtnWrap.style.margin = "24px auto 0 auto";
+  superBtnWrap.style.padding = "0 12px";
+  superBtnWrap.innerHTML = `<button class="btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="openSuperAdminPanel()">👨‍💻 ADMIN</button>`;
+  grid.parentElement.appendChild(superBtnWrap);
 
   /* === ADMIN BERDASARKAN DROPDOWN === */
   function openAdminBySelect() {
@@ -716,11 +820,17 @@
       <div><label style="font-weight:600;">Password Kelas</label>
       <input type='password' id='presPass' class='input' placeholder='Masukkan password kelas'></div>`;
       let html = `<h3 style="margin-top:0;">Isi Presensi — ${sheet}</h3>${passForm}<form id='formPresensi'>`;
+
+      // Update form select html dengan class warna & event onchange
       headers.forEach((h) => {
         html += `<div><b style="font-size:14px;">${h}</b><br>
-      <select name='${h}' class='input'>
-        <option>Hadir</option><option>Sakit</option><option>Izin</option>
-        <option>Alfa</option><option>Cabut</option></select></div>`;
+      <select name='${h}' class='input select-presensi hadir' onchange="updateSelectColor(this)">
+        <option value="Hadir" class="opt-hadir">Hadir</option>
+        <option value="Sakit" class="opt-sakit">Sakit</option>
+        <option value="Izin" class="opt-izin">Izin</option>
+        <option value="Alfa" class="opt-alfa">Alfa</option>
+        <option value="Cabut" class="opt-cabut">Cabut</option>
+      </select></div>`;
       });
       html += `</form><div style='margin-top:20px; display:flex;'>
     <button class='action-save' onclick="submitPresensi('${sheet}')">Kirim</button>
@@ -770,11 +880,300 @@
   }
 
   /* === ADMIN === */
-  function openAdminPrompt(sheet) {
+  async function openAdminPrompt(sheet) {
     const k = KELAS.find((x) => x.id === sheet);
     const inpw = prompt(`Masukkan password admin untuk ${k.label}`);
-    if (inpw !== k.adminPw) return alert("Password admin salah!");
-    openAdminModal(sheet);
+    if (!inpw) return;
+
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "verifyAdminKelas",
+          kelas: sheet,
+          password: inpw,
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) return alert("❌ Password admin salah!");
+      openAdminModal(sheet);
+    } catch (err) {
+      alert("Gagal memverifikasi password admin: " + (err.message || err));
+    }
+  }
+
+  /* === PANEL SUPERADMIN: KELOLA KELAS === */
+  let superAdminSesi = null;
+
+  async function openSuperAdminPanel(pesanError) {
+    if (superAdminSesi) {
+      return renderSuperAdminPanel();
+    }
+
+    showOverlay(`
+      <h3 style="margin-top:0;">🔐 Login Superadmin</h3>
+      ${
+        pesanError
+          ? `<p style="color:var(--danger);font-weight:600;margin-top:0;">❌ ${pesanError}</p>`
+          : ""
+      }
+      <div style="margin-bottom:12px;">
+        <label style="font-weight:600;display:block;margin-bottom:4px;">Username Superadmin</label>
+        <input id="suUsername" class="input" style="margin:0;" placeholder="superadmin" autocomplete="off">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-weight:600;display:block;margin-bottom:4px;">Password Superadmin</label>
+        <input id="suPassword" type="password" class="input" style="margin:0;" placeholder="Password" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="action-save" style="margin:0;" onclick="submitSuperAdminLogin()">Masuk</button>
+        <button class="action-del" style="margin:0;" onclick="closeOverlay()">Batal</button>
+      </div>
+    `);
+
+    const pass = document.getElementById("suPassword");
+    if (pass) {
+      pass.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitSuperAdminLogin();
+      });
+    }
+  }
+
+  async function submitSuperAdminLogin() {
+    const superUsername = document.getElementById("suUsername").value.trim();
+    const superPassword = document.getElementById("suPassword").value;
+
+    if (!superUsername || !superPassword) {
+      return alert("Username dan password wajib diisi.");
+    }
+
+    superAdminSesi = { superUsername, superPassword };
+    await renderSuperAdminPanel();
+  }
+
+  async function renderSuperAdminPanel() {
+    showLoading("Memuat daftar kelas...");
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "getDaftarKelasAdmin",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        closeOverlay();
+        superAdminSesi = null;
+        return openSuperAdminPanel(
+          j.error || "Gagal memuat daftar kelas. Cek username/password.",
+        );
+      }
+
+      const daftarHtml =
+        j.daftar.length > 0
+          ? j.daftar
+              .map(
+                (k) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-weight:600;">${k.kelas}</div>
+            <div class="small" style="color:${k.sheetAda ? "var(--text-muted)" : "var(--danger)"};">${k.sheetAda ? "Sheet ada" : "⚠️ Sheet tidak ditemukan (data nyasar)"}</div>
+          </div>
+          <button class="action-del" style="padding:6px 12px;margin:0;" onclick="hapusKelasDariPanel('${k.kelas}')">🗑️ Hapus</button>
+        </div>`,
+              )
+              .join("")
+          : `<p class="small">Belum ada kelas terdaftar.</p>`;
+
+      showOverlay(`
+        <h3 style="margin-top:0;">🛠️ Panel Superadmin — Kelola Kelas</h3>
+
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <input id="namaKelasBaru" class="input" style="margin:0;" placeholder="Nama kelas baru, mis. XI TKR 2">
+          <button class="action-save" style="margin:0;white-space:nowrap;" onclick="tambahKelasDariPanel()">➕ Tambah</button>
+        </div>
+
+        <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="action-edit" style="margin:0;" onclick="jalankanSyncKelasTjkt()">🔄 Sinkron Kelas TJKT dari Data Siswa</button>
+          <button class="action-edit" style="margin:0;" onclick="jalankanBuatSemuaKelas()">🏫 Buat Semua Kelas Dasar Sekolah</button>
+        </div>
+
+        <h4 style="margin-bottom:8px;">Daftar Kelas Terdaftar (${j.daftar.length})</h4>
+        <div style="max-height:280px;overflow-y:auto;">${daftarHtml}</div>
+
+        <div style="margin-top:16px;display:flex;">
+          <button class="action-del" onclick="closeOverlay()">Tutup</button>
+        </div>
+      `);
+    } catch (err) {
+      closeOverlay();
+      alert("Gagal memuat panel superadmin: " + (err.message || err));
+    }
+  }
+
+  async function tambahKelasDariPanel() {
+    const namaKelas = document.getElementById("namaKelasBaru").value.trim();
+    if (!namaKelas) return alert("Nama kelas tidak boleh kosong.");
+
+    try {
+      showLoading(`Membuat kelas "${namaKelas}"...`);
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "tambahKelasBaru",
+          namaKelas,
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      alert(
+        `✅ Kelas "${j.kelas}" berhasil dibuat!\n\nPassword Admin   : ${j.adminPassword}\nPassword Presensi: ${j.presensiPassword}\n\n⚠️ Catat sekarang, tidak ditampilkan lagi otomatis (tapi tersimpan apa adanya di sheet _CONFIG kalau lupa).`,
+      );
+      renderSuperAdminPanel();
+    } catch (err) {
+      alert("Gagal menambah kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function hapusKelasDariPanel(namaKelas) {
+    if (
+      !confirm(
+        `Yakin hapus kelas "${namaKelas}"?\n\nIni akan menghapus SHEET beserta SELURUH DATA PRESENSI di kelas ini secara PERMANEN. Tindakan ini tidak bisa dibatalkan.`,
+      )
+    )
+      return;
+
+    try {
+      showLoading(`Menghapus kelas "${namaKelas}"...`);
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "hapusKelas",
+          namaKelas,
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+      else alert("✅ " + j.message);
+
+      renderSuperAdminPanel();
+    } catch (err) {
+      alert("Gagal menghapus kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function jalankanSyncKelasTjkt() {
+    try {
+      showLoading("Menyinkronkan kelas TJKT dari data siswa...");
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "syncKelasFromSiswa",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      if (j.dibuat && j.dibuat.length > 0) {
+        let pesan = "✅ Kelas baru dibuat dari data siswa:\n\n";
+        j.dibuat.forEach((kls) => {
+          pesan += `• ${kls.kelas}\n  Admin: ${kls.adminPassword}\n  Presensi: ${kls.presensiPassword}\n\n`;
+        });
+        pesan += "⚠️ Catat password di atas sekarang.";
+        alert(pesan);
+      } else {
+        alert("Tidak ada kelas baru dari data siswa. Semua sudah tersedia.");
+      }
+      renderSuperAdminPanel();
+    } catch (err) {
+      alert("Gagal sinkron: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function jalankanBuatSemuaKelas() {
+    if (
+      !confirm(
+        "Ini akan membuat sheet untuk SEMUA kelas dasar sekolah yang belum ada (bisa puluhan sekaligus). Lanjutkan?",
+      )
+    )
+      return;
+
+    try {
+      showLoading("Membuat kelas dasar sekolah yang belum ada...");
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "buatSemuaKelasSekolah",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      if (j.dibuat && j.dibuat.length > 0) {
+        let teks = "";
+        j.dibuat.forEach((kls) => {
+          teks += `${kls.label} (${kls.kelas})\n  Admin: ${kls.adminPassword}\n  Presensi: ${kls.presensiPassword}\n\n`;
+        });
+        showOverlay(`
+          <h3 style="margin-top:0;">✅ ${j.dibuat.length} Kelas Baru Dibuat</h3>
+          <p class="small">Catat semua password di bawah ini SEKARANG. Kalau lupa, password juga tersimpan apa adanya di sheet <b>_CONFIG</b>.</p>
+          <textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:12px;padding:10px;border-radius:8px;border:1px solid var(--border);">${teks}</textarea>
+          <div style="margin-top:16px;display:flex;">
+            <button class="action-del" onclick="renderSuperAdminPanel()">Kembali ke Panel</button>
+          </div>
+        `);
+      } else {
+        alert("Tidak ada kelas baru — semua kelas dasar sudah ada.");
+        renderSuperAdminPanel();
+      }
+    } catch (err) {
+      alert("Gagal membuat kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  /* === SINKRON NAMA SISWA UNTUK 1 KELAS (dari panel admin) === */
+  async function syncNamaSiswaSheet(sheet) {
+    try {
+      showLoading("Menyinkronkan nama siswa...");
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "syncNamaSiswa", kelas: sheet }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal sinkron: " + (j.error || "Terjadi kesalahan"));
+        return openAdminModal(sheet);
+      }
+      alert(j.message || "✅ Sinkron selesai");
+      openAdminModal(sheet);
+    } catch (err) {
+      alert("Gagal sinkron nama siswa: " + (err.message || err));
+    }
   }
 
   async function openAdminModal(sheet) {
@@ -796,11 +1195,10 @@
     <span style="width:24px;color:var(--text-muted);font-size:14px;">${i + 1}.</span><input class='input nameInput' style="margin:0;" value='${h.replace(/'/g, "&#39;")}'>
     <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button></div>`),
       );
-      html += `</div><div style='margin-top:12px;display:flex;gap:8px'>
-    <input id='newName' class='input' style="margin:0;" placeholder='Nama baru...'>
-    <button class='action-save' style="margin:0;" onclick='addName()'>Tambah</button></div>
+      html += `</div><p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
     <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
     <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
+    <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
     <button class='action-edit' onclick="openEditRaw('${sheet}')">✏️ Edit Data</button>
     <button class='action-del' onclick='closeOverlay()'>Tutup</button></div>`;
       showOverlay(html);
@@ -828,20 +1226,6 @@
     } catch (err) {
       alert("Gagal menyimpan password: " + (err.message || err));
     }
-  }
-
-  function addName() {
-    const v = document.getElementById("newName").value.trim();
-    if (!v) return;
-    const c = document.getElementById("list");
-    const i = c.querySelectorAll(".nameInput").length + 1;
-    c.insertAdjacentHTML(
-      "beforeend",
-      `<div style='display:flex;gap:8px;margin-bottom:8px;align-items:center;'>
-    <span style="width:24px;color:var(--text-muted);font-size:14px;">${i}.</span><input class='input nameInput' style="margin:0;" value='${v.replace(/'/g, "&#39;")}'>
-    <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button></div>`,
-    );
-    document.getElementById("newName").value = "";
   }
 
   async function saveHeader(sheet) {
@@ -1510,6 +1894,7 @@
     doc.save("Rekap-Kehadiran-A4-Potrait.pdf");
   }
 
+  // Update render tabel edit form data mentah untuk warna
   function renderEditTable() {
     const bulan = document.getElementById("editBulan").value;
     const tbody = document.getElementById("editTbody");
@@ -1524,13 +1909,14 @@
       let tr = "<tr>";
       row.forEach((cell, c) => {
         if (c >= 2) {
+          const clsStatus = cell ? cell.toLowerCase() : "hadir";
           tr += `<td>
-          <select class="input cellEdit" data-r="${index}" data-c="${c}">
-            <option ${cell === "Hadir" ? "selected" : ""}>Hadir</option>
-            <option ${cell === "Sakit" ? "selected" : ""}>Sakit</option>
-            <option ${cell === "Izin" ? "selected" : ""}>Izin</option>
-            <option ${cell === "Alfa" ? "selected" : ""}>Alfa</option>
-            <option ${cell === "Cabut" ? "selected" : ""}>Cabut</option>
+          <select class="input cellEdit select-presensi ${clsStatus}" data-r="${index}" data-c="${c}" onchange="updateSelectColor(this)">
+            <option value="Hadir" class="opt-hadir" ${cell === "Hadir" ? "selected" : ""}>Hadir</option>
+            <option value="Sakit" class="opt-sakit" ${cell === "Sakit" ? "selected" : ""}>Sakit</option>
+            <option value="Izin" class="opt-izin" ${cell === "Izin" ? "selected" : ""}>Izin</option>
+            <option value="Alfa" class="opt-alfa" ${cell === "Alfa" ? "selected" : ""}>Alfa</option>
+            <option value="Cabut" class="opt-cabut" ${cell === "Cabut" ? "selected" : ""}>Cabut</option>
           </select>
         </td>`;
         } else {
