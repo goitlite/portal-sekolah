@@ -166,21 +166,21 @@
     transform: scale(0.98);
   }
 
-  /* Tombol Walas (Pengganti Gear) */
+  /* Tombol Walas (Di sebelah dropdown) */
   .btn-walas {
-    position: absolute;
-    top: 16px;
-    right: 16px;
     font-size: 12px;
     font-weight: 600;
     background: #f1f5f9;
     color: var(--text-muted);
     border: 1px solid var(--border);
-    padding: 6px 12px;
+    padding: 0 12px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
+    height: 41px; /* Menyesuaikan dengan perkiraan tinggi select */
+    white-space: nowrap; /* Mencegah teks turun ke bawah */
   }
+
   .btn-walas:hover {
     background: var(--primary);
     color: #fff;
@@ -662,7 +662,17 @@
 </style>
 
 <div class="presensi-root">
-  <h2>📋 <span class="badge-title">SMKN 1 TELUK KUANTAN</span></h2>
+  <div style="display: flex; justify-content: center; margin-bottom: 12px">
+    <img
+      id="logoSekolahEl"
+      src="/logo.png"
+      alt="Logo SMKN 1 Teluk Kuantan"
+      crossorigin="anonymous"
+      style="width: 64px; height: 64px; object-fit: contain"
+      onerror="this.style.display = 'none'"
+    />
+  </div>
+  <h2><span class="badge-title">SMKN 1 TELUK KUANTAN</span></h2>
   <div id="kelasGrid" class="presensi-grid"></div>
 </div>
 
@@ -727,15 +737,46 @@
     "https://script.google.com/macros/s/AKfycbyPCKZSnnr_O6yRKBgok2XEHC9MRERDFa8t5a-SO5RPDy52xnQknAxgCFlUzouSBVfP/exec";
   const KELAS = [
     // === KELAS X ===
+    //{ id: "XDPIB", label: "X DPIB", tingkat: "X" },
+    //{ id: "XGEOMATIKA", label: "X GEOMATIKA", tingkat: "X" },
+    //{ id: "XTAV", label: "X TAV", tingkat: "X" },
+    //{ id: "XTITL1", label: "X TITL 1", tingkat: "X" },
+    //{ id: "XTITL2", label: "X TITL 2", tingkat: "X" },
     { id: "XTJKT1", label: "X TJKT 1", tingkat: "X" },
     { id: "XTJKT2", label: "X TJKT 2", tingkat: "X" },
+    //{ id: "XTO1", label: "X TO 1", tingkat: "X" },
+    //{ id: "XTO2", label: "X TO 2", tingkat: "X" },
+    //{ id: "XTO3", label: "X TO 3", tingkat: "X" },
+    //{ id: "XTO4", label: "X TO 4", tingkat: "X" },
     { id: "XTPL", label: "X TPL", tingkat: "X" },
+
     // === KELAS XI ===
+    //{ id: "XIDPIB", label: "XI DPIB", tingkat: "XI" },
+    //{ id: "XIGEOMATIKA", label: "XI GEOMATIKA", tingkat: "XI" },
+    //{ id: "XITAB", label: "XI TAB", tingkat: "XI" },
+    //{ id: "XITAV", label: "XI TAV", tingkat: "XI" },
+    //{ id: "XITBSM1", label: "XI TBSM 1", tingkat: "XI" },
+    //{ id: "XITBSM2", label: "XI TBSM 2", tingkat: "XI" },
+    //{ id: "XITITL1", label: "XI TITL 1", tingkat: "XI" },
+    //{ id: "XITITL2", label: "XI TITL 2", tingkat: "XI" },
     { id: "XITJKT1", label: "XI TJKT 1", tingkat: "XI" },
     { id: "XITJKT2", label: "XI TJKT 2", tingkat: "XI" },
-    // === KELAS XII ===
+    //{ id: "XITKR", label: "XI TKR", tingkat: "XI" },
+    //{ id: "XITPL", label: "XI TPL", tingkat: "XI" },
+
+    // === KELAS XII (raw data tidak pakai prefix tingkat, tapi id di
+    // sini tetap dikasih awalan XII biar tidak bentrok & jelas) ===
+    //{ id: "XIIDPIB", label: "DPIB", tingkat: "XII" },
+    //{ id: "XIIGEOMATIKA", label: "GEOMATIKA", tingkat: "XII" },
+    //{ id: "XIITAB", label: "TAB", tingkat: "XII" },
+    //{ id: "XIITAV", label: "TAV", tingkat: "XII" },
+    //{ id: "XIITBSM1", label: "TBSM 1", tingkat: "XII" },
+    //{ id: "XIITBSM2", label: "TBSM 2", tingkat: "XII" },
+    //{ id: "XIITITL", label: "TITL", tingkat: "XII" },
     { id: "XIITJKT1", label: "TJKT 1", tingkat: "XII" },
     { id: "XIITJKT2", label: "TJKT 2", tingkat: "XII" },
+    //{ id: "XIITKR", label: "TKR", tingkat: "XII" },
+    //{ id: "XIITPL", label: "TPL", tingkat: "XII" },
   ];
 
   /* === RENDER 1 CARD SAJA === */
@@ -758,9 +799,12 @@
   el.innerHTML = `
   <h3>Presensi Sekolah</h3>
 
-  <select id="kelasSelect" class="input">
-    ${buildOptgroupKelas()}
-  </select>
+  <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; margin-bottom: 12px;">
+    <select id="kelasSelect" class="input" style="margin: 0; flex: 1;" onchange="localStorage.setItem('kelasTerakhir', this.value)">
+      ${buildOptgroupKelas()}
+    </select>
+    <button class="btn-walas" onclick="openAdminBySelect()">Login Walas</button>
+  </div>
 
   <button class="btn btn-isi" onclick="openPresensi(document.getElementById('kelasSelect').value)">
     Isi Presensi
@@ -769,10 +813,21 @@
   <button class="btn btn-rekap" onclick="openRekap(document.getElementById('kelasSelect').value)">
     Rekap
   </button>
-
-  <button class="btn-walas" onclick="openAdminBySelect()">Login Walas</button>
 `;
   grid.appendChild(el);
+
+  // Pulihkan kelas yang terakhir dipilih (kalau masih ada di daftar)
+  (function pulihkanKelasTerakhir() {
+    const terakhir = localStorage.getItem("kelasTerakhir");
+    const select = document.getElementById("kelasSelect");
+    if (
+      terakhir &&
+      select &&
+      [...select.options].some((o) => o.value === terakhir)
+    ) {
+      select.value = terakhir;
+    }
+  })();
 
   // Ubah penempatan Tombol Superadmin ke kanan
   const superBtnWrap = document.createElement("div");
@@ -816,12 +871,17 @@
       if (data.error)
         return showOverlay("<p style='color:red'>" + data.error + "</p>");
       const headers = data.headers || [];
-      const passForm = `
-      <div><label style="font-weight:600;">Password Kelas</label>
-      <input type='password' id='presPass' class='input' placeholder='Masukkan password kelas'></div>`;
-      let html = `<h3 style="margin-top:0;">Isi Presensi — ${sheet}</h3>${passForm}<form id='formPresensi'>`;
 
-      // Update form select html dengan class warna & event onchange
+      // Form password dipindahkan ke bawah
+      const passForm = `
+      <div style="margin-top:15px; margin-bottom:10px;">
+        <label style="font-weight:600; display:block; margin-bottom:4px;">Password Kelas</label>
+        <input type='password' id='presPass' class='input' style="margin-bottom:0;" placeholder='Masukkan password kelas'>
+      </div>`;
+
+      let html = `<h3 style="margin-top:0;">Isi Presensi — ${sheet}</h3><form id='formPresensi'>`;
+
+      // Form daftar siswa/presensi
       headers.forEach((h) => {
         html += `<div><b style="font-size:14px;">${h}</b><br>
       <select name='${h}' class='input select-presensi hadir' onchange="updateSelectColor(this)">
@@ -832,7 +892,9 @@
         <option value="Cabut" class="opt-cabut">Cabut</option>
       </select></div>`;
       });
-      html += `</form><div style='margin-top:20px; display:flex;'>
+
+      // Password diletakkan tepat di atas tombol Kirim
+      html += `</form>${passForm}<div style='margin-top:20px; display:flex;'>
     <button class='action-save' onclick="submitPresensi('${sheet}')">Kirim</button>
     <button class='action-del' onclick="closeOverlay()">Batal</button></div>`;
       showOverlay(html);
@@ -879,27 +941,83 @@
     }
   }
 
-  /* === ADMIN === */
+  /* === ADMIN / LOGIN WALAS === */
+  // Password admin per kelas disimpan di localStorage (per perangkat)
+  // supaya tidak perlu diketik ulang tiap buka Login Walas. Kalau
+  // perangkat dipakai bersama, pakai tombol "Logout Walas" di dalam
+  // modal untuk menghapus cache-nya.
+  let adminPasswordAktif = null;
+
+  function getCacheWalas() {
+    try {
+      return JSON.parse(localStorage.getItem("walasAuth") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function simpanCacheWalas(sheet, password) {
+    const cache = getCacheWalas();
+    cache[sheet] = password;
+    localStorage.setItem("walasAuth", JSON.stringify(cache));
+  }
+  function hapusCacheWalas(sheet) {
+    const cache = getCacheWalas();
+    delete cache[sheet];
+    localStorage.setItem("walasAuth", JSON.stringify(cache));
+  }
+
+  async function cekPasswordKeServer(sheet, password) {
+    const r = await fetch(SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "verifyAdminKelas",
+        kelas: sheet,
+        password,
+      }),
+    });
+    return r.json();
+  }
+
   async function openAdminPrompt(sheet) {
+    // 1) Coba pakai password yang sudah tersimpan dulu (login otomatis)
+    const cache = getCacheWalas();
+    const passTersimpan = cache[sheet];
+
+    if (passTersimpan) {
+      try {
+        const j = await cekPasswordKeServer(sheet, passTersimpan);
+        if (j.ok) {
+          adminPasswordAktif = passTersimpan;
+          return openAdminModal(sheet);
+        }
+        // Password tersimpan sudah tidak valid (mis. diganti admin lain)
+        hapusCacheWalas(sheet);
+      } catch (err) {
+        // Kalau network gagal, lanjut ke prompt manual di bawah
+      }
+    }
+
+    // 2) Belum ada cache / cache tidak valid → minta password manual
     const k = KELAS.find((x) => x.id === sheet);
     const inpw = prompt(`Masukkan password admin untuk ${k.label}`);
     if (!inpw) return;
 
     try {
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "verifyAdminKelas",
-          kelas: sheet,
-          password: inpw,
-        }),
-      });
-      const j = await r.json();
+      const j = await cekPasswordKeServer(sheet, inpw);
       if (!j.ok) return alert("❌ Password admin salah!");
+      adminPasswordAktif = inpw;
+      simpanCacheWalas(sheet, inpw);
       openAdminModal(sheet);
     } catch (err) {
       alert("Gagal memverifikasi password admin: " + (err.message || err));
     }
+  }
+
+  function logoutWalas(sheet) {
+    hapusCacheWalas(sheet);
+    adminPasswordAktif = null;
+    alert("Sesi Login Walas untuk kelas ini sudah dihapus dari perangkat ini.");
+    closeOverlay();
   }
 
   /* === PANEL SUPERADMIN: KELOLA KELAS === */
@@ -1178,35 +1296,817 @@
 
   async function openAdminModal(sheet) {
     try {
-      showLoading("Memuat admin...");
+      showLoading("Memuat data Login Walas...");
       const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
       const d = await res.json();
       const headers = d.headers || [];
       const pw = d.classPassword || "";
-      let html = `<h3 style="margin-top:0;">Admin — ${sheet}</h3>
-    <div><label style="font-weight:600;">Password kelas:</label><div style="display:flex;gap:8px;">
-    <input id='classPw' class='input' style="margin:0;" value='${pw.replace(/'/g, "&#39;")}' placeholder='Isi password kelas'>
-    <button class='action-save' style="margin:0;" onclick="setClassPassword('${sheet}')">Simpan</button></div></div>
-    <div style='margin-top:20px'><label style="font-weight:600;">Daftar siswa:</label>
-    <div id='list' style='max-height:40vh;overflow:auto;border:1px solid var(--border);padding:12px;border-radius:12px;background:#f8fafc;'>`;
+      const namaGuru = d.namaGuru || "";
+
+      // Simpan roster siswa untuk dipakai form Laporan Walas nanti
+      window._rosterAktif = headers;
+
+      let html = `
+      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">
+        Login Walas — <span style="color:var(--primary);">${sheet}</span>
+      </h3>
+
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">👤 Identitas Guru Wali</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="namaGuruWalas" class="input" style="margin:0;flex:1;min-width:200px;" placeholder="Nama lengkap guru wali kelas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
+          <button class="action-save" style="margin:0;white-space:nowrap;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan Nama</button>
+        </div>
+        <p class="small" style="margin:8px 0 0;color:var(--text-muted);">Nama ini akan otomatis muncul di kop setiap laporan/PDF kelas ${sheet}.</p>
+      </div>
+
+      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🔑 Password Presensi Kelas</label>
+        <div style="display:flex;gap:8px;">
+          <input id='classPw' class='input' style="margin:0;" value='${pw.replace(/'/g, "&#39;")}' placeholder='Isi password kelas'>
+          <button class='action-save' style="margin:0;" onclick="setClassPassword('${sheet}')">Simpan</button>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🧑‍🎓 Daftar Siswa (${headers.length})</label>
+        <div id='list' style='max-height:35vh;overflow:auto;border:1px solid var(--border);padding:12px;border-radius:12px;background:#f8fafc;'>`;
+
       headers.forEach(
         (h, i) =>
           (html += `<div style='display:flex;gap:8px;margin-bottom:8px;align-items:center;'>
     <span style="width:24px;color:var(--text-muted);font-size:14px;">${i + 1}.</span><input class='input nameInput' style="margin:0;" value='${h.replace(/'/g, "&#39;")}'>
     <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button></div>`),
       );
+
       html += `</div><p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
-    <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
     <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
     <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
     <button class='action-edit' onclick="openEditRaw('${sheet}')">✏️ Edit Data</button>
-    <button class='action-del' onclick='closeOverlay()'>Tutup</button></div>`;
+    </div>
+      </div>
+
+      <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
+        <button class="action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')">🖨️ Cetak Laporan Walas (A-D)</button>
+        <button class='action-edit' style="background:#94a3b8;" onclick="logoutWalas('${sheet}')">🚪 Logout Walas</button>
+        <button class='action-del' onclick='closeOverlay()'>Tutup</button>
+      </div>`;
+
       showOverlay(html);
     } catch (err) {
       showOverlay(
         `<p style='color:var(--danger);padding:20px;'>Gagal memuat admin: ${err.message || err}</p>`,
       );
     }
+  }
+
+  /* === SIMPAN NAMA GURU WALI (tersimpan di server, muncul otomatis lagi) === */
+  async function simpanNamaGuruDariModal(sheet) {
+    const namaGuru = document.getElementById("namaGuruWalas").value.trim();
+    if (!namaGuru) return alert("Nama guru wali tidak boleh kosong.");
+    if (!adminPasswordAktif) {
+      return alert(
+        "Sesi Login Walas tidak ditemukan, silakan tutup lalu Login Walas lagi.",
+      );
+    }
+
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "simpanNamaGuruWalas",
+          kelas: sheet,
+          adminPassword: adminPasswordAktif,
+          namaGuru,
+        }),
+      });
+      const j = await r.json();
+      alert(
+        j.ok
+          ? "✅ Nama guru wali disimpan."
+          : "❌ Gagal: " + (j.error || "Terjadi kesalahan"),
+      );
+    } catch (err) {
+      alert("Gagal menyimpan nama guru: " + (err.message || err));
+    }
+  }
+
+  /* === LIHAT REKAP DARI DALAM FORM LAPORAN WALAS ===
+     Membuka Rekap akan mengganti isi popup, jadi isian Lampiran B/C/D
+     yang belum disimpan akan hilang — makanya dikonfirmasi dulu. */
+  function lihatRekapDariLaporanWalas(sheet) {
+    const adaIsian =
+      document.querySelectorAll(
+        "#tabelPermasalahan .walas-nama, #tabelKondisiKelas .walas-piket, #tabelKondisiKelas .walas-inventaris, #tabelMutasi .walas-nama",
+      ).length > 0 &&
+      [
+        ...document.querySelectorAll(
+          "#tabelPermasalahan input, #tabelKondisiKelas input, #tabelMutasi input",
+        ),
+      ].some((i) => i.value.trim());
+
+    if (
+      adaIsian &&
+      !confirm(
+        "Isian Lampiran B/C/D yang belum disimpan akan hilang kalau pindah ke Rekap. Lanjutkan?",
+      )
+    ) {
+      return;
+    }
+    openRekap(sheet);
+  }
+
+  /* === LAPORAN WALAS: COVER + A. IDENTITAS + B. PERMASALAHAN SISWA +
+     C. KONDISI KELAS + D. MUTASI SISWA ===
+     Bagian B disimpan ke sheet WALAS (sesuai yang sudah dibuat manual
+     di spreadsheet). Bagian C & D HANYA untuk kebutuhan cetak, tidak
+     disimpan ke sheet manapun — sesuai permintaan (input saja). */
+  async function openFormLaporanWalas(sheet) {
+    if (!adminPasswordAktif) {
+      return alert(
+        "Sesi Login Walas tidak ditemukan, silakan tutup lalu Login Walas lagi.",
+      );
+    }
+
+    const namaGuru =
+      document.getElementById("namaGuruWalas")?.value.trim() ||
+      window._namaGuruAktif ||
+      "";
+    window._namaGuruAktif = namaGuru; // simpan supaya tetap terbawa walau modal berganti
+
+    const roster = window._rosterAktif || [];
+    const jumlahSiswa = roster.length;
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    showLoading("Memuat data sebelumnya...");
+
+    // Ambil data Lampiran B yang sudah pernah disimpan guru ini
+    let itemPermasalahanLama = [];
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "getWalasPermasalahan",
+          kelas: sheet,
+          adminPassword: adminPasswordAktif,
+          namaGuru,
+        }),
+      });
+      const j = await r.json();
+      if (j.ok) itemPermasalahanLama = j.items || [];
+    } catch (err) {
+      // gagal ambil data lama, lanjut dengan form kosong
+    }
+
+    // Ambil data mentah presensi untuk siapkan filter bulan Lampiran A
+    window._dataMentahLampiranA = await ambilDataMentahUntukLampiranA(sheet);
+    const bulanList = window._dataMentahLampiranA.bulanList || [];
+    const opsiBulan =
+      `<option value="ALL">Semua Bulan</option>` +
+      bulanList
+        .map((bk) => {
+          const [thn, bln] = bk.split("-").map(Number);
+          const label = new Date(thn, bln, 1).toLocaleDateString("id-ID", {
+            month: "long",
+            year: "numeric",
+          });
+          return `<option value="${bk}">${label}</option>`;
+        })
+        .join("");
+
+    const datalistSiswa = `<datalist id="datalistSiswaWalas">${roster
+      .map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`)
+      .join("")}</datalist>`;
+
+    showOverlay(`
+      <h3 style="margin-top:0;">🖨️ Laporan Walas — ${sheet}</h3>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+        <p style="margin:0 0 8px;font-size:13px;color:var(--dark);">
+          <b>Guru Wali:</b> ${namaGuru || "-"} &nbsp;|&nbsp;
+          <b>Kelas:</b> ${sheet} &nbsp;|&nbsp;
+          <b>Jumlah Siswa:</b> ${jumlahSiswa} &nbsp;|&nbsp;
+          <b>Tanggal:</b> ${tanggalCetak}
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="action-edit" style="margin:0;padding:6px 12px;font-size:12px;" onclick="lihatRekapDariLaporanWalas('${sheet}')">📊 Lihat Rekap Kehadiran</button>
+          <label style="font-size:12px;font-weight:600;color:var(--dark);">Lampiran A untuk bulan:</label>
+          <select id="bulanLampiranA" class="input" style="margin:0;width:auto;min-width:150px;">${opsiBulan}</select>
+        </div>
+        <p class="small" style="margin:8px 0 0;color:var(--text-muted);">Lampiran A (Rekap Kehadiran) otomatis disertakan saat PDF dicetak sesuai bulan yang dipilih di atas.</p>
+      </div>
+
+      ${datalistSiswa}
+
+      <h4 style="margin-bottom:8px;">LAMPIRAN B. Permasalahan Siswa</h4>
+      <div id="tabelPermasalahan"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelPermasalahan','permasalahan')">➕ Tambah Baris</button>
+
+      <h4 style="margin:22px 0 8px;">LAMPIRAN C. Kondisi Kelas</h4>
+      <div id="tabelKondisiKelas"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelKondisiKelas','kondisi')">➕ Tambah Baris</button>
+
+      <h4 style="margin:22px 0 8px;">LAMPIRAN D. Mutasi Siswa</h4>
+      <div id="tabelMutasi"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelMutasi','mutasi')">➕ Tambah Baris</button>
+
+      <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
+        <button class="action-save" onclick="simpanDanCetakLaporanWalas('${sheet}')">💾 Simpan &amp; Cetak PDF</button>
+        <button class="action-del" onclick="openAdminModal('${sheet}')">Kembali</button>
+      </div>
+    `);
+
+    // Lampiran B: isi ulang dari data lama kalau ada, kalau tidak 1 baris kosong
+    if (itemPermasalahanLama.length > 0) {
+      itemPermasalahanLama.forEach((it) =>
+        tambahBarisWalas("tabelPermasalahan", "permasalahan", it),
+      );
+    } else {
+      tambahBarisWalas("tabelPermasalahan", "permasalahan");
+    }
+    tambahBarisWalas("tabelKondisiKelas", "kondisi");
+    tambahBarisWalas("tabelMutasi", "mutasi");
+  }
+
+  function tambahBarisWalas(containerId, jenis, prefill) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const esc = (v) => String(v || "").replace(/"/g, "&quot;");
+
+    const div = document.createElement("div");
+    div.className = "baris-walas";
+    div.style.cssText =
+      "display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;flex-wrap:wrap;";
+
+    if (jenis === "permasalahan") {
+      div.innerHTML = `
+        <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa" value="${esc(prefill?.namaSiswa)}">
+        <input class="input walas-proses" style="margin:0;flex:2;min-width:180px;" placeholder="Proses Penyelesaian" value="${esc(prefill?.proses)}">
+        <input class="input walas-ket" style="margin:0;flex:1;min-width:140px;" placeholder="Keterangan" value="${esc(prefill?.keterangan)}">
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    } else if (jenis === "kondisi") {
+      div.innerHTML = `
+        <input class="input walas-piket" style="margin:0;flex:1;min-width:140px;" placeholder="Pelaksanaan Piket">
+        <input class="input walas-inventaris" style="margin:0;flex:1;min-width:140px;" placeholder="Inventaris Kelas">
+        <input class="input walas-ket" style="margin:0;flex:1;min-width:140px;" placeholder="Keterangan">
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    } else if (jenis === "mutasi") {
+      div.innerHTML = `
+        <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa">
+        <input class="input walas-keluar" style="margin:0;flex:1;min-width:100px;" placeholder="Mutasi Keluar">
+        <input class="input walas-masuk" style="margin:0;flex:1;min-width:100px;" placeholder="Mutasi Masuk">
+        <input type="date" class="input walas-tanggal" style="margin:0;flex:1;min-width:130px;">
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    }
+
+    container.appendChild(div);
+  }
+
+  async function simpanDanCetakLaporanWalas(sheet) {
+    const namaGuru = window._namaGuruAktif || "";
+
+    const dataPermasalahan = [
+      ...document.querySelectorAll("#tabelPermasalahan .baris-walas"),
+    ]
+      .map((div) => ({
+        namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
+        proses: div.querySelector(".walas-proses")?.value.trim() || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+      }))
+      .filter((it) => it.namaSiswa);
+
+    const dataKondisiKelas = [
+      ...document.querySelectorAll("#tabelKondisiKelas .baris-walas"),
+    ]
+      .map((div) => ({
+        piket: div.querySelector(".walas-piket")?.value.trim() || "",
+        inventaris: div.querySelector(".walas-inventaris")?.value.trim() || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+      }))
+      .filter((it) => it.piket || it.inventaris || it.keterangan);
+
+    const dataMutasi = [
+      ...document.querySelectorAll("#tabelMutasi .baris-walas"),
+    ]
+      .map((div) => ({
+        namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
+        keluar: div.querySelector(".walas-keluar")?.value.trim() || "",
+        masuk: div.querySelector(".walas-masuk")?.value.trim() || "",
+        tanggal: div.querySelector(".walas-tanggal")?.value || "",
+      }))
+      .filter((it) => it.namaSiswa);
+
+    // Bagian B disimpan ke sheet WALAS. Bagian C & D sengaja tidak
+    // dikirim ke server — cuma dipakai untuk cetak PDF.
+    if (dataPermasalahan.length > 0) {
+      if (!adminPasswordAktif) {
+        return alert(
+          "Sesi Login Walas tidak ditemukan, silakan Login Walas lagi.",
+        );
+      }
+      try {
+        const r = await fetch(SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "simpanWalasPermasalahan",
+            kelas: sheet,
+            adminPassword: adminPasswordAktif,
+            namaGuru,
+            items: dataPermasalahan,
+          }),
+        });
+        const j = await r.json();
+        if (!j.ok) {
+          alert(
+            "⚠️ Gagal menyimpan Bagian B ke sistem: " +
+              (j.error || "Terjadi kesalahan") +
+              "\n\nPDF tetap akan dicetak dengan data yang sudah diisi.",
+          );
+        }
+      } catch (err) {
+        alert(
+          "⚠️ Gagal menyimpan Bagian B ke sistem: " +
+            (err.message || err) +
+            "\n\nPDF tetap akan dicetak.",
+        );
+      }
+    }
+
+    const bulanKey = document.getElementById("bulanLampiranA")?.value || "ALL";
+
+    await cetakPdfLaporanWalas(
+      sheet,
+      namaGuru,
+      dataPermasalahan,
+      dataKondisiKelas,
+      dataMutasi,
+      bulanKey,
+    );
+  }
+
+  /* === DATA MENTAH REKAP KEHADIRAN (untuk Lampiran A) ===
+     Dipecah jadi 2 tahap: (1) ambil & kelompokkan data mentah per
+     bulan sekali saat form dibuka, (2) hitung ulang totalnya sesuai
+     bulan yang dipilih tepat sebelum PDF dicetak — tanpa fetch ulang. */
+  async function ambilDataMentahUntukLampiranA(sheet) {
+    const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}&action=all`);
+    const d = await res.json();
+    const rows = d.values || [];
+    if (rows.length < 2) {
+      return { headers: [], bulanan: {}, bulanList: [], totalRows: 0 };
+    }
+
+    const headers = rows[0].slice(2);
+    const bulanan = {}; // nama -> { "tahun-bulan": {hadir,sakit,izin,alfa,cabut,hari:Set} }
+    const bulanSet = new Set();
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const waktu = row[0];
+      if (!waktu) continue;
+      const tgl = new Date(waktu);
+      if (isNaN(tgl.getTime())) continue;
+
+      const bk = `${tgl.getFullYear()}-${tgl.getMonth()}`;
+      const hariKey = tgl.toDateString();
+      bulanSet.add(bk);
+
+      row.slice(2).forEach((st, i) => {
+        const nama = headers[i];
+        if (!nama) return;
+        if (!bulanan[nama]) bulanan[nama] = {};
+        if (!bulanan[nama][bk]) {
+          bulanan[nama][bk] = {
+            hadir: 0,
+            sakit: 0,
+            izin: 0,
+            alfa: 0,
+            cabut: 0,
+            hari: new Set(),
+          };
+        }
+        bulanan[nama][bk].hari.add(hariKey);
+        const status = (st || "").toString();
+        if (status === "Hadir") bulanan[nama][bk].hadir++;
+        else if (status === "Sakit") bulanan[nama][bk].sakit++;
+        else if (status === "Izin") bulanan[nama][bk].izin++;
+        else if (status === "Alfa") bulanan[nama][bk].alfa++;
+        else if (status === "Cabut") bulanan[nama][bk].cabut++;
+      });
+    }
+
+    return {
+      headers,
+      bulanan,
+      bulanList: [...bulanSet].sort(),
+      totalRows: rows.length - 1,
+    };
+  }
+
+  function hitungRekapDariDataMentah(dataMentah, bulanKey) {
+    const { headers, bulanan, totalRows } = dataMentah;
+    const pilihBulan = bulanKey && bulanKey !== "ALL" ? bulanKey : "ALL";
+
+    let totals, totalPertemuan;
+
+    if (pilihBulan === "ALL") {
+      totals = headers.map((nama) => {
+        const perBulan = bulanan[nama] || {};
+        const agg = { Hadir: 0, Sakit: 0, Izin: 0, Alfa: 0, Cabut: 0 };
+        Object.values(perBulan).forEach((b) => {
+          agg.Hadir += b.hadir;
+          agg.Sakit += b.sakit;
+          agg.Izin += b.izin;
+          agg.Alfa += b.alfa;
+          agg.Cabut += b.cabut;
+        });
+        return agg;
+      });
+
+      const setHariAll = new Set();
+      headers.forEach((nama) => {
+        const perBulan = bulanan[nama] || {};
+        Object.values(perBulan).forEach((b) =>
+          b.hari.forEach((h) => setHariAll.add(h)),
+        );
+      });
+      totalPertemuan = setHariAll.size || totalRows;
+    } else {
+      totals = headers.map((nama) => {
+        const b = (bulanan[nama] && bulanan[nama][pilihBulan]) || {
+          hadir: 0,
+          sakit: 0,
+          izin: 0,
+          alfa: 0,
+          cabut: 0,
+        };
+        return {
+          Hadir: b.hadir,
+          Sakit: b.sakit,
+          Izin: b.izin,
+          Alfa: b.alfa,
+          Cabut: b.cabut,
+        };
+      });
+
+      const setHariBulan = new Set();
+      headers.forEach((nama) => {
+        const b = bulanan[nama] && bulanan[nama][pilihBulan];
+        if (b) b.hari.forEach((h) => setHariBulan.add(h));
+      });
+      totalPertemuan = setHariBulan.size;
+    }
+
+    const totalSiswa = headers.length;
+    const totalHadir = totals.reduce((sum, t) => sum + (t.Hadir || 0), 0);
+    const kapasitas = totalSiswa * totalPertemuan;
+    const rataKehadiran = kapasitas
+      ? ((totalHadir / kapasitas) * 100).toFixed(2)
+      : "0.00";
+
+    return {
+      headers,
+      totals,
+      sessionCount: totalPertemuan,
+      totalPertemuan,
+      totalSiswa,
+      rataKehadiran,
+    };
+  }
+
+  async function cetakPdfLaporanWalas(
+    sheet,
+    namaGuru,
+    dataPermasalahan,
+    dataKondisiKelas,
+    dataMutasi,
+    bulanKey,
+  ) {
+    showLoading("Menyiapkan Lampiran A (Rekap Kehadiran)...");
+    const dataMentah =
+      window._dataMentahLampiranA ||
+      (await ambilDataMentahUntukLampiranA(sheet));
+    const rekap = hitungRekapDariDataMentah(dataMentah, bulanKey || "ALL");
+
+    const namaBulanTerpilih =
+      bulanKey && bulanKey !== "ALL"
+        ? (() => {
+            const [thn, bln] = bulanKey.split("-").map(Number);
+            return new Date(thn, bln, 1).toLocaleDateString("id-ID", {
+              month: "long",
+              year: "numeric",
+            });
+          })()
+        : "Semua Bulan";
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const jumlahSiswa = (window._rosterAktif || []).length;
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    // === KOP / COVER ===
+    const logoEl = document.getElementById("logoSekolahEl");
+    let y = 14;
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+      try {
+        doc.addImage(logoEl, "PNG", (pageWidth - 20) / 2, 8, 20, 20);
+        y = 8 + 20 + 6;
+      } catch (e) {
+        // lanjut tanpa logo kalau gagal ditempel
+      }
+    }
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, "bold");
+    doc.text("SMKN 1 TELUK KUANTAN", pageWidth / 2, y, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("LAPORAN GURU WALI KELAS", pageWidth / 2, y + 6, {
+      align: "center",
+    });
+    doc.setFont(undefined, "normal");
+
+    y += 16;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, pageWidth - 15, y);
+    y += 8;
+
+    // === A. IDENTITAS ===
+    doc.setFontSize(10);
+    const identitas = [
+      ["Nama Guru Wali", namaGuru || "-"],
+      ["Kelas", sheet],
+      ["Jumlah Siswa", String(jumlahSiswa)],
+      ["Tanggal Cetak", tanggalCetak],
+    ];
+    identitas.forEach(([label, value], i) => {
+      const yy = y + i * 6;
+      doc.text(label, 15, yy);
+      doc.text(":", 60, yy);
+      doc.text(String(value), 64, yy);
+    });
+    y += identitas.length * 6 + 10;
+
+    // === LAMPIRAN A. REKAP KEHADIRAN SISWA (model tabel sama seperti
+    // PDF Rekap Kehadiran yang sudah ada) ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN A. REKAP KEHADIRAN SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Periode: ${namaBulanTerpilih}`, 15, y + 5);
+    doc.setTextColor(0);
+    y += 10;
+
+    // === 3 KARTU RINGKASAN (Total Siswa / Total Pertemuan / Rata-rata) ===
+    {
+      const cardW = 55;
+      const cardH = 18;
+      const gap = 6;
+      const startX = (pageWidth - (cardW * 3 + gap * 2)) / 2;
+      doc.setDrawColor(180);
+      doc.setFillColor(255, 255, 255);
+
+      function drawCardLampiranA(x, judul, nilai) {
+        doc.rect(x, y, cardW, cardH);
+        doc.setFontSize(8.5);
+        doc.text(judul, x + cardW / 2, y + 6.5, { align: "center" });
+        doc.setFontSize(12);
+        doc.text(String(nilai), x + cardW / 2, y + 13.5, { align: "center" });
+      }
+
+      drawCardLampiranA(startX, "Total Siswa", rekap.totalSiswa);
+      drawCardLampiranA(
+        startX + cardW + gap,
+        "Total Pertemuan",
+        rekap.totalPertemuan,
+      );
+      drawCardLampiranA(
+        startX + (cardW + gap) * 2,
+        "Rata-rata Kehadiran",
+        rekap.rataKehadiran + "%",
+      );
+      y += cardH + 10;
+    }
+
+    const bodyA =
+      rekap.headers.length > 0
+        ? rekap.headers.map((name, i) => {
+            const t = rekap.totals[i];
+            const hadir = t.Hadir || 0;
+            const persen =
+              rekap.sessionCount > 0
+                ? ((hadir / rekap.sessionCount) * 100).toFixed(2)
+                : "0.00";
+            return [
+              i + 1,
+              name,
+              hadir,
+              t.Sakit || 0,
+              t.Izin || 0,
+              t.Alfa || 0,
+              t.Cabut || 0,
+              persen + "%",
+            ];
+          })
+        : [["-", "Belum ada data presensi", "-", "-", "-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [
+        [
+          "No",
+          "Nama Lengkap",
+          "Hadir",
+          "Sakit",
+          "Izin",
+          "Alfa",
+          "Cabut",
+          "% Kehadiran",
+        ],
+      ],
+      body: bodyA,
+      theme: "grid",
+      styles: {
+        fontSize: 8,
+        halign: "center",
+        valign: "middle",
+        cellPadding: 2,
+      },
+      headStyles: { fillColor: [240, 240, 240], textColor: 0, fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 8 },
+        1: { cellWidth: 45 },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 15 },
+        5: { cellWidth: 15 },
+        6: { cellWidth: 15 },
+        7: { cellWidth: 20 },
+      },
+      didParseCell(data) {
+        if (data.column.index === 7 && data.section === "body") {
+          const v = parseFloat(data.cell.raw);
+          if (v < 50) data.cell.styles.textColor = [200, 0, 0];
+          else if (v < 70) data.cell.styles.textColor = [200, 140, 0];
+          else data.cell.styles.textColor = [0, 140, 70];
+        }
+      },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === LAMPIRAN B. PERMASALAHAN SISWA ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN B. PERMASALAHAN SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+
+    const bodyB =
+      dataPermasalahan.length > 0
+        ? dataPermasalahan.map((it, i) => [
+            i + 1,
+            it.namaSiswa,
+            it.proses || "-",
+            it.keterangan || "-",
+          ])
+        : [["-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [["No", "Nama Siswa", "Proses Penyelesaian", "Keterangan"]],
+      body: bodyB,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 45 },
+      },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === C. KONDISI KELAS ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN C. KONDISI KELAS", 15, y);
+    doc.setFont(undefined, "normal");
+
+    const bodyC =
+      dataKondisiKelas.length > 0
+        ? dataKondisiKelas.map((it, i) => [
+            i + 1,
+            it.piket || "-",
+            it.inventaris || "-",
+            it.keterangan || "-",
+          ])
+        : [["-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [["No", "Pelaksanaan Piket", "Inventaris Kelas", "Keterangan"]],
+      body: bodyC,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: { 0: { cellWidth: 10, halign: "center" } },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === D. MUTASI SISWA ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN D. MUTASI SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+
+    const bodyD =
+      dataMutasi.length > 0
+        ? dataMutasi.map((it, i) => [
+            i + 1,
+            it.namaSiswa,
+            it.keluar || "-",
+            it.masuk || "-",
+            it.tanggal ? formatTanggal(it.tanggal) : "-",
+          ])
+        : [["-", "-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [["No", "Nama Siswa", "Mutasi Keluar", "Mutasi Masuk", "Tanggal"]],
+      body: bodyD,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: { 0: { cellWidth: 10, halign: "center" } },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 24;
+
+    // === TANDA TANGAN ===
+    if (y > 260) {
+      doc.addPage();
+      y = 30;
+    }
+    doc.setFontSize(10);
+    doc.text(`Teluk Kuantan, ${tanggalCetak}`, pageWidth - 70, y);
+    doc.text("Guru Wali Kelas,", pageWidth - 70, y + 6);
+    doc.text(namaGuru || "___________________", pageWidth - 70, y + 28);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth - 70, y + 29, pageWidth - 15, y + 29);
+
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(
+      "diunduh dari tjktsmkn1telukkuantan.web.id",
+      pageWidth - 10,
+      pageH - 8,
+      { align: "right" },
+    );
+
+    doc.save(`Laporan-Walas-${sheet}.pdf`);
+    closeOverlay();
   }
 
   async function setClassPassword(sheet) {
@@ -1273,6 +2173,10 @@
         );
 
       const headers = rows[0].slice(2);
+
+      // Simpan info guru wali & jumlah siswa untuk dipakai di PDF
+      window._namaGuruAktif = d.namaGuru || "";
+      window._jumlahSiswaAktif = headers.length;
       const last = rows[rows.length - 1];
       const tanggal = formatTanggal(last[0] || "");
       const vals = last.slice(2);
@@ -1775,6 +2679,21 @@
     document.getElementById("ringRataKehadiran").innerText = rata + "%";
   }
 
+  /* === Bersihkan emoji sebelum dikirim ke jsPDF ===
+     Font default jsPDF (WinAnsiEncoding) tidak mendukung emoji —
+     kalau dibiarkan, hasilnya karakter rusak semacam "Ø=ÜÊ" di PDF.
+     Emoji aman dipakai di tampilan HTML biasa, jadi fungsi ini HANYA
+     dipakai tepat sebelum teks masuk ke doc.text()/autoTable(). */
+  function bersihkanEmojiUntukPDF(teks) {
+    return String(teks || "")
+      .replace(
+        /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\uFE0F]/gu,
+        "",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   function downloadPDF() {
     const { jsPDF } = window.jspdf;
 
@@ -1788,18 +2707,48 @@
     const rata =
       document.getElementById("ringRataKehadiran")?.innerText || "0%";
 
-    const title =
-      document.getElementById("rekapJudul")?.innerText || "Rekap Kehadiran";
-    const sub = document.getElementById("rekapSubJudul")?.innerText || "";
+    const title = bersihkanEmojiUntukPDF(
+      document.getElementById("rekapJudul")?.innerText || "Rekap Kehadiran",
+    );
+    const sub = bersihkanEmojiUntukPDF(
+      document.getElementById("rekapSubJudul")?.innerText || "",
+    );
+
+    // === LOGO SEKOLAH (kalau berhasil dimuat) ===
+    const logoEl = document.getElementById("logoSekolahEl");
+    let yMulai = 14;
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+      try {
+        const logoW = 18;
+        const logoH = 18;
+        doc.addImage(logoEl, "PNG", (pageWidth - logoW) / 2, 8, logoW, logoH);
+        yMulai = 8 + logoH + 6;
+      } catch (e) {
+        // kalau logo gagal ditempel (mis. CORS), lanjut tanpa logo
+      }
+    }
 
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text(title, pageWidth / 2, 14, { align: "center" });
+    doc.text(title, pageWidth / 2, yMulai, { align: "center" });
 
     doc.setFontSize(10);
-    doc.text(sub, pageWidth / 2, 20, { align: "center" });
+    doc.text(sub, pageWidth / 2, yMulai + 6, { align: "center" });
 
-    let yCard = 26;
+    // === IDENTITAS GURU WALI & JUMLAH SISWA ===
+    const namaGuruWali = bersihkanEmojiUntukPDF(window._namaGuruAktif || "-");
+    const jumlahSiswaRoster = window._jumlahSiswaAktif || totalSiswa;
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(
+      `Guru Wali/Pembimbing: ${namaGuruWali || "-"}   |   Jumlah Siswa: ${jumlahSiswaRoster}`,
+      pageWidth / 2,
+      yMulai + 12,
+      { align: "center" },
+    );
+    doc.setTextColor(0);
+
+    let yCard = yMulai + 20;
     const cardW = 55;
     const cardH = 20;
     const gap = 6;
