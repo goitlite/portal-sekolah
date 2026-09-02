@@ -15,6 +15,7 @@
     --info: #0ea5e9;
     --info-hover: #0284c7;
     --success: #16a34a;
+    --success-hover: #15803d;
     --danger: #dc2626;
     --warning: #f59e0b;
     --dark: #0f172a;
@@ -168,42 +169,40 @@
 
   /* Tombol Walas (Di sebelah dropdown) */
   .btn-walas {
-    font-size: 12px;
-    font-weight: 600;
-    background: #f1f5f9;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--success);
+    color: #fff;
+    border: none;
+    padding: 0 16px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
     height: 41px; /* Menyesuaikan dengan perkiraan tinggi select */
     white-space: nowrap; /* Mencegah teks turun ke bawah */
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    flex-shrink: 0;
   }
 
   .btn-walas:hover {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
+    background: var(--success-hover);
+    transform: scale(1.02);
+  }
+  .btn-walas:active {
+    transform: scale(0.98);
   }
 
-  /* Tombol Superadmin */
+  /* Tombol Panel Admin (sekarang di dalam kartu, gaya konsisten .btn) */
   .btn-superadmin {
-    background: var(--dark);
+    background: var(--success);
     color: #fff;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s;
   }
   .btn-superadmin:hover {
-    background: #1e293b;
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    background: var(--success-hover);
+    transform: scale(1.02);
+  }
+  .btn-superadmin:active {
+    transform: scale(0.98);
   }
 
   /* === Form Element === */
@@ -737,6 +736,7 @@
     "https://script.google.com/macros/s/AKfycbyPCKZSnnr_O6yRKBgok2XEHC9MRERDFa8t5a-SO5RPDy52xnQknAxgCFlUzouSBVfP/exec";
   const KELAS = [
     // === KELAS X ===
+    { id: "XTPL", label: "X TPL", tingkat: "X" },
     //{ id: "XDPIB", label: "X DPIB", tingkat: "X" },
     //{ id: "XGEOMATIKA", label: "X GEOMATIKA", tingkat: "X" },
     //{ id: "XTAV", label: "X TAV", tingkat: "X" },
@@ -748,7 +748,6 @@
     //{ id: "XTO2", label: "X TO 2", tingkat: "X" },
     //{ id: "XTO3", label: "X TO 3", tingkat: "X" },
     //{ id: "XTO4", label: "X TO 4", tingkat: "X" },
-    { id: "XTPL", label: "X TPL", tingkat: "X" },
 
     // === KELAS XI ===
     //{ id: "XIDPIB", label: "XI DPIB", tingkat: "XI" },
@@ -799,20 +798,26 @@
   el.innerHTML = `
   <h3>Presensi Sekolah</h3>
 
-  <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; margin-bottom: 12px;">
-    <select id="kelasSelect" class="input" style="margin: 0; flex: 1;" onchange="localStorage.setItem('kelasTerakhir', this.value)">
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; margin-bottom: 12px;">
+    <select id="kelasSelect" class="input" style="margin: 0; flex: 1; min-width: 140px;" onchange="localStorage.setItem('kelasTerakhir', this.value)">
       ${buildOptgroupKelas()}
     </select>
-    <button class="btn-walas" onclick="openAdminBySelect()">Login Walas</button>
+    <button class="btn-walas" onclick="openAdminBySelect()">🔑 Login Walas</button>
   </div>
 
   <button class="btn btn-isi" onclick="openPresensi(document.getElementById('kelasSelect').value)">
-    Isi Presensi
+    📝 Isi Presensi
   </button>
 
   <button class="btn btn-rekap" onclick="openRekap(document.getElementById('kelasSelect').value)">
-    Rekap
+    📊 Rekap
   </button>
+
+  <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
+    <button class="btn btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="openSuperAdminPanel()">
+      🛠️ Panel Admin
+    </button>
+  </div>
 `;
   grid.appendChild(el);
 
@@ -828,16 +833,6 @@
       select.value = terakhir;
     }
   })();
-
-  // Ubah penempatan Tombol Superadmin ke kanan
-  const superBtnWrap = document.createElement("div");
-  superBtnWrap.style.display = "flex";
-  superBtnWrap.style.justifyContent = "flex-end";
-  superBtnWrap.style.maxWidth = "1100px";
-  superBtnWrap.style.margin = "24px auto 0 auto";
-  superBtnWrap.style.padding = "0 12px";
-  superBtnWrap.innerHTML = `<button class="btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="openSuperAdminPanel()">👨‍💻 ADMIN</button>`;
-  grid.parentElement.appendChild(superBtnWrap);
 
   /* === ADMIN BERDASARKAN DROPDOWN === */
   function openAdminBySelect() {
@@ -1294,6 +1289,7 @@
     }
   }
 
+  /* === UPDATE: MODAL LOGIN WALAS === */
   async function openAdminModal(sheet) {
     try {
       showLoading("Memuat data Login Walas...");
@@ -1307,56 +1303,89 @@
       window._rosterAktif = headers;
 
       let html = `
-      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">
-        Login Walas — <span style="color:var(--primary);">${sheet}</span>
-      </h3>
+    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">
+      Login Walas — <span style="color:var(--primary);">${sheet}</span>
+    </h3>
 
-      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">👤 Identitas Guru Wali</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input id="namaGuruWalas" class="input" style="margin:0;flex:1;min-width:200px;" placeholder="Nama lengkap guru wali kelas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
-          <button class="action-save" style="margin:0;white-space:nowrap;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan Nama</button>
-        </div>
-        <p class="small" style="margin:8px 0 0;color:var(--text-muted);">Nama ini akan otomatis muncul di kop setiap laporan/PDF kelas ${sheet}.</p>
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">👤 Identitas Guru Wali</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input id="namaGuruWalas" class="input" style="margin:0;flex:1;min-width:200px;" placeholder="Nama lengkap guru wali kelas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
+        <button class="action-save" style="margin:0;white-space:nowrap;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan Nama</button>
       </div>
-
-      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🔑 Password Presensi Kelas</label>
-        <div style="display:flex;gap:8px;">
-          <input id='classPw' class='input' style="margin:0;" value='${pw.replace(/'/g, "&#39;")}' placeholder='Isi password kelas'>
-          <button class='action-save' style="margin:0;" onclick="setClassPassword('${sheet}')">Simpan</button>
-        </div>
-      </div>
-
-      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
-        <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🧑‍🎓 Daftar Siswa (${headers.length})</label>
-        <div id='list' style='max-height:35vh;overflow:auto;border:1px solid var(--border);padding:12px;border-radius:12px;background:#f8fafc;'>`;
-
-      headers.forEach(
-        (h, i) =>
-          (html += `<div style='display:flex;gap:8px;margin-bottom:8px;align-items:center;'>
-    <span style="width:24px;color:var(--text-muted);font-size:14px;">${i + 1}.</span><input class='input nameInput' style="margin:0;" value='${h.replace(/'/g, "&#39;")}'>
-    <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button></div>`),
-      );
-
-      html += `</div><p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
-    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-    <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
-    <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
-    <button class='action-edit' onclick="openEditRaw('${sheet}')">✏️ Edit Data</button>
     </div>
-      </div>
 
-      <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
-        <button class="action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')">🖨️ Cetak Laporan Walas (A-D)</button>
-        <button class='action-edit' style="background:#94a3b8;" onclick="logoutWalas('${sheet}')">🚪 Logout Walas</button>
-        <button class='action-del' onclick='closeOverlay()'>Tutup</button>
-      </div>`;
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🔑 Password Presensi Kelas</label>
+      <div style="display:flex;gap:8px;">
+        <input id='classPw' class='input' style="margin:0;" value='${pw.replace(/'/g, "&#39;")}' placeholder='Isi password kelas'>
+        <button class='action-save' style="margin:0;" onclick="setClassPassword('${sheet}')">Simpan</button>
+      </div>
+    </div>
+
+    <!-- === PERUBAHAN UTAMA: Panel Daftar Siswa diganti menjadi Panel Kelola Data === -->
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🛠️ Kelola Data Presensi & Siswa</label>
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Klik tombol di bawah ini untuk mengedit data presensi atau menambah/menghapus nama siswa.</p>
+      
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <!-- Tombol Edit Data sekarang memanggil openEditRaw -->
+        <button class='action-save' style="background:var(--primary);" onclick="openEditRaw('${sheet}')">✏️ Buka Tampilan Edit Data</button>
+        <!-- Tombol Tambah/Hapus memanggil fungsi baru -->
+        <button class='action-edit' onclick="openKelolaSiswa('${sheet}')">🧑‍🎓 Tambah/Hapus Siswa</button>
+      </div>
+    </div>
+    <!-- ========================================================================= -->
+
+    <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
+      <button class="action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')">🖨️ Cetak Laporan Walas (A-D)</button>
+      <button class='action-edit' style="background:#94a3b8;" onclick="logoutWalas('${sheet}')">🚪 Logout Walas</button>
+      <button class='action-del' onclick='closeOverlay()'>Tutup</button>
+    </div>`;
 
       showOverlay(html);
     } catch (err) {
       showOverlay(
         `<p style='color:var(--danger);padding:20px;'>Gagal memuat admin: ${err.message || err}</p>`,
+      );
+    }
+  }
+
+  /* === FUNGSI BARU: TAMPILAN TAMBAH/HAPUS SISWA === */
+  async function openKelolaSiswa(sheet) {
+    try {
+      showLoading("Memuat daftar siswa...");
+      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
+      const d = await res.json();
+      const headers = d.headers || [];
+
+      let html = `
+    <h3 style="margin-top:0;">🧑‍🎓 Tambah/Hapus Siswa — <span style="color:var(--primary);">${sheet}</span></h3>
+    
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div id='list' style='max-height:50vh;overflow:auto;border:1px solid var(--border);padding:12px;border-radius:12px;background:#f8fafc;'>`;
+
+      headers.forEach((h, i) => {
+        html += `<div style='display:flex;gap:8px;margin-bottom:8px;align-items:center;'>
+        <span style="width:24px;color:var(--text-muted);font-size:14px;">${i + 1}.</span>
+        <input class='input nameInput' style="margin:0;" value='${h.replace(/'/g, "&#39;")}'>
+        <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button>
+      </div>`;
+      });
+
+      html += `</div>
+      <p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
+        <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
+        <button class='action-del' onclick="openAdminModal('${sheet}')">⬅️ Kembali ke Dashboard</button>
+      </div>
+    </div>`;
+
+      showOverlay(html);
+    } catch (err) {
+      showOverlay(
+        `<p style='color:var(--danger);padding:20px;'>Gagal memuat: ${err.message || err}</p>`,
       );
     }
   }
@@ -1434,6 +1463,7 @@
       window._namaGuruAktif ||
       "";
     window._namaGuruAktif = namaGuru; // simpan supaya tetap terbawa walau modal berganti
+    window._sheetAktifLaporanWalas = sheet; // dipakai saat upload foto per baris
 
     const roster = window._rosterAktif || [];
     const jumlahSiswa = roster.length;
@@ -1549,6 +1579,11 @@
         <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa" value="${esc(prefill?.namaSiswa)}">
         <input class="input walas-proses" style="margin:0;flex:2;min-width:180px;" placeholder="Proses Penyelesaian" value="${esc(prefill?.proses)}">
         <input class="input walas-ket" style="margin:0;flex:1;min-width:140px;" placeholder="Keterangan" value="${esc(prefill?.keterangan)}">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:76px;">
+          <input type="file" accept="image/*" class="walas-foto-file" style="font-size:10px;width:76px;" onchange="uploadFotoPermasalahanRow(this)">
+          <img class="walas-foto-preview" src="${esc(prefill?.fotoUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);${prefill?.fotoUrl ? "" : "display:none;"}">
+          <input type="hidden" class="walas-foto-url" value="${esc(prefill?.fotoUrl)}">
+        </div>
         <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
     } else if (jenis === "kondisi") {
       div.innerHTML = `
@@ -1559,13 +1594,95 @@
     } else if (jenis === "mutasi") {
       div.innerHTML = `
         <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa">
-        <input class="input walas-keluar" style="margin:0;flex:1;min-width:100px;" placeholder="Mutasi Keluar">
-        <input class="input walas-masuk" style="margin:0;flex:1;min-width:100px;" placeholder="Mutasi Masuk">
+        <select class="input walas-jenis" style="margin:0;flex:1;min-width:130px;">
+          <option value="Mutasi Masuk">Mutasi Masuk</option>
+          <option value="Mutasi Keluar">Mutasi Keluar</option>
+        </select>
+        <input class="input walas-ket" style="margin:0;flex:2;min-width:160px;" placeholder="Keterangan (asal/tujuan sekolah)">
         <input type="date" class="input walas-tanggal" style="margin:0;flex:1;min-width:130px;">
         <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
     }
 
     container.appendChild(div);
+  }
+
+  /* === UPLOAD FOTO PER BARIS LAMPIRAN B ===
+     Foto dikompres dulu di browser (biar tidak berat), lalu diupload
+     ke Google Drive lewat GAS. URL hasilnya disimpan di input hidden
+     .walas-foto-url, dipakai nanti untuk bikin barcode/QR saat cetak. */
+  function kompresGambarUntukUpload(file, maxDim = 900, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width;
+          let h = img.height;
+          if (w > h && w > maxDim) {
+            h = Math.round(h * (maxDim / w));
+            w = maxDim;
+          } else if (h > maxDim) {
+            w = Math.round(w * (maxDim / h));
+            h = maxDim;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => reject(new Error("Gagal membaca gambar."));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error("Gagal membaca file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadFotoPermasalahanRow(inputEl) {
+    const file = inputEl.files[0];
+    if (!file) return;
+
+    const div = inputEl.closest(".baris-walas");
+    const preview = div.querySelector(".walas-foto-preview");
+    const hiddenUrl = div.querySelector(".walas-foto-url");
+
+    if (!adminPasswordAktif || !window._sheetAktifLaporanWalas) {
+      alert("Sesi Login Walas tidak ditemukan, silakan Login Walas lagi.");
+      inputEl.value = "";
+      return;
+    }
+
+    inputEl.disabled = true;
+    try {
+      const base64 = await kompresGambarUntukUpload(file);
+
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "uploadFotoPermasalahan",
+          kelas: window._sheetAktifLaporanWalas,
+          adminPassword: adminPasswordAktif,
+          base64Data: base64,
+          fileName: `permasalahan_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal upload foto: " + (j.error || "Terjadi kesalahan"));
+        return;
+      }
+
+      hiddenUrl.value = j.url;
+      preview.src = j.url;
+      preview.style.display = "block";
+    } catch (err) {
+      alert("Gagal upload foto: " + (err.message || err));
+    } finally {
+      inputEl.disabled = false;
+    }
   }
 
   async function simpanDanCetakLaporanWalas(sheet) {
@@ -1578,6 +1695,7 @@
         namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
         proses: div.querySelector(".walas-proses")?.value.trim() || "",
         keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+        fotoUrl: div.querySelector(".walas-foto-url")?.value.trim() || "",
       }))
       .filter((it) => it.namaSiswa);
 
@@ -1596,8 +1714,8 @@
     ]
       .map((div) => ({
         namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
-        keluar: div.querySelector(".walas-keluar")?.value.trim() || "",
-        masuk: div.querySelector(".walas-masuk")?.value.trim() || "",
+        jenis: div.querySelector(".walas-jenis")?.value || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
         tanggal: div.querySelector(".walas-tanggal")?.value || "",
       }))
       .filter((it) => it.namaSiswa);
@@ -1945,7 +2063,12 @@
         valign: "middle",
         cellPadding: 2,
       },
-      headStyles: { fillColor: [240, 240, 240], textColor: 0, fontSize: 9 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontSize: 9,
+        halign: "center",
+      },
       columnStyles: {
         0: { cellWidth: 8 },
         1: { cellWidth: 45 },
@@ -1979,6 +2102,32 @@
     doc.text("LAMPIRAN B. PERMASALAHAN SISWA", 15, y);
     doc.setFont(undefined, "normal");
 
+    // Generate QR code untuk tiap baris yang punya foto (barcode foto,
+    // mirip fitur Jurnal Guru Wali di sistem MAGANG). Harus selesai
+    // dulu sebelum autoTable digambar karena didDrawCell sinkron.
+    const adaFotoUntukDiCetak = dataPermasalahan.some((it) => it.fotoUrl);
+    if (adaFotoUntukDiCetak && !window.QRCode) {
+      alert(
+        "⚠️ Library QR Code gagal dimuat (mungkin koneksi internet lambat/terblokir), jadi kolom Barcode Foto akan kosong di PDF ini. Coba refresh halaman lalu cetak ulang.",
+      );
+    }
+
+    const qrFotoB = [];
+    for (const it of dataPermasalahan) {
+      if (it.fotoUrl && window.QRCode) {
+        try {
+          qrFotoB.push(
+            await QRCode.toDataURL(it.fotoUrl, { width: 120, margin: 1 }),
+          );
+        } catch (e) {
+          console.error("Gagal generate QR untuk", it.fotoUrl, e);
+          qrFotoB.push(null);
+        }
+      } else {
+        qrFotoB.push(null);
+      }
+    }
+
     const bodyB =
       dataPermasalahan.length > 0
         ? dataPermasalahan.map((it, i) => [
@@ -1986,15 +2135,24 @@
             it.namaSiswa,
             it.proses || "-",
             it.keterangan || "-",
+            "",
           ])
-        : [["-", "-", "-", "-"]];
+        : [["-", "-", "-", "-", ""]];
 
     doc.autoTable({
       startY: y + 4,
-      head: [["No", "Nama Siswa", "Proses Penyelesaian", "Keterangan"]],
+      head: [
+        [
+          "No",
+          "Nama Siswa",
+          "Proses Penyelesaian",
+          "Keterangan",
+          "Barcode Foto",
+        ],
+      ],
       body: bodyB,
       theme: "grid",
-      styles: { fontSize: 9, cellPadding: 2.5 },
+      styles: { fontSize: 9, cellPadding: 2.5, minCellHeight: 20 },
       headStyles: {
         fillColor: [37, 99, 235],
         textColor: 255,
@@ -2002,9 +2160,26 @@
       },
       columnStyles: {
         0: { cellWidth: 10, halign: "center" },
-        1: { cellWidth: 45 },
+        1: { cellWidth: 40 },
+        4: { cellWidth: 22, halign: "center" },
       },
       margin: { left: 15, right: 15 },
+      didDrawCell: (data) => {
+        if (data.section === "body" && data.column.index === 4) {
+          const qr = qrFotoB[data.row.index];
+          if (qr) {
+            const ukuran = Math.min(data.cell.width, data.cell.height) - 4;
+            doc.addImage(
+              qr,
+              "PNG",
+              data.cell.x + (data.cell.width - ukuran) / 2,
+              data.cell.y + (data.cell.height - ukuran) / 2,
+              ukuran,
+              ukuran,
+            );
+          }
+        }
+      },
     });
     y = doc.lastAutoTable.finalY + 12;
 
@@ -2061,15 +2236,15 @@
         ? dataMutasi.map((it, i) => [
             i + 1,
             it.namaSiswa,
-            it.keluar || "-",
-            it.masuk || "-",
+            it.jenis || "-",
+            it.keterangan || "-",
             it.tanggal ? formatTanggal(it.tanggal) : "-",
           ])
         : [["-", "-", "-", "-", "-"]];
 
     doc.autoTable({
       startY: y + 4,
-      head: [["No", "Nama Siswa", "Mutasi Keluar", "Mutasi Masuk", "Tanggal"]],
+      head: [["No", "Nama Siswa", "Jenis Mutasi", "Keterangan", "Tanggal"]],
       body: bodyD,
       theme: "grid",
       styles: { fontSize: 9, cellPadding: 2.5 },
@@ -2485,11 +2660,12 @@
       let html = `
       <h3 style="margin-top:0;">✏️ Edit Data Mentah — ${sheet}</h3>
 
-      <div style="background:#f8fafc;padding:12px 16px;border-radius:10px;border:1px solid var(--border);margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+      <div style="background:#f8fafc;padding:12px 16px;border-radius:10px;border:1px solid var(--border);margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <label style="font-weight:600;font-size:14px;">📅 Pilih Bulan:</label>
         <select id="editBulan" class="input" style="max-width:200px;margin:0;" onchange="renderEditTable()">
           <option value="ALL">Semua Bulan</option>
         </select>
+        <button class="btn-walas" style="margin-left:auto;" onclick="tambahBarisTanggalBaru()">➕ Tambah Baris Tanggal</button>
       </div>
 
       <div class="table-freeze-wrapper raw-full">
@@ -2553,29 +2729,111 @@
         value: el.value,
       }));
 
+      const barisBaruEls = [
+        ...document.querySelectorAll("#editTbody tr[data-baris-baru]"),
+      ];
+
+      if (edits.length === 0 && barisBaruEls.length === 0) {
+        return alert("Tidak ada perubahan untuk disimpan.");
+      }
+
       if (!confirm("Simpan semua perubahan ke Google Sheet?")) return;
 
-      const res = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "editRawData",
-          kelas: sheet,
-          edits,
-        }),
-      });
-
-      const j = await res.json();
-
-      if (j.ok) {
-        alert("✅ Data berhasil diperbarui");
-        closeOverlay();
-        setTimeout(() => openRekap(sheet), 300);
-      } else {
-        alert("❌ Gagal: " + (j.error || "Tidak diketahui"));
+      if (edits.length > 0) {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "editRawData",
+            kelas: sheet,
+            edits,
+          }),
+        });
+        const j = await res.json();
+        if (!j.ok) {
+          alert(
+            "❌ Gagal simpan perubahan sel: " + (j.error || "Tidak diketahui"),
+          );
+          return;
+        }
       }
+
+      if (barisBaruEls.length > 0 && !adminPasswordAktif) {
+        alert(
+          "⚠️ Sesi Login Walas tidak ditemukan, baris baru GAGAL disimpan. Perubahan sel di atas (kalau ada) sudah tersimpan.",
+        );
+        return;
+      }
+
+      for (const tr of barisBaruEls) {
+        const tanggal = tr.dataset.tanggalBaru;
+        const statusPerSiswa = {};
+        tr.querySelectorAll(".cellEditBaru").forEach((sel) => {
+          statusPerSiswa[sel.dataset.nama] = sel.value;
+        });
+
+        const r2 = await fetch(SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "tambahBarisPresensiManual",
+            kelas: sheet,
+            adminPassword: adminPasswordAktif,
+            tanggal,
+            statusPerSiswa,
+          }),
+        });
+        const j2 = await r2.json();
+        if (!j2.ok) {
+          alert(
+            `❌ Gagal tambah baris tanggal ${tanggal}: ` +
+              (j2.error || "Tidak diketahui"),
+          );
+          return;
+        }
+      }
+
+      alert("✅ Data berhasil diperbarui");
+      closeOverlay();
+      setTimeout(() => openRekap(sheet), 300);
     } catch (err) {
       alert("❌ Gagal menyimpan perubahan: " + (err.message || err));
     }
+  }
+
+  /* === TAMBAH BARIS TANGGAL BARU (Edit Data / Login Walas) ===
+     Menambahkan 1 baris presensi baru langsung di tabel Edit Data,
+     dengan dropdown status per siswa (sama seperti baris yang sudah
+     ada). Baru benar-benar tersimpan ke sheet saat "Simpan Perubahan"
+     ditekan. */
+  function tambahBarisTanggalBaru() {
+    const tanggalInput = prompt(
+      "Tanggal presensi baru (YYYY-MM-DD):",
+      new Date().toISOString().slice(0, 10),
+    );
+    if (!tanggalInput) return;
+
+    const tbody = document.getElementById("editTbody");
+    if (!tbody) return;
+
+    const namaSiswaList = (window._rawHeaders || []).slice(2);
+
+    let tr = `<tr data-baris-baru="true" data-tanggal-baru="${tanggalInput}" style="background:#f0fdf4;">`;
+    tr += `<td>${formatTanggal(tanggalInput)} <span class="small" style="color:var(--success);font-weight:700;">(baru)</span></td>`;
+    tr += `<td>(diisi Login Walas)</td>`;
+    namaSiswaList.forEach((nama) => {
+      const namaAman = String(nama).replace(/"/g, "&quot;");
+      tr += `<td>
+        <select class="input cellEditBaru select-presensi hadir" data-nama="${namaAman}" onchange="updateSelectColor(this)">
+          <option value="Hadir" class="opt-hadir" selected>Hadir</option>
+          <option value="Sakit" class="opt-sakit">Sakit</option>
+          <option value="Izin" class="opt-izin">Izin</option>
+          <option value="Alfa" class="opt-alfa">Alfa</option>
+          <option value="Cabut" class="opt-cabut">Cabut</option>
+        </select>
+      </td>`;
+    });
+    tr += "</tr>";
+
+    tbody.insertAdjacentHTML("beforeend", tr);
   }
 
   function toggleFullscreen() {
@@ -2834,7 +3092,7 @@
     doc.setFontSize(8);
     doc.setTextColor(150);
     doc.text(
-      "diunduh dari tjktsmkn1telukkuantan.web.id",
+      "diunduh dari portalsmkn1telku.vercel.app",
       pageWidth - 10,
       pageH - 8,
       { align: "right" },
@@ -2879,3 +3137,4 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
