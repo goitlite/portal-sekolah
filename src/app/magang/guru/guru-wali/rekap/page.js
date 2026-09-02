@@ -317,7 +317,7 @@ export default function RekapGuruWaliPage() {
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
                     <DocumentIndicator url={siswa.fotoProfil} label="FOTO" />
-                    <DocumentIndicator url={siswa.ijazahSmp} label="IJAZAH" />
+                    <DocumentIndicator url={siswa.ijazahSmp} label="Dokumen" />
                   </div>
                 </div>
 

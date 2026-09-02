@@ -771,7 +771,7 @@ export default function BiodataSiswa() {
                     <span className="text-xl">📄</span>
                     <div>
                       <p className="text-xs font-black text-emerald-900">
-                        Ijazah SMP Terupload
+                        Dokumen Terupload
                       </p>
                       <p className="text-[10px] text-emerald-600 font-medium">
                         File tersimpan aman di Google Drive
