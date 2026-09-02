@@ -536,7 +536,7 @@ export default function BiodataSiswa() {
                   <span className="text-[10px] font-bold text-slate-500 text-center px-2">
                     Klik Upload
                     <br />
-                    Foto
+                    Foto Latar Merah
                   </span>
                 </div>
               )}
@@ -741,7 +741,7 @@ export default function BiodataSiswa() {
           <Section title="📄 Dokumen Pendukung">
             <label className="block w-full">
               <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">
-                Upload Ijazah SMP / Dokumen Pendukung
+                Upload Surat Pernyataan TKA
                 <span className="block normal-case text-[9px] text-slate-400 mt-1">
                   JPG, JPEG, PNG, atau PDF • Maks. 10 MB PDF / 5 MB foto
                 </span>
