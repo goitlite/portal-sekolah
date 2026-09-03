@@ -6,7 +6,6 @@ import Image from "next/image";
 
 import { saveMonitoring, uploadPhoto } from "../../lib/api";
 import { getSession, isLoggedIn } from "../../lib/auth";
-import QRCode from "qrcode";
 
 export default function MonitoringPage() {
   const router = useRouter();
@@ -136,7 +135,10 @@ export default function MonitoringPage() {
   }
 
   // FUNGSI TAMBAH WATERMARK
-  function addWatermark(imageData) {
+  async function addWatermark(imageData) {
+    // QR code hanya dimuat saat benar-benar diperlukan.
+    const QRCode = (await import("qrcode")).default;
+
     return new Promise((resolve) => {
       const img = document.createElement("img");
       img.onload = () => {
@@ -223,7 +225,7 @@ export default function MonitoringPage() {
             ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
             ctx.textAlign = "left";
 
-            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.9);
+            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.75);
             resolve(watermarkedImage);
           };
           qrImage.src = qrUrl;
@@ -266,7 +268,7 @@ export default function MonitoringPage() {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
 
-    const image = canvas.toDataURL("image/jpeg", 0.9);
+    const image = canvas.toDataURL("image/jpeg", 0.75);
     setPhoto(image);
     setPhotoSuccess(true);
 
@@ -318,7 +320,11 @@ export default function MonitoringPage() {
         setAlamat("-");
         alert("Lokasi tidak dapat diperoleh.");
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000,
+      },
     );
   }
 
@@ -373,7 +379,7 @@ export default function MonitoringPage() {
         setAlamat("-");
         setAccuracy("-");
         setGpsSuccess(false);
-        window.location.href = "/magang/guru";
+        router.replace("/magang/guru");
       } else {
         alert(result.message);
       }
