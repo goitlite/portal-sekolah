@@ -23,7 +23,7 @@ export default function MonitoringPage() {
 
   const [cameraReady, setCameraReady] = useState(false);
 
-  // STATE UNTUK PANDUAN LANDSCAPE
+  // STATE UNTUK PANDUAN LANDSCAPEE
   const [showLandscapeGuide, setShowLandscapeGuide] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
 
