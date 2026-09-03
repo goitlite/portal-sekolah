@@ -329,6 +329,13 @@ export default function MonitoringPage() {
   }
 
   // FUNGSI SIMPAN MONITORING
+  // 1. Turunkan kompresi pada addWatermark (ubah 0.9 menjadi 0.6)
+  const watermarkedImage = canvas.toDataURL("image/jpeg", 0.6);
+
+  // 2. Turunkan kompresi pada capturePhoto (ubah 0.9 menjadi 0.6)
+  const image = canvas.toDataURL("image/jpeg", 0.6);
+
+  // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API
   async function handleSaveMonitoring() {
     if (!photo) {
       alert("Silakan ambil foto monitoring.");
@@ -341,23 +348,16 @@ export default function MonitoringPage() {
 
     try {
       setSaving(true);
+
+      // Proses watermark lokal di browser
       const photoWithWatermark = await addWatermark(photo);
-      const upload = await uploadPhoto(
-        photoWithWatermark,
-        "MONITORING_" + Date.now() + ".jpg",
-      );
 
-      if (!upload.success) {
-        alert(upload.message);
-        setSaving(false);
-        return;
-      }
-
+      // Kirim 1 request gabungan ke backend
       const result = await saveMonitoring({
         idGuru: user.id,
         namaGuru: user.nama,
         tempatMagang: tempatMagang,
-        fotoUrl: upload.data.url,
+        base64Photo: photoWithWatermark, // Kirim Base64 langsung
         latitude: latitude,
         longitude: longitude,
         mapUrl: "https://www.google.com/maps?q=" + latitude + "," + longitude,
@@ -371,23 +371,16 @@ export default function MonitoringPage() {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
-        setPhoto("");
-        setPhotoSuccess(false);
-        setKeterangan("");
-        setLatitude("-");
-        setLongitude("-");
-        setAlamat("-");
-        setAccuracy("-");
-        setGpsSuccess(false);
         router.replace("/magang/guru");
       } else {
         alert(result.message);
       }
     } catch (err) {
-      console.log(err);
-      alert("Terjadi kesalahan.");
+      console.error(err);
+      alert("Terjadi kesalahan sistem saat menyimpan.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   useEffect(() => {
