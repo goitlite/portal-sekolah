@@ -225,7 +225,7 @@ export default function MonitoringPage() {
             ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
             ctx.textAlign = "left";
 
-            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.75);
+            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.6);
             resolve(watermarkedImage);
           };
           qrImage.src = qrUrl;
@@ -268,7 +268,7 @@ export default function MonitoringPage() {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
 
-    const image = canvas.toDataURL("image/jpeg", 0.75);
+    const image = canvas.toDataURL("image/jpeg", 0.6);
     setPhoto(image);
     setPhotoSuccess(true);
 
@@ -327,13 +327,6 @@ export default function MonitoringPage() {
       },
     );
   }
-
-  // FUNGSI SIMPAN MONITORING
-  // 1. Turunkan kompresi pada addWatermark (ubah 0.9 menjadi 0.6)
-  const watermarkedImage = canvas.toDataURL("image/jpeg", 0.6);
-
-  // 2. Turunkan kompresi pada capturePhoto (ubah 0.9 menjadi 0.6)
-  const image = canvas.toDataURL("image/jpeg", 0.6);
 
   // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API
   async function handleSaveMonitoring() {
