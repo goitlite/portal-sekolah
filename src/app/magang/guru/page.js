@@ -142,17 +142,18 @@ function DashboardGuruContent() {
   const [formPerjalananDinas, setFormPerjalananDinas] = useState({
     dasar: "Surat Perintah Tugas Kepala Sekolah tentang Siswa PKL 2026",
     tempatKegiatan: "Teluk Kuantan",
-    tanggalPelaksanaan: "16 - 17 Agustus 2026",
-    pelaksanaKegiatan: "Panitia PKL SMKN 1 Teluk Kuantan",
+    tanggalPelaksanaan: "03 - 04 September 2026",
+    pelaksanaKegiatan:
+      "Panitia Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan",
     namaKegiatan: "Monitoring Siswa PKL 2026",
     tujuanKegiatan: "Melakukan Monitoring Siswa PKL 2026",
     sasaranKegiatan: "Siswa PKL 2026 SMKN 1 Teluk Kuantan",
     prosesKegiatan:
-      "Kegiatan Monitoring siswa Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan Tahun Pelajaran 2026/2027 dilaksanakan pada tanggal 16–17 Juli 2026 di Pekanbaru. Diawali dengan monitoring lapangan ke PT. Telkom Pekanbaru dan kemudian PT. Mayatama Pekanbaru. Dalam Kegiatan tersebut guru pembimbing Memantau perkembangan kompetensi yang dicapai, jurnal dan berbagai permasalahan yang dihadapi siswa serta berkoordinasi Bersama pihak pihak dunia usaha dan dunia industri (DUDI) menyangkut perkembangan siswa di Tempat PKL",
+      "Kegiatan Monitoring Siswa Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan Tahun Pelajaran 2026/2027 dilaksanakan pada tanggal 03 September 2026 di Teluk Kuantan. Kegiatan diawali dengan monitoring ke PT. Telkom, dilanjutkan ke Kantor Diskominfo Kuansing, Toko Kita Store, dan terakhir Kantor Mayatama Net. Dalam kegiatan tersebut, guru pembimbing memantau presensi online, perkembangan kompetensi, jurnal kegiatan, serta permasalahan yang dihadapi siswa dan berkoordinasi dengan pihak Dunia Usaha dan Dunia Industri (DUDI)",
     hasilKegiatan:
-      "Kegiatan Monitoring siswa PKL berjalan sesuai dengan rencana. Seluruh siswa PKL mampu beradaptasi di lingkungan dunia usaha dan dunia industri (DUDI) sehingga diharapkan memberikan pengalaman kerja yang bermanfaat bagi peserta siswa",
+      "Kegiatan Monitoring Siswa PKL berjalan dengan baik dan sesuai rencana. Siswa mampu beradaptasi dengan lingkungan Dunia Usaha dan Dunia Industri (DUDI) serta memperoleh pengalaman kerja yang bermanfaat untuk meningkatkan kompetensi dan kesiapan memasuki dunia kerja.",
     saranSaran:
-      "Diperlukan kerja sama dengan DUDI yang lebih banyak lagi dan profesional sebagai mitra strategis dalam mendukung peningkatan kompetensi peserta didik.",
+      "Perlu ditingkatkan kerja sama dengan lebih banyak DUDI yang profesional dan relevan sebagai mitra strategis dalam mendukung peningkatan kompetensi peserta didik.",
     tanggalTtd: tanggalOtomatisInit, // <-- Form akan terisi secara otomatis mengikuti tanggal hari ini
   });
 
