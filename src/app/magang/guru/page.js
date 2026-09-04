@@ -158,6 +158,88 @@ function DashboardGuruContent() {
     tanggalTtd: tanggalOtomatisInit, // <-- Form akan terisi secara otomatis mengikuti tanggal hari ini
   });
 
+  // 👇 TAMBAHAN STATE UNTUK FITUR "TAMBAH FOTO LAMPIRAN"
+  const [includeFotoLampiran, setIncludeFotoLampiran] = useState(false);
+  const [fotoLampiranList, setFotoLampiranList] = useState([
+    { namaTempat: "", fotoBase64: "", fotoWidth: 0, fotoHeight: 0 },
+  ]);
+
+  // Tambah baris baru (tombol ikon "+")
+  function tambahBarisFotoLampiran() {
+    setFotoLampiranList((prev) => [
+      ...prev,
+      { namaTempat: "", fotoBase64: "", fotoWidth: 0, fotoHeight: 0 },
+    ]);
+  }
+
+  // Hapus satu baris
+  function hapusBarisFotoLampiran(index) {
+    setFotoLampiranList((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Ubah nama tempat magang pada baris tertentu
+  function ubahNamaTempatFotoLampiran(index, value) {
+    setFotoLampiranList((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, namaTempat: value } : row)),
+    );
+  }
+
+  // Upload & kompres foto lampiran ringan (maks 1200px) agar ukuran PDF wajar
+  async function handleUploadFotoLampiran(index, file) {
+    if (!file) return;
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const img = await new Promise((resolve, reject) => {
+        const image = new window.Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = dataUrl;
+      });
+
+      const MAX_DIM = 1200;
+      let targetW = img.width;
+      let targetH = img.height;
+      if (targetW > MAX_DIM || targetH > MAX_DIM) {
+        if (targetW > targetH) {
+          targetH = Math.round((targetH * MAX_DIM) / targetW);
+          targetW = MAX_DIM;
+        } else {
+          targetW = Math.round((targetW * MAX_DIM) / targetH);
+          targetH = MAX_DIM;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+      setFotoLampiranList((prev) =>
+        prev.map((row, i) =>
+          i === index
+            ? {
+                ...row,
+                fotoBase64: compressedDataUrl,
+                fotoWidth: targetW,
+                fotoHeight: targetH,
+              }
+            : row,
+        ),
+      );
+    } catch (err) {
+      console.error("Gagal memproses foto lampiran:", err);
+      alert("Gagal memproses foto. Coba gunakan file gambar lain.");
+    }
+  }
+
   // 👇 TAMBAHKAN KODE INI UNTUK MENGINGAT ISIAN FORM
   useEffect(() => {
     const savedData = localStorage.getItem("dataPernyataanMutlak");
@@ -492,6 +574,11 @@ function DashboardGuruContent() {
         ? JSON.parse(dataPerjalananStr)
         : null;
 
+      // Foto lampiran tambahan (hanya baris yang sudah diisi foto)
+      const dataFotoLampiran = includeFotoLampiran
+        ? fotoLampiranList.filter((item) => item.fotoBase64)
+        : null;
+
       await generateLaporanPDF({
         data: filteredDataToRender,
         guruDipilih: user.id,
@@ -500,6 +587,7 @@ function DashboardGuruContent() {
         guruList,
         dataPernyataan,
         dataPerjalanan,
+        dataFotoLampiran,
         onProgress: (p) => setProgressPdfMonitoring(18 + p * 0.8), // petakan 0-100 dari PDF ke 18-98%
       });
 
@@ -1528,6 +1616,94 @@ function DashboardGuruContent() {
                       }
                       className="w-full mt-0.5 p-2 border border-slate-300 rounded-lg bg-white"
                     />
+                  </div>
+                </div>
+              )}
+
+              {/* 👇 CHECKBOX & FORM TAMBAH FOTO LAMPIRAN */}
+              <div className="pt-3 border-t border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeFotoLampiran}
+                    onChange={(e) => setIncludeFotoLampiran(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-xs font-black text-slate-800">
+                    📎 Tambah Foto Lampiran
+                  </span>
+                </label>
+              </div>
+
+              {includeFotoLampiran && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                  <p className="font-bold text-indigo-700 uppercase text-[11px] mb-1">
+                    Foto Lampiran Kegiatan (maks. 3 foto per halaman PDF)
+                  </p>
+
+                  <div className="space-y-2">
+                    {fotoLampiranList.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2"
+                      >
+                        <input
+                          type="text"
+                          placeholder="Nama tempat magang"
+                          value={item.namaTempat}
+                          onChange={(e) =>
+                            ubahNamaTempatFotoLampiran(index, e.target.value)
+                          }
+                          className="flex-1 p-2 border border-slate-300 rounded-lg bg-white text-xs"
+                        />
+
+                        <label className="shrink-0 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadFotoLampiran(index, file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <span
+                            className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap ${
+                              item.fotoBase64
+                                ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                                : "bg-indigo-100 text-indigo-700 border border-indigo-300"
+                            }`}
+                          >
+                            {item.fotoBase64
+                              ? "✅ Foto Terpilih"
+                              : "📤 Upload Foto"}
+                          </span>
+                        </label>
+
+                        {fotoLampiranList.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => hapusBarisFotoLampiran(index)}
+                            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-red-50 text-red-600 border border-red-200 font-bold"
+                            title="Hapus baris"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={tambahBarisFotoLampiran}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-600 text-white font-black text-lg shadow-sm hover:bg-indigo-700 active:scale-95 transition-all"
+                      title="Tambah baris"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               )}

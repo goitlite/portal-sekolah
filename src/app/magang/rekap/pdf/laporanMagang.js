@@ -69,6 +69,98 @@ const optimizeFotoUrlForPdf = (url, size = 1000) => {
   return url;
 };
 
+// HALAMAN LAMPIRAN FOTO TAMBAHAN — dicetak di bagian paling akhir dokumen,
+// maksimal 3 foto per halaman. Foto sudah berupa base64 (dataURL) hasil upload
+// manual dari form, jadi tidak perlu fetch ulang seperti foto monitoring.
+const renderLampiranFotoPage = (doc, items, pageWidth) => {
+  const perPage = 3;
+  const totalPages = Math.ceil(items.length / perPage);
+  const pageHeight = 297; // A4 portrait, mm
+
+  for (let p = 0; p < totalPages; p++) {
+    doc.addPage();
+
+    // Header halaman lampiran (gaya sama dengan header halaman detail lainnya)
+    doc.setFillColor(33, 37, 41);
+    doc.rect(0, 0, pageWidth, 14, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("SMKN 1 TELUK KUANTAN - LAMPIRAN FOTO KEGIATAN", 15, 10);
+    doc.setTextColor(0, 0, 0);
+
+    let topMargin = 20;
+    if (p === 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("LAMPIRAN FOTO KEGIATAN", pageWidth / 2, 24, {
+        align: "center",
+      });
+      topMargin = 32;
+    }
+
+    const startIndex = p * perPage;
+    const itemsOnPage = items.slice(startIndex, startIndex + perPage);
+
+    const bottomMargin = 15;
+    const availableHeight = pageHeight - topMargin - bottomMargin;
+    const slotHeight = availableHeight / perPage;
+    const boxW = pageWidth - 30;
+    const maxImgH = slotHeight - 14; // sisakan ruang untuk label nama tempat
+
+    itemsOnPage.forEach((item, idx) => {
+      const slotY = topMargin + idx * slotHeight;
+
+      // Label nomor + nama tempat magang
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(
+        `${startIndex + idx + 1}. ${item.namaTempat || "Tanpa Nama Tempat"}`,
+        15,
+        slotY + 5,
+      );
+
+      const boxY = slotY + 8;
+
+      if (item.fotoBase64) {
+        let imgW = boxW;
+        let imgH =
+          item.fotoWidth && item.fotoHeight
+            ? (item.fotoHeight * boxW) / item.fotoWidth
+            : maxImgH;
+
+        if (imgH > maxImgH) {
+          imgH = maxImgH;
+          imgW =
+            item.fotoWidth && item.fotoHeight
+              ? (item.fotoWidth * maxImgH) / item.fotoHeight
+              : boxW;
+        }
+
+        const xOffset = 15 + (boxW - imgW) / 2;
+        const yOffset = boxY + (maxImgH - imgH) / 2;
+
+        doc.setDrawColor(180);
+        doc.setLineWidth(0.3);
+        doc.rect(15, boxY, boxW, maxImgH);
+        try {
+          doc.addImage(item.fotoBase64, "JPEG", xOffset, yOffset, imgW, imgH);
+        } catch (e) {
+          // biarkan kotak kosong jika gambar gagal ditempel
+        }
+      } else {
+        doc.setDrawColor(200);
+        doc.rect(15, boxY, boxW, maxImgH);
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8);
+        doc.text("FOTO TIDAK TERSEDIA", pageWidth / 2, boxY + maxImgH / 2, {
+          align: "center",
+        });
+      }
+    });
+  }
+};
+
 // HELPER BARU: Membaca & Mengonversi Bulan Otomatis dari Data Spreadsheet
 const autoDetectBulanFromData = (dataList, bulanInput) => {
   // 1. Jika pengguna secara manual memilih bulan di dropdown, utamakan pilihan tersebut
@@ -154,6 +246,7 @@ export const generateLaporanPDF = async ({
   guruList = [],
   dataPernyataan, // Parameter baru
   dataPerjalanan, // 👈 TAMBAHKAN PARAMETER INI
+  dataFotoLampiran, // ⬅️ TAMBAHKAN: array {namaTempat, fotoBase64, fotoWidth, fotoHeight}
   onProgress, // ⬅️ TAMBAHKAN: callback(percent) opsional untuk progress bar
 }) => {
   const reportProgress = (percent) => {
@@ -753,6 +846,15 @@ export const generateLaporanPDF = async ({
     doc.text(dataPernyataan?.nama || teksNamaGuru, 125, finalPerjalananY);
     doc.setFont("helvetica", "normal");
     doc.text(`NIP. ${dataPernyataan?.nip || "-"}`, 125, finalPerjalananY + 5);
+  }
+
+  // ==========================================
+  // HALAMAN TAMBAHAN: LAMPIRAN FOTO KEGIATAN
+  // Muncul paling akhir, di bawah semua hasil cetak yang sudah ada.
+  // Maksimal 3 foto per halaman.
+  // ==========================================
+  if (Array.isArray(dataFotoLampiran) && dataFotoLampiran.length > 0) {
+    renderLampiranFotoPage(doc, dataFotoLampiran, pageWidth);
   }
 
   reportProgress(97);
