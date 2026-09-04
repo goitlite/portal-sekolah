@@ -54,6 +54,21 @@ const getBase64Image = async (url) => {
   }
 };
 
+// Minta Google mengirim versi resize/kompres, bukan file foto asli (bisa 3-8MB).
+// Ini penyebab utama loading kadang lama — ukuran tiap foto tidak seragam.
+const optimizeFotoUrlForPdf = (url, size = 1000) => {
+  if (!url || typeof url !== "string") return url;
+  if (url.includes("googleusercontent.com")) {
+    const base = url.split("=")[0];
+    return `${base}=w${size}-h${size}`;
+  }
+  const driveIdMatch = url.match(/[-\w]{25,}/);
+  if (url.includes("drive.google.com") && driveIdMatch) {
+    return `https://lh3.googleusercontent.com/d/${driveIdMatch[0]}=w${size}-h${size}`;
+  }
+  return url;
+};
+
 // HELPER BARU: Membaca & Mengonversi Bulan Otomatis dari Data Spreadsheet
 const autoDetectBulanFromData = (dataList, bulanInput) => {
   // 1. Jika pengguna secara manual memilih bulan di dropdown, utamakan pilihan tersebut
@@ -139,7 +154,15 @@ export const generateLaporanPDF = async ({
   guruList = [],
   dataPernyataan, // Parameter baru
   dataPerjalanan, // 👈 TAMBAHKAN PARAMETER INI
+  onProgress, // ⬅️ TAMBAHKAN: callback(percent) opsional untuk progress bar
 }) => {
+  const reportProgress = (percent) => {
+    if (typeof onProgress === "function") {
+      onProgress(Math.min(100, Math.max(0, Math.round(percent))));
+    }
+  };
+  reportProgress(2);
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -192,6 +215,17 @@ export const generateLaporanPDF = async ({
     totalAGlobal += a;
     return { ...item, stat: { h, i, s, a } };
   });
+
+  reportProgress(8);
+
+  // PREFETCH SEMUA FOTO SECARA PARALEL — total waktu tunggu jadi ≈ foto
+  // terlama, bukan akumulasi semua foto seperti sebelumnya (sequential).
+  const fotoResults = await Promise.all(
+    dataProcessed.map((item) =>
+      getBase64Image(optimizeFotoUrlForPdf(item.foto)),
+    ),
+  );
+  reportProgress(55);
 
   // Tentukan Nama Guru Asli
   let teksNamaGuru = namaGuru;
@@ -292,7 +326,7 @@ export const generateLaporanPDF = async ({
     let detailY = currentYOnPage;
 
     // FOTO BESAR (Max Tinggi 75mm)
-    const bigImgObj = await getBase64Image(item.foto);
+    const bigImgObj = fotoResults[i];
     const maxW = 180;
     const maxH = 75;
 
@@ -402,7 +436,12 @@ export const generateLaporanPDF = async ({
 
     finalY += 2;
     doc.line(15, finalY, 195, finalY);
+
+    // progress menggambar halaman: 55% -> 88%
+    reportProgress(55 + (33 * (i + 1)) / dataProcessed.length);
   }
+
+  reportProgress(90);
 
   // ==========================================
   // HALAMAN TERAKHIR: REKAP AKHIR & TTDd
@@ -610,6 +649,7 @@ export const generateLaporanPDF = async ({
     doc.setFont("helvetica", "normal");
     doc.text(`NIP. ${dataPernyataan.nip || "-"}`, 120, py + 6);
   }
+  reportProgress(94);
 
   if (dataPerjalanan) {
     doc.addPage();
@@ -715,8 +755,12 @@ export const generateLaporanPDF = async ({
     doc.text(`NIP. ${dataPernyataan?.nip || "-"}`, 125, finalPerjalananY + 5);
   }
 
+  reportProgress(97);
+
   const namaFileAman = teksNamaGuru.replace(/[^a-zA-Z0-9_]/g, "_");
   const bulanFileAman = teksBulan.replace(/[^a-zA-Z0-9_]/g, "_");
 
+  reportProgress(99);
   doc.save(`Laporan_Magang_${namaFileAman}_${bulanFileAman}.pdf`);
+  reportProgress(100);
 };

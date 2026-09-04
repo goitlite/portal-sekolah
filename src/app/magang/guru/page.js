@@ -110,6 +110,7 @@ function DashboardGuruContent() {
 
   const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
     useState(false);
+  const [progressPdfMonitoring, setProgressPdfMonitoring] = useState(0); // ⬅️ TAMBAHKAN
 
   const [showCetakModal, setShowCetakModal] = useState(false);
   const [formDataCetak, setFormDataCetak] = useState({
@@ -397,6 +398,7 @@ function DashboardGuruContent() {
   const handleCetakLaporanMonitoringLangsung = async () => {
     if (!user?.id || loadingCetakLaporanMonitoring) return;
     setLoadingCetakLaporanMonitoring(true);
+    setProgressPdfMonitoring(0);
 
     try {
       // Simpan form (perilaku sama seperti alur lama)
@@ -438,15 +440,18 @@ function DashboardGuruContent() {
 
       // Ambil data rekap — persis seperti load() di halaman Rekap
       // (tempat selalu "Semua" -> dikirim "" ke backend, sama seperti alur lama)
+      setProgressPdfMonitoring(5);
       const hasilRekap = await getRekapSemua(bulanTerbaru, "", user.id);
       const dataRekap = hasilRekap?.data || [];
 
       // Ambil daftar guru — persis seperti fetchGuru() di halaman Rekap
+      setProgressPdfMonitoring(12);
       const resGuru = await getGuru();
       let guruList = resGuru?.data || [];
       guruList = [...guruList].sort((a, b) =>
         (a.NAMA_GURU || "").localeCompare(b.NAMA_GURU || ""),
       );
+      setProgressPdfMonitoring(18);
 
       // Filter identik dengan filteredDataToRender (filterNama="", filterKelas="Semua", tempat="Semua")
       const filteredDataToRender = dataRekap
@@ -495,9 +500,11 @@ function DashboardGuruContent() {
         guruList,
         dataPernyataan,
         dataPerjalanan,
+        onProgress: (p) => setProgressPdfMonitoring(18 + p * 0.8), // petakan 0-100 dari PDF ke 18-98%
       });
 
-      setShowCetakModal(false);
+      setProgressPdfMonitoring(100);
+      setTimeout(() => setShowCetakModal(false), 400); // beri jeda supaya 100% sempat terlihat
     } catch (error) {
       console.error("Gagal mencetak laporan monitoring:", error);
       alert(
@@ -1526,10 +1533,30 @@ function DashboardGuruContent() {
               )}
             </div>
 
+            {loadingCetakLaporanMonitoring && (
+              <div className="px-5 pb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold text-slate-500">
+                    Menyiapkan PDF...
+                  </span>
+                  <span className="text-[10px] font-black text-indigo-600">
+                    {Math.round(progressPdfMonitoring)}%
+                  </span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-blue-600 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${progressPdfMonitoring}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
               <button
                 onClick={() => setShowCetakModal(false)}
-                className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-colors"
+                disabled={loadingCetakLaporanMonitoring}
+                className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-colors disabled:opacity-60"
               >
                 Batal
               </button>
@@ -1539,7 +1566,7 @@ function DashboardGuruContent() {
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-indigo-200 disabled:opacity-60"
               >
                 {loadingCetakLaporanMonitoring
-                  ? "⏳ Tunggu Sebentar yaa..."
+                  ? `⏳ ${Math.round(progressPdfMonitoring)}%`
                   : "Lanjutkan Cetak"}
               </button>
             </div>
