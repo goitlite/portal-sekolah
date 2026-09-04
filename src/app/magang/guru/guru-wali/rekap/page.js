@@ -393,7 +393,7 @@ export default function RekapGuruWaliPage() {
                     FOTO
                   </th>
                   <th className="px-2 py-2 font-black border-b text-center">
-                    IJAZAH
+                    Dokumen
                   </th>
                   <th className="px-3 py-2 font-black border-b">NO HP (WA)</th>
                   <th className="px-3 py-2 font-black border-b">TTL</th>
@@ -447,7 +447,7 @@ export default function RekapGuruWaliPage() {
                       <td className="px-2 py-2 border-b align-middle">
                         <DocumentIndicator
                           url={siswa.ijazahSmp}
-                          label="IJAZAH"
+                          label="Dokumen"
                         />
                       </td>
 

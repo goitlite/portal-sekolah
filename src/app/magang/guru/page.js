@@ -1538,7 +1538,7 @@ function DashboardGuruContent() {
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-indigo-200 disabled:opacity-60"
               >
                 {loadingCetakLaporanMonitoring
-                  ? "⏳ Menyusun PDF..."
+                  ? "⏳ Tunggu Sebentar yaa..."
                   : "Lanjutkan Cetak"}
               </button>
             </div>
