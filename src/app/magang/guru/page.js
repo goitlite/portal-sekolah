@@ -12,7 +12,10 @@ import {
   getJurnalGuruWali,
   getDataSiswaWali,
   getJurnalPKL,
+  getRekapSemua, // ⬅️ TAMBAHKAN
+  getGuru, // ⬅️ TAMBAHKAN
 } from "../lib/api";
+import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
@@ -104,6 +107,9 @@ function DashboardGuruContent() {
 
   const [loadingCetakWali, setLoadingCetakWali] = useState(false);
   const [showLaporanWaliModal, setShowLaporanWaliModal] = useState(false);
+
+  const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
+    useState(false);
 
   const [showCetakModal, setShowCetakModal] = useState(false);
   const [formDataCetak, setFormDataCetak] = useState({
@@ -384,6 +390,120 @@ function DashboardGuruContent() {
       );
     } finally {
       setLoadingCetakJurnalPkl(false);
+    }
+  };
+
+  const handleCetakLaporanMonitoringLangsung = async () => {
+    if (!user?.id || loadingCetakLaporanMonitoring) return;
+    setLoadingCetakLaporanMonitoring(true);
+
+    try {
+      // Simpan form (perilaku sama seperti alur lama)
+      localStorage.setItem(
+        "dataPernyataanMutlak",
+        JSON.stringify({ nama: user?.nama, ...formDataCetak }),
+      );
+
+      if (includePerjalananDinas) {
+        localStorage.setItem(
+          "dataPerjalananDinas",
+          JSON.stringify(formPerjalananDinas),
+        );
+      } else {
+        localStorage.removeItem("dataPerjalananDinas");
+      }
+
+      if (includeCetakJurnalPkl) {
+        await handleCetakJurnalPkl();
+      }
+
+      // Samakan format "bulan" persis seperti targetBulanRekap di alur lama
+      const date = new Date();
+      const namaBulan = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+      const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
+
+      // Ambil data rekap — persis seperti load() di halaman Rekap
+      // (tempat selalu "Semua" -> dikirim "" ke backend, sama seperti alur lama)
+      const hasilRekap = await getRekapSemua(bulanTerbaru, "", user.id);
+      const dataRekap = hasilRekap?.data || [];
+
+      // Ambil daftar guru — persis seperti fetchGuru() di halaman Rekap
+      const resGuru = await getGuru();
+      let guruList = resGuru?.data || [];
+      guruList = [...guruList].sort((a, b) =>
+        (a.NAMA_GURU || "").localeCompare(b.NAMA_GURU || ""),
+      );
+
+      // Filter identik dengan filteredDataToRender (filterNama="", filterKelas="Semua", tempat="Semua")
+      const filteredDataToRender = dataRekap
+        .filter((item) => (item.siswa || []).length > 0)
+        .sort((a, b) => a.tempat.localeCompare(b.tempat));
+
+      if (filteredDataToRender.length === 0) {
+        alert(
+          "Tidak ada data untuk dicetak. Pastikan sudah ada presensi tercatat.",
+        );
+        return;
+      }
+
+      // Cari namaGuru — persis logika handleDownloadPDF di halaman Rekap
+      const guruObj = guruList.find((g) => {
+        const finalId =
+          g.id ||
+          g.ID ||
+          g.ID_GURU ||
+          g.id_guru ||
+          g.idGuru ||
+          g.NAMA_GURU ||
+          g.nama ||
+          "";
+        return finalId === user.id;
+      });
+      const namaGuru = guruObj
+        ? guruObj.NAMA || guruObj.nama || guruObj.NAMA_GURU || guruObj.nama_guru
+        : user.id;
+
+      const dataPernyataanStr = localStorage.getItem("dataPernyataanMutlak");
+      const dataPernyataan = dataPernyataanStr
+        ? JSON.parse(dataPernyataanStr)
+        : null;
+
+      const dataPerjalananStr = localStorage.getItem("dataPerjalananDinas");
+      const dataPerjalanan = dataPerjalananStr
+        ? JSON.parse(dataPerjalananStr)
+        : null;
+
+      await generateLaporanPDF({
+        data: filteredDataToRender,
+        guruDipilih: user.id,
+        namaGuru,
+        bulan: bulanTerbaru || "Semua Bulan",
+        guruList,
+        dataPernyataan,
+        dataPerjalanan,
+      });
+
+      setShowCetakModal(false);
+    } catch (error) {
+      console.error("Gagal mencetak laporan monitoring:", error);
+      alert(
+        "Terjadi kesalahan teknis saat menyusun PDF. Pastikan koneksi internet lancar.",
+      );
+    } finally {
+      setLoadingCetakLaporanMonitoring(false);
     }
   };
 
@@ -1413,56 +1533,13 @@ function DashboardGuruContent() {
                 Batal
               </button>
               <button
-                onClick={async () => {
-                  if (includeCetakJurnalPkl) {
-                    await handleCetakJurnalPkl();
-                  }
-
-                  // Simpan form ke localStorage
-                  localStorage.setItem(
-                    "dataPernyataanMutlak",
-                    JSON.stringify({
-                      nama: user?.nama,
-                      ...formDataCetak,
-                    }),
-                  );
-
-                  if (includePerjalananDinas) {
-                    localStorage.setItem(
-                      "dataPerjalananDinas",
-                      JSON.stringify(formPerjalananDinas),
-                    );
-                  } else {
-                    localStorage.removeItem("dataPerjalananDinas");
-                  }
-
-                  // Logika pindah halaman yang asli
-                  const date = new Date();
-                  const namaBulan = [
-                    "Januari",
-                    "Februari",
-                    "Maret",
-                    "April",
-                    "Mei",
-                    "Juni",
-                    "Juli",
-                    "Agustus",
-                    "September",
-                    "Oktober",
-                    "November",
-                    "Desember",
-                  ];
-                  const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
-
-                  localStorage.setItem("targetTempatRekap", "Semua");
-                  localStorage.setItem("targetGuruRekap", user.id);
-                  localStorage.setItem("targetBulanRekap", bulanTerbaru);
-
-                  window.location.href = "/magang/rekap?source=dashboard_guru";
-                }}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-indigo-200"
+                onClick={handleCetakLaporanMonitoringLangsung}
+                disabled={loadingCetakLaporanMonitoring}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-indigo-200 disabled:opacity-60"
               >
-                Lanjutkan Cetak
+                {loadingCetakLaporanMonitoring
+                  ? "⏳ Menyusun PDF..."
+                  : "Lanjutkan Cetak"}
               </button>
             </div>
           </div>

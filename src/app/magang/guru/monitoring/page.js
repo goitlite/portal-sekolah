@@ -35,6 +35,11 @@ export default function MonitoringPage() {
 
   const [gpsLoading, setGpsLoading] = useState(false);
 
+  // ---- TAMBAHAN: state garis progress simpan monitoring ----
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [saveLabel, setSaveLabel] = useState("");
+  const progressIntervalRef = useRef(null);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const watermarkCanvasRef = useRef(null);
@@ -328,7 +333,38 @@ export default function MonitoringPage() {
     );
   }
 
+  // ---- TAMBAHAN: kontrol garis progress (murni visual, tidak menyentuh jaringan) ----
+  // Garis bergerak pendek ke arah 90% selama request berjalan (melambat
+  // mendekati ujung agar tidak terkesan "bohong" kalau prosesnya lama),
+  // lalu baru lompat ke 100% setelah response BENAR-BENAR diterima.
+  function startSaveProgress(label) {
+    setSaveLabel(label);
+    let current = 6;
+    setSaveProgress(current);
+    handleSaveMonitoring;
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+
+    progressIntervalRef.current = setInterval(() => {
+      const remaining = 90 - current;
+      current += Math.max(remaining * 0.06, 0.4);
+      if (current >= 90) current = 90;
+      setSaveProgress(Math.round(current));
+    }, 200);
+  }
+
+  function finishSaveProgress() {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setSaveProgress(100);
+  }
+
+  function resetSaveProgress() {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setSaveProgress(0);
+    setSaveLabel("");
+  }
+
   // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API
+  // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API (+ garis progress)
   async function handleSaveMonitoring() {
     if (!photo) {
       alert("Silakan ambil foto monitoring.");
@@ -341,11 +377,14 @@ export default function MonitoringPage() {
 
     try {
       setSaving(true);
+      startSaveProgress("Memproses watermark...");
 
       // Proses watermark lokal di browser
       const photoWithWatermark = await addWatermark(photo);
 
-      // Kirim 1 request gabungan ke backend
+      startSaveProgress("Mengirim ke server...");
+
+      // Kirim 1 request gabungan ke backend (tidak berubah)
       const result = await saveMonitoring({
         idGuru: user.id,
         namaGuru: user.nama,
@@ -358,7 +397,10 @@ export default function MonitoringPage() {
         keterangan: keterangan,
       });
 
+      finishSaveProgress();
+
       if (result.success) {
+        setSaveLabel("Selesai");
         alert("Monitoring berhasil disimpan.");
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
@@ -373,6 +415,7 @@ export default function MonitoringPage() {
       alert("Terjadi kesalahan sistem saat menyimpan.");
     } finally {
       setSaving(false);
+      resetSaveProgress();
     }
   }
 
@@ -745,10 +788,23 @@ export default function MonitoringPage() {
                 disabled={saving || !photo || latitude === "-"}
                 className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
               >
-                {saving
-                  ? "🔄 MENGUNGGAH KE SERVER..."
-                  : "🚀 SIMPAN DATA MONITORING"}
+                {saving ? `🔄 ${saveLabel}` : "🚀 SIMPAN DATA MONITORING"}
               </button>
+
+              {/* ---- TAMBAHAN: garis progress pendek -> penuh ---- */}
+              {saving && (
+                <div className="mt-3">
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-200 ease-linear"
+                      style={{ width: `${saveProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-center text-[11px] font-bold text-slate-500">
+                    {saveProgress}%
+                  </p>
+                </div>
+              )}
 
               {(!photo || latitude === "-") && !saving && (
                 <p className="mt-3 text-center text-xs font-bold text-rose-500 animate-pulse">
