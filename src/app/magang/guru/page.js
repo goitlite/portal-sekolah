@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSession, isLoggedIn, logout } from "../lib/auth";
@@ -62,6 +62,39 @@ function formatTanggal(waktu) {
   );
 }
 
+// Bungkus satu request dengan batas waktu — tanpa ini, kalau Apps Script
+// macet/lambat merespons, request bisa menggantung tanpa batas dan spinner
+// tidak akan pernah berhenti berputar.
+function fetchWithTimeout(fn, ms = 15000) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Waktu tunggu server habis (timeout).")),
+        ms,
+      ),
+    ),
+  ]);
+}
+
+// Retry ringan untuk request awal dashboard — GAS kadang "cold start" dan
+// gagal/lambat di percobaan pertama setelah idle lama, jadi dicoba sekali
+// lagi sebelum benar-benar dianggap gagal.
+async function fetchStepWithRetry(fn, { retries = 1, timeoutMs = 15000 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetchWithTimeout(fn, timeoutMs);
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function DashboardGuruContent() {
   const router = useRouter();
   // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
@@ -78,6 +111,10 @@ function DashboardGuruContent() {
   const [loadingCetakJurnalPkl, setLoadingCetakJurnalPkl] = useState(false);
 
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0); // ⬅️ TAMBAHKAN: progress bar batang
+  const [loadFailed, setLoadFailed] = useState(false); // ⬅️ TAMBAHKAN: status gagal total
+  const [loadFailedMessage, setLoadFailedMessage] = useState(""); // ⬅️ TAMBAHKAN
+  const isMountedRef = useRef(true); // ⬅️ TAMBAHKAN: pengganti isMounted lokal agar bisa dipakai ulang oleh tombol refresh
   const [user, setUser] = useState(null);
   const [aktivitas, setAktivitas] = useState([]);
   const [tempatMagang, setTempatMagang] = useState([]);
@@ -258,138 +295,177 @@ function DashboardGuruContent() {
     }
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  // loadDashboard dibuat sebagai fungsi biasa (bukan hanya di dalam useEffect)
+  // supaya bisa dipanggil ulang oleh tombol "🔄 Muat Ulang" saat gagal, tanpa
+  // perlu reload seluruh halaman.
+  const loadDashboard = useCallback(async () => {
+    if (!isLoggedIn()) {
+      router.replace("/magang/login");
+      return;
+    }
 
-    async function loadDashboard() {
-      if (!isLoggedIn()) {
-        router.replace("/magang/login");
-        return;
-      }
+    const session = getSession();
 
-      const session = getSession();
+    if (!session || session.role !== "guru") {
+      router.replace("/magang/login");
+      return;
+    }
 
-      if (!session || session.role !== "guru") {
-        router.replace("/magang/login");
-        return;
-      }
+    if (isMountedRef.current) {
+      setUser(session);
+      setLoadFailed(false);
+      setLoadFailedMessage("");
+      setLoadProgress(8);
+    }
 
-      if (isMounted) {
-        setUser(session);
-      }
+    // 1. LOAD CACHE — tampil instan kalau ada & valid, lalu tetap disegarkan
+    // di latar belakang oleh fetch di bawah.
+    const cachedDataStr = localStorage.getItem(CACHE_KEY);
+    let usedCache = false;
 
-      // 1. LOAD CACHE
-      const cachedDataStr = localStorage.getItem(CACHE_KEY);
+    if (cachedDataStr && isMountedRef.current) {
+      try {
+        const cachedData = JSON.parse(cachedDataStr);
 
-      if (cachedDataStr && isMounted) {
-        try {
-          const cachedData = JSON.parse(cachedDataStr);
+        // PENTING: validasi ketat struktur cache sebelum dipakai.
+        // Ini akar masalah "sekali gagal, seterusnya selalu gagal": kalau cache
+        // pernah tersimpan dengan field yang undefined/rusak (misal karena request
+        // sempat gagal saat pertama kali disimpan), versi lama kode langsung
+        // percaya bentuk cache apa adanya. Akibatnya .length/.map dipanggil pada
+        // undefined saat render -> seluruh halaman crash, dan karena crash terjadi
+        // sebelum data baru sempat menimpa cache yang rusak, error ini berulang
+        // di SETIAP login berikutnya sampai localStorage dibersihkan manual.
+        const isValidCache =
+          cachedData &&
+          typeof cachedData === "object" &&
+          cachedData.dashboard &&
+          typeof cachedData.dashboard === "object" &&
+          Array.isArray(cachedData.tempatMagang) &&
+          Array.isArray(cachedData.aktivitas);
 
-          // PENTING: validasi ketat struktur cache sebelum dipakai.
-          // Ini akar masalah "sekali gagal, seterusnya selalu gagal": kalau cache
-          // pernah tersimpan dengan field yang undefined/rusak (misal karena request
-          // sempat gagal saat pertama kali disimpan), versi lama kode langsung
-          // percaya bentuk cache apa adanya. Akibatnya .length/.map dipanggil pada
-          // undefined saat render -> seluruh halaman crash, dan karena crash terjadi
-          // sebelum data baru sempat menimpa cache yang rusak, error ini berulang
-          // di SETIAP login berikutnya sampai localStorage dibersihkan manual.
-          const isValidCache =
-            cachedData &&
-            typeof cachedData === "object" &&
-            cachedData.dashboard &&
-            typeof cachedData.dashboard === "object" &&
-            Array.isArray(cachedData.tempatMagang) &&
-            Array.isArray(cachedData.aktivitas);
-
-          if (isValidCache) {
-            setDashboard(cachedData.dashboard);
-            setTempatMagang(cachedData.tempatMagang);
-            setAktivitas(cachedData.aktivitas);
-            setLoading(false);
-          } else {
-            console.warn(
-              "Cache dashboard tidak valid, diabaikan & dihapus. Menunggu data baru dari server.",
-            );
-            localStorage.removeItem(CACHE_KEY);
-          }
-        } catch (error) {
-          console.error("Gagal membaca cache dashboard, cache dihapus:", error);
+        if (isValidCache) {
+          setDashboard(cachedData.dashboard);
+          setTempatMagang(cachedData.tempatMagang);
+          setAktivitas(cachedData.aktivitas);
+          setLoading(false);
+          usedCache = true;
+        } else {
+          console.warn(
+            "Cache dashboard tidak valid, diabaikan & dihapus. Menunggu data baru dari server.",
+          );
           localStorage.removeItem(CACHE_KEY);
         }
-      }
-
-      // 2. FETCH DATA PARALEL
-      try {
-        const [result, tempat, aktivitasResult] = await Promise.allSettled([
-          getDashboardGuru(session.id),
-          getTempatMagangGuru(session.id),
-          getAktivitasGuru(session.id),
-        ]);
-
-        if (!isMounted) return;
-
-        // Dashboard
-        const dashboardData =
-          result.status === "fulfilled" &&
-          result.value?.success &&
-          result.value?.data
-            ? result.value.data
-            : null;
-
-        // Tempat Magang (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
-        const tempatDataRaw =
-          tempat.status === "fulfilled" && tempat.value?.success
-            ? tempat.value.data
-            : [];
-        const tempatData = Array.isArray(tempatDataRaw) ? tempatDataRaw : [];
-
-        // Aktivitas (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
-        const aktivitasDataRaw =
-          aktivitasResult.status === "fulfilled" &&
-          aktivitasResult.value?.success
-            ? aktivitasResult.value.data
-            : [];
-        const aktivitasData = Array.isArray(aktivitasDataRaw)
-          ? aktivitasDataRaw
-          : [];
-
-        // Jika dashboard berhasil
-        if (dashboardData) {
-          const serverData = {
-            dashboard: dashboardData,
-            tempatMagang: tempatData,
-            aktivitas: aktivitasData,
-          };
-
-          setDashboard(serverData.dashboard);
-          setTempatMagang(serverData.tempatMagang);
-          setAktivitas(serverData.aktivitas);
-
-          try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
-          } catch (cacheErr) {
-            // Beberapa browser mobile punya kuota localStorage kecil.
-            // Gagal cache tidak boleh menghentikan render dashboard.
-            console.warn("Cache dashboard dilewati (kuota penuh?):", cacheErr);
-          }
-        } else if (!cachedDataStr) {
-          alert("Data dashboard tidak ditemukan.");
-        }
-      } catch (err) {
-        console.error("Error fetching dashboard:", err);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+      } catch (error) {
+        console.error("Gagal membaca cache dashboard, cache dihapus:", error);
+        localStorage.removeItem(CACHE_KEY);
       }
     }
 
+    // 2. FETCH DATA — tiap request dibungkus timeout (15 detik) + retry 1x
+    // supaya cold-start GAS tidak bikin spinner menggantung selamanya, dan
+    // progress bar naik nyata setiap salah satu dari 3 request selesai
+    // (bukan animasi buatan).
+    const totalSteps = 3;
+    let doneSteps = 0;
+    const bumpProgress = () => {
+      doneSteps += 1;
+      if (isMountedRef.current) {
+        setLoadProgress(10 + Math.round((doneSteps / totalSteps) * 80));
+      }
+    };
+
+    try {
+      const [result, tempat, aktivitasResult] = await Promise.allSettled([
+        fetchStepWithRetry(() => getDashboardGuru(session.id)).finally(
+          bumpProgress,
+        ),
+        fetchStepWithRetry(() => getTempatMagangGuru(session.id)).finally(
+          bumpProgress,
+        ),
+        fetchStepWithRetry(() => getAktivitasGuru(session.id)).finally(
+          bumpProgress,
+        ),
+      ]);
+
+      if (!isMountedRef.current) return;
+
+      // Dashboard
+      const dashboardData =
+        result.status === "fulfilled" &&
+        result.value?.success &&
+        result.value?.data
+          ? result.value.data
+          : null;
+
+      // Tempat Magang (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
+      const tempatDataRaw =
+        tempat.status === "fulfilled" && tempat.value?.success
+          ? tempat.value.data
+          : [];
+      const tempatData = Array.isArray(tempatDataRaw) ? tempatDataRaw : [];
+
+      // Aktivitas (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
+      const aktivitasDataRaw =
+        aktivitasResult.status === "fulfilled" && aktivitasResult.value?.success
+          ? aktivitasResult.value.data
+          : [];
+      const aktivitasData = Array.isArray(aktivitasDataRaw)
+        ? aktivitasDataRaw
+        : [];
+
+      // Jika dashboard berhasil
+      if (dashboardData) {
+        const serverData = {
+          dashboard: dashboardData,
+          tempatMagang: tempatData,
+          aktivitas: aktivitasData,
+        };
+
+        setDashboard(serverData.dashboard);
+        setTempatMagang(serverData.tempatMagang);
+        setAktivitas(serverData.aktivitas);
+        setLoadProgress(100);
+
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+        } catch (cacheErr) {
+          // Beberapa browser mobile punya kuota localStorage kecil.
+          // Gagal cache tidak boleh menghentikan render dashboard.
+          console.warn("Cache dashboard dilewati (kuota penuh?):", cacheErr);
+        }
+      } else if (!usedCache) {
+        // Gagal total dan tidak ada cache sebagai fallback — tampilkan status
+        // gagal + tombol refresh, JANGAN biarkan spinner berputar selamanya.
+        setLoadFailed(true);
+        setLoadFailedMessage(
+          result.status === "rejected"
+            ? "Koneksi ke server terputus atau server lambat merespons."
+            : "Data dashboard tidak ditemukan di server.",
+        );
+      }
+    } catch (err) {
+      console.error("Error fetching dashboard:", err);
+      if (!usedCache) {
+        setLoadFailed(true);
+        setLoadFailedMessage(
+          "Terjadi kesalahan saat mengambil data. Periksa koneksi internet Anda.",
+        );
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [router, CACHE_KEY]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
     loadDashboard();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
-  }, [router]);
+  }, [loadDashboard]);
 
   function handleLogout() {
     if (!confirm("Keluar dari aplikasi?")) return;
@@ -614,16 +690,50 @@ function DashboardGuruContent() {
     return result.data || [];
   };
 
+  // Status gagal total (tidak ada cache & fetch gagal setelah retry) —
+  // tampilkan tombol refresh, jangan biarkan pengguna terjebak di spinner.
+  if (loadFailed) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="text-center max-w-sm">
+          <p className="text-4xl mb-3">⚠️</p>
+          <h2 className="text-lg font-black text-slate-800 mb-2">
+            Gagal Memuat Dashboard
+          </h2>
+          <p className="text-sm text-slate-500 mb-5">
+            {loadFailedMessage ||
+              "Terjadi kendala saat mengambil data dari server."}
+          </p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              setLoadProgress(0);
+              loadDashboard();
+            }}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors active:scale-95 shadow-lg shadow-indigo-200"
+          >
+            🔄 Muat Ulang
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (loading || !user) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="relative mx-auto h-14 w-14">
-            <div className="absolute inset-0 rounded-full border-4 border-amber-200"></div>
-            <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
-          </div>
-          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-xs text-center">
+          <p className="mb-4 text-base font-bold text-slate-600 tracking-wide">
             Menyinkronkan Dashboard Guru...
+          </p>
+          <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${loadProgress}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs font-black text-slate-400">
+            {Math.round(loadProgress)}%
           </p>
         </div>
       </main>
