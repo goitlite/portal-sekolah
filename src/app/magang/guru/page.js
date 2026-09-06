@@ -1748,7 +1748,7 @@ function DashboardGuruContent() {
               {includeFotoLampiran && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
                   <p className="font-bold text-indigo-700 uppercase text-[11px] mb-1">
-                    Foto Lampiran Kegiatan (maks. 3 foto per halaman PDF)
+                    Foto Lampiran Kegiatan
                   </p>
 
                   <div className="space-y-2">
