@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   getRekapGuru,
   getRekapSemua,
@@ -12,6 +12,45 @@ import Image from "next/image";
 import Link from "next/link";
 import { toBlob } from "html-to-image";
 import { generateLaporanPDF } from "./pdf/laporanMagang";
+
+// Bungkus satu request dengan batas waktu — tanpa ini, kalau Apps Script
+// macet/lambat merespons, request bisa menggantung tanpa batas dan
+// loading tidak akan pernah berhenti.
+function fetchWithTimeout(fn, ms = 15000) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Waktu tunggu server habis (timeout).")),
+        ms,
+      ),
+    ),
+  ]);
+}
+
+// Retry ringan (sama seperti model JS Guru) — GAS kadang "cold start" dan
+// gagal/lambat di percobaan pertama setelah idle lama, jadi dicoba sekali
+// lagi sebelum benar-benar dianggap gagal.
+async function fetchStepWithRetry(fn, { retries = 1, timeoutMs = 15000 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const result = await fetchWithTimeout(fn, timeoutMs);
+      if (result && result.success === false) {
+        throw new Error(
+          result.message || "Permintaan ke server gagal diproses.",
+        );
+      }
+      return result;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    }
+  }
+  throw lastError;
+}
 
 const NamaBadge = ({ rawName }) => {
   if (!rawName) return null;
@@ -46,6 +85,10 @@ const NamaBadge = ({ rawName }) => {
 
 export default function RekapPage() {
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0); // ⬅️ TAMBAHKAN: progress bar batang
+  const [loadFailed, setLoadFailed] = useState(false); // ⬅️ TAMBAHKAN: status gagal total
+  const [loadFailedMessage, setLoadFailedMessage] = useState(""); // ⬅️ TAMBAHKAN
+  const trickleIntervalRef = useRef(null); // ⬅️ TAMBAHKAN: untuk animasi progress saat menunggu
   const [data, setData] = useState([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [bulan, setBulan] = useState("");
@@ -139,7 +182,7 @@ export default function RekapPage() {
   useEffect(() => {
     async function fetchGuru() {
       try {
-        const res = await getGuru();
+        const res = await fetchStepWithRetry(() => getGuru());
         let list = res.data || [];
         list.sort((a, b) => a.NAMA_GURU.localeCompare(b.NAMA_GURU));
         setGuruList(list);
@@ -159,26 +202,60 @@ export default function RekapPage() {
     load(false);
   }, [guruDipilih, bulan, tempat]);
 
+  // Progress "trickle" — naik bertahap selagi menunggu satu request (yang
+  // tidak punya banyak tahap terpisah seperti dashboard guru), lalu ditahan
+  // di 88% dan baru lompat ke 100% begitu data benar-benar diterima. Ini
+  // memberi kesan proses berjalan nyata, bukan diam total seperti spinner.
+  function startTrickleProgress() {
+    setLoadProgress(8);
+    if (trickleIntervalRef.current) clearInterval(trickleIntervalRef.current);
+    trickleIntervalRef.current = setInterval(() => {
+      setLoadProgress((prev) => {
+        if (prev >= 88) return prev;
+        const sisa = 88 - prev;
+        return prev + Math.max(1, sisa * 0.12);
+      });
+    }, 300);
+  }
+
+  function stopTrickleProgress(finalValue) {
+    if (trickleIntervalRef.current) {
+      clearInterval(trickleIntervalRef.current);
+      trickleIntervalRef.current = null;
+    }
+    setLoadProgress(finalValue);
+  }
+
   async function load(isRetry = false) {
-    if (!isRetry) setLoading(true);
+    if (!isRetry) {
+      setLoading(true);
+      setLoadFailed(false);
+      setLoadFailedMessage("");
+      startTrickleProgress();
+    }
 
     try {
       const idGuruAman = guruDipilih || "";
-      const hasil = await getRekapSemua(
-        bulan,
-        tempat === "Semua" ? "" : tempat,
-        idGuruAman,
+      // Timeout 15 detik + retry 1x otomatis (sama seperti model JS Guru) —
+      // supaya cold-start/koneksi lambat tidak bikin loading menggantung
+      // selamanya, dan tidak langsung dianggap gagal di percobaan pertama.
+      const hasil = await fetchStepWithRetry(() =>
+        getRekapSemua(bulan, tempat === "Semua" ? "" : tempat, idGuruAman),
       );
 
       setData(hasil.data || []);
+      stopTrickleProgress(100);
       setLoading(false);
     } catch (error) {
       console.error("Fetch Rekap error:", error);
-      if (!isRetry) {
-        setTimeout(() => load(true), 1000);
-      } else {
-        setLoading(false);
-      }
+      stopTrickleProgress(0);
+      setLoadFailed(true);
+      setLoadFailedMessage(
+        error?.message
+          ? `Gagal memuat data rekap: ${error.message}`
+          : "Koneksi ke server terputus atau server lambat merespons.",
+      );
+      setLoading(false);
     }
   }
 
@@ -241,27 +318,19 @@ export default function RekapPage() {
     }
   }
 
-  async function handleSiswaClick(
-    idSiswa,
-    namaSiswa,
-    namaGuru,
-    tempatMagang,
-    isRetry = false,
-  ) {
-    if (!isRetry) {
-      setSelectedSiswa({
-        id: idSiswa,
-        nama: namaSiswa,
-        guru: namaGuru,
-        tempat: tempatMagang,
-      });
-      setRiwayatLoading(true);
-      setRiwayatSiswa([]);
-      setSelectedRiwayatBulan("Semua"); // Reset filter bulan saat membuka siswa baru
-    }
+  async function handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang) {
+    setSelectedSiswa({
+      id: idSiswa,
+      nama: namaSiswa,
+      guru: namaGuru,
+      tempat: tempatMagang,
+    });
+    setRiwayatLoading(true);
+    setRiwayatSiswa([]);
+    setSelectedRiwayatBulan("Semua"); // Reset filter bulan saat membuka siswa baru
 
     try {
-      const response = await getRiwayatSiswa(idSiswa);
+      const response = await fetchStepWithRetry(() => getRiwayatSiswa(idSiswa));
       const dataSiswa = response.data || response;
 
       if (Array.isArray(dataSiswa)) {
@@ -269,18 +338,10 @@ export default function RekapPage() {
           setRiwayatSiswa([...dataSiswa].reverse());
         }
       }
-      setRiwayatLoading(false);
     } catch (error) {
       console.error("Fetch Riwayat error:", error);
-      if (!isRetry) {
-        setTimeout(
-          () =>
-            handleSiswaClick(idSiswa, namaSiswa, namaGuru, tempatMagang, true),
-          1000,
-        );
-      } else {
-        setRiwayatLoading(false);
-      }
+    } finally {
+      setRiwayatLoading(false);
     }
   }
 
@@ -644,15 +705,39 @@ export default function RekapPage() {
             )}
           </div>
 
-          {loading ? (
-            <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
-              <div className="relative h-12 w-12 sm:h-16 sm:w-16">
-                <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-blue-700 border-t-transparent animate-spin"></div>
-              </div>
-              <p className="mt-4 sm:mt-6 font-semibold text-sm sm:text-lg">
-                Sinkronisasi Data Sistem...
+          {loadFailed ? (
+            <div className="mt-20 flex flex-col items-center justify-center text-center bg-white p-8 sm:p-12 rounded-3xl border border-dashed border-rose-300 max-w-md mx-auto shadow-sm">
+              <p className="text-4xl mb-3">⚠️</p>
+              <h3 className="text-lg sm:text-xl font-black text-slate-800 mb-2">
+                Gagal Memuat Data Rekap
+              </h3>
+              <p className="text-sm text-slate-500 mb-5">
+                {loadFailedMessage ||
+                  "Terjadi kendala saat mengambil data dari server."}
               </p>
+              <button
+                onClick={() => load(false)}
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors active:scale-95 shadow-lg shadow-indigo-200"
+              >
+                🔄 Muat Ulang
+              </button>
+            </div>
+          ) : loading ? (
+            <div className="mt-20 flex flex-col items-center justify-center text-slate-500">
+              <div className="w-full max-w-xs">
+                <p className="mb-3 text-center font-semibold text-sm sm:text-lg">
+                  Sinkronisasi Data Sistem...
+                </p>
+                <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${loadProgress}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-center text-xs font-black text-slate-400">
+                  {Math.round(loadProgress)}%
+                </p>
+              </div>
             </div>
           ) : !guruDipilih ? (
             <div className="mt-20 flex flex-col items-center justify-center text-slate-400 bg-white p-8 sm:p-12 rounded-3xl border border-dashed border-slate-300 max-w-2xl mx-auto shadow-sm transition-all">

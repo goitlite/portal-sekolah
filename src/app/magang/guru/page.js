@@ -95,6 +95,43 @@ async function fetchStepWithRetry(fn, { retries = 1, timeoutMs = 15000 } = {}) {
   throw lastError;
 }
 
+// Retry khusus alur CETAK (bukan loading dashboard) — bedanya dari
+// fetchStepWithRetry di atas: di sini respons ber-`success: false` (misalnya
+// GAS sempat cold-start dan balas error, tapi tidak "throw" secara teknis)
+// JUGA dianggap kegagalan dan ikut di-retry, bukan cuma network/timeout.
+// Ini akar masalah kenapa cetak laporan sering gagal PERSIS SEKALI di
+// percobaan pertama (login baru = GAS belum "panas") lalu sukses begitu
+// tombol ditekan ulang: percobaan pertama gagal diam-diam dan dibaca kode
+// sebagai "datanya kosong", padahal sebenarnya request-nya yang gagal.
+// Retry 2x (3 percobaan total) karena mencetak adalah aksi sesekali yang
+// wajar ditunggu sedikit lebih lama demi hasil yang benar.
+async function fetchPrintDataWithRetry(
+  fn,
+  { retries = 2, delayMs = 1200, onRetry } = {},
+) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const result = await fetchWithTimeout(fn, 15000);
+      if (result && result.success === false) {
+        throw new Error(
+          result.message || "Permintaan ke server gagal diproses.",
+        );
+      }
+      return result;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        if (typeof onRetry === "function") {
+          onRetry(attempt + 1, retries);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function DashboardGuruContent() {
   const router = useRouter();
   // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
@@ -148,6 +185,7 @@ function DashboardGuruContent() {
   const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
     useState(false);
   const [progressPdfMonitoring, setProgressPdfMonitoring] = useState(0); // ⬅️ TAMBAHKAN
+  const [retryStatusText, setRetryStatusText] = useState(""); // ⬅️ TAMBAHKAN: pesan saat retry cetak
 
   const [showCetakModal, setShowCetakModal] = useState(false);
   const [formDataCetak, setFormDataCetak] = useState({
@@ -557,6 +595,7 @@ function DashboardGuruContent() {
     if (!user?.id || loadingCetakLaporanMonitoring) return;
     setLoadingCetakLaporanMonitoring(true);
     setProgressPdfMonitoring(0);
+    setRetryStatusText("");
 
     try {
       // Simpan form (perilaku sama seperti alur lama)
@@ -596,20 +635,34 @@ function DashboardGuruContent() {
       ];
       const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
 
-      // Ambil data rekap — persis seperti load() di halaman Rekap
-      // (tempat selalu "Semua" -> dikirim "" ke backend, sama seperti alur lama)
+      // Ambil data rekap & daftar guru SECARA PARALEL (bukan berurutan) dengan
+      // retry otomatis + cek `success` eksplisit. Ini memperbaiki bug: kalau
+      // login baru saja dilakukan (GAS belum "panas"), percobaan pertama bisa
+      // gagal/timeout secara diam-diam dan sebelumnya dibaca sebagai "data
+      // kosong" — padahal sebenarnya request-nya yang gagal. Sekarang gagal
+      // di percobaan pertama akan otomatis dicoba lagi hingga 2x sebelum
+      // benar-benar dianggap gagal.
       setProgressPdfMonitoring(5);
-      const hasilRekap = await getRekapSemua(bulanTerbaru, "", user.id);
-      const dataRekap = hasilRekap?.data || [];
+      const [hasilRekap, resGuru] = await Promise.all([
+        fetchPrintDataWithRetry(
+          () => getRekapSemua(bulanTerbaru, "", user.id),
+          {
+            onRetry: (attempt, total) =>
+              setRetryStatusText(
+                `Server lambat merespons, mencoba lagi... (${attempt}/${total})`,
+              ),
+          },
+        ),
+        fetchPrintDataWithRetry(() => getGuru()),
+      ]);
+      setRetryStatusText("");
+      setProgressPdfMonitoring(18);
 
-      // Ambil daftar guru — persis seperti fetchGuru() di halaman Rekap
-      setProgressPdfMonitoring(12);
-      const resGuru = await getGuru();
+      const dataRekap = hasilRekap?.data || [];
       let guruList = resGuru?.data || [];
       guruList = [...guruList].sort((a, b) =>
         (a.NAMA_GURU || "").localeCompare(b.NAMA_GURU || ""),
       );
-      setProgressPdfMonitoring(18);
 
       // Filter identik dengan filteredDataToRender (filterNama="", filterKelas="Semua", tempat="Semua")
       const filteredDataToRender = dataRekap
@@ -672,9 +725,12 @@ function DashboardGuruContent() {
     } catch (error) {
       console.error("Gagal mencetak laporan monitoring:", error);
       alert(
-        "Terjadi kesalahan teknis saat menyusun PDF. Pastikan koneksi internet lancar.",
+        error?.message
+          ? `Gagal mencetak laporan: ${error.message}`
+          : "Terjadi kesalahan teknis saat menyusun PDF. Pastikan koneksi internet lancar.",
       );
     } finally {
+      setRetryStatusText("");
       setLoadingCetakLaporanMonitoring(false);
     }
   };
@@ -1748,7 +1804,7 @@ function DashboardGuruContent() {
               {includeFotoLampiran && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
                   <p className="font-bold text-indigo-700 uppercase text-[11px] mb-1">
-                    Foto Lampiran Kegiatan
+                    Foto Lampiran Kegiatan (maks. 3 foto per halaman PDF)
                   </p>
 
                   <div className="space-y-2">
@@ -1822,8 +1878,12 @@ function DashboardGuruContent() {
             {loadingCetakLaporanMonitoring && (
               <div className="px-5 pb-3">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-slate-500">
-                    Menyiapkan PDF...
+                  <span
+                    className={`text-[10px] font-bold ${
+                      retryStatusText ? "text-amber-600" : "text-slate-500"
+                    }`}
+                  >
+                    {retryStatusText || "Menyiapkan PDF..."}
                   </span>
                   <span className="text-[10px] font-black text-indigo-600">
                     {Math.round(progressPdfMonitoring)}%
