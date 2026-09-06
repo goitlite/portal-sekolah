@@ -17,12 +17,12 @@ export default function BiodataSiswa() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
-  const [uploadingIjazah, setUploadingIjazah] = useState(false); // ---> TAMBAHKAN IN
+  const [uploadingIjazah, setUploadingIjazah] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
-    fotoProfil: "", // Tambahan state untuk foto profil
+    fotoProfil: "",
     noHp: "",
     tempatLahir: "",
     tglLahir: "",
@@ -57,7 +57,7 @@ export default function BiodataSiswa() {
         const result = await getBiodataSiswa(session.id);
         if (result.success && result.data) {
           setForm({
-            fotoProfil: result.data.fotoProfil || "", // Ambil foto jika ada
+            fotoProfil: result.data.fotoProfil || "",
             noHp: result.data.noHp || "",
             tempatLahir: result.data.tempatLahir || "",
             tglLahir: result.data.tglLahir || "",
@@ -77,7 +77,7 @@ export default function BiodataSiswa() {
             pelajaranTidakDisukai: result.data.pelajaranTidakDisukai || "",
             alasanTidakDisukai: result.data.alasanTidakDisukai || "",
             harapan: result.data.harapan || "",
-            ijazahSmp: result.data.ijazahSmp || "", // ---> TAMBAHKAN INI
+            ijazahSmp: result.data.ijazahSmp || "",
           });
         }
       } catch (err) {
@@ -101,7 +101,6 @@ export default function BiodataSiswa() {
     }
   }
 
-  // Fungsi kompresi dan upload foto
   // Fungsi kompresi dan upload foto (Auto-Save ke Database)
   async function handleFotoChange(e) {
     const file = e.target.files[0];
@@ -111,8 +110,8 @@ export default function BiodataSiswa() {
     setError("");
 
     try {
-      // 1. Kompresi gambar dengan Canvas & Convert ke JPG
-      const compressedBase64 = await compressImage(file);
+      // 1. Kompresi gambar dengan Canvas & Convert ke JPG (Otomatis 3:4)
+      const compressedBase64 = await compressProfileImage(file);
 
       // 2. Upload ke Google Drive via API
       const fileName = `profil_${user.id}_${Date.now()}.jpg`;
@@ -125,10 +124,10 @@ export default function BiodataSiswa() {
         setForm((prev) => ({ ...prev, fotoProfil: photoUrl }));
 
         // 4. OTOMATIS SIMPAN KE GOOGLE SHEETS (Auto Save)
+        // Diperbarui agar lebih stabil dengan hanya mengirimkan id dan fotoProfil saja
         await updateBiodataSiswa({
-          ...form,
           idSiswa: user.id,
-          fotoProfil: photoUrl, // Mengirim URL Foto Profil yang baru
+          fotoProfil: photoUrl,
         });
 
         setMessage(
@@ -141,7 +140,6 @@ export default function BiodataSiswa() {
       setError("Terjadi kesalahan saat memproses foto.");
     } finally {
       setUploadingFoto(false);
-      // Reset input agar bisa pilih file yang sama lagi jika perlu
       e.target.value = null;
     }
   }
@@ -156,12 +154,10 @@ export default function BiodataSiswa() {
     });
   }
 
-  // Fungsi khusus upload Ijazah SMP
   // =====================================================
   // UPLOAD DOKUMEN IJAZAH SMP
   // Support PDF + FOTO
   // =====================================================
-
   async function handleIjazahChange(e) {
     const file = e.target.files?.[0];
 
@@ -171,44 +167,26 @@ export default function BiodataSiswa() {
     setMessage("");
 
     try {
-      // =====================================================
-      // DETEKSI EKSTENSI FILE
-      // =====================================================
-
       const fileName = file.name || "";
       const extension = fileName.includes(".")
         ? fileName.split(".").pop().toLowerCase()
         : "";
 
-      // =====================================================
-      // FORMAT YANG DIIZINKAN
-      // HANYA JPG / JPEG / PNG / PDF
-      // =====================================================
-
       const allowedExtensions = ["jpg", "jpeg", "png", "pdf"];
-
       const allowedMimeTypes = ["application/pdf", "image/jpeg", "image/png"];
 
       const validByExtension = allowedExtensions.includes(extension);
       const validByMime = allowedMimeTypes.includes(file.type);
 
-      // Beberapa browser/HP bisa memberikan file.type kosong.
       if (!validByExtension && !validByMime) {
         setError(
           "❌ Format tidak didukung. Silakan pilih file JPG, JPEG, PNG, atau PDF.",
         );
-
         e.target.value = "";
         return;
       }
 
-      // =====================================================
-      // TENTUKAN JENIS FILE
-      // Jangan hanya mengandalkan file.type
-      // =====================================================
-
       const isPDF = file.type === "application/pdf" || extension === "pdf";
-
       const isImage =
         file.type === "image/jpeg" ||
         file.type === "image/png" ||
@@ -216,14 +194,9 @@ export default function BiodataSiswa() {
 
       if (!isPDF && !isImage) {
         setError("❌ File tidak dikenali. Gunakan JPG, JPEG, PNG, atau PDF.");
-
         e.target.value = "";
         return;
       }
-
-      // =====================================================
-      // BATAS UKURAN
-      // =====================================================
 
       if (isPDF && file.size > 10 * 1024 * 1024) {
         setError("❌ Ukuran PDF maksimal 10 MB.");
@@ -239,40 +212,19 @@ export default function BiodataSiswa() {
 
       setUploadingIjazah(true);
 
-      // =====================================================
-      // SIAPKAN FILE
-      // =====================================================
-
       let base64;
       let finalExtension;
       let mimeType;
 
       if (isPDF) {
-        // ---------------------------------------------------
-        // PDF
-        // Tidak dikompresi
-        // ---------------------------------------------------
-
         base64 = await getBase64(file);
-
         finalExtension = "pdf";
         mimeType = "application/pdf";
       } else {
-        // ---------------------------------------------------
-        // FOTO
-        // JPG / JPEG / PNG
-        // Kompres menjadi JPG
-        // ---------------------------------------------------
-
-        base64 = await compressImage(file, 900);
-
+        base64 = await compressDocumentImage(file, 900);
         finalExtension = "jpg";
         mimeType = "image/jpeg";
       }
-
-      // =====================================================
-      // NAMA FILE
-      // =====================================================
 
       const uploadFileName = `ijazah_smp_${user.id}_${Date.now()}.${finalExtension}`;
 
@@ -281,30 +233,17 @@ export default function BiodataSiswa() {
       console.log("MIME:", mimeType);
       console.log("Ukuran asli:", (file.size / 1024 / 1024).toFixed(2), "MB");
 
-      // =====================================================
-      // UPLOAD GOOGLE DRIVE
-      // =====================================================
-
       const result = await uploadPhoto(base64, uploadFileName, mimeType);
 
       console.log("HASIL UPLOAD:", result);
 
-      // =====================================================
-      // BERHASIL
-      // =====================================================
-
       if (result?.success && result?.data?.url) {
         const fileUrl = result.data.url;
 
-        // Update state
         setForm((prev) => ({
           ...prev,
           ijazahSmp: fileUrl,
         }));
-
-        // ===================================================
-        // SIMPAN URL KE GOOGLE SHEETS
-        // ===================================================
 
         const saveResult = await updateBiodataSiswa({
           ...form,
@@ -333,110 +272,248 @@ export default function BiodataSiswa() {
       }
     } catch (err) {
       console.error("ERROR UPLOAD DOKUMEN:", err);
-
       setError(
         "❌ Upload gagal. Pastikan file JPG, PNG, atau PDF dan coba lagi.",
       );
     } finally {
       setUploadingIjazah(false);
-
-      // Reset input
       e.target.value = "";
     }
   }
 
-  // Helper fungsi untuk kompresi ke bawah 500KB (max resolusi 800px, quality 0.7)
-  function compressImage(file, maxSizeKB = 900) {
+  // Helper fungsi untuk kompresi, crop otomatis portrait 3:4 dan resize
+  // =====================================================
+  // HELPER: Load gambar seefisien & seaman mungkin di semua HP
+  // - createImageBitmap otomatis benerin EXIF orientation (penting
+  //   untuk foto dari kamera iPhone/Android yang sering "terbalik").
+  // - Fallback ke <img> untuk browser lama yang belum dukung penuh.
+  // =====================================================
+  async function loadImageSource(file) {
+    if (typeof createImageBitmap === "function") {
+      try {
+        const bitmap = await createImageBitmap(file, {
+          imageOrientation: "from-image",
+        });
+        return {
+          source: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          cleanup: () => bitmap.close(),
+        };
+      } catch (err) {
+        console.warn("createImageBitmap gagal, fallback ke <img>:", err);
+      }
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () =>
+        reject(new Error("Gagal membaca gambar. File mungkin rusak."));
+      el.src = objectUrl;
+    });
+
+    return {
+      source: img,
+      width: img.naturalWidth || img.width,
+      height: img.naturalHeight || img.height,
+      cleanup: () => URL.revokeObjectURL(objectUrl),
+    };
+  }
+
+  // =====================================================
+  // FUNGSI 1: KOMPRESI FOTO PROFIL
+  // - WAJIB crop rasio 3:4 (potrait)
+  // - Output SELALU tepat 900 x 1200 px, berapa pun ukuran crop-nya
+  //   (canvas dipatok 900x1200, drawImage yang menyesuaikan skala)
+  // - Kualitas JPEG diturunkan bertahap sampai muat batas ukuran
+  // =====================================================
+  function compressProfileImage(file, maxSizeKB = 900) {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+      (async () => {
+        let cleanup;
+        try {
+          const {
+            source: img,
+            width: sourceWidth,
+            height: sourceHeight,
+            cleanup: c,
+          } = await loadImageSource(file);
+          cleanup = c;
 
-      reader.onload = (event) => {
-        const img = new Image();
-
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-
-          const MAX_DIMENSION = 1200;
-
-          // ==========================================
-          // RESIZE
-          // ==========================================
-
-          if (width > height && width > MAX_DIMENSION) {
-            height = Math.round(height * (MAX_DIMENSION / width));
-
-            width = MAX_DIMENSION;
-          } else if (height > MAX_DIMENSION) {
-            width = Math.round(width * (MAX_DIMENSION / height));
-
-            height = MAX_DIMENSION;
+          if (!sourceWidth || !sourceHeight) {
+            throw new Error("Ukuran gambar tidak valid.");
           }
 
-          // ==========================================
-          // CANVAS
-          // ==========================================
+          const TARGET_RATIO = 3 / 4;
+          const OUTPUT_WIDTH = 900;
+          const OUTPUT_HEIGHT = 1200;
+          const sourceRatio = sourceWidth / sourceHeight;
 
+          let cropWidth, cropHeight, cropX, cropY;
+
+          if (sourceRatio > TARGET_RATIO) {
+            // Landscape / terlalu lebar -> potong kiri-kanan
+            cropHeight = sourceHeight;
+            cropWidth = Math.round(sourceHeight * TARGET_RATIO);
+            cropX = Math.round((sourceWidth - cropWidth) / 2);
+            cropY = 0;
+          } else if (sourceRatio < TARGET_RATIO) {
+            // Portrait terlalu tinggi -> potong atas-bawah
+            cropWidth = sourceWidth;
+            cropHeight = Math.round(sourceWidth / TARGET_RATIO);
+            cropX = 0;
+            cropY = Math.round((sourceHeight - cropHeight) / 2);
+          } else {
+            cropWidth = sourceWidth;
+            cropHeight = sourceHeight;
+            cropX = 0;
+            cropY = 0;
+          }
+
+          // PENTING: canvas dipatok tetap 900x1200. drawImage otomatis
+          // upscale/downscale crop ke ukuran ini -> hasil akhir SELALU
+          // 900x1200 untuk semua siswa, tidak peduli ukuran foto asli.
           const canvas = document.createElement("canvas");
+          canvas.width = OUTPUT_WIDTH;
+          canvas.height = OUTPUT_HEIGHT;
 
-          canvas.width = width;
-          canvas.height = height;
+          const ctx = canvas.getContext("2d", { alpha: false });
+          if (!ctx) throw new Error("Browser tidak mendukung Canvas.");
 
-          const ctx = canvas.getContext("2d");
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // ==========================================
-          // KOMPRESI ADAPTIF
-          // ==========================================
+          ctx.drawImage(
+            img,
+            cropX,
+            cropY,
+            cropWidth,
+            cropHeight,
+            0,
+            0,
+            OUTPUT_WIDTH,
+            OUTPUT_HEIGHT,
+          );
 
           let quality = 0.85;
-
+          const minQuality = 0.35;
+          const maxBytes = maxSizeKB * 1024;
           let dataUrl;
 
-          const maxBytes = maxSizeKB * 1024;
-
-          do {
+          while (true) {
             dataUrl = canvas.toDataURL("image/jpeg", quality);
-
             const base64 = dataUrl.split(",")[1];
-
             const estimatedBytes = Math.ceil((base64.length * 3) / 4);
 
             console.log(
-              "Kompresi:",
+              "Foto profil:",
+              `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`,
+              "Ukuran:",
               (estimatedBytes / 1024).toFixed(0),
               "KB",
-              "quality:",
-              quality,
+              "Quality:",
+              quality.toFixed(2),
             );
 
-            if (estimatedBytes <= maxBytes) {
-              break;
-            }
-
+            if (estimatedBytes <= maxBytes || quality <= minQuality) break;
             quality -= 0.05;
-          } while (quality >= 0.3);
-
-          // ==========================================
-          // HASIL
-          // ==========================================
+          }
 
           resolve(dataUrl);
-        };
+        } catch (err) {
+          reject(err);
+        } finally {
+          if (cleanup) cleanup();
+        }
+      })();
+    });
+  }
 
-        img.onerror = () => {
-          reject(new Error("Gagal membaca gambar."));
-        };
+  // =====================================================
+  // FUNGSI 2: KOMPRESI DOKUMEN (Ijazah / Surat Pernyataan)
+  // - TIDAK crop sama sekali, rasio asli 100% dipertahankan
+  // - Hanya diperkecil kalau sisi terpanjang melebihi batas
+  // - Kualitas JPEG diturunkan bertahap sampai muat batas ukuran
+  // =====================================================
+  function compressDocumentImage(file, maxSizeKB = 900) {
+    return new Promise((resolve, reject) => {
+      (async () => {
+        let cleanup;
+        try {
+          const {
+            source: img,
+            width: srcW,
+            height: srcH,
+            cleanup: c,
+          } = await loadImageSource(file);
+          cleanup = c;
 
-        img.src = event.target.result;
-      };
+          if (!srcW || !srcH) {
+            throw new Error("Ukuran gambar tidak valid.");
+          }
 
-      reader.onerror = () => {
-        reject(new Error("Gagal membaca file."));
-      };
+          const MAX_DIMENSION = 1600; // cukup jelas dibaca, tidak boros
+          let width = srcW;
+          let height = srcH;
 
-      reader.readAsDataURL(file);
+          if (width > height && width > MAX_DIMENSION) {
+            height = Math.round(height * (MAX_DIMENSION / width));
+            width = MAX_DIMENSION;
+          } else if (height >= width && height > MAX_DIMENSION) {
+            width = Math.round(width * (MAX_DIMENSION / height));
+            height = MAX_DIMENSION;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d", { alpha: false });
+          if (!ctx) throw new Error("Browser tidak mendukung Canvas.");
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+
+          // Tanpa crop -> gambar utuh, rasio asli dipertahankan
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let quality = 0.85;
+          const minQuality = 0.4; // dokumen tetap harus terbaca jelas
+          const maxBytes = maxSizeKB * 1024;
+          let dataUrl;
+
+          while (true) {
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+            const base64 = dataUrl.split(",")[1];
+            const estimatedBytes = Math.ceil((base64.length * 3) / 4);
+
+            console.log(
+              "Dokumen foto:",
+              `${width}x${height}`,
+              "Ukuran:",
+              (estimatedBytes / 1024).toFixed(0),
+              "KB",
+              "Quality:",
+              quality.toFixed(2),
+            );
+
+            if (estimatedBytes <= maxBytes || quality <= minQuality) break;
+            quality -= 0.05;
+          }
+
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        } finally {
+          if (cleanup) cleanup();
+        }
+      })();
     });
   }
 
@@ -450,7 +527,7 @@ export default function BiodataSiswa() {
     try {
       const result = await updateBiodataSiswa({
         idSiswa: user.id,
-        fotoProfil: form.fotoProfil, // Kirim URL foto ke backend
+        fotoProfil: form.fotoProfil,
         noHp: form.noHp,
         tempatLahir: form.tempatLahir,
         tglLahir: form.tglLahir,
@@ -470,7 +547,7 @@ export default function BiodataSiswa() {
         pelajaranTidakDisukai: form.pelajaranTidakDisukai,
         alasanTidakDisukai: form.alasanTidakDisukai,
         harapan: form.harapan,
-        ijazahSmp: form.ijazahSmp, // ---> TAMBAHKAN INI
+        ijazahSmp: form.ijazahSmp,
       });
 
       if (result.success) {
@@ -509,17 +586,16 @@ export default function BiodataSiswa() {
 
       <div className="mx-auto max-w-3xl px-4 mt-6">
         <div className="rounded-2xl bg-gradient-to-br from-blue-900 to-indigo-900 text-white p-5 shadow-lg relative">
-          {/* ----- UI FOTO PROFIL (Tengah Atas) ----- */}
+          {/* ----- UI FOTO PROFIL (Tengah Atas) Tampilan 3:4 Portrait ----- */}
           <div className="flex justify-center -mt-12 mb-4">
-            <div className="relative w-28 h-28 rounded-full border-4 border-indigo-900 bg-slate-200 shadow-xl overflow-hidden group">
+            <div className="relative w-36 aspect-[3/4] rounded-xl border-4 border-indigo-900 bg-slate-200 shadow-xl overflow-hidden group">
               {form.fotoProfil ? (
                 <>
                   <img
-                    src={formatDriveUrl(form.fotoProfil)} // ---> UBAH BAGIAN INI
+                    src={formatDriveUrl(form.fotoProfil)}
                     alt="Foto Profil"
                     className="w-full h-full object-cover"
                   />
-                  {/* Tombol Ganti Transparan di Kanan Atas */}
                   <div
                     onClick={handleFotoClick}
                     className="absolute top-0 right-0 bg-black/40 hover:bg-black/60 text-white/80 text-[10px] font-bold px-2 py-1 rounded-bl-lg cursor-pointer transition-all"
@@ -541,7 +617,6 @@ export default function BiodataSiswa() {
                 </div>
               )}
 
-              {/* Overlay Loading Foto */}
               {uploadingFoto && (
                 <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-sm">
                   <span className="text-xs font-black text-blue-800 animate-pulse">
@@ -551,6 +626,7 @@ export default function BiodataSiswa() {
               )}
             </div>
           </div>
+          {/* ------------------------------------------ */}
 
           {/* Input File Tersembunyi */}
           <input
@@ -560,7 +636,6 @@ export default function BiodataSiswa() {
             onChange={handleFotoChange}
             className="hidden"
           />
-          {/* ------------------------------------------ */}
 
           <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider text-center">
             Identitas Siswa
@@ -756,14 +831,12 @@ export default function BiodataSiswa() {
               />
             </label>
 
-            {/* Peringatan Status Loading */}
             {uploadingIjazah && (
               <div className="mt-3 text-xs font-bold text-blue-600 animate-pulse flex items-center gap-2">
                 ⏳ Sedang mengupload Ijazah...
               </div>
             )}
 
-            {/* Kotak Link Dokumen setelah sukses terupload */}
             {form.ijazahSmp && !uploadingIjazah && (
               <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
@@ -779,7 +852,6 @@ export default function BiodataSiswa() {
                     </div>
                   </div>
 
-                  {/* Tombol Utama Buka Dokumen */}
                   <a
                     href={form.ijazahSmp}
                     target="_blank"
@@ -790,7 +862,6 @@ export default function BiodataSiswa() {
                   </a>
                 </div>
 
-                {/* Menampilkan Teks Link URL Asli (Bisa diklik/dicopy) */}
                 <div className="pt-2 border-t border-emerald-200/70 flex items-center gap-1 text-[11px] text-emerald-800 overflow-hidden">
                   <span className="font-bold shrink-0">🔗 Link File:</span>
                   <a
@@ -869,23 +940,18 @@ function Textarea({ label, name, value, onChange, rows = 3 }) {
   );
 }
 
-// Fungsi untuk mengubah link Drive menjadi Direct Image Link yang kebal blokir
 function formatDriveUrl(url) {
   if (!url) return "";
 
   let fileId = "";
 
-  // Jika link format standar: drive.google.com/file/d/ID_FILE/view
   if (url.includes("/file/d/")) {
     fileId = url.split("/file/d/")[1].split("/")[0];
-  }
-  // Jika link format query: drive.google.com/uc?id=ID_FILE
-  else if (url.includes("id=")) {
+  } else if (url.includes("id=")) {
     fileId = url.split("id=")[1].split("&")[0];
   }
 
   if (fileId) {
-    // Gunakan endpoint thumbnail Drive (Jauh lebih aman dari blokir CORS browser)
     return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
   }
 
