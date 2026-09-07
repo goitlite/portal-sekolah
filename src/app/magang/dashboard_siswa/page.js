@@ -168,7 +168,16 @@ export default function DashboardSiswa() {
           getStatistikSiswa(session.id),
           getRiwayatSiswa(session.id),
           getPresensiHariIni(session.idGuru),
-          getDataSiswaWali(session.idGuru),
+          // PENTING: gunakan "ALL", BUKAN session.idGuru.
+          // session.idGuru adalah ID Guru PEMBIMBING PKL siswa, bukan ID Guru
+          // Wali-nya. Kalau dikirim session.idGuru, backend getDataSiswaWali()
+          // hanya akan mencocokkan siswa yang guru walinya KEBETULAN sama
+          // dengan guru pembimbing PKL-nya -> makanya Guru Wali cuma muncul
+          // kalau guru itu juga berstatus pembimbing magang.
+          // Dengan "ALL", backend mengembalikan data SEMUA siswa lengkap
+          // dengan guru wali ASLI-nya (dari sheet GURU_WALI), lalu di bawah
+          // kita cari baris milik siswa ini sendiri berdasarkan idSiswa.
+          getDataSiswaWali("ALL"),
         ]);
 
         if (!isMounted) return;
@@ -215,10 +224,15 @@ export default function DashboardSiswa() {
           const siswaSaya = waliResult.value.data.find(
             (item) => String(item.idSiswa).trim() === String(session.id).trim(),
           );
-          if (siswaSaya?.namaGuru) {
+          // Backend mengisi namaGuru = "Tanpa Guru Wali" kalau siswa memang
+          // belum punya guru wali sama sekali. Tampilkan sebagai "-" saja
+          // di dashboard supaya konsisten dengan tampilan lain.
+          if (siswaSaya?.namaGuru && siswaSaya.namaGuru !== "Tanpa Guru Wali") {
             currentGuruWali = siswaSaya.namaGuru;
-            setGuruWali(currentGuruWali);
+          } else {
+            currentGuruWali = "-";
           }
+          setGuruWali(currentGuruWali);
         }
 
         // Simpan Cache Lengkap Terbaru

@@ -218,9 +218,9 @@ function DashboardGuruContent() {
   const [formPerjalananDinas, setFormPerjalananDinas] = useState({
     dasar: "Surat Perintah Tugas Kepala Sekolah tentang Siswa PKL 2026",
     tempatKegiatan: "Teluk Kuantan",
-    tanggalPelaksanaan: "03 - 04 September 2026",
+    tanggalPelaksanaan: "04 September 2026",
     pelaksanaKegiatan:
-      "Panitia Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan",
+      "Pembimbing Praktik Kerja Lapangan (PKL) SMKN 1 Teluk Kuantan",
     namaKegiatan: "Monitoring Siswa PKL 2026",
     tujuanKegiatan: "Melakukan Monitoring Siswa PKL 2026",
     sasaranKegiatan: "Siswa PKL 2026 SMKN 1 Teluk Kuantan",
@@ -1804,7 +1804,7 @@ function DashboardGuruContent() {
               {includeFotoLampiran && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
                   <p className="font-bold text-indigo-700 uppercase text-[11px] mb-1">
-                    Foto Lampiran Kegiatan (maks. 3 foto per halaman PDF)
+                    Foto Lampiran Kegiatan
                   </p>
 
                   <div className="space-y-2">
