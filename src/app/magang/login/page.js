@@ -9,6 +9,48 @@ import { login } from "../lib/api";
 import { saveSession, isLoggedIn, getSession } from "../lib/auth";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 
+// =====================================================
+// KONFIGURASI PENGAMAN LOGIN (ANTI BRUTE-FORCE)
+// =====================================================
+// Setelah MAX_ATTEMPTS kali gagal login berturut-turut,
+// form dikunci selama LOCK_DURATION_MS (default 2 menit).
+// Disimpan di localStorage sehingga tetap terkunci walau
+// halaman direfresh, sampai waktu kunci habis.
+// CATATAN: Ini proteksi sisi client (per browser/HP). Untuk
+// proteksi tambahan di sisi server, bisa ditambahkan rate-limit
+// di Login.gs (CacheService) sebagai lapisan kedua nanti.
+// =====================================================
+const LOGIN_LOCK_KEY = "magang_login_lock";
+const MAX_ATTEMPTS = 3;
+const LOCK_DURATION_MS = 2 * 60 * 1000; // 2 menit
+
+function formatMMSS(totalSeconds) {
+  const safe = Math.max(0, totalSeconds);
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// =====================================================
+// KONFIGURASI CAPTCHA MATEMATIKA (LAPISAN KE-2)
+// =====================================================
+// Captcha buatan sendiri (bukan reCAPTCHA Google) supaya:
+// - Tidak butuh API key/secret key dari pihak ketiga
+// - Tidak tergantung koneksi ke server luar (kadang lambat
+//   atau diblokir jaringan sekolah)
+// - Tidak perlu ubah backend GAS sama sekali
+// Muncul otomatis setelah CAPTCHA_AFTER_ATTEMPTS kali gagal,
+// dan soal berganti otomatis setiap kali dijawab salah atau
+// setiap kali ada percobaan login baru yang gagal.
+// =====================================================
+const CAPTCHA_AFTER_ATTEMPTS = 1; // captcha aktif setelah 1x gagal
+
+function buatSoalCaptcha() {
+  const a = Math.floor(Math.random() * 9) + 1; // 1 - 9
+  const b = Math.floor(Math.random() * 9) + 1; // 1 - 9
+  return { a, b };
+}
+
 export default function LoginMagang() {
   const router = useRouter();
 
@@ -18,6 +60,116 @@ export default function LoginMagang() {
 
   // 2. STATE BARU: Untuk menahan tampilan form saat sedang mengecek sesi
   const [isChecking, setIsChecking] = useState(true);
+
+  // --- STATE BARU: PENGAMAN ANTI BRUTE-FORCE ---
+  const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [lockUntil, setLockUntil] = useState(0);
+  const [remainingTime, setRemainingTime] = useState(0); // dalam detik
+
+  const isLocked = lockUntil > 0 && remainingTime > 0;
+
+  // --- STATE BARU: CAPTCHA MATEMATIKA ---
+  const [captchaChallenge, setCaptchaChallenge] = useState({ a: 0, b: 0 });
+  const [captchaInput, setCaptchaInput] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
+
+  // Captcha wajib diisi kalau sudah gagal >= CAPTCHA_AFTER_ATTEMPTS kali
+  // dan form belum terkunci.
+  const captchaRequired =
+    !isLocked && attemptsLeft <= MAX_ATTEMPTS - CAPTCHA_AFTER_ATTEMPTS;
+
+  // Buat soal captcha baru setiap kali captcha jadi wajib
+  // (pertama kali dibutuhkan, atau setelah percobaan gagal berikutnya)
+  useEffect(() => {
+    if (captchaRequired) {
+      setCaptchaChallenge(buatSoalCaptcha());
+      setCaptchaInput("");
+      setCaptchaError("");
+    }
+  }, [captchaRequired, attemptsLeft]);
+
+  function gantiSoalCaptcha() {
+    setCaptchaChallenge(buatSoalCaptcha());
+    setCaptchaInput("");
+    setCaptchaError("");
+  }
+
+  // --- MUAT STATUS KUNCI DARI localStorage SAAT HALAMAN DIBUKA ---
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(LOGIN_LOCK_KEY) || "null");
+      if (stored && stored.lockUntil && stored.lockUntil > Date.now()) {
+        setLockUntil(stored.lockUntil);
+        setAttemptsLeft(0);
+      } else if (stored && stored.attempts) {
+        setAttemptsLeft(Math.max(0, MAX_ATTEMPTS - stored.attempts));
+      }
+    } catch (err) {
+      // Abaikan jika data korup, anggap belum ada percobaan gagal
+    }
+  }, []);
+
+  // --- COUNTDOWN TIMER SAAT TERKUNCI ---
+  useEffect(() => {
+    if (!lockUntil) {
+      setRemainingTime(0);
+      return;
+    }
+
+    const tick = () => {
+      const diff = Math.max(0, Math.ceil((lockUntil - Date.now()) / 1000));
+      setRemainingTime(diff);
+
+      if (diff <= 0) {
+        // Waktu kunci habis -> reset otomatis
+        setLockUntil(0);
+        setAttemptsLeft(MAX_ATTEMPTS);
+        try {
+          localStorage.removeItem(LOGIN_LOCK_KEY);
+        } catch (err) {}
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [lockUntil]);
+
+  // --- HELPER: CATAT PERCOBAAN GAGAL ---
+  function recordFailedAttempt() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(LOGIN_LOCK_KEY) || "null");
+      let attempts = stored && stored.attempts ? stored.attempts : 0;
+      attempts += 1;
+
+      if (attempts >= MAX_ATTEMPTS) {
+        const until = Date.now() + LOCK_DURATION_MS;
+        localStorage.setItem(
+          LOGIN_LOCK_KEY,
+          JSON.stringify({ attempts: 0, lockUntil: until }),
+        );
+        setLockUntil(until);
+        setAttemptsLeft(0);
+      } else {
+        localStorage.setItem(
+          LOGIN_LOCK_KEY,
+          JSON.stringify({ attempts, lockUntil: 0 }),
+        );
+        setAttemptsLeft(MAX_ATTEMPTS - attempts);
+      }
+    } catch (err) {
+      // Jika localStorage gagal ditulis, jangan hentikan alur login
+    }
+  }
+
+  // --- HELPER: RESET PERCOBAAN SAAT LOGIN BERHASIL ---
+  function resetLoginAttempts() {
+    try {
+      localStorage.removeItem(LOGIN_LOCK_KEY);
+    } catch (err) {}
+    setAttemptsLeft(MAX_ATTEMPTS);
+    setLockUntil(0);
+  }
 
   // 3. USE-EFFECT BARU: Logika auto-redirect
   // USE-EFFECT PERBAIKAN
@@ -50,9 +202,35 @@ export default function LoginMagang() {
   async function handleLogin(e) {
     e.preventDefault();
 
+    // --- CEK KUNCI SEBELUM PROSES LOGIN ---
+    if (lockUntil && lockUntil > Date.now()) {
+      alert(
+        `🔒 Terlalu banyak percobaan gagal.\nSilakan coba lagi dalam ${formatMMSS(
+          remainingTime,
+        )} menit:detik.`,
+      );
+      return;
+    }
+
     if (!id.trim()) {
       alert("Masukkan ID.");
       return;
+    }
+
+    // --- VALIDASI CAPTCHA (JIKA SEDANG DIWAJIBKAN) ---
+    if (captchaRequired) {
+      const jawabanBenar = captchaChallenge.a + captchaChallenge.b;
+
+      if (captchaInput.trim() === "") {
+        setCaptchaError("Jawaban verifikasi wajib diisi.");
+        return;
+      }
+
+      if (parseInt(captchaInput, 10) !== jawabanBenar) {
+        setCaptchaError("Jawaban verifikasi salah. Soal diganti, coba lagi.");
+        gantiSoalCaptcha();
+        return;
+      }
     }
 
     setLoading(true);
@@ -61,6 +239,9 @@ export default function LoginMagang() {
       const result = await login(id);
 
       if (!result.success) {
+        // --- ID SALAH / TIDAK DITEMUKAN: CATAT SEBAGAI PERCOBAAN GAGAL ---
+        recordFailedAttempt();
+        gantiSoalCaptcha();
         alert(result.message);
         return;
       }
@@ -69,6 +250,11 @@ export default function LoginMagang() {
         alert("Data login tidak diterima dari server.");
         return;
       }
+
+      // --- LOGIN BERHASIL: RESET PENGAMAN ---
+      resetLoginAttempts();
+      setCaptchaInput("");
+      setCaptchaError("");
 
       // Simpan ID yang berhasil login ke localStorage
       let ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
@@ -213,6 +399,33 @@ export default function LoginMagang() {
             onSubmit={handleLogin}
             className="px-6 pb-6 pt-4 sm:px-8 sm:pb-8"
           >
+            {/* --- BANNER PENGAMAN: TERKUNCI --- */}
+            {isLocked && (
+              <div className="mb-5 rounded-2xl bg-red-700 text-white px-4 py-3.5 text-center shadow-lg border border-red-900/40">
+                <p className="text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5">
+                  🔒 Akun Sementara Terkunci
+                </p>
+                <p className="mt-1 text-2xl font-black tracking-widest tabular-nums">
+                  {formatMMSS(remainingTime)}
+                </p>
+                <p className="mt-1 text-[10px] font-semibold text-red-100">
+                  Terlalu banyak percobaan gagal. Silakan tunggu hingga waktu
+                  habis.
+                </p>
+              </div>
+            )}
+
+            {/* --- BANNER PENGAMAN: SISA PERCOBAAN --- */}
+            {!isLocked && attemptsLeft < MAX_ATTEMPTS && (
+              <div className="mb-5 rounded-xl bg-red-950/10 border border-red-900/30 text-red-950 px-4 py-2.5 text-center">
+                <p className="text-[11px] font-black">
+                  ⚠️ ID salah. Sisa percobaan:{" "}
+                  <span className="text-red-700">{attemptsLeft}x</span> sebelum
+                  dikunci {LOCK_DURATION_MS / 60000} menit.
+                </p>
+              </div>
+            )}
+
             <div className="mb-6">
               <label className="mb-2 block text-[11px] font-black text-blue-950 uppercase tracking-widest text-center opacity-85">
                 ID Pengguna Guru dan Siswa
@@ -226,7 +439,8 @@ export default function LoginMagang() {
                   value={id}
                   onChange={(e) => setId(e.target.value.replace(/\D/g, ""))}
                   placeholder="000000"
-                  className="w-full rounded-2xl border-2 border-amber-600/20 bg-white px-4 py-4 text-center text-3xl font-black tracking-[8px] text-slate-900 outline-none transition-all placeholder:text-slate-200 focus:border-blue-950 focus:ring-4 focus:ring-blue-950/10 shadow-inner group-hover:border-amber-600/40"
+                  disabled={isLocked}
+                  className="w-full rounded-2xl border-2 border-amber-600/20 bg-white px-4 py-4 text-center text-3xl font-black tracking-[8px] text-slate-900 outline-none transition-all placeholder:text-slate-200 focus:border-blue-950 focus:ring-4 focus:ring-blue-950/10 shadow-inner group-hover:border-amber-600/40 disabled:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
 
@@ -237,14 +451,60 @@ export default function LoginMagang() {
               </datalist>
             </div>
 
+            {/* --- KOTAK CAPTCHA MATEMATIKA (MUNCUL SETELAH GAGAL) --- */}
+            {captchaRequired && (
+              <div className="mb-6 rounded-2xl border-2 border-dashed border-blue-950/30 bg-white/50 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-[11px] font-black text-blue-950 uppercase tracking-widest">
+                    🧠 Verifikasi Keamanan
+                  </label>
+                  <button
+                    type="button"
+                    onClick={gantiSoalCaptcha}
+                    className="text-[10px] font-bold text-blue-900 underline decoration-dotted"
+                  >
+                    🔄 Ganti Soal
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 select-none rounded-xl bg-blue-950 py-3 text-center text-xl font-black tracking-wider text-white">
+                    {captchaChallenge.a} + {captchaChallenge.b} = ?
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={captchaInput}
+                    onChange={(e) => {
+                      setCaptchaInput(e.target.value.replace(/\D/g, ""));
+                      setCaptchaError("");
+                    }}
+                    placeholder="?"
+                    className="w-20 rounded-xl border-2 border-blue-950/20 bg-white px-2 py-3 text-center text-xl font-black text-slate-900 outline-none focus:border-blue-950"
+                  />
+                </div>
+
+                {captchaError && (
+                  <p className="mt-2 text-[11px] font-bold text-red-700">
+                    ⚠️ {captchaError}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* TOMBOL MASUK */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isLocked}
               className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-blue-950 py-4 font-black uppercase text-white shadow-[0_10px_25px_-5px_rgba(15,23,42,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_15px_30px_-5px_rgba(15,23,42,0.5)] disabled:translate-y-0 disabled:opacity-70 disabled:shadow-none flex justify-center items-center gap-2"
             >
               <div className="absolute inset-0 w-full h-full bg-white/10 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-500 ease-out"></div>
-              {loading ? (
+              {isLocked ? (
+                <span className="relative z-10 tracking-widest text-sm">
+                  🔒 TERKUNCI {formatMMSS(remainingTime)}
+                </span>
+              ) : loading ? (
                 <>
                   <svg
                     className="animate-spin h-5 w-5 text-white"
