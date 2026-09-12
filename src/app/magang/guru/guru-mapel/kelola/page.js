@@ -1112,78 +1112,111 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
               Belum ada siswa di mapel ini. Klik "➕ Tambah Siswa" untuk mulai.
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden relative w-full">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden relative w-full">
               <div
                 className="overflow-auto custom-scrollbar relative h-[70vh] overscroll-contain touch-pan-x touch-pan-y"
                 style={{ WebkitOverflowScrolling: "touch" }}
+                onScroll={(e) => {
+                  if (e.currentTarget.scrollLeft > 10) {
+                    e.currentTarget.classList.add("is-scrolled");
+                  } else {
+                    e.currentTarget.classList.remove("is-scrolled");
+                  }
+                }}
               >
-                <table
-                  className="border-separate border-spacing-0 whitespace-nowrap text-[9px] sm:text-[10px] sm:text-xs min-w-max"
-                  style={{ tableLayout: "auto" }}
-                >
-                  <thead className="bg-slate-100 text-slate-800 shadow-sm">
+                <table className="border-separate border-spacing-0 whitespace-nowrap text-[9px] sm:text-[10px] min-w-max w-full [&_.col-nama]:transition-all [&_.col-nama]:duration-300 [.is-scrolled_&_.col-nama]:!w-[150px] [.is-scrolled_&_.col-nama]:!min-w-[150px] [.is-scrolled_&_.col-nama]:!max-w-[150px]">
+                  <thead className="bg-slate-50 text-slate-700 shadow-sm leading-none">
                     <tr>
-                      <th className="px-1.5 py-2 font-black border-b sticky top-0 left-0 bg-slate-100 z-50 outline outline-1 outline-slate-200 w-8 sm:w-10">
+                      <th className="px-1 py-1.5 font-black border-b-2 border-slate-300 sticky top-0 left-0 bg-slate-50 z-[70] w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] text-center">
                         No
                       </th>
-                      <th className="px-2 sm:px-3 py-2 font-black border-b sticky top-0 left-[32px] sm:left-[40px] bg-slate-100 z-50 outline outline-1 outline-slate-200 min-w-[150px] sm:min-w-[180px] text-left">
-                        Nama Siswa
+
+                      <th
+                        className="col-nama px-1.5 py-1.5 font-black border-b-2 border-slate-300 sticky top-0 left-[28px] sm:left-[32px] bg-slate-50 z-[80] text-left shadow-[5px_0_10px_-5px_rgba(0,0,0,0.1)] w-[190px] min-w-[190px] max-w-[190px]"
+                        style={{
+                          position: "sticky",
+                          left: "28px",
+                          zIndex: 80,
+                        }}
+                      >
+                        <div className="w-full overflow-hidden truncate">
+                          Nama Siswa
+                        </div>
                       </th>
 
-                      {/* HEADER KOLOM PERTEMUAN DENGAN TOMBOL + DAN - */}
                       {currentPertemuanArray.map((p) => (
                         <th
                           key={p}
-                          className="px-1 sm:px-1.5 py-1.5 font-black border-b text-center min-w-[64px] sm:min-w-[75px] sticky top-0 bg-slate-100 z-40"
+                          className="px-0.5 py-1 font-black border-b-2 border-slate-300 border-l border-slate-100 text-center min-w-[55px] sm:min-w-[65px] sticky top-0 bg-slate-50 z-40"
                         >
-                          <div className="mb-1 flex items-center justify-center gap-1 text-[10px] sm:text-[11px] text-slate-800">
-                            <span>Pertemuan {p}</span>
-                            {/* Tombol + / - diletakkan sejajar di samping nama pertemuan */}
+                          <div className="mb-1 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] text-slate-800">
+                            <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                              Pert. {p}
+                            </span>
+
                             {p === jumlahPertemuan && (
-                              <div className="flex flex-row items-center gap-1 ml-1">
+                              <div className="flex flex-row items-center gap-0.5">
                                 <button
                                   onClick={tambahKolomPertemuan}
                                   disabled={jumlahPertemuan >= PERTEMUAN_MAX}
-                                  className="h-3.5 w-3.5 rounded bg-blue-600 text-white flex items-center justify-center text-[10px] font-black hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-                                  title="Tambah Pertemuan"
+                                  className="h-3.5 w-3.5 rounded bg-blue-600 text-white flex items-center justify-center text-[10px] font-black hover:bg-blue-700 hover:scale-110 disabled:opacity-50 shadow-sm transition-all"
+                                  title="Tambah"
                                 >
                                   +
                                 </button>
+
                                 <button
                                   onClick={kurangiKolomPertemuan}
                                   disabled={jumlahPertemuan <= 1}
-                                  className="h-3.5 w-3.5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-black hover:bg-rose-600 disabled:opacity-50 shadow-sm"
-                                  title="Hapus Pertemuan Terakhir"
+                                  className="h-3.5 w-3.5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-black hover:bg-rose-600 hover:scale-110 disabled:opacity-50 shadow-sm transition-all"
+                                  title="Kurangi"
                                 >
                                   -
                                 </button>
                               </div>
                             )}
                           </div>
+
                           <input
                             type="date"
                             value={tanggalPertemuan[p] || ""}
                             onChange={(e) =>
                               updateTanggalPertemuan(p, e.target.value)
                             }
-                            className="w-full max-w-[90px] rounded border border-slate-300 text-[8px] sm:text-[9px] px-1 py-1 bg-white focus:ring-1 focus:ring-blue-500 outline-none mx-auto block"
+                            className="w-full max-w-[75px] h-[18px] rounded border border-slate-300 text-[8px] sm:text-[9px] px-0.5 py-0 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none mx-auto block cursor-pointer transition-all shadow-inner"
                           />
                         </th>
                       ))}
 
-                      {/* HEADER TOTAL COMPACT (H S I A C N) */}
-                      <th className="px-2 py-2 font-black border-b text-center sticky top-0 bg-slate-100 z-40 outline outline-1 outline-slate-200">
-                        <div className="w-[180px] min-w-[180px] max-w-[180px] mx-auto">
-                          <div className="text-[10px] sm:text-[11px] mb-1">
+                      <th className="px-1 py-1 font-black border-b-2 border-slate-300 border-l-2 border-slate-200 text-center sticky top-0 bg-slate-100 z-50">
+                        <div className="w-[130px] min-w-[130px] max-w-[130px] mx-auto">
+                          <div className="text-[9px] sm:text-[10px] mb-0.5 uppercase tracking-widest text-slate-600">
                             TOTAL
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-[9px] leading-none">
-                            <span className="w-4 text-emerald-700">H</span>
-                            <span className="w-4 text-blue-700">S</span>
-                            <span className="w-4 text-amber-600">I</span>
-                            <span className="w-4 text-rose-700">A</span>
-                            <span className="w-4 text-violet-700">C</span>
-                            <span className="w-4 font-black text-fuchsia-700">
+
+                          <div className="flex items-center justify-center gap-1 text-[9px] leading-none bg-white py-0.5 rounded shadow-sm border border-slate-200">
+                            <span
+                              className="w-4 text-emerald-700"
+                              title="Hadir"
+                            >
+                              H
+                            </span>
+                            <span className="w-4 text-blue-700" title="Sakit">
+                              S
+                            </span>
+                            <span className="w-4 text-amber-600" title="Izin">
+                              I
+                            </span>
+                            <span className="w-4 text-rose-700" title="Alfa">
+                              A
+                            </span>
+                            <span className="w-4 text-violet-700" title="Cabut">
+                              C
+                            </span>
+                            <span
+                              className="w-4 font-black text-fuchsia-700"
+                              title="Total Nilai"
+                            >
                               N
                             </span>
                           </div>
@@ -1195,42 +1228,56 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                   <tbody className="divide-y divide-slate-100">
                     {siswaList.map((s, idx) => {
                       const total = hitungTotal(s.idSiswa);
+
                       return (
                         <tr
                           key={s.idSiswa}
-                          className="hover:bg-slate-50/60 transition-colors"
+                          className="hover:bg-blue-50/60 transition-colors group"
                         >
-                          <td className="px-1.5 py-1.5 border-b sticky left-0 bg-white/95 backdrop-blur-sm z-20 outline outline-1 outline-slate-100 font-bold text-center w-8 sm:w-10">
+                          <td className="px-1 py-1 border-b border-slate-100 sticky left-0 bg-white group-hover:bg-blue-50/90 z-[70] font-bold text-center text-slate-500 w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px]">
                             {idx + 1}
                           </td>
-                          <td className="px-2 sm:px-3 py-1.5 border-b sticky left-[32px] sm:left-[40px] bg-white/95 backdrop-blur-sm z-20 outline outline-1 outline-slate-100 min-w-[150px] sm:min-w-[180px]">
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <p className="font-black text-slate-800 text-[10px] sm:text-[11px] leading-tight truncate">
+
+                          <td
+                            className="col-nama px-1.5 py-1 border-b border-slate-100 sticky left-[28px] sm:left-[32px] bg-white group-hover:bg-blue-50/90 z-[60] shadow-[5px_0_10px_-5px_rgba(0,0,0,0.05)] w-[190px] min-w-[190px] max-w-[190px]"
+                            style={{
+                              position: "sticky",
+                              left: "28px",
+                              zIndex: 60,
+                            }}
+                          >
+                            <div className="flex flex-col justify-center h-full w-full min-w-0 overflow-hidden">
+                              <p
+                                className="font-black text-slate-800 text-[10px] sm:text-[11px] leading-none truncate w-full"
+                                title={s.nama}
+                              >
                                 {s.nama}
                               </p>
-                              <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold">
-                                ID: {s.idSiswa}
-                              </p>
 
-                              {/* SPACE KOSONG: Badge Wali dan Tombol Hapus Berdampingan */}
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {s.namaGuruWali ? (
-                                  <span className="inline-block rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 text-[8px] font-bold">
-                                    Wali: {s.namaGuruWali}
+                              <div className="flex items-center justify-between mt-0.5 w-full">
+                                <div className="flex items-center gap-1 min-w-0 overflow-hidden mr-1">
+                                  <span className="shrink-0 text-[7px] sm:text-[8px] text-slate-400 font-medium bg-slate-100 px-1 py-0 rounded truncate">
+                                    ID: {s.idSiswa}
                                   </span>
-                                ) : (
-                                  <span className="inline-block rounded bg-red-50 text-red-500 border border-red-200 px-1.5 py-0.5 text-[8px] font-bold">
-                                    Tanpa Wali
-                                  </span>
-                                )}
+
+                                  {s.namaGuruWali ? (
+                                    <span className="truncate rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0 text-[7px] font-bold">
+                                      Wali: {s.namaGuruWali}
+                                    </span>
+                                  ) : (
+                                    <span className="shrink-0 rounded bg-red-50 text-red-500 border border-red-200 px-1 py-0 text-[7px] font-bold">
+                                      Tanpa Wali
+                                    </span>
+                                  )}
+                                </div>
 
                                 <button
                                   onClick={() => hapusSiswaDariMapel(s)}
                                   disabled={menghapusId === s.idSiswa}
-                                  title="Hapus siswa dari mapel ini"
-                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 text-[9px] disabled:opacity-50 transition-colors"
+                                  title="Hapus"
+                                  className="shrink-0 flex h-4 w-4 items-center justify-center rounded bg-red-50 border border-red-200 text-red-600 hover:bg-red-500 hover:text-white text-[8px] disabled:opacity-50 transition-all shadow-sm"
                                 >
-                                  {menghapusId === s.idSiswa ? "⏳" : "🗑️"}
+                                  {menghapusId === s.idSiswa ? "⏳" : "✕"}
                                 </button>
                               </div>
                             </div>
@@ -1238,15 +1285,18 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
 
                           {currentPertemuanArray.map((p) => {
                             const key = `${s.idSiswa}_${p}`;
-                            const cell = grid[key] || { status: "", nilai: "" };
+                            const cell = grid[key] || {
+                              status: "",
+                              nilai: "",
+                            };
                             const isHadir = cell.status === "Hadir";
 
                             return (
                               <td
                                 key={p}
-                                className="px-1 py-1.5 border-b text-center align-middle"
+                                className="p-0.5 border-b border-slate-100 border-l border-slate-50 text-center align-middle"
                               >
-                                <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 w-full h-full">
                                   <select
                                     value={cell.status}
                                     onChange={(e) =>
@@ -1257,21 +1307,23 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                                         e.target.value,
                                       )
                                     }
-                                    className={`rounded border text-[9px] sm:text-[10px] font-black py-1 px-0.5 text-center appearance-none ${warnaStatus(cell.status)}`}
+                                    className={`cursor-pointer rounded border text-[9px] sm:text-[10px] font-black h-[20px] px-0.5 shadow-sm hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-blue-400 ${warnaStatus(cell.status)}`}
                                     style={{
-                                      width: isHadir ? "36px" : "55px",
+                                      width: isHadir ? "35px" : "50px",
                                       textAlignLast: "center",
                                     }}
                                   >
                                     <option hidden value={cell.status}>
                                       {isHadir ? "H" : cell.status || "-"}
                                     </option>
+
                                     <option
                                       value=""
                                       className="bg-white text-slate-800"
                                     >
                                       -
                                     </option>
+
                                     {STATUS_OPTIONS.map((opt) => (
                                       <option
                                         key={opt.value}
@@ -1294,14 +1346,14 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                                           e.target.value,
                                         )
                                       }
-                                      title="Nilai Harian"
-                                      className="rounded border border-emerald-300 text-[9px] sm:text-[10px] px-1 py-1 text-center font-bold appearance-none bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
+                                      title="Nilai"
+                                      className="cursor-pointer rounded border border-emerald-400 text-[9px] sm:text-[10px] h-[20px] px-0.5 text-center font-black bg-white text-emerald-800 shadow-sm hover:bg-emerald-50 hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-emerald-500"
                                       style={{
-                                        width: "42px",
+                                        width: "35px",
                                         textAlignLast: "center",
                                       }}
                                     >
-                                      <option value="">Nlai</option>
+                                      <option value="">Nil</option>
                                       {NILAI_OPTIONS.map((n) => (
                                         <option key={n} value={n}>
                                           {n}
@@ -1314,25 +1366,24 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                             );
                           })}
 
-                          {/* KOLOM TOTAL COMPACT (ANGKA DI BAWAH HEADER H S I A C N) */}
-                          <td className="px-2 py-1.5 border-b bg-white/95 backdrop-blur-sm z-20 outline outline-1 outline-slate-100 text-center">
-                            <div className="flex items-center justify-center gap-2 w-[180px] min-w-[180px] max-w-[180px] mx-auto leading-none">
-                              <span className="w-4 text-[10px] font-black text-emerald-600">
+                          <td className="px-1 py-1 border-b border-l-2 border-slate-200 bg-slate-50/50 group-hover:bg-blue-100/50 transition-colors text-center">
+                            <div className="flex items-center justify-center gap-1 w-[130px] min-w-[130px] max-w-[130px] mx-auto leading-none">
+                              <span className="w-4 text-[10px] font-black text-emerald-600 bg-emerald-100 py-0.5 rounded">
                                 {total.Hadir}
                               </span>
-                              <span className="w-4 text-[10px] font-black text-blue-600">
+                              <span className="w-4 text-[10px] font-black text-blue-600 bg-blue-100 py-0.5 rounded">
                                 {total.Sakit}
                               </span>
-                              <span className="w-4 text-[10px] font-black text-amber-500">
+                              <span className="w-4 text-[10px] font-black text-amber-600 bg-amber-100 py-0.5 rounded">
                                 {total.Izin}
                               </span>
-                              <span className="w-4 text-[10px] font-black text-rose-600">
+                              <span className="w-4 text-[10px] font-black text-rose-600 bg-rose-100 py-0.5 rounded">
                                 {total.Alfa}
                               </span>
-                              <span className="w-4 text-[10px] font-black text-violet-600">
+                              <span className="w-4 text-[10px] font-black text-violet-600 bg-violet-100 py-0.5 rounded">
                                 {total.Cabut}
                               </span>
-                              <span className="w-4 text-[10px] font-black text-fuchsia-700">
+                              <span className="w-4 text-[10px] font-black text-fuchsia-700 bg-fuchsia-100 py-0.5 rounded border border-fuchsia-200">
                                 {total.jumlahNilai}
                               </span>
                             </div>
@@ -1464,8 +1515,12 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                     </span>
                     <input
                       value={namaBaru}
-                      onChange={(e) => setNamaBaru(e.target.value)}
-                      className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500"
+                      // Tambahkan .toUpperCase() di bawah ini
+                      onChange={(e) =>
+                        setNamaBaru(e.target.value.toUpperCase())
+                      }
+                      // Kamu juga bisa menambahkan class "uppercase" di className agar kursor dan teks langsung terlihat kapital
+                      className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 uppercase"
                     />
                   </label>
                   <label className="block">
@@ -1478,11 +1533,54 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                       className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500"
                     >
                       <option value="">-- Pilih kelas --</option>
-                      {daftarKelas.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
+
+                      <optgroup label="Kelas X">
+                        <option value="X TKJ 1">X TJKT 1</option>
+                        <option value="X TKJ 2">X TJKT 2</option>
+                        <option value="X DPIB">X DPIB</option>
+                        <option value="X TAV">X TAV</option>
+                        <option value="X GEOMATIKA">X GEOMATIKA</option>
+                        <option value="X TO 1">X TO1</option>
+                        <option value="X TO 2">X TO2</option>
+                        <option value="X TO 3">X TO3</option>
+                        <option value="X TO 4">X TO4</option>
+                        <option value="X TPL">X TPL</option>
+                        <option value="X TITL 1">X TITL 1</option>
+                        <option value="X TITL 2">X TITL 2</option>
+                      </optgroup>
+
+                      <optgroup label="Kelas XI">
+                        <option value="XI TKJ 1">XI TJKT 1</option>
+                        <option value="XI TKJ 2">XI TJKT 2</option>
+                        <option value="XI DPIB">XI DPIB</option>
+                        <option value="XI TAV">XI TAV</option>
+                        <option value="XI GEOMATIKA">XI GEOMATIKA</option>
+                        <option value="XI TBSM 1">XI TBSM 1</option>
+                        <option value="XI TBSM 2">XI TBSM 2</option>
+                        <option value="XI TAB">XI TAB</option>
+                        <option value="XI TKR">XI TKRO</option>
+                        <option value="XI TPL">XI TPL</option>
+                        <option value="XI TITL 1">XI TITL 1</option>
+                        <option value="XI TITL 2">XI TITL 2</option>
+                      </optgroup>
+
+                      <optgroup label="Kelas XII">
+                        <option value="TKJ 1">XII TJKT 1</option>
+                        <option value="TKJ 2">XII TJKT 2</option>
+                        <option value="DPIB">XII DPIB</option>
+                        <option value="TAV">XII TAV</option>
+                        <option value="GEOMATIKA">XII GEOMATIKA</option>
+                        <option value="TBSM 1">XII TBSM 1</option>
+                        <option value="TBSM 2">XII TBSM 2</option>
+                        <option value="TAB">XII TAB</option>
+                        <option value="TKR">XII TKRO</option>
+                        <option value="TPL">XII TPL</option>
+                        <option value="TITL">XII TITL</option>
+                      </optgroup>
+
+                      <optgroup label="Lainnya">
+                        <option value="CONTOH">KELAS CONTOH</option>
+                      </optgroup>
                     </select>
                   </label>
                   <div className="flex gap-2 mt-2">
