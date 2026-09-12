@@ -798,7 +798,17 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
   }
 
   // Menambahkan fitur untuk mengurangi kolom
+  // Mengurangi kolom dengan konfirmasi peringatan
   function kurangiKolomPertemuan() {
+    if (jumlahPertemuan <= 1) return;
+
+    const konfirmasi = window.confirm(
+      `⚠️ Hapus kolom Pertemuan ${jumlahPertemuan}?\n\n` +
+        `Data presensi dan nilai pada pertemuan terakhir ini akan dihapus. Lanjutkan?`,
+    );
+
+    if (!konfirmasi) return;
+
     setJumlahPertemuan((prev) => Math.max(1, prev - 1));
   }
 
@@ -1157,21 +1167,20 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                             {p === jumlahPertemuan && (
                               <div className="flex flex-row items-center gap-0.5">
                                 <button
-                                  onClick={tambahKolomPertemuan}
-                                  disabled={jumlahPertemuan >= PERTEMUAN_MAX}
-                                  className="h-3.5 w-3.5 rounded bg-blue-600 text-white flex items-center justify-center text-[10px] font-black hover:bg-blue-700 hover:scale-110 disabled:opacity-50 shadow-sm transition-all"
-                                  title="Tambah"
-                                >
-                                  +
-                                </button>
-
-                                <button
                                   onClick={kurangiKolomPertemuan}
                                   disabled={jumlahPertemuan <= 1}
                                   className="h-3.5 w-3.5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-black hover:bg-rose-600 hover:scale-110 disabled:opacity-50 shadow-sm transition-all"
                                   title="Kurangi"
                                 >
                                   -
+                                </button>
+                                <button
+                                  onClick={tambahKolomPertemuan}
+                                  disabled={jumlahPertemuan >= PERTEMUAN_MAX}
+                                  className="h-3.5 w-3.5 rounded bg-blue-600 text-white flex items-center justify-center text-[10px] font-black hover:bg-blue-700 hover:scale-110 disabled:opacity-50 shadow-sm transition-all"
+                                  title="Tambah"
+                                >
+                                  +
                                 </button>
                               </div>
                             )}
