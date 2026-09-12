@@ -442,3 +442,93 @@ export async function getJurnalPKL(idGuru) {
     idGuru,
   });
 }
+
+/**
+ * ====================================================================
+ * PATCH FINAL UNTUK src/lib/api.js — FITUR GURU MAPEL (v3)
+ * ====================================================================
+ * INI VERSI GABUNGAN/FINAL. Abaikan file JS_API_PATCH_MAPEL.txt,
+ * JS_API_PATCH_MAPEL_V2.txt, JS_API_PATCH_MAPEL_V3.txt yang lama —
+ * cukup pakai file ini saja.
+ *
+ * CARA PASANG:
+ * Tempel seluruh blok di bawah ini ke BAGIAN PALING BAWAH file
+ * lib/api.js yang sudah ada (setelah fungsi getJurnalPKL()). Tidak ada
+ * satupun fungsi lama yang diubah — murni tambahan.
+ * ====================================================================
+ */
+
+// ==========================================
+// GURU MAPEL
+// ==========================================
+
+export async function getMapelByGuru(idGuru) {
+  return request("getMapelByGuru", { idGuru });
+}
+
+export async function addMapel(data) {
+  return request("addMapel", data);
+}
+
+export async function editMapel(data) {
+  return request("editMapel", data);
+}
+
+export async function deleteMapel(data) {
+  return request("deleteMapel", data);
+}
+
+export async function getKelasSiswaMapel() {
+  return request("getKelasSiswaMapel");
+}
+
+export async function getSiswaByKelasMapel(kelas) {
+  return request("getSiswaByKelasMapel", { kelas });
+}
+
+export async function getSiswaMapel(idGuru, idMapel) {
+  return request("getSiswaMapel", { idGuru, idMapel });
+}
+
+export async function simpanSiswaMapel(data) {
+  return request("simpanSiswaMapel", data);
+}
+
+export async function hapusSiswaMapel(data) {
+  return request("hapusSiswaMapel", data);
+}
+
+export async function getSemuaSiswaUntukTambahMapel(idGuru, idMapel) {
+  return request("getSemuaSiswaUntukTambahMapel", { idGuru, idMapel });
+}
+
+export async function getPresensiMapelGrid(idGuru, idMapel) {
+  return request("getPresensiMapelGrid", { idGuru, idMapel });
+}
+
+export async function savePresensiMapel(data) {
+  return request("savePresensiMapel", {
+    idGuru: data.idGuru,
+    idMapel: data.idMapel,
+    cells: data.cells || [],
+  });
+}
+
+export async function saveJurnalMapel(data) {
+  return request("saveJurnalMapel", {
+    idGuru: data.idGuru,
+    idMapel: data.idMapel,
+    idSiswa: data.idSiswa,
+    idSiswaList: data.idSiswaList,
+    tanggal: data.tanggal,
+    formatPertemuan: data.formatPertemuan || "Individu",
+    topik: data.topik || "",
+    tindakLanjut: data.tindakLanjut || "",
+    keterangan: data.keterangan || "",
+    fotoUrl: data.fotoUrl || "",
+  });
+}
+
+export async function getJurnalMapel(idGuru, idMapel) {
+  return request("getJurnalMapel", { idGuru, idMapel });
+}

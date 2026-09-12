@@ -912,6 +912,29 @@ function DashboardGuruContent() {
                 Guru Wali
               </span>
             </button>
+
+            {/* Tab: Guru Mapel */}
+            <button
+              onClick={() => setActiveMenuTab("mapel")}
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+                activeMenuTab === "mapel"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
+              }`}
+            >
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "mapel" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  📚
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+                Guru Mapel
+              </span>
+            </button>
           </div>
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
@@ -992,6 +1015,35 @@ function DashboardGuruContent() {
                 icon="📑"
                 bgGrad="from-slate-500 to-slate-700"
                 onClick={() => setShowLaporanWaliModal(true)}
+              />
+            </div>
+          )}
+
+          {/* 4. KONTEN TAB GURU MAPEL */}
+          {activeMenuTab === "mapel" && (
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
+              <SolidCompactCard
+                title="Kelola Mapel"
+                desc="Tambah & atur mata pelajaran"
+                icon="📚"
+                bgGrad="from-cyan-600 to-blue-700"
+                onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
+              />
+              <SolidCompactCard
+                title="Isi Pembinaan Mapel"
+                desc="Segera hadir (Fase berikutnya)"
+                icon="📷"
+                bgGrad="from-slate-500 to-slate-700"
+                disabled={true}
+                onClick={() => {}}
+              />
+              <SolidCompactCard
+                title="Cetak Laporan Mapel"
+                desc="Segera hadir (Fase berikutnya)"
+                icon="🖨️"
+                bgGrad="from-slate-500 to-slate-700"
+                disabled={true}
+                onClick={() => {}}
               />
             </div>
           )}
