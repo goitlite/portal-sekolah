@@ -18,6 +18,7 @@ import {
 import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
+import CetakLaporanMapelModal from "./guru-mapel/CetakLaporanMapelModal";
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
 import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
@@ -181,6 +182,7 @@ function DashboardGuruContent() {
 
   const [loadingCetakWali, setLoadingCetakWali] = useState(false);
   const [showLaporanWaliModal, setShowLaporanWaliModal] = useState(false);
+  const [showCetakMapelModal, setShowCetakMapelModal] = useState(false);
 
   const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
     useState(false);
@@ -1024,7 +1026,7 @@ function DashboardGuruContent() {
             <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
               <SolidCompactCard
                 title="Kelola Mapel"
-                desc="Tambah & atur mata pelajaran"
+                desc="Tambah mata pelajaran & presensi"
                 icon="📚"
                 bgGrad="from-cyan-600 to-blue-700"
                 onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
@@ -1039,11 +1041,10 @@ function DashboardGuruContent() {
               />
               <SolidCompactCard
                 title="Cetak Laporan Mapel"
-                desc="Segera hadir (Fase berikutnya)"
+                desc="Unduh rekap presensi & nilai (PDF)"
                 icon="🖨️"
-                bgGrad="from-slate-500 to-slate-700"
-                disabled={true}
-                onClick={() => {}}
+                bgGrad="from-fuchsia-600 to-pink-600"
+                onClick={() => setShowCetakMapelModal(true)}
               />
             </div>
           )}
@@ -1989,6 +1990,13 @@ function DashboardGuruContent() {
         idGuru={user?.id}
         namaGuru={user?.nama}
         onSaved={() => setShowJurnalPklModal(false)}
+      />
+
+      {/* MODAL CETAK LAPORAN MAPEL */}
+      <CetakLaporanMapelModal
+        isOpen={showCetakMapelModal}
+        onClose={() => setShowCetakMapelModal(false)}
+        guru={user}
       />
     </main>
   );

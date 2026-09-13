@@ -23,6 +23,8 @@ import {
   savePresensiMapel,
   addSiswa,
 } from "../../../lib/api";
+import { generateLaporanMapelPDF } from "../generateLaporanMapelPDF";
+import ModalTambahSiswa from "./ModalTambahSiswa";
 
 const PERTEMUAN_MAX = 20;
 const NILAI_OPTIONS = Array.from({ length: 20 }, (_, i) => (i + 1) * 5); // Kelipatan 5 hingga 100
@@ -51,6 +53,133 @@ function warnaStatus(status) {
       return "bg-slate-50 text-slate-400 border-slate-200";
   }
 }
+
+const KELAS_OPTIONS = (
+  <>
+    <optgroup label="Kelas X" className="font-bold text-slate-900 bg-white">
+      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">
+        X TJKT 1
+      </option>
+      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">
+        X TJKT 2
+      </option>
+      <option value="X DPIB" className="font-medium text-slate-800 bg-white">
+        X DPIB
+      </option>
+      <option value="X TAV" className="font-medium text-slate-800 bg-white">
+        X TAV
+      </option>
+      <option
+        value="X GEOMATIKA"
+        className="font-medium text-slate-800 bg-white"
+      >
+        X GEOMATIKA
+      </option>
+      <option value="X TO 1" className="font-medium text-slate-800 bg-white">
+        X TO1
+      </option>
+      <option value="X TO 2" className="font-medium text-slate-800 bg-white">
+        X TO2
+      </option>
+      <option value="X TO 3" className="font-medium text-slate-800 bg-white">
+        X TO3
+      </option>
+      <option value="X TO 4" className="font-medium text-slate-800 bg-white">
+        X TO4
+      </option>
+      <option value="X TPL" className="font-medium text-slate-800 bg-white">
+        X TPL
+      </option>
+      <option value="X TITL 1" className="font-medium text-slate-800 bg-white">
+        X TITL 1
+      </option>
+      <option value="X TITL 2" className="font-medium text-slate-800 bg-white">
+        X TITL 2
+      </option>
+    </optgroup>
+    <optgroup label="Kelas XI" className="font-bold text-slate-900 bg-white">
+      <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">
+        XI TJKT 1
+      </option>
+      <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">
+        XI TJKT 2
+      </option>
+      <option value="XI DPIB" className="font-medium text-slate-800 bg-white">
+        XI DPIB
+      </option>
+      <option value="XI TAV" className="font-medium text-slate-800 bg-white">
+        XI TAV
+      </option>
+      <option
+        value="XI GEOMATIKA"
+        className="font-medium text-slate-800 bg-white"
+      >
+        XI GEOMATIKA
+      </option>
+      <option value="XI TBSM 1" className="font-medium text-slate-800 bg-white">
+        XI TBSM 1
+      </option>
+      <option value="XI TBSM 2" className="font-medium text-slate-800 bg-white">
+        XI TBSM 2
+      </option>
+      <option value="XI TAB" className="font-medium text-slate-800 bg-white">
+        XI TAB
+      </option>
+      <option value="XI TKR" className="font-medium text-slate-800 bg-white">
+        XI TKRO
+      </option>
+      <option value="XI TPL" className="font-medium text-slate-800 bg-white">
+        XI TPL
+      </option>
+      <option value="XI TITL 1" className="font-medium text-slate-800 bg-white">
+        XI TITL 1
+      </option>
+      <option value="XI TITL 2" className="font-medium text-slate-800 bg-white">
+        XI TITL 2
+      </option>
+    </optgroup>
+    <optgroup label="Kelas XII" className="font-bold text-slate-900 bg-white">
+      <option value="TKJ 1" className="font-medium text-slate-800 bg-white">
+        XII TJKT 1
+      </option>
+      <option value="TKJ 2" className="font-medium text-slate-800 bg-white">
+        XII TJKT 2
+      </option>
+      <option value="DPIB" className="font-medium text-slate-800 bg-white">
+        XII DPIB
+      </option>
+      <option value="TAV" className="font-medium text-slate-800 bg-white">
+        XII TAV
+      </option>
+      <option value="GEOMATIKA" className="font-medium text-slate-800 bg-white">
+        XII GEOMATIKA
+      </option>
+      <option value="TBSM 1" className="font-medium text-slate-800 bg-white">
+        XII TBSM 1
+      </option>
+      <option value="TBSM 2" className="font-medium text-slate-800 bg-white">
+        XII TBSM 2
+      </option>
+      <option value="TAB" className="font-medium text-slate-800 bg-white">
+        XII TAB
+      </option>
+      <option value="TKR" className="font-medium text-slate-800 bg-white">
+        XII TKRO
+      </option>
+      <option value="TPL" className="font-medium text-slate-800 bg-white">
+        XII TPL
+      </option>
+      <option value="TITL" className="font-medium text-slate-800 bg-white">
+        XII TITL
+      </option>
+    </optgroup>
+    <optgroup label="Lainnya" className="font-bold text-slate-900 bg-white">
+      <option value="CONTOH" className="font-medium text-slate-800 bg-white">
+        KELAS CONTOH
+      </option>
+    </optgroup>
+  </>
+);
 
 export default function KelolaMapelPage() {
   const router = useRouter();
@@ -85,6 +214,20 @@ export default function KelolaMapelPage() {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [pendingOpenId, setPendingOpenId] = useState(null);
   const activeGridRef = useRef(null);
+  const [cetakCardLoadingId, setCetakCardLoadingId] = useState(null);
+  const [mapelTambahTarget, setMapelTambahTarget] = useState(null);
+
+  async function handleCetakPdfMapel(mapel) {
+    try {
+      setCetakCardLoadingId(mapel.idMapel);
+      await generateLaporanMapelPDF({ guru, mapel });
+    } catch (err) {
+      console.error("Gagal cetak PDF mapel:", err);
+      alert(err.message || "Gagal mencetak laporan PDF mapel.");
+    } finally {
+      setCetakCardLoadingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -411,11 +554,7 @@ export default function KelolaMapelPage() {
                           ? "Memuat daftar kelas..."
                           : "-- Tanpa kelas (manual) --"}
                       </option>
-                      {daftarKelas.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
+                      {KELAS_OPTIONS}
                     </select>
                   </label>
                 </div>
@@ -573,6 +712,34 @@ export default function KelolaMapelPage() {
                           {/* Tombol Aksi Kanan */}
                           <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
                             <button
+                              onClick={() => setMapelTambahTarget(mapel)}
+                              title="Tambah / Daftarkan Siswa ke Mapel Ini"
+                              className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
+                            >
+                              <span>➕</span>
+                              <span>Tambah Siswa</span>
+                            </button>
+                            <button
+                              onClick={() => handleCetakPdfMapel(mapel)}
+                              disabled={cetakCardLoadingId === mapel.idMapel}
+                              title="Cetak Laporan Presensi & Nilai PDF"
+                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
+                            >
+                              {cetakCardLoadingId === mapel.idMapel ? (
+                                <>
+                                  <span className="inline-block animate-spin">
+                                    ⏳
+                                  </span>
+                                  <span>Mencetak...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>🖨️</span>
+                                  <span>Cetak PDF</span>
+                                </>
+                              )}
+                            </button>
+                            <button
                               onClick={() => pilihMapelAktif(mapel)}
                               disabled={isAktif}
                               className={`rounded-xl px-4 py-2.5 text-xs font-black shadow-md transition-all ${
@@ -622,6 +789,7 @@ export default function KelolaMapelPage() {
                           guru={guru}
                           mapel={mapel}
                           daftarKelas={daftarKelas}
+                          onBukaTambah={() => setMapelTambahTarget(mapel)}
                           onClose={() => {
                             setExpandedMapelId(pendingOpenId);
                             setPendingOpenId(null);
@@ -682,6 +850,19 @@ export default function KelolaMapelPage() {
             </div>
           </div>
         )}
+        {/* MODAL TAMBAH SISWA KE MAPEL */}
+        <ModalTambahSiswa
+          key={mapelTambahTarget?.idMapel || "closed"}
+          isOpen={!!mapelTambahTarget}
+          onClose={() => setMapelTambahTarget(null)}
+          guru={guru}
+          mapel={mapelTambahTarget}
+          onSiswaAdded={() => {
+            if (activeGridRef.current?.reloadGrid) {
+              activeGridRef.current.reloadGrid();
+            }
+          }}
+        />
       </div>
 
       <style
@@ -702,7 +883,7 @@ export default function KelolaMapelPage() {
 // KOMPONEN: TABEL PRESENSI + NILAI
 // =========================================================================
 const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
-  { guru, mapel, daftarKelas, onClose },
+  { guru, mapel, daftarKelas, onBukaTambah, onClose },
   ref,
 ) {
   const [loading, setLoading] = useState(true);
@@ -713,25 +894,15 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
 
   // State Dinamis untuk jumlah pertemuan P
   const [jumlahPertemuan, setJumlahPertemuan] = useState(1);
-
-  const [showTambahModal, setShowTambahModal] = useState(false);
-  const [kandidatSiswa, setKandidatSiswa] = useState([]);
-  const [loadingKandidat, setLoadingKandidat] = useState(false);
-  const [searchTambah, setSearchTambah] = useState("");
-  const [filterKelasTambah, setFilterKelasTambah] = useState("");
-  const [menambahId, setMenambahId] = useState(null);
-
-  const [showFormBaru, setShowFormBaru] = useState(false);
-  const [namaBaru, setNamaBaru] = useState("");
-  const [kelasBaru, setKelasBaru] = useState(mapel.kelas || "");
-  const [savingBaru, setSavingBaru] = useState(false);
-
   const [menghapusId, setMenghapusId] = useState(null);
 
   useImperativeHandle(ref, () => ({
     triggerSimpan: async () => {
       await handleSimpanPresensi();
       if (onClose) onClose();
+    },
+    reloadGrid: () => {
+      loadGrid();
     },
   }));
 
@@ -883,143 +1054,6 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
     }
   }
 
-  async function bukaModalTambah() {
-    setShowTambahModal(true);
-    setSearchTambah("");
-    setFilterKelasTambah("");
-    setShowFormBaru(false);
-    setNamaBaru("");
-    setKelasBaru(mapel.kelas || "");
-    setLoadingKandidat(true);
-    try {
-      const result = await getSemuaSiswaUntukTambahMapel(
-        guru.id,
-        mapel.idMapel,
-      );
-      setKandidatSiswa(result.success ? result.data || [] : []);
-    } catch (err) {
-      console.error("ERROR LOAD KANDIDAT SISWA:", err);
-      setKandidatSiswa([]);
-    } finally {
-      setLoadingKandidat(false);
-    }
-  }
-
-  async function tambahSiswaKeMapel(siswa) {
-    setMenambahId(siswa.idSiswa);
-    try {
-      const result = await simpanSiswaMapel({
-        idGuru: guru.id,
-        idMapel: mapel.idMapel,
-        idSiswa: siswa.idSiswa,
-      });
-      if (result.success) {
-        setSiswaList((prev) =>
-          [
-            ...prev,
-            {
-              idSiswa: siswa.idSiswa,
-              nama: siswa.nama,
-              kelas: siswa.kelas,
-              namaGuruWali: siswa.namaGuruWali,
-            },
-          ].sort((a, b) => a.nama.localeCompare(b.nama)),
-        );
-        setKandidatSiswa((prev) =>
-          prev.filter((s) => s.idSiswa !== siswa.idSiswa),
-        );
-      } else {
-        alert(result.message || "Gagal menambahkan siswa.");
-      }
-    } catch (err) {
-      console.error("ERROR TAMBAH SISWA MAPEL:", err);
-      alert("Terjadi kesalahan saat menambahkan siswa.");
-    } finally {
-      setMenambahId(null);
-    }
-  }
-
-  async function daftarSiswaBaru() {
-    if (!namaBaru.trim()) {
-      alert("Nama siswa wajib diisi.");
-      return;
-    }
-    if (!kelasBaru) {
-      alert("Pilih kelas siswa terlebih dahulu.");
-      return;
-    }
-
-    setSavingBaru(true);
-    try {
-      const namaLengkap = `${namaBaru.trim().toUpperCase()} [${kelasBaru}]`;
-
-      const hasilAdd = await addSiswa({
-        id: "",
-        nama: namaLengkap,
-        idGuru: "",
-        namaGuru: "",
-        tempatMagang: "",
-        status: "BELUM_MAGANG",
-      });
-
-      if (!hasilAdd.success) {
-        alert(hasilAdd.message || "Gagal mendaftarkan siswa baru ke sistem.");
-        return;
-      }
-
-      const idBaru =
-        hasilAdd.data?.id ||
-        hasilAdd.data?.ID ||
-        hasilAdd.data?.idSiswa ||
-        hasilAdd.data?.ID_SISWA;
-
-      if (!idBaru) {
-        alert(
-          "Siswa baru tersimpan di sistem, tapi ID tidak terbaca otomatis. Silakan cari namanya lagi di kotak pencarian untuk memasukkannya ke mapel ini.",
-        );
-        setShowFormBaru(false);
-        bukaModalTambah();
-        return;
-      }
-
-      const hasilEnroll = await simpanSiswaMapel({
-        idGuru: guru.id,
-        idMapel: mapel.idMapel,
-        idSiswa: idBaru,
-      });
-
-      if (hasilEnroll.success) {
-        setSiswaList((prev) =>
-          [
-            ...prev,
-            {
-              idSiswa: idBaru,
-              nama: namaBaru.trim().toUpperCase(),
-              kelas: kelasBaru,
-              namaGuruWali: "",
-            },
-          ].sort((a, b) => a.nama.localeCompare(b.nama)),
-        );
-        alert(
-          `✅ Siswa "${namaBaru.trim().toUpperCase()}" berhasil didaftarkan & ditambahkan ke mapel ini.`,
-        );
-        setNamaBaru("");
-        setShowFormBaru(false);
-        setSearchTambah("");
-      } else {
-        alert(
-          hasilEnroll.message ||
-            "Siswa berhasil didaftarkan ke sistem, tapi gagal dimasukkan ke mapel ini. Coba cari namanya di 'Tambah Siswa'.",
-        );
-      }
-    } catch (err) {
-      console.error("ERROR DAFTAR SISWA BARU:", err);
-      alert("Terjadi kesalahan saat mendaftarkan siswa baru.");
-    } finally {
-      setSavingBaru(false);
-    }
-  }
-
   async function hapusSiswaDariMapel(siswa) {
     const konfirmasi = window.confirm(
       `Hapus "${siswa.nama}" dari mapel "${mapel.namaMapel}"?\n\n` +
@@ -1066,20 +1100,6 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
     }
   }
 
-  const daftarKelasKandidat = Array.from(
-    new Set(kandidatSiswa.map((s) => s.kelas).filter(Boolean)),
-  ).sort();
-
-  const kandidatTersaring = kandidatSiswa.filter((s) => {
-    const cocokNama = s.nama.toLowerCase().includes(searchTambah.toLowerCase());
-    const cocokKelas = !filterKelasTambah || s.kelas === filterKelasTambah;
-    return cocokNama && cocokKelas;
-  });
-  const tidakDitemukan =
-    !loadingKandidat &&
-    searchTambah.trim() !== "" &&
-    kandidatTersaring.length === 0;
-
   const currentPertemuanArray = Array.from(
     { length: jumlahPertemuan },
     (_, i) => i + 1,
@@ -1102,8 +1122,8 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
             {/* Tombol Pertemuan (+) dihilangkan dari sini karena dipindah ke header */}
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               <button
-                onClick={bukaModalTambah}
-                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white text-[10px] sm:text-[11px] font-black px-3 py-2 sm:px-4 sm:py-2.5 shadow-md transition-all"
+                onClick={onBukaTambah || bukaModalTambah}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 text-white text-[10px] sm:text-[11px] font-black px-3 py-2 sm:px-4 sm:py-2.5 shadow-md transition-all flex items-center gap-1"
               >
                 ➕ Tambah Siswa
               </button>
@@ -1119,7 +1139,8 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
 
           {siswaList.length === 0 ? (
             <div className="rounded-xl bg-slate-50 border border-dashed border-slate-300 p-8 text-center text-xs sm:text-sm font-bold text-slate-400 shadow-inner">
-              Belum ada siswa di mapel ini. Klik "➕ Tambah Siswa" untuk mulai.
+              Belum ada siswa di mapel ini. Klik &quot;➕ Tambah Siswa&quot;
+              untuk mulai.
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden relative w-full">
@@ -1135,14 +1156,14 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                 }}
               >
                 <table className="border-separate border-spacing-0 whitespace-nowrap text-[9px] sm:text-[10px] min-w-max w-full [&_.col-nama]:transition-all [&_.col-nama]:duration-300 [.is-scrolled_&_.col-nama]:!w-[150px] [.is-scrolled_&_.col-nama]:!min-w-[150px] [.is-scrolled_&_.col-nama]:!max-w-[150px]">
-                  <thead className="bg-slate-50 text-slate-700 shadow-sm leading-none">
+                  <thead className="bg-slate-100 text-slate-800 shadow-sm leading-none">
                     <tr>
-                      <th className="px-1 py-1.5 font-black border-b-2 border-slate-300 sticky top-0 left-0 bg-slate-50 z-[70] w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] text-center">
+                      <th className="px-1 py-2 font-black border-b-2 border-slate-300 sticky top-0 left-0 bg-slate-100 z-[70] w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] text-center">
                         No
                       </th>
 
                       <th
-                        className="col-nama px-1.5 py-1.5 font-black border-b-2 border-slate-300 sticky top-0 left-[28px] sm:left-[32px] bg-slate-50 z-[80] text-left shadow-[5px_0_10px_-5px_rgba(0,0,0,0.1)] w-[190px] min-w-[190px] max-w-[190px]"
+                        className="col-nama px-1.5 py-2 font-black border-b-2 border-slate-300 sticky top-0 left-[28px] sm:left-[32px] bg-slate-100 z-[80] text-left shadow-[5px_0_10px_-5px_rgba(0,0,0,0.1)] w-[190px] min-w-[190px] max-w-[190px]"
                         style={{
                           position: "sticky",
                           left: "28px",
@@ -1157,7 +1178,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                       {currentPertemuanArray.map((p) => (
                         <th
                           key={p}
-                          className="px-0.5 py-1 font-black border-b-2 border-slate-300 border-l border-slate-100 text-center min-w-[55px] sm:min-w-[65px] sticky top-0 bg-slate-50 z-40"
+                          className="px-0.5 py-1.5 font-black border-b-2 border-slate-300 border-l border-slate-200 text-center min-w-[55px] sm:min-w-[65px] sticky top-0 bg-slate-100 z-40"
                         >
                           <div className="mb-1 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] text-slate-800">
                             <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
@@ -1197,7 +1218,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                         </th>
                       ))}
 
-                      <th className="px-1 py-1 font-black border-b-2 border-slate-300 border-l-2 border-slate-200 text-center sticky top-0 bg-slate-100 z-50">
+                      <th className="px-1 py-1 font-black border-b-2 border-slate-300 border-l-2 border-slate-300 text-center sticky top-0 bg-slate-200/80 z-50">
                         <div className="w-[130px] min-w-[130px] max-w-[130px] mx-auto">
                           <div className="text-[9px] sm:text-[10px] mb-0.5 uppercase tracking-widest text-slate-600">
                             TOTAL
@@ -1237,18 +1258,29 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                   <tbody className="divide-y divide-slate-100">
                     {siswaList.map((s, idx) => {
                       const total = hitungTotal(s.idSiswa);
+                      const isEven = idx % 2 === 1;
 
                       return (
                         <tr
                           key={s.idSiswa}
-                          className="hover:bg-blue-50/60 transition-colors group"
+                          className={`transition-colors group ${
+                            isEven
+                              ? "bg-slate-50/70 hover:bg-blue-50/60"
+                              : "bg-white hover:bg-blue-50/60"
+                          }`}
                         >
-                          <td className="px-1 py-1 border-b border-slate-100 sticky left-0 bg-white group-hover:bg-blue-50/90 z-[70] font-bold text-center text-slate-500 w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px]">
+                          <td
+                            className={`px-1 py-1 border-b border-slate-100 sticky left-0 group-hover:bg-blue-50/90 z-[70] font-bold text-center text-slate-500 w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] ${
+                              isEven ? "bg-slate-50" : "bg-white"
+                            }`}
+                          >
                             {idx + 1}
                           </td>
 
                           <td
-                            className="col-nama px-1.5 py-1 border-b border-slate-100 sticky left-[28px] sm:left-[32px] bg-white group-hover:bg-blue-50/90 z-[60] shadow-[5px_0_10px_-5px_rgba(0,0,0,0.05)] w-[190px] min-w-[190px] max-w-[190px]"
+                            className={`col-nama px-1.5 py-1 border-b border-slate-100 sticky left-[28px] sm:left-[32px] group-hover:bg-blue-50/90 z-[60] shadow-[5px_0_10px_-5px_rgba(0,0,0,0.05)] w-[190px] min-w-[190px] max-w-[190px] ${
+                              isEven ? "bg-slate-50" : "bg-white"
+                            }`}
                             style={{
                               position: "sticky",
                               left: "28px",
@@ -1375,7 +1407,11 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                             );
                           })}
 
-                          <td className="px-1 py-1 border-b border-l-2 border-slate-200 bg-slate-50/50 group-hover:bg-blue-100/50 transition-colors text-center">
+                          <td
+                            className={`px-1 py-1 border-b border-l-2 border-slate-200 group-hover:bg-blue-100/50 transition-colors text-center ${
+                              isEven ? "bg-slate-100/70" : "bg-slate-50/50"
+                            }`}
+                          >
                             <div className="flex items-center justify-center gap-1 w-[130px] min-w-[130px] max-w-[130px] mx-auto leading-none">
                               <span className="w-4 text-[10px] font-black text-emerald-600 bg-emerald-100 py-0.5 rounded">
                                 {total.Hadir}
@@ -1406,216 +1442,6 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
             </div>
           )}
         </>
-      )}
-
-      {/* MODAL TAMBAH SISWA */}
-      {showTambahModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowTambahModal(false);
-          }}
-        >
-          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="shrink-0 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-4 text-white">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black">
-                  ➕ Tambah Siswa ke "{mapel.namaMapel}"
-                </h3>
-                <button
-                  onClick={() => setShowTambahModal(false)}
-                  className="rounded-full bg-white/20 hover:bg-white/30 w-7 h-7 flex items-center justify-center text-xs font-black transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              <input
-                type="text"
-                value={searchTambah}
-                onChange={(e) => {
-                  setSearchTambah(e.target.value);
-                  setShowFormBaru(false);
-                }}
-                placeholder="Cari nama siswa..."
-                className="mt-3 w-full rounded-xl border border-white/30 bg-white/10 placeholder-white/60 px-4 py-2.5 text-xs sm:text-sm font-medium text-white outline-none focus:bg-white/20 transition-colors"
-              />
-              <select
-                value={filterKelasTambah}
-                onChange={(e) => setFilterKelasTambah(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-xs sm:text-sm font-bold text-white outline-none focus:bg-white/20 transition-colors"
-              >
-                <option value="" className="text-slate-800">
-                  -- Semua Kelas --
-                </option>
-                {daftarKelasKandidat.map((k) => (
-                  <option key={k} value={k} className="text-slate-800">
-                    {k}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {loadingKandidat ? (
-                <p className="text-center text-xs font-bold text-slate-400 py-6">
-                  Memuat daftar siswa...
-                </p>
-              ) : kandidatTersaring.length > 0 ? (
-                kandidatTersaring.map((s) => (
-                  <div
-                    key={s.idSiswa}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-800 truncate">
-                        {s.nama}{" "}
-                        {s.kelas && (
-                          <span className="ml-1 rounded bg-slate-200 text-slate-600 px-1.5 py-0.5 text-[9px] font-bold">
-                            {s.kelas}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[9px] text-slate-400 font-bold mt-0.5">
-                        {s.namaGuruWali
-                          ? `Wali: ${s.namaGuruWali}`
-                          : "Belum ada Guru Wali"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => tambahSiswaKeMapel(s)}
-                      disabled={menambahId === s.idSiswa}
-                      className="shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-1.5 disabled:opacity-60 transition-colors shadow-sm"
-                    >
-                      {menambahId === s.idSiswa ? "⏳..." : "+ Tambah"}
-                    </button>
-                  </div>
-                ))
-              ) : !tidakDitemukan ? (
-                <p className="text-center text-xs font-bold text-slate-400 py-6">
-                  Semua siswa sudah terdaftar di mapel ini.
-                </p>
-              ) : null}
-
-              {tidakDitemukan && !showFormBaru && (
-                <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-center">
-                  <p className="text-xs font-bold text-amber-800 mb-3">
-                    Siswa "{searchTambah}" tidak ditemukan di database.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setNamaBaru(searchTambah);
-                      setShowFormBaru(true);
-                    }}
-                    className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black px-4 py-2 transition-colors shadow-sm"
-                  >
-                    ➕ Daftarkan Siswa Baru
-                  </button>
-                </div>
-              )}
-
-              {showFormBaru && (
-                <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 space-y-3">
-                  <p className="text-xs font-black text-emerald-800">
-                    📝 Daftarkan Siswa Baru ke Sistem
-                  </p>
-                  <label className="block">
-                    <span className="block text-[10px] font-bold uppercase text-emerald-700 mb-1">
-                      Nama Lengkap
-                    </span>
-                    <input
-                      value={namaBaru}
-                      // Tambahkan .toUpperCase() di bawah ini
-                      onChange={(e) =>
-                        setNamaBaru(e.target.value.toUpperCase())
-                      }
-                      // Kamu juga bisa menambahkan class "uppercase" di className agar kursor dan teks langsung terlihat kapital
-                      className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 uppercase"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-[10px] font-bold uppercase text-emerald-700 mb-1">
-                      Kelas
-                    </span>
-                    <select
-                      value={kelasBaru}
-                      onChange={(e) => setKelasBaru(e.target.value)}
-                      className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500"
-                    >
-                      <option value="">-- Pilih kelas --</option>
-
-                      <optgroup label="Kelas X">
-                        <option value="X TKJ 1">X TJKT 1</option>
-                        <option value="X TKJ 2">X TJKT 2</option>
-                        <option value="X DPIB">X DPIB</option>
-                        <option value="X TAV">X TAV</option>
-                        <option value="X GEOMATIKA">X GEOMATIKA</option>
-                        <option value="X TO 1">X TO1</option>
-                        <option value="X TO 2">X TO2</option>
-                        <option value="X TO 3">X TO3</option>
-                        <option value="X TO 4">X TO4</option>
-                        <option value="X TPL">X TPL</option>
-                        <option value="X TITL 1">X TITL 1</option>
-                        <option value="X TITL 2">X TITL 2</option>
-                      </optgroup>
-
-                      <optgroup label="Kelas XI">
-                        <option value="XI TKJ 1">XI TJKT 1</option>
-                        <option value="XI TKJ 2">XI TJKT 2</option>
-                        <option value="XI DPIB">XI DPIB</option>
-                        <option value="XI TAV">XI TAV</option>
-                        <option value="XI GEOMATIKA">XI GEOMATIKA</option>
-                        <option value="XI TBSM 1">XI TBSM 1</option>
-                        <option value="XI TBSM 2">XI TBSM 2</option>
-                        <option value="XI TAB">XI TAB</option>
-                        <option value="XI TKR">XI TKRO</option>
-                        <option value="XI TPL">XI TPL</option>
-                        <option value="XI TITL 1">XI TITL 1</option>
-                        <option value="XI TITL 2">XI TITL 2</option>
-                      </optgroup>
-
-                      <optgroup label="Kelas XII">
-                        <option value="TKJ 1">XII TJKT 1</option>
-                        <option value="TKJ 2">XII TJKT 2</option>
-                        <option value="DPIB">XII DPIB</option>
-                        <option value="TAV">XII TAV</option>
-                        <option value="GEOMATIKA">XII GEOMATIKA</option>
-                        <option value="TBSM 1">XII TBSM 1</option>
-                        <option value="TBSM 2">XII TBSM 2</option>
-                        <option value="TAB">XII TAB</option>
-                        <option value="TKR">XII TKRO</option>
-                        <option value="TPL">XII TPL</option>
-                        <option value="TITL">XII TITL</option>
-                      </optgroup>
-
-                      <optgroup label="Lainnya">
-                        <option value="CONTOH">KELAS CONTOH</option>
-                      </optgroup>
-                    </select>
-                  </label>
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={daftarSiswaBaru}
-                      disabled={savingBaru}
-                      className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black px-3 py-2 disabled:opacity-60 transition-colors shadow-sm"
-                    >
-                      {savingBaru ? "Menyimpan..." : "💾 Simpan & Tambahkan"}
-                    </button>
-                    <button
-                      onClick={() => setShowFormBaru(false)}
-                      className="rounded-lg bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 text-[11px] font-black px-4 py-2 transition-colors"
-                    >
-                      Batal
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-emerald-700/80 leading-tight">
-                    Siswa baru akan otomatis dibuatkan ID dan langsung
-                    dimasukkan ke mapel ini.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
