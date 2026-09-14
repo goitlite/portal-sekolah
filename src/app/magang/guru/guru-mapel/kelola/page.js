@@ -42,7 +42,7 @@ function warnaStatus(status) {
     case "Hadir":
       return "bg-emerald-500 text-white border-emerald-600";
     case "Sakit":
-      return "bg-blue-500 text-white border-blue-600";
+      return "bg-blue-600 text-white border-blue-700";
     case "Izin":
       return "bg-amber-500 text-white border-amber-600";
     case "Alfa":
@@ -50,7 +50,7 @@ function warnaStatus(status) {
     case "Cabut":
       return "bg-violet-500 text-white border-violet-600";
     default:
-      return "bg-slate-50 text-slate-400 border-slate-200";
+      return "bg-white text-slate-500 border-slate-300 hover:border-blue-400";
   }
 }
 
@@ -965,7 +965,33 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
   }
 
   function tambahKolomPertemuan() {
-    setJumlahPertemuan((prev) => Math.min(PERTEMUAN_MAX, prev + 1));
+    if (jumlahPertemuan >= PERTEMUAN_MAX) return;
+    const nextP = jumlahPertemuan + 1;
+    setJumlahPertemuan(nextP);
+
+    // Otomatis default Hadir untuk semua siswa di pertemuan yang baru ditambahkan
+    setGrid((prev) => {
+      const salinan = { ...prev };
+      siswaList.forEach((s) => {
+        const key = `${s.idSiswa}_${nextP}`;
+        if (!salinan[key] || !salinan[key].status) {
+          salinan[key] = {
+            status: "Hadir",
+            nilai: salinan[key]?.nilai || "",
+          };
+        }
+      });
+      return salinan;
+    });
+
+    // Otomatis isi tanggal hari ini jika belum ada
+    setTanggalPertemuan((prev) => {
+      if (!prev[nextP]) {
+        const today = new Date().toLocaleDateString("en-CA");
+        return { ...prev, [nextP]: today };
+      }
+      return prev;
+    });
   }
 
   // Menambahkan fitur untuk mengurangi kolom
@@ -980,6 +1006,20 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
 
     if (!konfirmasi) return;
 
+    const pDihapus = jumlahPertemuan;
+    setGrid((prev) => {
+      const salinan = { ...prev };
+      siswaList.forEach((s) => {
+        delete salinan[`${s.idSiswa}_${pDihapus}`];
+      });
+      return salinan;
+    });
+    setTanggalPertemuan((prev) => {
+      const salinan = { ...prev };
+      delete salinan[pDihapus];
+      return salinan;
+    });
+
     setJumlahPertemuan((prev) => Math.max(1, prev - 1));
   }
 
@@ -993,7 +1033,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
       jumlahNilai: 0,
     };
 
-    for (let p = 1; p <= PERTEMUAN_MAX; p++) {
+    for (let p = 1; p <= jumlahPertemuan; p++) {
       const cell = grid[`${idSiswa}_${p}`];
 
       if (cell?.status && total[cell.status] !== undefined) {
@@ -1016,11 +1056,13 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
     Object.entries(grid).forEach(([key, val]) => {
       if (!val.status) return;
       const [idSiswa, pertemuanKe] = key.split("_");
+      const pKe = Number(pertemuanKe);
+      if (pKe > jumlahPertemuan) return;
       const siswa = siswaList.find((s) => String(s.idSiswa) === idSiswa);
       cells.push({
         idSiswa,
         namaSiswa: siswa?.nama || "",
-        pertemuanKe: Number(pertemuanKe),
+        pertemuanKe: pKe,
         tanggal: tanggalPertemuan[pertemuanKe] || "",
         status: val.status,
         nilaiHarian: val.status === "Hadir" ? val.nilai : "",
@@ -1255,7 +1297,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-200">
                     {siswaList.map((s, idx) => {
                       const total = hitungTotal(s.idSiswa);
                       const isEven = idx % 2 === 1;
@@ -1265,12 +1307,12 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                           key={s.idSiswa}
                           className={`transition-colors group ${
                             isEven
-                              ? "bg-slate-50/70 hover:bg-blue-50/60"
-                              : "bg-white hover:bg-blue-50/60"
+                              ? "bg-slate-50/70 hover:bg-blue-100 focus-within:bg-blue-100"
+                              : "bg-white hover:bg-blue-100 focus-within:bg-blue-100"
                           }`}
                         >
                           <td
-                            className={`px-1 py-1 border-b border-slate-100 sticky left-0 group-hover:bg-blue-50/90 z-[70] font-bold text-center text-slate-500 w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] ${
+                            className={`px-1 py-1 border-b border-slate-200 sticky left-0 group-hover:bg-blue-100 group-focus-within:bg-blue-100 z-[70] font-bold text-center text-slate-600 w-[28px] sm:w-[32px] min-w-[28px] sm:min-w-[32px] max-w-[28px] sm:max-w-[32px] transition-colors ${
                               isEven ? "bg-slate-50" : "bg-white"
                             }`}
                           >
@@ -1278,7 +1320,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                           </td>
 
                           <td
-                            className={`col-nama px-1.5 py-1 border-b border-slate-100 sticky left-[28px] sm:left-[32px] group-hover:bg-blue-50/90 z-[60] shadow-[5px_0_10px_-5px_rgba(0,0,0,0.05)] w-[190px] min-w-[190px] max-w-[190px] ${
+                            className={`col-nama px-1.5 py-1 border-b border-slate-200 sticky left-[28px] sm:left-[32px] group-hover:bg-blue-100 group-focus-within:bg-blue-100 z-[60] shadow-[5px_0_10px_-5px_rgba(0,0,0,0.08)] w-[190px] min-w-[190px] max-w-[190px] transition-colors ${
                               isEven ? "bg-slate-50" : "bg-white"
                             }`}
                             style={{
@@ -1335,7 +1377,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                             return (
                               <td
                                 key={p}
-                                className="p-0.5 border-b border-slate-100 border-l border-slate-50 text-center align-middle"
+                                className="p-0.5 border-b border-slate-200 border-l border-slate-200/80 text-center align-middle hover:bg-blue-200/70 focus-within:bg-blue-200/80 transition-colors"
                               >
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 w-full h-full">
                                   <select
@@ -1348,7 +1390,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                                         e.target.value,
                                       )
                                     }
-                                    className={`cursor-pointer rounded border text-[9px] sm:text-[10px] font-black h-[20px] px-0.5 shadow-sm hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-blue-400 ${warnaStatus(cell.status)}`}
+                                    className={`cursor-pointer rounded border text-[9px] sm:text-[10px] font-black h-[21px] px-0.5 shadow-sm hover:scale-105 transition-all appearance-none outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 ${warnaStatus(cell.status)}`}
                                     style={{
                                       width: isHadir ? "35px" : "50px",
                                       textAlignLast: "center",
@@ -1388,7 +1430,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                                         )
                                       }
                                       title="Nilai"
-                                      className="cursor-pointer rounded border border-emerald-400 text-[9px] sm:text-[10px] h-[20px] px-0.5 text-center font-black bg-white text-emerald-800 shadow-sm hover:bg-emerald-50 hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-emerald-500"
+                                      className="cursor-pointer rounded border border-emerald-500 text-[9px] sm:text-[10px] h-[21px] px-0.5 text-center font-black bg-white text-emerald-800 shadow-sm hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 transition-all appearance-none outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                       style={{
                                         width: "35px",
                                         textAlignLast: "center",
@@ -1408,7 +1450,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
                           })}
 
                           <td
-                            className={`px-1 py-1 border-b border-l-2 border-slate-200 group-hover:bg-blue-100/50 transition-colors text-center ${
+                            className={`px-1 py-1 border-b border-l-2 border-slate-200 group-hover:bg-blue-100 group-focus-within:bg-blue-100 transition-colors text-center ${
                               isEven ? "bg-slate-100/70" : "bg-slate-50/50"
                             }`}
                           >
