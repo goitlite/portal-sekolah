@@ -52,10 +52,10 @@ const KELAS_OPTIONS = (
     </optgroup>
     <optgroup label="Kelas XI" className="font-bold text-slate-900 bg-white">
       <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">
-        XI TJKT 1
+        XI TKJ 1
       </option>
       <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">
-        XI TJKT 2
+        XI TKJ 2
       </option>
       <option value="XI DPIB" className="font-medium text-slate-800 bg-white">
         XI DPIB
