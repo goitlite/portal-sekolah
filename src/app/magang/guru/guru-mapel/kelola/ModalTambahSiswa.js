@@ -10,10 +10,10 @@ import {
 const KELAS_OPTIONS = (
   <>
     <optgroup label="Kelas X" className="font-bold text-slate-900 bg-white">
-      <option value="X TJKT 1" className="font-medium text-slate-800 bg-white">
+      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">
         X TJKT 1
       </option>
-      <option value="X TJKT 2" className="font-medium text-slate-800 bg-white">
+      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">
         X TJKT 2
       </option>
       <option value="X DPIB" className="font-medium text-slate-800 bg-white">
