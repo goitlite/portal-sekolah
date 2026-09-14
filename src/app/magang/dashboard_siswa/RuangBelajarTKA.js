@@ -18,10 +18,6 @@ const SUMBER_BELAJAR = {
     tombol: "🚀 Mulai Simulasi",
     url: "https://pusmendik.kemendikdasmen.go.id/tka/simulasi_tka",
     gradient: "from-amber-500 via-yellow-500 to-orange-500",
-    // Belum ada laporan situs ini menolak iframe, jadi tetap dicoba
-    // ditampilkan dalam modal. Kalau ternyata suatu saat juga menolak
-    // (muncul "refused to connect"), cukup ubah ini jadi false.
-    embeddable: true,
   },
   literasi: {
     key: "literasi",
@@ -31,10 +27,6 @@ const SUMBER_BELAJAR = {
     tombol: "▶️ Mulai Belajar",
     url: "https://s.id/videolitnumsmk",
     gradient: "from-blue-500 to-indigo-600",
-    // s.id TERBUKTI menolak ditampilkan dalam iframe ("refused to connect").
-    // Ini pembatasan dari pihak situs (X-Frame-Options), jadi kita tidak
-    // memaksakan iframe — langsung dibuka di tab baru.
-    embeddable: false,
   },
   numerasi: {
     key: "numerasi",
@@ -45,8 +37,6 @@ const SUMBER_BELAJAR = {
     tombol: "▶️ Mulai Belajar",
     url: "https://s.id/videolitnumsmk",
     gradient: "from-violet-500 to-purple-600",
-    // Sama seperti Literasi (URL sama), s.id menolak iframe.
-    embeddable: false,
   },
 };
 
@@ -71,7 +61,6 @@ export default function RuangBelajarTKA({ idSiswa }) {
   const storageKey = `tka_learning_progress_${idSiswa || "guest"}`;
 
   const [progress, setProgress] = useState(getDefaultProgress());
-  const [modalAktif, setModalAktif] = useState(null); // null | 'simulasi' | 'literasi' | 'numerasi'
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef(null);
 
@@ -126,19 +115,9 @@ export default function RuangBelajarTKA({ idSiswa }) {
     };
     simpanProgress(next);
 
-    if (item.embeddable) {
-      setModalAktif(kunci);
-    } else {
-      // Situs ini diketahui menolak ditampilkan dalam iframe, jadi tidak
-      // usah dipaksakan memuat iframe yang pasti gagal ("refused to
-      // connect") — langsung diarahkan ke tab baru.
-      window.open(item.url, "_blank", "noopener,noreferrer");
-      tampilkanToast(`${item.icon} ${item.judul} dibuka di tab baru.`);
-    }
-  }
-
-  function tutupModal() {
-    setModalAktif(null);
+    // Langsung buka link di tab baru (tanpa modal iframe)
+    window.open(item.url, "_blank", "noopener,noreferrer");
+    tampilkanToast(`${item.icon} ${item.judul} dibuka di tab baru.`);
   }
 
   const today = getTodayStr();
@@ -218,11 +197,9 @@ export default function RuangBelajarTKA({ idSiswa }) {
                   >
                     {item.tombol}
                   </button>
-                  {!item.embeddable && (
-                    <p className="mt-2 text-center text-[10px] font-semibold text-blue-300/70">
-                      🔗 Dibuka di tab baru
-                    </p>
-                  )}
+                  <p className="mt-2 text-center text-[10px] font-semibold text-blue-300/70">
+                    🔗 Dibuka di tab baru
+                  </p>
                 </div>
               );
             })}
@@ -328,14 +305,6 @@ export default function RuangBelajarTKA({ idSiswa }) {
         </div>
       </div>
 
-      {/* ================= MODAL IFRAME (LAZY-MOUNTED) ================= */}
-      {modalAktif && (
-        <ModalIframeBelajar
-          data={SUMBER_BELAJAR[modalAktif]}
-          onClose={tutupModal}
-        />
-      )}
-
       {/* ================= TOAST KONFIRMASI TAB BARU ================= */}
       {toast && (
         <div className="fixed bottom-4 left-1/2 z-[300] -translate-x-1/2 rounded-full border border-white/10 bg-slate-900 px-4 py-2.5 text-xs sm:text-sm font-bold text-white shadow-xl">
@@ -343,117 +312,5 @@ export default function RuangBelajarTKA({ idSiswa }) {
         </div>
       )}
     </>
-  );
-}
-
-// ============================================================
-// MODAL IFRAME
-// Iframe HANYA dibuat saat modal dibuka (tidak pernah dimuat saat
-// Dashboard Siswa pertama kali render), supaya dashboard tetap cepat.
-// Tidak ada percobaan melewati X-Frame-Options/CSP: jika situs
-// tampak lambat/tidak merespons, siswa cukup diarahkan membuka
-// halaman di tab baru.
-// ============================================================
-function ModalIframeBelajar({ data, onClose }) {
-  const [status, setStatus] = useState("loading"); // loading | loaded | lambat
-  const timerRef = useRef(null);
-
-  useEffect(() => {
-    setStatus("loading");
-    timerRef.current = setTimeout(() => {
-      setStatus((prev) => (prev === "loading" ? "lambat" : prev));
-    }, 6000);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [data.url]);
-
-  function handleLoad() {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setStatus("loaded");
-  }
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-0 sm:p-4">
-      <div className="flex h-full w-full sm:h-[92vh] sm:max-w-5xl flex-col overflow-hidden bg-white sm:rounded-2xl shadow-2xl">
-        {/* HEADER MODAL */}
-        <div className="shrink-0 flex items-center justify-between gap-3 bg-gradient-to-r from-blue-900 to-indigo-900 px-4 py-3 sm:px-5 sm:py-4 text-white">
-          <h3 className="text-sm sm:text-base font-black flex items-center gap-2 truncate">
-            {data.icon} {data.judul}
-          </h3>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={data.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/10 border border-white/20 px-3 py-1.5 text-[11px] font-bold hover:bg-white/20 transition-all"
-            >
-              🔗 Buka di Tab Baru
-            </a>
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-sm font-black transition-all"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* BODY IFRAME */}
-        <div className="relative flex-1 bg-slate-100">
-          {status === "loading" && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/90 gap-3">
-              <div className="relative h-10 w-10">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-200"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-blue-700 border-t-transparent animate-spin"></div>
-              </div>
-              <p className="text-xs font-bold text-slate-500">
-                Memuat konten...
-              </p>
-            </div>
-          )}
-
-          <iframe
-            key={data.url}
-            src={data.url}
-            title={data.judul}
-            onLoad={handleLoad}
-            className="h-full w-full border-0"
-            referrerPolicy="no-referrer-when-downgrade"
-            allow="fullscreen"
-          />
-
-          {status === "lambat" && (
-            <div className="absolute inset-x-0 bottom-0 z-10 bg-amber-50 border-t border-amber-200 p-3 sm:p-4 text-center">
-              <p className="text-xs sm:text-sm font-bold text-amber-800">
-                ⚠️ Konten belum juga muncul. Situs ini mungkin tidak mengizinkan
-                tampilan dalam frame.
-              </p>
-              <a
-                href={data.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-all"
-              >
-                🔗 Buka Halaman di Tab Baru
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* FOOTER FALLBACK KHUSUS MOBILE */}
-        <div className="shrink-0 sm:hidden border-t border-slate-200 bg-slate-50 p-3">
-          <a
-            href={data.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-900 px-4 py-2.5 text-xs font-black text-white"
-          >
-            🔗 Buka di Tab Baru
-          </a>
-        </div>
-      </div>
-    </div>
   );
 }
