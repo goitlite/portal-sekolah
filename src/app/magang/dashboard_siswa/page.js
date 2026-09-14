@@ -13,6 +13,10 @@ import {
 
 import { getSession, isLoggedIn, logout } from "../lib/auth";
 
+// 🎓 MODUL BARU: Ruang Belajar Siswa (TKA / Literasi / Numerasi)
+// Diletakkan sebagai komponen terpisah agar tidak mengganggu logic dashboard lama.
+import RuangBelajarTKA from "./RuangBelajarTKA";
+
 // --- HELPER FORMAT TANGGAL ---
 function formatWaktu(timestamp) {
   if (!timestamp) return { tanggal: "-", jam: "-" };
@@ -651,6 +655,11 @@ export default function DashboardSiswa() {
             )}
           </div>
         </div>
+
+        {/* ============================================================ */}
+        {/* 🎓 RUANG BELAJAR SISWA — MODUL TAMBAHAN (TIDAK MENGUBAH FITUR LAMA) */}
+        {/* ============================================================ */}
+        <RuangBelajarTKA idSiswa={user?.id} />
       </div>
     </main>
   );
