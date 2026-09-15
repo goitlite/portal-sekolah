@@ -2161,7 +2161,7 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:10px;margin-bottom:12px;">
           <!-- Kartu Guru Wali Compact -->
           <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
-            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">👤 Guru Wali:</span>
+            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">👤 Wali Kelas:</span>
             <input id="namaGuruWalas" class="input input-compact" style="margin:0;flex:1;min-width:130px;" placeholder="Nama Lengkap Walas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
             <button class="action-save btn-compact" style="margin:0;white-space:nowrap;padding:4px 10px;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan</button>
           </div>
@@ -2319,7 +2319,7 @@
   /* === SIMPAN NAMA GURU WALI (tersimpan di server, muncul otomatis lagi) === */
   async function simpanNamaGuruDariModal(sheet) {
     const namaGuru = document.getElementById("namaGuruWalas").value.trim();
-    if (!namaGuru) return alert("Nama guru wali tidak boleh kosong.");
+    if (!namaGuru) return alert("Nama wali kelas tidak boleh kosong.");
     if (!adminPasswordAktif) {
       return alert(
         "Sesi Login Walas tidak ditemukan, silakan tutup lalu Login Walas lagi.",
@@ -2452,7 +2452,7 @@
 
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
         <p style="margin:0 0 8px;font-size:13px;color:var(--dark);">
-          <b>Guru Wali:</b> ${namaGuru || "-"} &nbsp;|&nbsp;
+          <b>Wali Kelas:</b> ${namaGuru || "-"} &nbsp;|&nbsp;
           <b>Kelas:</b> ${sheet} &nbsp;|&nbsp;
           <b>Jumlah Siswa:</b> ${jumlahSiswa} &nbsp;|&nbsp;
           <b>Tanggal:</b> ${tanggalCetak}
@@ -2903,7 +2903,7 @@
     // === A. IDENTITAS ===
     doc.setFontSize(10);
     const identitas = [
-      ["Nama Guru Wali", namaGuru || "-"],
+      ["Nama Wali Kelas", namaGuru || "-"],
       ["Kelas", sheet],
       ["Jumlah Siswa", String(jumlahSiswa)],
       ["Tanggal Cetak", tanggalCetak],
@@ -4358,7 +4358,7 @@
         docRef.text("Kelas", col1X, yPos + 3);
         docRef.text(`:  ${kelasAktif}`, col1X + 18, yPos + 3);
 
-        docRef.text("Guru Wali", col2X, yPos + 3);
+        docRef.text("Guru Wali kelas", col2X, yPos + 3);
         docRef.text(`:  ${namaGuru || "-"}`, col2X + 20, yPos + 3);
 
         docRef.text("Periode", col3X, yPos + 3);
