@@ -1907,14 +1907,21 @@
       "Mengambil daftar seluruh kelas terdaftar...",
     );
     try {
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "getDaftarKelasAdmin",
-          ...superAdminSesi,
-        }),
+      // KODE BARU (Perbaikan)
+      const j = await postToAppsScript({
+        action: "getDaftarKelasAdmin",
+        ...superAdminSesi,
       });
-      const j = await r.json();
+
+      // Wajib tambahkan hideLoading() jika gagal, agar tidak stuck!
+      if (!j || !j.ok) {
+        hideLoading();
+        closeOverlay();
+        superAdminSesi = null;
+        return openSuperAdminPanel(
+          j?.error || "Gagal memuat daftar kelas. Cek jaringan.",
+        );
+      }
 
       if (!j.ok) {
         closeOverlay();
