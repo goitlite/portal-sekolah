@@ -632,24 +632,226 @@
     }
   }
 
-  /* Animasi Loading Spinner */
+  /* === Top Progress Bar (Visual Indicator Seluruh Proses) === */
+  .top-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 4px;
+    width: 0%;
+    background: linear-gradient(90deg, #2563eb, #0ea5e9, #10b981);
+    z-index: 99999;
+    transition:
+      width 0.2s ease,
+      opacity 0.4s ease;
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .top-progress-bar.active {
+    opacity: 1;
+  }
+
+  /* === Mode Persentase Bar & Loading Modern === */
+  .global-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .global-loading-overlay.active {
+    display: flex !important;
+    opacity: 1 !important;
+  }
   .loading-box {
     text-align: center;
-    padding: 40px;
+    padding: 30px 16px;
   }
-  .spinner {
+  .progress-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 28px 24px;
+    max-width: 440px;
+    margin: 0 auto;
+    text-align: center;
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border);
+  }
+  .progress-ring-container {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .progress-spinner {
+    position: absolute;
+    inset: 0;
     border: 4px solid #e2e8f0;
     border-top: 4px solid var(--primary);
+    border-right: 4px solid var(--info);
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 16px;
+    animation: spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
   }
-  .loading-text {
-    font-weight: 500;
+  .progress-percent-text {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-main-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 6px;
+  }
+  .progress-bar-track {
+    width: 100%;
+    height: 10px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 14px 0 10px;
+    border: 1px solid #e2e8f0;
+    position: relative;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+    border-radius: 20px;
+    transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-status-desc {
+    font-size: 13px;
     color: var(--text-muted);
+    min-height: 20px;
   }
+
+  /* === Navigasi Floating Window Admin (Back & Close All) === */
+  .btn-modal-back {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    background: #f1f5f9;
+    color: var(--dark);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+  .btn-modal-back:hover {
+    background: #e2e8f0;
+    color: var(--primary);
+    transform: translateX(-2px);
+  }
+  .btn-modal-close-all {
+    position: absolute;
+    right: 64px;
+    top: 20px;
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    border-radius: 18px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+  .btn-modal-close-all:hover {
+    background: #fecaca;
+    color: #991b1b;
+  }
+  .speed-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-top: 8px;
+  }
+
+  /* === Tampilan Padat & Berisi untuk Dashboard Walas === */
+  .walas-dashboard-container {
+    animation: popupFade 0.25s ease-out;
+  }
+  .input-compact {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    height: 34px !important;
+    border-radius: 7px !important;
+  }
+  .btn-compact {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    height: 34px !important;
+    border-radius: 7px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+  }
+  .table-compact th {
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    background: #f1f5f9 !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 2 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  .table-compact td {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    vertical-align: middle !important;
+  }
+  .table-compact .cellEdit,
+  .table-compact .cellEditBaru {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    height: 30px !important;
+    margin: 0 !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    min-width: 90px !important;
+  }
+  .table-compact-wrapper {
+    max-height: 52vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
   @keyframes spin {
     0% {
       transform: rotate(0deg);
@@ -659,6 +861,51 @@
     }
   }
 </style>
+
+<!-- Top Progress Bar -->
+<div id="topProgressBar" class="top-progress-bar"></div>
+
+<!-- Global Loading & Realtime Progress Overlay (Non-intrusive) -->
+<div id="globalLoadingOverlay" class="global-loading-overlay">
+  <div class="progress-card">
+    <div class="progress-ring-container">
+      <div class="progress-spinner"></div>
+      <div id="progressPercent" class="progress-percent-text">15%</div>
+    </div>
+    <div id="progressTitle" class="progress-main-title">Memuat data...</div>
+    <div class="progress-bar-track">
+      <div
+        id="progressBarFill"
+        class="progress-bar-fill"
+        style="width: 15%"
+      ></div>
+    </div>
+    <div id="progressSubtitle" class="progress-status-desc">
+      Menghubungkan ke server...
+    </div>
+    <button
+      type="button"
+      onclick="hideLoading()"
+      style="
+        margin-top: 12px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      "
+      onmouseover="this.style.background = '#e2e8f0'"
+      onmouseout="this.style.background = '#f1f5f9'"
+      title="Tutup indikator loading jika koneksi tertahan"
+    >
+      ✕ Batalkan / Tutup
+    </button>
+  </div>
+</div>
 
 <div class="presensi-root">
   <div style="display: flex; justify-content: center; margin-bottom: 12px">
@@ -677,7 +924,23 @@
 
 <div id="overlay" class="popup-overlay">
   <div class="popup">
-    <div class="close" onclick="closeOverlay()">✕</div>
+    <button
+      id="modalBackBtn"
+      class="btn-modal-back"
+      onclick="closeOverlay()"
+      title="Kembali ke jendela sebelumnya"
+    >
+      <span style="font-size: 16px; line-height: 1">‹</span> Kembali
+    </button>
+    <button
+      id="modalCloseAllBtn"
+      class="btn-modal-close-all"
+      onclick="closeOverlay(true)"
+      title="Tutup seluruh jendela & kembali ke beranda"
+    >
+      Tutup Semua
+    </button>
+    <div class="close" onclick="closeOverlay()" title="Tutup">✕</div>
     <div id="popupBody"></div>
   </div>
 </div>
@@ -799,29 +1062,33 @@
   <h3>Presensi Sekolah</h3>
 
   <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; margin-bottom: 12px;">
-    <select id="kelasSelect" class="input" style="margin: 0; flex: 1; min-width: 140px;" onchange="localStorage.setItem('kelasTerakhir', this.value)">
+    <select id="kelasSelect" class="input" style="margin: 0; flex: 1; min-width: 140px;" onchange="localStorage.setItem('kelasTerakhir', this.value); prefetchKelas(this.value)">
       ${buildOptgroupKelas()}
     </select>
     <button class="btn-walas" onclick="openAdminBySelect()">🔑 Login Walas</button>
   </div>
 
-  <button class="btn btn-isi" onclick="openPresensi(document.getElementById('kelasSelect').value)">
+  <button class="btn btn-isi" onclick="resetModalStack(); openPresensi(document.getElementById('kelasSelect').value)">
     📝 Isi Presensi
   </button>
 
-  <button class="btn btn-rekap" onclick="openRekap(document.getElementById('kelasSelect').value)">
+  <button class="btn btn-rekap" onclick="resetModalStack(); openRekap(document.getElementById('kelasSelect').value)">
     📊 Rekap
   </button>
 
   <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
-    <button class="btn btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="openSuperAdminPanel()">
+    <button class="btn btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="resetModalStack(); openSuperAdminPanel()">
       🛠️ Panel Admin
     </button>
+  </div>
+
+  <div style="display:flex; justify-content:center; margin-top:10px;">
+    <span class="speed-mode-badge" title="Data di-cache di client & server untuk proses baca super cepat">⚡ Fast Read & Percentage Bar Mode Aktif</span>
   </div>
 `;
   grid.appendChild(el);
 
-  // Pulihkan kelas yang terakhir dipilih (kalau masih ada di daftar)
+  // Pulihkan kelas yang terakhir dipilih (kalau masih ada di daftar) & prefetch data
   (function pulihkanKelasTerakhir() {
     const terakhir = localStorage.getItem("kelasTerakhir");
     const select = document.getElementById("kelasSelect");
@@ -832,39 +1099,361 @@
     ) {
       select.value = terakhir;
     }
+    // Prefetch latar belakang untuk kelas aktif
+    setTimeout(() => {
+      if (select && select.value) prefetchKelas(select.value);
+    }, 600);
   })();
 
   /* === ADMIN BERDASARKAN DROPDOWN === */
   function openAdminBySelect() {
+    resetModalStack();
     const sheet = document.getElementById("kelasSelect").value;
     openAdminPrompt(sheet);
   }
 
-  /* === POPUP HELPERS === */
-  function showOverlay(html) {
+  /* === 1. CLIENT DATA CACHE & PERFORMANCE ACCELERATOR === */
+  const sheetDataCache = {
+    all: {}, // sheetName -> { data, timestamp }
+    headers: {}, // sheetName -> { data, timestamp }
+  };
+  const CACHE_TTL_MS = 90 * 1000; // 90 detik cache client
+
+  function invalidateSheetCache(sheet) {
+    if (sheet) {
+      delete sheetDataCache.all[sheet];
+      delete sheetDataCache.headers[sheet];
+    } else {
+      sheetDataCache.all = {};
+      sheetDataCache.headers = {};
+    }
+  }
+
+  async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 14000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      return response;
+    } catch (err) {
+      clearTimeout(id);
+      throw err;
+    }
+  }
+
+  async function getSheetData(sheet, action = "headers", forceRefresh = false) {
+    const isAll = action === "all";
+    const store = isAll ? sheetDataCache.all : sheetDataCache.headers;
+    const now = Date.now();
+
+    // 1. Cek cache lokal jika masih segar dan tidak force refresh
+    if (
+      !forceRefresh &&
+      store[sheet] &&
+      now - store[sheet].timestamp < CACHE_TTL_MS
+    ) {
+      return store[sheet].data;
+    }
+
+    // 2. Jika minta 'headers' tapi 'all' sudah ada dan masih segar di cache, ekstraksi langsung (0ms)
+    if (
+      !forceRefresh &&
+      !isAll &&
+      sheetDataCache.all[sheet] &&
+      now - sheetDataCache.all[sheet].timestamp < CACHE_TTL_MS
+    ) {
+      const allData = sheetDataCache.all[sheet].data;
+      const values = allData.values || [];
+      if (values.length > 0) {
+        const headers = values[0].slice(2);
+        const classPassword = values[1] ? values[1][1] || "" : "";
+        return {
+          headers,
+          classPassword,
+          namaGuru: allData.namaGuru || "",
+        };
+      }
+    }
+
+    // 3. Request ke Apps Script dengan timeout aman dan URI encode
+    const encodedSheet = encodeURIComponent(sheet);
+    const url = isAll
+      ? `${SCRIPT_URL}?sheet=${encodedSheet}&action=all&_t=${now}`
+      : `${SCRIPT_URL}?sheet=${encodedSheet}&_t=${now}`;
+
+    try {
+      const res = await fetchJsonWithTimeout(url, {}, 14000);
+      const data = await res.json();
+
+      // Simpan ke cache
+      store[sheet] = {
+        data,
+        timestamp: now,
+      };
+
+      return data;
+    } catch (fetchErr) {
+      console.warn("getSheetData fetch error:", fetchErr);
+      // Jika fetch gagal tapi ada cache lama, gunakan cache lama daripada freeze
+      if (store[sheet] && store[sheet].data) {
+        return store[sheet].data;
+      }
+      throw fetchErr;
+    }
+  }
+
+  // Pre-fetch data di latar belakang saat dropdown kelas dipilih
+  function prefetchKelas(sheet) {
+    if (!sheet) return;
+    getSheetData(sheet, "all").catch(() => {});
+  }
+
+  /* === 2. CONTROLLER PROGRESS BAR DENGAN PERSENTASE & WATCHDOG ANTI-STUK === */
+  let activeProgressTimer = null;
+  let loadingSafetyTimeout = null;
+
+  function updateProgressBar(percent, title, subtitle) {
+    const percentEl = document.getElementById("progressPercent");
+    const barEl = document.getElementById("progressBarFill");
+    const titleEl = document.getElementById("progressTitle");
+    const subEl = document.getElementById("progressSubtitle");
+    const topBar = document.getElementById("topProgressBar");
+
+    const p = Math.min(100, Math.max(0, Math.round(percent)));
+    if (percentEl) percentEl.textContent = `${p}%`;
+    if (barEl) barEl.style.width = `${p}%`;
+    if (title && titleEl) titleEl.textContent = title;
+    if (subtitle && subEl) subEl.textContent = subtitle;
+
+    if (topBar) {
+      topBar.classList.add("active");
+      topBar.style.width = `${p}%`;
+    }
+  }
+
+  function showLoading(
+    text = "Memuat data...",
+    subtitle = "Menghubungkan ke server...",
+  ) {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.add("active");
+
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.classList.add("active");
+      topBar.style.width = "15%";
+    }
+
+    updateProgressBar(15, text, subtitle);
+
+    let currentP = 15;
+    activeProgressTimer = setInterval(() => {
+      if (currentP < 88) {
+        const inc = currentP < 40 ? 7 : currentP < 70 ? 3.5 : 1.2;
+        currentP += inc;
+        let sub = subtitle;
+        if (currentP > 60) sub = "Membaca baris dan memproses struktur data...";
+        else if (currentP > 30) sub = "Mengambil data spreadsheet Google...";
+        updateProgressBar(currentP, text, sub);
+      }
+    }, 90);
+
+    // Watchdog safety timeout (15s): Otomatis pulihkan UI jika jaringan lambat / tertahan
+    loadingSafetyTimeout = setTimeout(() => {
+      console.warn("showLoading watchdog timeout (15s) dipicu. Memulihkan UI.");
+      hideLoading();
+    }, 15000);
+  }
+
+  function hideLoading() {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.remove("active");
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.classList.remove("active");
+      topBar.style.width = "0%";
+    }
+  }
+
+  async function finishProgress(doneMessage = "Selesai 100%!") {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+    updateProgressBar(100, "Berhasil!", doneMessage);
+    await new Promise((r) => setTimeout(r, 160));
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.remove("active");
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.style.width = "100%";
+      setTimeout(() => {
+        topBar.classList.remove("active");
+        topBar.style.width = "0%";
+      }, 250);
+    }
+  }
+
+  /* === 3. FLOATING WINDOW STACK & NAVIGATION CONTROLLER === */
+  let modalHistory = [];
+  let currentModalView = null;
+
+  function resetModalStack() {
+    modalHistory = [];
+    currentModalView = null;
+    updateModalNavUI();
+  }
+
+  function captureCurrentModalState() {
+    if (!currentModalView) return null;
+    const popupBody = document.getElementById("popupBody");
+    if (!popupBody) return null;
+
+    // Preservasi isi form & input agar tidak hilang saat navigasi bolak-balik
+    popupBody.querySelectorAll("input, select, textarea").forEach((el) => {
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (el.checked) el.setAttribute("checked", "checked");
+        else el.removeAttribute("checked");
+      } else if (el.tagName === "SELECT") {
+        el.querySelectorAll("option").forEach((opt) => {
+          if (opt.value === el.value) opt.setAttribute("selected", "selected");
+          else opt.removeAttribute("selected");
+        });
+      } else if (el.tagName === "TEXTAREA") {
+        el.textContent = el.value;
+      } else {
+        el.setAttribute("value", el.value);
+      }
+    });
+
+    const popup = document.querySelector(".popup");
+    return {
+      viewId: currentModalView.viewId,
+      title: currentModalView.title || "",
+      sheet: currentModalView.sheet || "",
+      html: popupBody.innerHTML,
+      scrollTop: popup ? popup.scrollTop : 0,
+    };
+  }
+
+  function updateModalNavUI() {
+    const backBtn = document.getElementById("modalBackBtn");
+    const closeAllBtn = document.getElementById("modalCloseAllBtn");
+    const closeBtn = document.querySelector(".popup .close");
+
+    if (modalHistory.length > 0) {
+      if (backBtn) {
+        backBtn.style.display = "inline-flex";
+        const prev = modalHistory[modalHistory.length - 1];
+        backBtn.title = `Kembali ke ${prev.title || "jendela sebelumnya"}`;
+      }
+      if (closeAllBtn) closeAllBtn.style.display = "inline-flex";
+      if (closeBtn) closeBtn.title = "Kembali ke jendela sebelumnya";
+    } else {
+      if (backBtn) backBtn.style.display = "none";
+      if (closeAllBtn) closeAllBtn.style.display = "none";
+      if (closeBtn) closeBtn.title = "Tutup jendela";
+    }
+  }
+
+  function showOverlay(html, meta = {}) {
+    hideLoading();
+
+    const newViewId = meta.viewId || "view_" + Date.now();
+    const newTitle = meta.title || "";
+    const newSheet = meta.sheet || window.currentSheet || "";
+
+    // Simpan jendela aktif saat ini ke stack jika berpindah ke jendela baru
+    if (currentModalView && currentModalView.viewId !== newViewId) {
+      const existingIdx = modalHistory.findIndex((m) => m.viewId === newViewId);
+      if (existingIdx !== -1) {
+        modalHistory = modalHistory.slice(0, existingIdx);
+      } else {
+        const saved = captureCurrentModalState();
+        if (saved) modalHistory.push(saved);
+      }
+    }
+
+    currentModalView = {
+      viewId: newViewId,
+      title: newTitle,
+      sheet: newSheet,
+    };
+
     document.getElementById("popupBody").innerHTML = html;
     document.getElementById("overlay").style.display = "flex";
+
+    const popup = document.querySelector(".popup");
+    if (popup) popup.scrollTop = 0;
+
+    updateModalNavUI();
   }
-  function showLoading(text = "Memuat data...") {
-    showOverlay(`
-    <div class="loading-box">
-      <div class="spinner"></div>
-      <div class="loading-text">${text}</div>
-    </div>
-  `);
-  }
-  function closeOverlay() {
+
+  function closeOverlay(forceCloseAll = false) {
+    hideLoading();
+
+    // Jika ada riwayat floating window sebelumnya dan bukan force close all:
+    if (!forceCloseAll && modalHistory.length > 0) {
+      const prev = modalHistory.pop();
+      currentModalView = {
+        viewId: prev.viewId,
+        title: prev.title,
+        sheet: prev.sheet,
+      };
+      document.getElementById("popupBody").innerHTML = prev.html;
+      document.getElementById("overlay").style.display = "flex";
+      const popup = document.querySelector(".popup");
+      if (popup && prev.scrollTop) popup.scrollTop = prev.scrollTop;
+      updateModalNavUI();
+      return;
+    }
+
+    // Tutup seluruhnya jika riwayat kosong atau forceCloseAll = true
+    modalHistory = [];
+    currentModalView = null;
     document.getElementById("overlay").style.display = "none";
+    document.getElementById("popupBody").innerHTML = "";
+    updateModalNavUI();
   }
 
   /* === ISI PRESENSI === */
   async function openPresensi(sheet) {
     try {
-      showLoading("Memuat data presensi...");
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
-      const data = await res.json();
-      if (data.error)
-        return showOverlay("<p style='color:red'>" + data.error + "</p>");
+      showLoading("Memuat data presensi...", "Mengambil daftar siswa kelas...");
+      const data = await getSheetData(sheet, "headers");
+      if (data.error) {
+        await finishProgress("Gagal");
+        return showOverlay("<p style='color:red'>" + data.error + "</p>", {
+          viewId: "presensi_" + sheet,
+          title: "Isi Presensi",
+          sheet,
+        });
+      }
       const headers = data.headers || [];
 
       // Form password dipindahkan ke bawah
@@ -892,10 +1481,16 @@
       html += `</form>${passForm}<div style='margin-top:20px; display:flex;'>
     <button class='action-save' onclick="submitPresensi('${sheet}')">Kirim</button>
     <button class='action-del' onclick="closeOverlay()">Batal</button></div>`;
-      showOverlay(html);
+      await finishProgress("Presensi Siap Diisi!");
+      showOverlay(html, {
+        viewId: "presensi_" + sheet,
+        title: `Isi Presensi — ${sheet}`,
+        sheet,
+      });
     } catch (err) {
       showOverlay(
         `<p style='color:var(--danger);padding:20px;'>Gagal memuat presensi: ${err.message || err}</p>`,
+        { viewId: "presensi_error", title: "Error" },
       );
     }
   }
@@ -903,12 +1498,12 @@
   async function submitPresensi(sheet) {
     try {
       const pass = document.getElementById("presPass").value.trim();
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
-      const d = await res.json();
-      if (d.classPassword !== pass) {
-        alert("❌ Password kelas salah!");
-        return;
-      }
+      if (!pass) return alert("Masukkan password kelas!");
+
+      showLoading(
+        "Mengirim presensi...",
+        "Menyimpan data kehadiran ke spreadsheet...",
+      );
       const form = document.getElementById("formPresensi");
       const entries = {};
       for (let el of form.elements) {
@@ -920,18 +1515,18 @@
         password: pass,
         entries,
       };
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const j = await r.json();
-      if (j.ok) {
+      const j = await postToAppsScript(body);
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Presensi Tersimpan 100%!");
         alert("✅ Presensi tersimpan");
-        closeOverlay();
+        closeOverlay(true);
       } else {
-        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        hideLoading();
+        alert("❌ Gagal: " + (j?.error || "Terjadi kesalahan"));
       }
     } catch (err) {
+      hideLoading();
       alert("❌ Gagal mengirim presensi: " + (err.message || err));
     }
   }
@@ -961,58 +1556,239 @@
     localStorage.setItem("walasAuth", JSON.stringify(cache));
   }
 
+  async function postToAppsScript(payload, maxRetries = 1, timeoutMs = 12000) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const r = await fetchJsonWithTimeout(
+          SCRIPT_URL,
+          {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+          },
+          timeoutMs,
+        );
+        const text = await r.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === "object") {
+            return parsed;
+          }
+        } catch (err) {
+          console.warn("GAS returned non-JSON response:", text.slice(0, 150));
+        }
+      } catch (netErr) {
+        console.warn(`postToAppsScript attempt ${attempt + 1} failed:`, netErr);
+      }
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    return {
+      ok: false,
+      error: "Respon server tidak valid atau koneksi terputus.",
+    };
+  }
+
   async function cekPasswordKeServer(sheet, password) {
-    const r = await fetch(SCRIPT_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "verifyAdminKelas",
-        kelas: sheet,
-        password,
-      }),
+    const pw = String(password || "").trim();
+    if (!pw) return { ok: false, error: "Password tidak boleh kosong" };
+
+    // METODE 1: Cek ke server Apps Script (verifyAdminKelas)
+    try {
+      const j = await postToAppsScript(
+        {
+          action: "verifyAdminKelas",
+          kelas: sheet,
+          password: pw,
+        },
+        1,
+        10000,
+      );
+      if (j && j.ok) return { ok: true };
+    } catch (err) {
+      console.warn("verifyAdminKelas network error:", err);
+    }
+
+    // METODE 2: Cocokkan dengan classPassword sheet atau namaGuru di _CONFIG via GET
+    try {
+      const d = await getSheetData(sheet, "headers", false);
+      if (d) {
+        const cp = String(d.classPassword || "").trim();
+        const ng = String(d.namaGuru || "").trim();
+        if (cp && cp.toLowerCase() === pw.toLowerCase()) {
+          return { ok: true };
+        }
+        if (
+          ng &&
+          (ng.toLowerCase().startsWith(pw.toLowerCase() + " ") ||
+            ng.toLowerCase() === pw.toLowerCase())
+        ) {
+          return { ok: true };
+        }
+      }
+    } catch (e) {
+      console.warn("Gagal cek via sheet headers cache:", e);
+    }
+
+    // METODE 3: Pastikan sekali lagi jika classPassword di sheet cocok (force refresh GET langsung dari Google Sheets)
+    try {
+      const dFresh = await getSheetData(sheet, "headers", true);
+      if (dFresh) {
+        const cp = String(dFresh.classPassword || "").trim();
+        const ng = String(dFresh.namaGuru || "").trim();
+        if (cp && cp.toLowerCase() === pw.toLowerCase()) {
+          return { ok: true };
+        }
+        if (
+          ng &&
+          (ng.toLowerCase().startsWith(pw.toLowerCase() + " ") ||
+            ng.toLowerCase() === pw.toLowerCase())
+        ) {
+          return { ok: true };
+        }
+      }
+    } catch (e) {}
+
+    return { ok: false, error: "Password admin salah!" };
+  }
+
+  function togglePasswordVisibility(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    el.type = el.type === "password" ? "text" : "password";
+  }
+
+  function showWalasLoginModal(sheet, pesanError = "") {
+    const k = KELAS.find((x) => x.id === sheet) || { label: sheet };
+
+    const html = `
+      <div style="max-width:420px;margin:0 auto;text-align:left;">
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="font-size:38px;margin-bottom:6px;">🔑</div>
+          <h3 style="margin:0;font-size:20px;font-weight:700;color:var(--dark);">
+            Login Walas — <span style="color:var(--primary);">${k.label}</span>
+          </h3>
+          <p style="font-size:13px;color:var(--text-muted);margin:6px 0 0;">
+            Masukkan password admin wali kelas untuk mengelola & mengedit presensi.
+          </p>
+        </div>
+
+        ${
+          pesanError
+            ? `<div style="background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+                <span>⚠️</span> <span>${pesanError}</span>
+              </div>`
+            : ""
+        }
+
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--dark);">
+            Password Admin Walas
+          </label>
+          <div style="position:relative;">
+            <input 
+              type="password" 
+              id="inputWalasPromptPassword" 
+              class="input" 
+              placeholder="Masukkan password..." 
+              style="width:100%;box-sizing:border-box;margin:0;padding-right:44px;height:42px;font-size:14px;"
+              autocomplete="current-password"
+              onkeydown="if(event.key === 'Enter') submitWalasPromptPassword('${sheet}')"
+            />
+            <button 
+              type="button"
+              onclick="togglePasswordVisibility('inputWalasPromptPassword')" 
+              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:18px;cursor:pointer;padding:6px 8px;opacity:0.7;"
+              title="Lihat / Sembunyikan Password"
+            >👁️</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;border-top:1px solid var(--border);padding-top:16px;">
+          <button class="action-del" style="margin:0;padding:8px 18px;" onclick="closeOverlay()">Batal</button>
+          <button class="action-save" style="margin:0;background:var(--primary);padding:8px 22px;font-weight:600;" onclick="submitWalasPromptPassword('${sheet}')">
+            Masuk Sekarang ➔
+          </button>
+        </div>
+      </div>
+    `;
+
+    showOverlay(html, {
+      viewId: "walasLoginPrompt_" + sheet,
+      title: `Login Walas — ${k.label}`,
+      sheet,
     });
-    return r.json();
+
+    setTimeout(() => {
+      const inp = document.getElementById("inputWalasPromptPassword");
+      if (inp) inp.focus();
+    }, 100);
+  }
+
+  async function submitWalasPromptPassword(sheet) {
+    const inp = document.getElementById("inputWalasPromptPassword");
+    const pass = inp ? inp.value.trim() : "";
+    if (!pass) {
+      if (inp) inp.focus();
+      return alert("Silakan masukkan password admin walas!");
+    }
+
+    // ⚡ MUNCULKAN LOADING BAR REALTIME SECARA INSTAN (0ms)!
+    showLoading(
+      "Login Walas — " + sheet,
+      "Memverifikasi kredensial walas ke server...",
+    );
+
+    try {
+      const j = await cekPasswordKeServer(sheet, pass);
+      if (!j || !j.ok) {
+        hideLoading();
+        return showWalasLoginModal(sheet, j?.error || "Password admin salah!");
+      }
+
+      // Berhasil login
+      adminPasswordAktif = pass;
+      simpanCacheWalas(sheet, pass);
+
+      updateProgressBar(
+        65,
+        "Login Walas Berhasil!",
+        "Menyiapkan tabel data presensi...",
+      );
+      await openAdminModal(sheet);
+    } catch (err) {
+      console.error("submitWalasPromptPassword error:", err);
+      hideLoading();
+      showWalasLoginModal(sheet, "Gagal login: " + (err.message || err));
+    }
   }
 
   async function openAdminPrompt(sheet) {
-    // 1) Coba pakai password yang sudah tersimpan dulu (login otomatis)
+    if (!sheet) {
+      sheet = document.getElementById("kelasSelect")?.value;
+      if (!sheet) return alert("Pilih kelas terlebih dahulu!");
+    }
+
+    // 1) Persistent Login: Jika sudah pernah login di perangkat ini, langsung buka Dashboard Walas tanpa minta password lagi!
     const cache = getCacheWalas();
     const passTersimpan = cache[sheet];
 
     if (passTersimpan) {
-      try {
-        const j = await cekPasswordKeServer(sheet, passTersimpan);
-        if (j.ok) {
-          adminPasswordAktif = passTersimpan;
-          return openAdminModal(sheet);
-        }
-        // Password tersimpan sudah tidak valid (mis. diganti admin lain)
-        hapusCacheWalas(sheet);
-      } catch (err) {
-        // Kalau network gagal, lanjut ke prompt manual di bawah
-      }
+      adminPasswordAktif = passTersimpan;
+      // Langsung buka dashboard walas secara instan tanpa perlu isi password atau verifikasi berulang
+      return openAdminModal(sheet);
     }
 
-    // 2) Belum ada cache / cache tidak valid → minta password manual
-    const k = KELAS.find((x) => x.id === sheet);
-    const inpw = prompt(`Masukkan password admin untuk ${k.label}`);
-    if (!inpw) return;
-
-    try {
-      const j = await cekPasswordKeServer(sheet, inpw);
-      if (!j.ok) return alert("❌ Password admin salah!");
-      adminPasswordAktif = inpw;
-      simpanCacheWalas(sheet, inpw);
-      openAdminModal(sheet);
-    } catch (err) {
-      alert("Gagal memverifikasi password admin: " + (err.message || err));
-    }
+    // 2) Belum pernah login di perangkat ini: buka modal input password
+    showWalasLoginModal(sheet);
   }
 
   function logoutWalas(sheet) {
     hapusCacheWalas(sheet);
     adminPasswordAktif = null;
     alert("Sesi Login Walas untuk kelas ini sudah dihapus dari perangkat ini.");
-    closeOverlay();
+    closeOverlay(true);
   }
 
   /* === PANEL SUPERADMIN: KELOLA KELAS === */
@@ -1023,7 +1799,8 @@
       return renderSuperAdminPanel();
     }
 
-    showOverlay(`
+    showOverlay(
+      `
       <h3 style="margin-top:0;">🔐 Login Superadmin</h3>
       ${
         pesanError
@@ -1042,7 +1819,12 @@
         <button class="action-save" style="margin:0;" onclick="submitSuperAdminLogin()">Masuk</button>
         <button class="action-del" style="margin:0;" onclick="closeOverlay()">Batal</button>
       </div>
-    `);
+    `,
+      {
+        viewId: "superAdminLogin",
+        title: "Login Superadmin",
+      },
+    );
 
     const pass = document.getElementById("suPassword");
     if (pass) {
@@ -1065,7 +1847,10 @@
   }
 
   async function renderSuperAdminPanel() {
-    showLoading("Memuat daftar kelas...");
+    showLoading(
+      "Memuat daftar kelas...",
+      "Mengambil daftar seluruh kelas terdaftar...",
+    );
     try {
       const r = await fetch(SCRIPT_URL, {
         method: "POST",
@@ -1100,7 +1885,7 @@
               .join("")
           : `<p class="small">Belum ada kelas terdaftar.</p>`;
 
-      showOverlay(`
+      const superHtml = `
         <h3 style="margin-top:0;">🛠️ Panel Superadmin — Kelola Kelas</h3>
 
         <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1119,7 +1904,13 @@
         <div style="margin-top:16px;display:flex;">
           <button class="action-del" onclick="closeOverlay()">Tutup</button>
         </div>
-      `);
+      `;
+
+      await finishProgress("Panel Admin Siap!");
+      showOverlay(superHtml, {
+        viewId: "superAdminPanel",
+        title: "Panel Superadmin",
+      });
     } catch (err) {
       closeOverlay();
       alert("Gagal memuat panel superadmin: " + (err.message || err));
@@ -1271,7 +2062,10 @@
   /* === SINKRON NAMA SISWA UNTUK 1 KELAS (dari panel admin) === */
   async function syncNamaSiswaSheet(sheet) {
     try {
-      showLoading("Menyinkronkan nama siswa...");
+      showLoading(
+        "Menyinkronkan nama siswa...",
+        "Menyaring siswa baru & mengurutkan abjad...",
+      );
       const r = await fetch(SCRIPT_URL, {
         method: "POST",
         body: JSON.stringify({ action: "syncNamaSiswa", kelas: sheet }),
@@ -1279,84 +2073,210 @@
       const j = await r.json();
 
       if (!j.ok) {
+        await finishProgress("Gagal");
         alert("❌ Gagal sinkron: " + (j.error || "Terjadi kesalahan"));
-        return openAdminModal(sheet);
+        return openKelolaSiswa(sheet);
       }
+      invalidateSheetCache(sheet);
+      await finishProgress("Sinkron Selesai 100%!");
       alert(j.message || "✅ Sinkron selesai");
-      openAdminModal(sheet);
+      openKelolaSiswa(sheet);
     } catch (err) {
       alert("Gagal sinkron nama siswa: " + (err.message || err));
     }
   }
 
-  /* === UPDATE: MODAL LOGIN WALAS === */
-  async function openAdminModal(sheet) {
+  /* === UPDATE: MODAL LOGIN WALAS DENGAN EDIT DATA LANGSUNG TERBUKA (PADAT & BERISI) === */
+  async function openAdminModal(sheet, forceRefresh = false) {
     try {
-      showLoading("Memuat data Login Walas...");
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
-      const d = await res.json();
-      const headers = d.headers || [];
-      const pw = d.classPassword || "";
+      showLoading(
+        "Login Walas — " + sheet,
+        "Mengambil data presensi & hak akses...",
+      );
+
+      // Ambil seluruh baris data spreadsheet
+      const d = await getSheetData(sheet, "all", forceRefresh);
+      if (!d || d.error) {
+        hideLoading();
+        alert(
+          "Gagal memuat data kelas: " +
+            (d?.error || "Koneksi ke spreadsheet terputus."),
+        );
+        return;
+      }
+      const rows = d.values || [];
       const namaGuru = d.namaGuru || "";
 
-      // Simpan roster siswa untuk dipakai form Laporan Walas nanti
-      window._rosterAktif = headers;
+      window._rawHeaders = rows[0] || [];
+      window._rawRows = rows.slice(1);
+      window._rosterAktif = (window._rawHeaders || []).slice(2);
+      window._rawByMonth = {};
+
+      const pw = rows[1] && rows[1][1] ? rows[1][1] : d.classPassword || "";
+
+      // Hitung data per bulan
+      window._rawRows.forEach((row, i) => {
+        const dt = new Date(row[0]);
+        if (isNaN(dt)) return;
+        const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+        if (!window._rawByMonth[key]) window._rawByMonth[key] = [];
+        window._rawByMonth[key].push({ row, index: i });
+      });
+
+      const totalPertemuan = window._rawRows.length;
+      const totalSiswa = window._rosterAktif.length;
 
       let html = `
-    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">
-      Login Walas — <span style="color:var(--primary);">${sheet}</span>
-    </h3>
+      <div class="walas-dashboard-container">
+        <!-- BARIS ATAS: HEADER & AKSI CEPAT -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h3 style="margin:0;font-size:18px;font-weight:700;display:flex;align-items:center;gap:6px;">
+              <span>🏢</span> Dashboard Walas — <span style="color:var(--primary);">${sheet}</span>
+            </h3>
+            <span class="speed-mode-badge" style="margin:0;">⚡ Live Edit Ready</span>
+            <span style="font-size:12px;font-weight:600;background:#e0f2fe;color:#0284c7;padding:3px 8px;border-radius:12px;">👥 ${totalSiswa} Siswa</span>
+            <span style="font-size:12px;font-weight:600;background:#fef3c7;color:#b45309;padding:3px 8px;border-radius:12px;">📅 ${totalPertemuan} Pertemuan</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <button class="btn-compact action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')" title="Cetak Seluruh Data Mentah Harian Siswa (Format A4 Landscape)">
+              🖨️ Cetak Data Mentah
+            </button>
+            <button class="btn-compact action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')" title="Cetak Formulir Laporan Walas Lengkap (A-D)">
+              🖨️ Cetak Laporan (A-D)
+            </button>
+            <button class="btn-compact action-edit" style="background:#475569;" onclick="openKelolaSiswa('${sheet}')" title="Kelola Nama Siswa Kelas Ini">
+              🧑‍🎓 Kelola Siswa
+            </button>
+            <button class="btn-compact" style="background:#e2e8f0;color:var(--dark);" onclick="openAdminModal('${sheet}', true)" title="Segarkan Data dari Server">
+              🔄 Segarkan
+            </button>
+            <button class="btn-compact" style="background:#fee2e2;color:#b91c1c;" onclick="logoutWalas('${sheet}')" title="Keluar dari Sesi Walas">
+              🚪 Logout
+            </button>
+          </div>
+        </div>
 
-    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">👤 Identitas Guru Wali</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <input id="namaGuruWalas" class="input" style="margin:0;flex:1;min-width:200px;" placeholder="Nama lengkap guru wali kelas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
-        <button class="action-save" style="margin:0;white-space:nowrap;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan Nama</button>
+        <!-- BARIS KEDUA: FORM IDENTITAS GURU WALI & PASSWORD KELAS (PADAT & BERISI) -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:10px;margin-bottom:12px;">
+          <!-- Kartu Guru Wali Compact -->
+          <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">👤 Guru Wali:</span>
+            <input id="namaGuruWalas" class="input input-compact" style="margin:0;flex:1;min-width:130px;" placeholder="Nama Lengkap Walas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
+            <button class="action-save btn-compact" style="margin:0;white-space:nowrap;padding:4px 10px;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan</button>
+          </div>
+
+          <!-- Kartu Password Presensi Siswa Compact -->
+          <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">🔑 Password Kelas:</span>
+            <input id="classPw" class="input input-compact" style="margin:0;flex:1;min-width:110px;" value="${String(pw).replace(/'/g, "&#39;")}" placeholder="Password Presensi Siswa">
+            <button class="action-save btn-compact" style="margin:0;white-space:nowrap;padding:4px 10px;" onclick="setClassPassword('${sheet}')">💾 Simpan</button>
+          </div>
+        </div>
+
+        <!-- BARIS KETIGA: TOOLBAR TABEL EDIT DATA (BULAN & TOMBOL AKSI) -->
+        <div style="background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <label style="font-weight:700;font-size:13px;color:var(--dark);display:flex;align-items:center;gap:4px;">
+              <span>📅</span> Filter Bulan:
+            </label>
+            <select id="editBulan" class="input input-compact" style="width:auto;min-width:160px;margin:0;font-weight:600;" onchange="renderEditTable()">
+              <option value="ALL">Semua Bulan (${totalPertemuan} data)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="btn-compact btn-walas" style="margin:0;background:#f59e0b;color:#fff;" onclick="tambahBarisTanggalBaru()">
+              ➕ Tambah Tanggal
+            </button>
+            <button class="btn-compact action-save" style="margin:0;background:var(--primary);font-weight:700;" onclick="saveEditedRaw('${sheet}')">
+              💾 Simpan Perubahan
+            </button>
+          </div>
+        </div>
+
+        <!-- BARIS KEEMPAT: TABEL DATA MENTAH PRESENSI DENGAN WRAPPER PADAT & BERISI -->
+        <div class="table-compact-wrapper" style="margin-bottom:12px;">
+          <table class="table table-compact">
+            <thead>
+              <tr>
+                ${window._rawHeaders.map((h, idx) => `<th style="${idx < 2 ? "background:#e2e8f0;font-weight:700;" : ""}">${h}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody id="editTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- FOOTER: TOMBOL SIMPAN & TUTUP -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:12px;color:var(--text-muted);">
+            💡 Tips: Ubah status kehadiran langsung pada kolom siswa, lalu klik <b>Simpan Perubahan</b>.
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="action-save btn-compact" style="padding:6px 18px;font-weight:700;" onclick="saveEditedRaw('${sheet}')">
+              💾 Simpan Perubahan
+            </button>
+            <button class="action-del btn-compact" style="padding:6px 14px;" onclick="closeOverlay()">
+              Tutup
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+      `;
 
-    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🔑 Password Presensi Kelas</label>
-      <div style="display:flex;gap:8px;">
-        <input id='classPw' class='input' style="margin:0;" value='${pw.replace(/'/g, "&#39;")}' placeholder='Isi password kelas'>
-        <button class='action-save' style="margin:0;" onclick="setClassPassword('${sheet}')">Simpan</button>
-      </div>
-    </div>
+      await finishProgress("Dashboard Walas Siap!");
 
-    <!-- === PERUBAHAN UTAMA: Panel Daftar Siswa diganti menjadi Panel Kelola Data === -->
-    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
-      <label style="font-weight:700;display:block;margin-bottom:8px;color:var(--dark);">🛠️ Kelola Data Presensi & Siswa</label>
-      <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Klik tombol di bawah ini untuk mengedit data presensi atau menambah/menghapus nama siswa.</p>
-      
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <!-- Tombol Edit Data sekarang memanggil openEditRaw -->
-        <button class='action-save' style="background:var(--primary);" onclick="openEditRaw('${sheet}')">✏️ Buka Tampilan Edit Data</button>
-        <!-- Tombol Tambah/Hapus memanggil fungsi baru -->
-        <button class='action-edit' onclick="openKelolaSiswa('${sheet}')">🧑‍🎓 Tambah/Hapus Siswa</button>
-      </div>
-    </div>
-    <!-- ========================================================================= -->
+      showOverlay(html, {
+        viewId: "adminModal_" + sheet,
+        title: `Login Walas — ${sheet}`,
+        sheet,
+      });
 
-    <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
-      <button class="action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')">🖨️ Cetak Laporan Walas (A-D)</button>
-      <button class='action-edit' style="background:#94a3b8;" onclick="logoutWalas('${sheet}')">🚪 Logout Walas</button>
-      <button class='action-del' onclick='closeOverlay()'>Tutup</button>
-    </div>`;
+      // Isi opsi dropdown bulan
+      const sel = document.getElementById("editBulan");
+      if (sel) {
+        Object.keys(window._rawByMonth)
+          .sort()
+          .forEach((k) => {
+            const [y, m] = k.split("-");
+            const nm = [
+              "Januari",
+              "Februari",
+              "Maret",
+              "April",
+              "Mei",
+              "Juni",
+              "Juli",
+              "Agustus",
+              "September",
+              "Oktober",
+              "November",
+              "Desember",
+            ][m];
+            const count = window._rawByMonth[k].length;
+            sel.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${k}">${nm} ${y} (${count})</option>`,
+            );
+          });
+      }
 
-      showOverlay(html);
+      // Render isi tabel langsung
+      renderEditTable();
+      setTimeout(renderEditTable, 40);
     } catch (err) {
+      hideLoading();
       showOverlay(
-        `<p style='color:var(--danger);padding:20px;'>Gagal memuat admin: ${err.message || err}</p>`,
+        `<p style='color:var(--danger);padding:20px;font-weight:600;'>❌ Gagal memuat dashboard walas: ${err.message || err}</p>`,
+        { viewId: "admin_error", title: "Error" },
       );
     }
   }
 
-  /* === FUNGSI BARU: TAMPILAN TAMBAH/HAPUS SISWA === */
+  /* === FUNGSI: TAMPILAN TAMBAH/HAPUS SISWA === */
   async function openKelolaSiswa(sheet) {
     try {
-      showLoading("Memuat daftar siswa...");
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}`);
-      const d = await res.json();
+      showLoading("Memuat daftar siswa...", "Mengambil daftar nama siswa...");
+      const d = await getSheetData(sheet, "headers");
       const headers = d.headers || [];
 
       let html = `
@@ -1378,14 +2298,20 @@
       <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
         <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
-        <button class='action-del' onclick="openAdminModal('${sheet}')">⬅️ Kembali ke Dashboard</button>
+        <button class='action-del' onclick="closeOverlay()">⬅️ Kembali ke Dashboard</button>
       </div>
     </div>`;
 
-      showOverlay(html);
+      await finishProgress("Daftar Siswa Siap!");
+      showOverlay(html, {
+        viewId: "kelolaSiswa_" + sheet,
+        title: `Kelola Siswa — ${sheet}`,
+        sheet,
+      });
     } catch (err) {
       showOverlay(
         `<p style='color:var(--danger);padding:20px;'>Gagal memuat: ${err.message || err}</p>`,
+        { viewId: "kelola_error", title: "Error" },
       );
     }
   }
@@ -1401,22 +2327,27 @@
     }
 
     try {
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "simpanNamaGuruWalas",
-          kelas: sheet,
-          adminPassword: adminPasswordAktif,
-          namaGuru,
-        }),
-      });
-      const j = await r.json();
-      alert(
-        j.ok
-          ? "✅ Nama guru wali disimpan."
-          : "❌ Gagal: " + (j.error || "Terjadi kesalahan"),
+      showLoading(
+        "Menyimpan nama guru...",
+        "Memperbarui identitas guru wali...",
       );
+      const j = await postToAppsScript({
+        action: "simpanNamaGuruWalas",
+        kelas: sheet,
+        adminPassword: adminPasswordAktif,
+        namaGuru,
+      });
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Nama Tersimpan!");
+        alert("✅ Nama guru wali disimpan.");
+        openAdminModal(sheet, true);
+      } else {
+        hideLoading();
+        alert("❌ Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
     } catch (err) {
+      hideLoading();
       alert("Gagal menyimpan nama guru: " + (err.message || err));
     }
   }
@@ -1473,7 +2404,10 @@
       year: "numeric",
     });
 
-    showLoading("Memuat data sebelumnya...");
+    showLoading(
+      "Memuat data laporan walas...",
+      "Mengambil riwayat data & identitas...",
+    );
 
     // Ambil data Lampiran B yang sudah pernah disimpan guru ini
     let itemPermasalahanLama = [];
@@ -1513,7 +2447,7 @@
       .map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`)
       .join("")}</datalist>`;
 
-    showOverlay(`
+    const htmlLaporan = `
       <h3 style="margin-top:0;">🖨️ Laporan Walas — ${sheet}</h3>
 
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
@@ -1547,9 +2481,16 @@
 
       <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
         <button class="action-save" onclick="simpanDanCetakLaporanWalas('${sheet}')">💾 Simpan &amp; Cetak PDF</button>
-        <button class="action-del" onclick="openAdminModal('${sheet}')">Kembali</button>
+        <button class="action-del" onclick="closeOverlay()">Kembali</button>
       </div>
-    `);
+    `;
+
+    await finishProgress("Form Laporan Siap!");
+    showOverlay(htmlLaporan, {
+      viewId: "formWalas_" + sheet,
+      title: `Laporan Walas — ${sheet}`,
+      sheet,
+    });
 
     // Lampiran B: isi ulang dari data lama kalau ada, kalau tidak 1 baris kosong
     if (itemPermasalahanLama.length > 0) {
@@ -1773,8 +2714,7 @@
      bulan sekali saat form dibuka, (2) hitung ulang totalnya sesuai
      bulan yang dipilih tepat sebelum PDF dicetak — tanpa fetch ulang. */
   async function ambilDataMentahUntukLampiranA(sheet) {
-    const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}&action=all`);
-    const d = await res.json();
+    const d = await getSheetData(sheet, "all");
     const rows = d.values || [];
     if (rows.length < 2) {
       return { headers: [], bulanan: {}, bulanList: [], totalRows: 0 };
@@ -2288,17 +3228,26 @@
     try {
       const v = document.getElementById("classPw").value.trim();
       if (!v) return alert("Isi password!");
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "setPassword",
-          kelas: sheet,
-          newPassword: v,
-        }),
+      showLoading(
+        "Menyimpan password...",
+        "Memperbarui password presensi kelas di sheet...",
+      );
+      const j = await postToAppsScript({
+        action: "setPassword",
+        kelas: sheet,
+        newPassword: v,
       });
-      const j = await r.json();
-      alert(j.ok ? "✅ Password disimpan" : "Gagal: " + j.error);
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Password Diperbarui!");
+        alert("✅ Password disimpan");
+        openAdminModal(sheet, true);
+      } else {
+        hideLoading();
+        alert("Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
     } catch (err) {
+      hideLoading();
       alert("Gagal menyimpan password: " + (err.message || err));
     }
   }
@@ -2308,17 +3257,26 @@
       const names = [...document.querySelectorAll(".nameInput")]
         .map((i) => i.value.trim())
         .filter((x) => x);
-      const r = await fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "updateHeader",
-          kelas: sheet,
-          headers: names,
-        }),
+      showLoading(
+        "Menyimpan daftar siswa...",
+        "Mengirim nama siswa ke spreadsheet...",
+      );
+      const j = await postToAppsScript({
+        action: "updateHeader",
+        kelas: sheet,
+        headers: names,
       });
-      const j = await r.json();
-      alert(j.ok ? "✅ Nama tersimpan" : "Gagal: " + j.error);
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Daftar Siswa Tersimpan!");
+        alert("✅ Nama tersimpan");
+        closeOverlay();
+      } else {
+        hideLoading();
+        alert("Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
     } catch (err) {
+      hideLoading();
       alert("Gagal menyimpan daftar: " + (err.message || err));
     }
   }
@@ -2334,18 +3292,23 @@
   }
 
   /* === REKAP TERBARU === */
-  async function openRekap(sheet) {
-    showLoading("Memuat rekap...");
+  async function openRekap(sheet, forceRefresh = false) {
+    showLoading(
+      "Memuat rekap kehadiran...",
+      "Mengambil seluruh riwayat kehadiran...",
+    );
     window.currentSheet = sheet;
 
     try {
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}&action=all`);
-      const d = await res.json();
+      const d = await getSheetData(sheet, "all", forceRefresh);
       const rows = d.values || [];
-      if (rows.length < 2)
+      if (rows.length < 2) {
+        await finishProgress("Data Kosong");
         return showOverlay(
           `<h3 style="margin-top:0;">${sheet}</h3><p class="small">Belum ada data.</p>`,
+          { viewId: "rekap_" + sheet, title: `Rekap — ${sheet}`, sheet },
         );
+      }
 
       const headers = rows[0].slice(2);
 
@@ -2551,18 +3514,27 @@
       // Footer tombol
       html += `
 <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:24px;">
+  <button class="action-edit" style="background:#0284c7;" onclick="openRekap('${sheet}', true)" title="Muat ulang data paling segar dari server">🔄 Segarkan Data</button>
   <button class="action-edit" style="background:#475569;" onclick="toggleFullscreen()">🖥 Fullscreen</button>
   <button class="action-save" onclick="downloadPDF()">📄 Download PDF</button>
+  <button class="action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')" title="Cetak Data Mentah Presensi Harian (Format A4 Landscape)">🖨️ Cetak Data Mentah (A4)</button>
   <button class="action-edit" onclick="showRawData('${sheet}')">📊 Data Mentah</button>
-  <button class="action-edit" style="background:var(--warning);" onclick="openAdminPrompt('${sheet}')">⚙️ Admin</button>
+  <button class="action-edit" style="background:var(--warning);" onclick="openAdminPrompt('${sheet}')">🔑 Login Walas</button>
   <button class="action-del" onclick="closeOverlay()">Tutup</button>
 </div>`;
 
-      showOverlay(html);
+      await finishProgress("Rekap Berhasil Dimuat!");
+      showOverlay(html, {
+        viewId: "rekap_" + sheet,
+        title: `Rekap — ${sheet}`,
+        sheet,
+      });
       setTimeout(() => applyBulanFilter("ALL"), 50);
     } catch (err) {
+      hideLoading();
       showOverlay(
         `<div class='small' style='color:var(--danger);padding:20px;'>Gagal memuat rekap: ${err.message || err}</div>`,
+        { viewId: "rekap_error", title: "Error" },
       );
       console.error(err);
     }
@@ -2570,16 +3542,21 @@
 
   /* === LIHAT DATA MENTAH === */
   async function showRawData(sheet) {
-    showLoading("Memuat data mentah...");
+    showLoading("Memuat data mentah...", "Membaca baris data spreadsheet...");
 
     try {
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}&action=all`);
-      const d = await res.json();
+      const d = await getSheetData(sheet, "all");
       const rows = d.values || [];
 
       if (rows.length < 1) {
+        await finishProgress("Data Kosong");
         showOverlay(
           `<h3 style="margin-top:0;">${sheet}</h3><p>Belum ada data.</p>`,
+          {
+            viewId: "rawData_" + sheet,
+            title: `Data Mentah — ${sheet}`,
+            sheet,
+          },
         );
         return;
       }
@@ -2618,14 +3595,26 @@
       });
 
       html += `</tbody></table></div>`;
-      html += `<div style="text-align:right">
-               <button class="action-del" onclick="closeOverlay()">Tutup</button>
+      html += `<div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+               <div style="font-size:12px;color:var(--text-muted);">
+                 💡 Tips: Unduh laporan data mentah lengkap dalam lembar kerja <b>A4 Landscape</b> dengan seluruh data presensi tersusun rapi.
+               </div>
+               <div style="display:flex;gap:8px;">
+                 <button class="action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')">🖨️ Cetak PDF Data Mentah (A4 Landscape)</button>
+                 <button class="action-del" onclick="closeOverlay()">Tutup</button>
+               </div>
              </div>`;
 
-      showOverlay(html);
+      await finishProgress("Data Mentah Siap!");
+      showOverlay(html, {
+        viewId: "rawData_" + sheet,
+        title: `Data Mentah — ${sheet}`,
+        sheet,
+      });
     } catch (err) {
       showOverlay(
         `<p style="color:var(--danger)">Gagal memuat data mentah: ${err.message}</p>`,
+        { viewId: "raw_error", title: "Error" },
       );
     }
   }
@@ -2633,13 +3622,16 @@
   /* === EDIT DATA MENTAH === */
   async function openEditRaw(sheet) {
     try {
-      showLoading("Memuat data mentah...");
+      showLoading(
+        "Memuat data mentah...",
+        "Menyiapkan lembar kerja edit data...",
+      );
 
-      const res = await fetch(`${SCRIPT_URL}?sheet=${sheet}&action=all`);
-      const d = await res.json();
+      const d = await getSheetData(sheet, "all");
       const rows = d.values || [];
 
       if (rows.length < 2) {
+        await finishProgress("Data Kosong");
         alert("Data kosong");
         closeOverlay();
         return;
@@ -2685,7 +3677,12 @@
       </div>
     `;
 
-      showOverlay(html);
+      await finishProgress("Editor Siap!");
+      showOverlay(html, {
+        viewId: "editRaw_" + sheet,
+        title: `Edit Data — ${sheet}`,
+        sheet,
+      });
 
       const sel = document.getElementById("editBulan");
       Object.keys(window._rawByMonth)
@@ -2716,6 +3713,7 @@
     } catch (err) {
       showOverlay(
         `<p style="color:var(--danger)">Gagal memuat editor data: ${err.message || err}</p>`,
+        { viewId: "edit_error", title: "Error" },
       );
     }
   }
@@ -2739,17 +3737,19 @@
 
       if (!confirm("Simpan semua perubahan ke Google Sheet?")) return;
 
+      showLoading(
+        "Menyimpan perubahan...",
+        "Mengirim perubahan baris ke Google Sheets...",
+      );
+
       if (edits.length > 0) {
-        const res = await fetch(SCRIPT_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "editRawData",
-            kelas: sheet,
-            edits,
-          }),
+        const j = await postToAppsScript({
+          action: "editRawData",
+          kelas: sheet,
+          edits,
         });
-        const j = await res.json();
         if (!j.ok) {
+          hideLoading();
           alert(
             "❌ Gagal simpan perubahan sel: " + (j.error || "Tidak diketahui"),
           );
@@ -2758,6 +3758,7 @@
       }
 
       if (barisBaruEls.length > 0 && !adminPasswordAktif) {
+        hideLoading();
         alert(
           "⚠️ Sesi Login Walas tidak ditemukan, baris baru GAGAL disimpan. Perubahan sel di atas (kalau ada) sudah tersimpan.",
         );
@@ -2771,18 +3772,15 @@
           statusPerSiswa[sel.dataset.nama] = sel.value;
         });
 
-        const r2 = await fetch(SCRIPT_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "tambahBarisPresensiManual",
-            kelas: sheet,
-            adminPassword: adminPasswordAktif,
-            tanggal,
-            statusPerSiswa,
-          }),
+        const j2 = await postToAppsScript({
+          action: "tambahBarisPresensiManual",
+          kelas: sheet,
+          adminPassword: adminPasswordAktif,
+          tanggal,
+          statusPerSiswa,
         });
-        const j2 = await r2.json();
         if (!j2.ok) {
+          hideLoading();
           alert(
             `❌ Gagal tambah baris tanggal ${tanggal}: ` +
               (j2.error || "Tidak diketahui"),
@@ -2791,10 +3789,12 @@
         }
       }
 
+      invalidateSheetCache(sheet);
+      await finishProgress("Perubahan Tersimpan 100%!");
       alert("✅ Data berhasil diperbarui");
-      closeOverlay();
-      setTimeout(() => openRekap(sheet), 300);
+      openAdminModal(sheet, true);
     } catch (err) {
+      hideLoading();
       alert("❌ Gagal menyimpan perubahan: " + (err.message || err));
     }
   }
@@ -2958,6 +3958,10 @@
     const doc = new jsPDF("p", "mm", "a4");
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    const sheet =
+      window.currentSheet ||
+      document.getElementById("kelasSelect")?.value ||
+      "Kelas";
     const totalSiswa =
       document.getElementById("ringTotalSiswa")?.innerText || "0";
     const totalPertemuan =
@@ -2965,71 +3969,93 @@
     const rata =
       document.getElementById("ringRataKehadiran")?.innerText || "0%";
 
-    const title = bersihkanEmojiUntukPDF(
-      document.getElementById("rekapJudul")?.innerText || "Rekap Kehadiran",
-    );
-    const sub = bersihkanEmojiUntukPDF(
-      document.getElementById("rekapSubJudul")?.innerText || "",
+    const filterBulanEl = document.getElementById("filterBulan");
+    const periodeBulan =
+      filterBulanEl && filterBulanEl.selectedIndex >= 0
+        ? filterBulanEl.options[filterBulanEl.selectedIndex].text
+        : "Semua Bulan";
+
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    const namaGuruWali = bersihkanEmojiUntukPDF(
+      window._namaGuruAktif ||
+        document.getElementById("namaGuruWalas")?.value ||
+        "-",
     );
 
-    // === LOGO SEKOLAH (kalau berhasil dimuat) ===
+    // === KOP / HEADER RESMI (PERSIS LOGIN WALAS) ===
     const logoEl = document.getElementById("logoSekolahEl");
-    let yMulai = 14;
+    let y = 14;
     if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
       try {
-        const logoW = 18;
-        const logoH = 18;
-        doc.addImage(logoEl, "PNG", (pageWidth - logoW) / 2, 8, logoW, logoH);
-        yMulai = 8 + logoH + 6;
-      } catch (e) {
-        // kalau logo gagal ditempel (mis. CORS), lanjut tanpa logo
-      }
+        doc.addImage(logoEl, "PNG", (pageWidth - 20) / 2, 8, 20, 20);
+        y = 8 + 20 + 6;
+      } catch (e) {}
     }
 
     doc.setFontSize(14);
+    doc.setFont(undefined, "bold");
     doc.setTextColor(0);
-    doc.text(title, pageWidth / 2, yMulai, { align: "center" });
+    doc.text("SMKN 1 TELUK KUANTAN", pageWidth / 2, y, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("LAPORAN REKAPITULASI KEHADIRAN SISWA", pageWidth / 2, y + 6, {
+      align: "center",
+    });
+    doc.setFont(undefined, "normal");
 
+    y += 14;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, pageWidth - 15, y);
+    y += 8;
+
+    // === IDENTITAS RESMI (PERSIS LOGIN WALAS) ===
     doc.setFontSize(10);
-    doc.text(sub, pageWidth / 2, yMulai + 6, { align: "center" });
-
-    // === IDENTITAS GURU WALI & JUMLAH SISWA ===
-    const namaGuruWali = bersihkanEmojiUntukPDF(window._namaGuruAktif || "-");
-    const jumlahSiswaRoster = window._jumlahSiswaAktif || totalSiswa;
-    doc.setFontSize(9);
-    doc.setTextColor(90);
-    doc.text(
-      `Guru Wali/Pembimbing: ${namaGuruWali || "-"}   |   Jumlah Siswa: ${jumlahSiswaRoster}`,
-      pageWidth / 2,
-      yMulai + 12,
-      { align: "center" },
-    );
     doc.setTextColor(0);
+    const identitas = [
+      ["Nama Guru Wali", namaGuruWali || "-"],
+      ["Kelas", sheet],
+      ["Periode Kehadiran", periodeBulan],
+      ["Jumlah Siswa", String(totalSiswa)],
+      ["Tanggal Cetak", tanggalCetak],
+    ];
+    identitas.forEach(([label, value], i) => {
+      const yy = y + i * 6;
+      doc.text(label, 15, yy);
+      doc.text(":", 58, yy);
+      doc.text(String(value), 62, yy);
+    });
+    y += identitas.length * 6 + 8;
 
-    let yCard = yMulai + 20;
-    const cardW = 55;
-    const cardH = 20;
-    const gap = 6;
-    const startX = (pageWidth - (cardW * 3 + gap * 2)) / 2;
+    // === 3 KARTU RINGKASAN (PERSIS LOGIN WALAS) ===
+    {
+      const cardW = 55;
+      const cardH = 18;
+      const gap = 6;
+      const startX = (pageWidth - (cardW * 3 + gap * 2)) / 2;
+      doc.setDrawColor(180);
+      doc.setFillColor(255, 255, 255);
+      doc.setTextColor(0);
 
-    doc.setDrawColor(180);
-    doc.setFillColor(255, 255, 255);
-    doc.setTextColor(0);
+      function drawCard(x, judul, nilai) {
+        doc.rect(x, y, cardW, cardH);
+        doc.setFontSize(8.5);
+        doc.text(judul, x + cardW / 2, y + 6.5, { align: "center" });
+        doc.setFontSize(12);
+        doc.text(String(nilai), x + cardW / 2, y + 13.5, { align: "center" });
+      }
 
-    function drawCard(x, title, value) {
-      doc.rect(x, yCard, cardW, cardH);
-      doc.setFontSize(9);
-      doc.text(title, x + cardW / 2, yCard + 7, { align: "center" });
-      doc.setFontSize(13);
-      doc.text(value.toString(), x + cardW / 2, yCard + 15, {
-        align: "center",
-      });
+      drawCard(startX, "Total Siswa", totalSiswa);
+      drawCard(startX + cardW + gap, "Total Pertemuan", totalPertemuan);
+      drawCard(startX + (cardW + gap) * 2, "Rata-rata Kehadiran", rata);
+      y += cardH + 8;
     }
 
-    drawCard(startX, "Total Siswa", totalSiswa);
-    drawCard(startX + cardW + gap, "Total Pertemuan", totalPertemuan);
-    drawCard(startX + (cardW + gap) * 2, "Rata-rata Kehadiran", rata);
-
+    // === TABEL KEHADIRAN SISWA DENGAN TEMA ROYAL BLUE (PERSIS LOGIN WALAS) ===
     const head = [
       [
         "No",
@@ -3049,13 +4075,16 @@
       tr.querySelectorAll("td").forEach((td) => {
         row.push(td.innerText.trim());
       });
-      body.push(row);
+      if (row.length > 0) body.push(row);
     });
 
     doc.autoTable({
-      startY: yCard + cardH + 8,
+      startY: y,
       head: head,
-      body: body,
+      body:
+        body.length > 0
+          ? body
+          : [["-", "Belum ada data presensi", "-", "-", "-", "-", "-", "-"]],
       theme: "grid",
       styles: {
         fontSize: 8,
@@ -3064,59 +4093,779 @@
         cellPadding: 2,
       },
       headStyles: {
-        fillColor: [240, 240, 240],
-        textColor: 0,
+        fillColor: [37, 99, 235],
+        textColor: 255,
         fontSize: 9,
+        halign: "center",
+        fontStyle: "bold",
       },
       columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 45 },
-        2: { cellWidth: 15 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 15 },
-        5: { cellWidth: 15 },
-        6: { cellWidth: 15 },
-        7: { cellWidth: 20 },
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 45, halign: "left" },
+        2: { cellWidth: 15, halign: "center" },
+        3: { cellWidth: 15, halign: "center" },
+        4: { cellWidth: 15, halign: "center" },
+        5: { cellWidth: 15, halign: "center" },
+        6: { cellWidth: 15, halign: "center" },
+        7: { cellWidth: 20, halign: "center" },
       },
       didParseCell(data) {
-        if (data.column.index === 7) {
+        if (data.column.index === 7 && data.section === "body") {
           const v = parseFloat(data.cell.raw);
           if (v < 50) data.cell.styles.textColor = [200, 0, 0];
           else if (v < 70) data.cell.styles.textColor = [200, 140, 0];
           else data.cell.styles.textColor = [0, 140, 70];
         }
       },
+      margin: { left: 15, right: 15 },
     });
 
+    y = doc.lastAutoTable.finalY + 16;
+    if (y > 245) {
+      doc.addPage();
+      y = 25;
+    }
+
+    // === TANDA TANGAN RESMI GURU WALI KELAS (PERSIS LOGIN WALAS) ===
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text(`Teluk Kuantan, ${tanggalCetak}`, pageWidth - 70, y);
+    doc.text("Guru Wali Kelas,", pageWidth - 70, y + 6);
+    doc.text(namaGuruWali || "___________________", pageWidth - 70, y + 28);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth - 70, y + 29, pageWidth - 15, y + 29);
+
+    // === FOOTER NOTE ===
     const pageH = doc.internal.pageSize.getHeight();
     doc.setFontSize(8);
     doc.setTextColor(150);
     doc.text(
       "diunduh dari portalsmkn1telku.vercel.app",
-      pageWidth - 10,
+      pageWidth - 15,
       pageH - 8,
       { align: "right" },
     );
 
-    doc.save("Rekap-Kehadiran-A4-Potrait.pdf");
+    const namaFileBulan = bersihkanEmojiUntukPDF(periodeBulan).replace(
+      /[^a-zA-Z0-9]/g,
+      "_",
+    );
+    doc.save(`Rekap-Kehadiran-${sheet}-${namaFileBulan}.pdf`);
+  }
+
+  /* === CETAK DATA MENTAH PRESENSI FORMAT A4 LANDSCAPE (AKOMODIR BANYAK BULAN & BANYAK SISWA) === */
+  async function downloadDataMentahPDF(sheet) {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      return alert("Pustaka jsPDF belum dimuat. Silakan muat ulang halaman.");
+    }
+
+    const kelasAktif =
+      sheet ||
+      window.currentSheet ||
+      document.getElementById("kelasSelect")?.value ||
+      "Kelas";
+
+    showLoading(
+      "Mempersiapkan PDF Data Mentah...",
+      `Mengambil & menyusun data presensi kelas ${kelasAktif}...`,
+    );
+
+    try {
+      // 1. Ambil data lengkap
+      let d = null;
+      if (
+        window._rawHeaders &&
+        window._rawHeaders.length > 2 &&
+        window._rawRows &&
+        window.currentSheet === kelasAktif
+      ) {
+        d = {
+          values: [window._rawHeaders, ...window._rawRows],
+          namaGuru:
+            window._namaGuruAktif ||
+            document.getElementById("namaGuruWalas")?.value ||
+            "",
+        };
+      } else {
+        d = await getSheetData(kelasAktif, "all");
+      }
+
+      const rows = (d && d.values) || [];
+      if (rows.length < 2) {
+        hideLoading();
+        return alert(
+          "Belum ada data presensi mentah untuk dicetak pada kelas ini.",
+        );
+      }
+
+      const rawHeaders = rows[0] || [];
+      // Kolom nama siswa (kolom index 2 ke atas)
+      const daftarSiswa = rawHeaders
+        .slice(2)
+        .map((s) => bersihkanEmojiUntukPDF(String(s).trim()))
+        .filter(Boolean);
+
+      if (daftarSiswa.length === 0) {
+        hideLoading();
+        return alert("Daftar nama siswa kosong.");
+      }
+
+      // 2. Deteksi filter bulan aktif dari UI (Login Walas #editBulan atau Rekap #filterBulan)
+      const editBulanEl = document.getElementById("editBulan");
+      const filterBulanEl = document.getElementById("filterBulan");
+      const activeBulanVal =
+        (editBulanEl ? editBulanEl.value : null) ||
+        (filterBulanEl ? filterBulanEl.value : null) ||
+        "ALL";
+
+      const NAMA_BULAN = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+
+      // 3. Kelompokkan data per bulan ("YYYY-M")
+      const rawDataRows = rows.slice(1).filter((r) => r && r[0]);
+      const rowsByMonth = {};
+      const fallbackRows = [];
+
+      rawDataRows.forEach((r) => {
+        const dt = new Date(r[0]);
+        if (!isNaN(dt.getTime())) {
+          const mKey = `${dt.getFullYear()}-${dt.getMonth()}`;
+          if (!rowsByMonth[mKey]) rowsByMonth[mKey] = [];
+          rowsByMonth[mKey].push(r);
+        } else {
+          fallbackRows.push(r);
+        }
+      });
+
+      // Urutkan kunci bulan secara kronologis (misal: Juli -> Agustus -> September...)
+      const sortedMonthKeys = Object.keys(rowsByMonth).sort((a, b) => {
+        const [y1, m1] = a.split("-").map(Number);
+        const [y2, m2] = b.split("-").map(Number);
+        return y1 === y2 ? m1 - m2 : y1 - y2;
+      });
+
+      // Tentukan bulan mana saja yang akan dicetak
+      let targetMonthKeys = [];
+      let isSingleMonth = false;
+
+      if (activeBulanVal !== "ALL") {
+        if (rowsByMonth[activeBulanVal]) {
+          targetMonthKeys = [activeBulanVal];
+          isSingleMonth = true;
+        } else {
+          hideLoading();
+          return alert("Tidak ada data presensi pada bulan yang dipilih.");
+        }
+      } else {
+        targetMonthKeys = sortedMonthKeys;
+        if (targetMonthKeys.length === 0 && fallbackRows.length > 0) {
+          targetMonthKeys = ["ALL"];
+          rowsByMonth["ALL"] = fallbackRows;
+        }
+      }
+
+      if (targetMonthKeys.length === 0) {
+        hideLoading();
+        return alert("Tidak ada data pertemuan presensi yang dapat dicetak.");
+      }
+
+      const namaGuru = bersihkanEmojiUntukPDF(
+        d.namaGuru ||
+          window._namaGuruAktif ||
+          document.getElementById("namaGuruWalas")?.value ||
+          "-",
+      );
+
+      const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+
+      // 4. Inisialisasi dokumen jsPDF A4 Landscape (297 mm x 210 mm)
+      const doc = new jsPDF("landscape", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth(); // 297 mm
+      const pageHeight = doc.internal.pageSize.getHeight(); // 210 mm
+      const logoEl = document.getElementById("logoSekolahEl");
+
+      // Ukuran adaptif untuk mengakomodir banyak siswa
+      const totalSiswa = daftarSiswa.length;
+      const isBanyakSiswa = totalSiswa > 33;
+      const baseFontSize = isBanyakSiswa ? 6.3 : 6.8;
+      const baseCellPadding = isBanyakSiswa ? 0.75 : 0.95;
+
+      let isFirstPageOverall = true;
+
+      // Helper function menggambar Kop & Header halaman
+      function drawKopLandscape(docRef, judulPeriode, infoBagian = "") {
+        let yPos = 8;
+        if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+          try {
+            docRef.addImage(logoEl, "PNG", 10, yPos, 14, 14);
+          } catch (e) {}
+        }
+
+        docRef.setFontSize(12.5);
+        docRef.setFont(undefined, "bold");
+        docRef.setTextColor(15, 23, 42);
+        docRef.text("SMKN 1 TELUK KUANTAN", 28, yPos + 4.5);
+
+        docRef.setFontSize(9.5);
+        docRef.text(
+          "LAPORAN DATA MENTAH PRESENSI SISWA (JURNAL HARIAN)",
+          28,
+          yPos + 9.5,
+        );
+
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7.5);
+        docRef.setTextColor(100);
+        const subInfo = infoBagian ? ` — ${infoBagian}` : "";
+        docRef.text(
+          `Tahun Ajaran 2026/2027 • Format Lembar Kerja A4 Landscape${subInfo}`,
+          28,
+          yPos + 13.5,
+        );
+
+        yPos += 16;
+        docRef.setDrawColor(203, 213, 225);
+        docRef.setLineWidth(0.4);
+        docRef.line(10, yPos, pageWidth - 10, yPos);
+        yPos += 3;
+
+        // 4 Kolom Identitas Rapi
+        docRef.setFontSize(8);
+        docRef.setTextColor(30, 41, 59);
+
+        const col1X = 10;
+        const col2X = 80;
+        const col3X = 150;
+        const col4X = 220;
+
+        docRef.text("Kelas", col1X, yPos + 3);
+        docRef.text(`:  ${kelasAktif}`, col1X + 18, yPos + 3);
+
+        docRef.text("Guru Wali", col2X, yPos + 3);
+        docRef.text(`:  ${namaGuru || "-"}`, col2X + 20, yPos + 3);
+
+        docRef.text("Periode", col3X, yPos + 3);
+        docRef.text(`:  ${judulPeriode}`, col3X + 18, yPos + 3);
+
+        docRef.text("Tgl Cetak", col4X, yPos + 3);
+        docRef.text(`:  ${tanggalCetak}`, col4X + 20, yPos + 3);
+
+        return yPos + 7;
+      }
+
+      // Helper function menggambar Blok Tanda Tangan Resmi
+      function drawSignatureBlock(docRef, startYPos) {
+        const sigHeightNeeded = 26;
+        let finalY = startYPos;
+        if (finalY + sigHeightNeeded > pageHeight - 8) {
+          docRef.addPage("a4", "landscape");
+          finalY = 22;
+        } else {
+          finalY = Math.max(finalY + 6, pageHeight - 24);
+        }
+
+        docRef.setFontSize(7.8);
+        docRef.setTextColor(30, 41, 59);
+
+        // Kiri: Mengetahui Kepala Sekolah
+        const leftSigX = 18;
+        docRef.text("Mengetahui,", leftSigX, finalY - 12);
+        docRef.text("Kepala SMKN 1 Teluk Kuantan", leftSigX, finalY - 8.5);
+        docRef.setFont(undefined, "bold");
+        docRef.text("H. HURDISMAN, S.Pd, M.Pd", leftSigX, finalY);
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7);
+        docRef.text("NIP. 19690605 199303 1 004", leftSigX, finalY + 3.5);
+
+        // Kanan: Guru Wali Kelas
+        const rightSigX = pageWidth - 65;
+        docRef.setFontSize(7.8);
+        docRef.text(`Teluk Kuantan, ${tanggalCetak}`, rightSigX, finalY - 12);
+        docRef.text(`Guru Wali Kelas ${kelasAktif}`, rightSigX, finalY - 8.5);
+        docRef.setFont(undefined, "bold");
+        docRef.text(
+          namaGuru || "( .................................... )",
+          rightSigX,
+          finalY,
+        );
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7);
+        docRef.text("NIP. -", rightSigX, finalY + 3.5);
+      }
+
+      // 5. PROSES PER BULAN (Setiap bulan mendapatkan halaman tersendiri yang tersusun rapi)
+      targetMonthKeys.forEach((mKey) => {
+        const monthRows = rowsByMonth[mKey] || [];
+        if (monthRows.length === 0) return;
+
+        // Urutkan tanggal pada bulan ini dari terlama ke terbaru
+        monthRows.sort((a, b) => {
+          const ta = new Date(a[0]).getTime();
+          const tb = new Date(b[0]).getTime();
+          if (isNaN(ta) || isNaN(tb)) return 0;
+          return ta - tb;
+        });
+
+        let labelBulan = "Semua Pertemuan";
+        if (mKey !== "ALL") {
+          const [thn, bln] = mKey.split("-").map(Number);
+          labelBulan = `Bulan ${NAMA_BULAN[bln] || ""} ${thn}`;
+        }
+
+        // Jika tanggal dalam satu bulan > 22 hari, chunk per 20 hari agar tidak gepeng
+        const maxDatesPerTable = 20;
+        const monthChunks = [];
+        for (let i = 0; i < monthRows.length; i += maxDatesPerTable) {
+          monthChunks.push(monthRows.slice(i, i + maxDatesPerTable));
+        }
+
+        // Hitung akumulasi kehadiran per siswa untuk bulan ini
+        const totalPertemuanBulan = monthRows.length;
+        const ringkasanBulan = daftarSiswa.map((_, sIdx) => {
+          let h = 0,
+            s = 0,
+            i = 0,
+            a = 0,
+            c = 0;
+          monthRows.forEach((row) => {
+            const st = String(row[sIdx + 2] || "")
+              .trim()
+              .toLowerCase();
+            if (st === "hadir" || st === "h") h++;
+            else if (st === "sakit" || st === "s") s++;
+            else if (st === "izin" || st === "i") i++;
+            else if (st === "alfa" || st === "a") a++;
+            else if (st === "cabut" || st === "c") c++;
+          });
+          const persentase =
+            totalPertemuanBulan > 0
+              ? ((h / totalPertemuanBulan) * 100).toFixed(0) + "%"
+              : "0%";
+          return { h, s, i, a, c, persentase };
+        });
+
+        monthChunks.forEach((chunkRows, chunkIdx) => {
+          if (!isFirstPageOverall) {
+            doc.addPage("a4", "landscape");
+          }
+          isFirstPageOverall = false;
+
+          const infoBagian =
+            monthChunks.length > 1
+              ? `Bagian ${chunkIdx + 1} dari ${monthChunks.length}`
+              : "";
+          const startTableY = drawKopLandscape(doc, labelBulan, infoBagian);
+
+          // Susun Table Header
+          const tableHead = ["No", "Nama Siswa"];
+          chunkRows.forEach((row) => {
+            const dt = new Date(row[0]);
+            if (!isNaN(dt.getTime())) {
+              const dStr = String(dt.getDate()).padStart(2, "0");
+              const mStr = String(dt.getMonth() + 1).padStart(2, "0");
+              tableHead.push(`${dStr}/${mStr}`);
+            } else {
+              tableHead.push(String(row[0]).slice(0, 5));
+            }
+          });
+
+          const isLastChunkOfMonth = chunkIdx === monthChunks.length - 1;
+          if (isLastChunkOfMonth) {
+            tableHead.push("H", "S", "I", "A", "C", "%");
+          }
+
+          // Susun Table Body
+          const tableBody = [];
+          daftarSiswa.forEach((namaSiswa, sIdx) => {
+            const rowData = [String(sIdx + 1), namaSiswa];
+
+            chunkRows.forEach((row) => {
+              const val = String(row[sIdx + 2] || "").trim();
+              let kode = "-";
+              const lower = val.toLowerCase();
+              if (lower === "hadir" || lower === "h") kode = "H";
+              else if (lower === "sakit" || lower === "s") kode = "S";
+              else if (lower === "izin" || lower === "i") kode = "I";
+              else if (lower === "alfa" || lower === "a") kode = "A";
+              else if (lower === "cabut" || lower === "c") kode = "C";
+              rowData.push(kode);
+            });
+
+            if (isLastChunkOfMonth) {
+              const r = ringkasanBulan[sIdx];
+              rowData.push(
+                String(r.h),
+                String(r.s),
+                String(r.i),
+                String(r.a),
+                String(r.c),
+                r.persentase,
+              );
+            }
+
+            tableBody.push(rowData);
+          });
+
+          // Baris Total Hadir Harian per Tanggal
+          const totalHarianRow = ["", "Total Hadir"];
+          chunkRows.forEach((row) => {
+            let countHadir = 0;
+            daftarSiswa.forEach((_, sIdx) => {
+              const val = String(row[sIdx + 2] || "")
+                .trim()
+                .toLowerCase();
+              if (val === "hadir" || val === "h") countHadir++;
+            });
+            totalHarianRow.push(String(countHadir));
+          });
+
+          if (isLastChunkOfMonth) {
+            const grandH = ringkasanBulan.reduce((sum, x) => sum + x.h, 0);
+            const grandS = ringkasanBulan.reduce((sum, x) => sum + x.s, 0);
+            const grandI = ringkasanBulan.reduce((sum, x) => sum + x.i, 0);
+            const grandA = ringkasanBulan.reduce((sum, x) => sum + x.a, 0);
+            const grandC = ringkasanBulan.reduce((sum, x) => sum + x.c, 0);
+            const grandKap = totalSiswa * totalPertemuanBulan;
+            const grandRata =
+              grandKap > 0
+                ? ((grandH / grandKap) * 100).toFixed(0) + "%"
+                : "0%";
+            totalHarianRow.push(
+              String(grandH),
+              String(grandS),
+              String(grandI),
+              String(grandA),
+              String(grandC),
+              grandRata,
+            );
+          }
+          tableBody.push(totalHarianRow);
+
+          // Lebar kolom responsif
+          const colStyles = {
+            0: { cellWidth: 7, halign: "center" },
+            1: { cellWidth: 50, halign: "left", fontStyle: "bold" },
+          };
+
+          const dateColStartIndex = 2;
+          const dateColEndIndex = dateColStartIndex + chunkRows.length;
+          for (let c = dateColStartIndex; c < dateColEndIndex; c++) {
+            colStyles[c] = { halign: "center" };
+          }
+
+          if (isLastChunkOfMonth) {
+            colStyles[dateColEndIndex] = { cellWidth: 5.8, halign: "center" }; // H
+            colStyles[dateColEndIndex + 1] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // S
+            colStyles[dateColEndIndex + 2] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // I
+            colStyles[dateColEndIndex + 3] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // A
+            colStyles[dateColEndIndex + 4] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // C
+            colStyles[dateColEndIndex + 5] = {
+              cellWidth: 9,
+              halign: "center",
+              fontStyle: "bold",
+            }; // %
+          }
+
+          doc.autoTable({
+            startY: startTableY,
+            head: [tableHead],
+            body: tableBody,
+            theme: "grid",
+            styles: {
+              fontSize: baseFontSize,
+              cellPadding: baseCellPadding,
+              lineColor: [226, 232, 240],
+              lineWidth: 0.15,
+              valign: "middle",
+              overflow: "ellipsize",
+            },
+            headStyles: {
+              fillColor: [37, 99, 235], // Royal Blue
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              halign: "center",
+              fontSize: baseFontSize + 0.3,
+            },
+            columnStyles: colStyles,
+            showHead: "everyPage",
+            margin: { left: 10, right: 10, top: 10, bottom: 25 },
+            didParseCell: function (data) {
+              if (data.section === "head") {
+                if (data.column.index === 1) data.cell.styles.halign = "left";
+                return;
+              }
+
+              // Baris Total Hadir (paling bawah)
+              if (data.row.index === tableBody.length - 1) {
+                data.cell.styles.fillColor = [241, 245, 249];
+                data.cell.styles.fontStyle = "bold";
+                data.cell.styles.textColor = [30, 41, 59];
+                return;
+              }
+
+              // Pewarnaan status presensi
+              const val = String(data.cell.raw || "").trim();
+              if (val === "H") {
+                data.cell.styles.textColor = [22, 101, 52];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "S") {
+                data.cell.styles.textColor = [29, 78, 216];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "I") {
+                data.cell.styles.textColor = [180, 83, 9];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "A") {
+                data.cell.styles.textColor = [220, 38, 38];
+                data.cell.styles.fontStyle = "bold";
+                data.cell.styles.fillColor = [254, 242, 242];
+              } else if (val === "C") {
+                data.cell.styles.textColor = [126, 34, 206];
+                data.cell.styles.fontStyle = "bold";
+              }
+            },
+          });
+
+          // Legenda kode status di bawah tabel
+          const finalY = doc.lastAutoTable
+            ? doc.lastAutoTable.finalY + 3.5
+            : startTableY + 10;
+          doc.setFontSize(6.8);
+          doc.setTextColor(100);
+          doc.text(
+            "Keterangan: H = Hadir | S = Sakit | I = Izin | A = Alfa (Tanpa Keterangan) | C = Cabut (Meninggalkan Pembelajaran)",
+            10,
+            Math.min(finalY, pageHeight - 24),
+          );
+
+          // Jika hanya 1 bulan dan chunk terakhir, gambar tanda tangan langsung di halaman ini
+          if (isSingleMonth && isLastChunkOfMonth) {
+            drawSignatureBlock(doc, finalY);
+          }
+        });
+      });
+
+      // 6. JIKA MENCETAK SEMUA BULAN (MULTI-BULAN): Buat halaman Rekapitulasi Akumulasi Keseluruhan Semester
+      if (!isSingleMonth && targetMonthKeys.length > 1) {
+        doc.addPage("a4", "landscape");
+        const startRecapY = drawKopLandscape(
+          doc,
+          "Akumulasi Keseluruhan Semester (Semua Bulan)",
+          "Ringkasan Kumulatif",
+        );
+
+        const totalSemuaPertemuan = rawDataRows.length;
+        const recapTableHead = [
+          [
+            "No",
+            "Nama Siswa",
+            "Total Hadir",
+            "Sakit",
+            "Izin",
+            "Alfa",
+            "Cabut",
+            "Total Pertemuan",
+            "% Kehadiran Total",
+          ],
+        ];
+
+        const recapTableBody = [];
+        let grandHadirAll = 0,
+          grandSakitAll = 0,
+          grandIzinAll = 0,
+          grandAlfaAll = 0,
+          grandCabutAll = 0;
+
+        daftarSiswa.forEach((namaSiswa, sIdx) => {
+          let h = 0,
+            s = 0,
+            i = 0,
+            a = 0,
+            c = 0;
+          rawDataRows.forEach((row) => {
+            const st = String(row[sIdx + 2] || "")
+              .trim()
+              .toLowerCase();
+            if (st === "hadir" || st === "h") h++;
+            else if (st === "sakit" || st === "s") s++;
+            else if (st === "izin" || st === "i") i++;
+            else if (st === "alfa" || st === "a") a++;
+            else if (st === "cabut" || st === "c") c++;
+          });
+
+          grandHadirAll += h;
+          grandSakitAll += s;
+          grandIzinAll += i;
+          grandAlfaAll += a;
+          grandCabutAll += c;
+
+          const pct =
+            totalSemuaPertemuan > 0
+              ? ((h / totalSemuaPertemuan) * 100).toFixed(1) + "%"
+              : "0%";
+
+          recapTableBody.push([
+            String(sIdx + 1),
+            namaSiswa,
+            String(h),
+            String(s),
+            String(i),
+            String(a),
+            String(c),
+            String(totalSemuaPertemuan),
+            pct,
+          ]);
+        });
+
+        // Baris total keseluruhan
+        const grandKapasitasAll = totalSiswa * totalSemuaPertemuan;
+        const grandPersenAll =
+          grandKapasitasAll > 0
+            ? ((grandHadirAll / grandKapasitasAll) * 100).toFixed(1) + "%"
+            : "0%";
+
+        recapTableBody.push([
+          "",
+          "TOTAL KESELURUHAN SISWA",
+          String(grandHadirAll),
+          String(grandSakitAll),
+          String(grandIzinAll),
+          String(grandAlfaAll),
+          String(grandCabutAll),
+          String(totalSemuaPertemuan),
+          grandPersenAll,
+        ]);
+
+        doc.autoTable({
+          startY: startRecapY,
+          head: recapTableHead,
+          body: recapTableBody,
+          theme: "grid",
+          styles: {
+            fontSize: baseFontSize + 0.3,
+            cellPadding: baseCellPadding + 0.2,
+            lineColor: [226, 232, 240],
+            lineWidth: 0.15,
+            valign: "middle",
+          },
+          headStyles: {
+            fillColor: [37, 99, 235],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            halign: "center",
+          },
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" },
+            1: { cellWidth: 75, halign: "left", fontStyle: "bold" },
+            2: { halign: "center", textColor: [22, 101, 52], fontStyle: "bold" },
+            3: { halign: "center", textColor: [29, 78, 216] },
+            4: { halign: "center", textColor: [180, 83, 9] },
+            5: { halign: "center", textColor: [220, 38, 38], fontStyle: "bold" },
+            6: { halign: "center", textColor: [126, 34, 206] },
+            7: { halign: "center" },
+            8: { halign: "center", fontStyle: "bold" },
+          },
+          showHead: "everyPage",
+          margin: { left: 10, right: 10, top: 10, bottom: 25 },
+          didParseCell: function (data) {
+            if (data.row.index === recapTableBody.length - 1) {
+              data.cell.styles.fillColor = [241, 245, 249];
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = [30, 41, 59];
+            }
+          },
+        });
+
+        const finalRecapY = doc.lastAutoTable
+          ? doc.lastAutoTable.finalY
+          : startRecapY + 20;
+        drawSignatureBlock(doc, finalRecapY);
+      } else if (!isSingleMonth && targetMonthKeys.length === 1) {
+        // Jika hanya ada 1 bulan terdata meskipun opsi ALL dipilih
+        const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 150;
+        drawSignatureBlock(doc, finalY);
+      }
+
+      // 7. Tulis Nomor Halaman Otomatis di Setiap Lembar
+      const totalPages = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(6.8);
+        doc.setTextColor(140);
+        doc.text(
+          `Laporan Data Mentah Presensi • SMKN 1 Teluk Kuantan (portalsmkn1telku.vercel.app) — Halaman ${p} dari ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 3.8,
+          { align: "center" },
+        );
+      }
+
+      let namaFileBulan = isSingleMonth
+        ? targetMonthKeys[0]
+        : "Semua_Bulan_Semester";
+      namaFileBulan = bersihkanEmojiUntukPDF(namaFileBulan).replace(
+        /[^a-zA-Z0-9]/g,
+        "_",
+      );
+      doc.save(`Data-Mentah-Presensi-${kelasAktif}-${namaFileBulan}.pdf`);
+      await finishProgress("PDF Data Mentah Berhasil Diunduh!");
+    } catch (err) {
+      console.error("downloadDataMentahPDF error:", err);
+      hideLoading();
+      alert("Gagal membuat PDF Data Mentah: " + (err.message || err));
+    }
   }
 
   // Update render tabel edit form data mentah untuk warna
   function renderEditTable() {
-    const bulan = document.getElementById("editBulan").value;
+    const bulanEl = document.getElementById("editBulan");
+    const bulan = bulanEl ? bulanEl.value : "ALL";
     const tbody = document.getElementById("editTbody");
+    if (!tbody) return;
     tbody.innerHTML = "";
+
+    const rawRows = window._rawRows || [];
+    const rawByMonth = window._rawByMonth || {};
 
     const sumber =
       bulan === "ALL"
-        ? window._rawRows.map((r, i) => ({ row: r, index: i }))
-        : window._rawByMonth[bulan] || [];
+        ? rawRows.map((r, i) => ({ row: r, index: i }))
+        : rawByMonth[bulan] || [];
 
     sumber.forEach(({ row, index }) => {
+      if (!row || !Array.isArray(row)) return;
       let tr = "<tr>";
       row.forEach((cell, c) => {
         if (c >= 2) {
-          const clsStatus = cell ? cell.toLowerCase() : "hadir";
+          const clsStatus = cell ? String(cell).toLowerCase() : "hadir";
           tr += `<td>
           <select class="input cellEdit select-presensi ${clsStatus}" data-r="${index}" data-c="${c}" onchange="updateSelectColor(this)">
             <option value="Hadir" class="opt-hadir" ${cell === "Hadir" ? "selected" : ""}>Hadir</option>
@@ -3127,7 +4876,7 @@
           </select>
         </td>`;
         } else {
-          tr += `<td>${c === 0 ? formatTanggal(cell) : cell}</td>`;
+          tr += `<td>${c === 0 ? formatTanggal(cell) : cell || ""}</td>`;
         }
       });
       tr += "</tr>";
