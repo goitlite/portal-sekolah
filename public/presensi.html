@@ -1770,17 +1770,72 @@
       if (!sheet) return alert("Pilih kelas terlebih dahulu!");
     }
 
-    // 1) Persistent Login: Jika sudah pernah login di perangkat ini, langsung buka Dashboard Walas tanpa minta password lagi!
     const cache = getCacheWalas();
     const passTersimpan = cache[sheet];
 
+    // ============================================================
+    // 1. CEK PASSWORD YANG TERSIMPAN
+    // ============================================================
     if (passTersimpan) {
-      adminPasswordAktif = passTersimpan;
-      // Langsung buka dashboard walas secara instan tanpa perlu isi password atau verifikasi berulang
-      return openAdminModal(sheet);
+      try {
+        showLoading(
+          "Login Walas — " + sheet,
+          "Memeriksa sesi login yang tersimpan...",
+        );
+
+        const hasil = await cekPasswordKeServer(sheet, passTersimpan);
+
+        // ========================================================
+        // PASSWORD CACHE MASIH VALID
+        // ========================================================
+        if (hasil && hasil.ok) {
+          adminPasswordAktif = passTersimpan;
+
+          updateProgressBar(
+            60,
+            "Sesi Login Valid",
+            "Menyiapkan dashboard walas...",
+          );
+
+          return await openAdminModal(sheet);
+        }
+
+        // ========================================================
+        // PASSWORD CACHE SUDAH TIDAK VALID
+        // Misalnya password Walas sudah diganti
+        // ========================================================
+        console.warn(
+          "Password Walas tersimpan sudah tidak valid untuk kelas:",
+          sheet,
+        );
+
+        hapusCacheWalas(sheet);
+        adminPasswordAktif = null;
+
+        hideLoading();
+
+        // Tampilkan login ulang dengan pesan yang jelas
+        return showWalasLoginModal(
+          sheet,
+          "Sesi login sebelumnya sudah tidak berlaku. Silakan masukkan password Walas yang baru.",
+        );
+      } catch (err) {
+        console.error("Validasi cache login Walas gagal:", err);
+
+        hideLoading();
+
+        // Jangan langsung menghapus cache jika masalahnya hanya koneksi.
+        // Pengguna masih diberi kesempatan login ulang.
+        return showWalasLoginModal(
+          sheet,
+          "Gagal memeriksa sesi login. Silakan masukkan password Walas.",
+        );
+      }
     }
 
-    // 2) Belum pernah login di perangkat ini: buka modal input password
+    // ============================================================
+    // 2. BELUM ADA PASSWORD TERSIMPAN
+    // ============================================================
     showWalasLoginModal(sheet);
   }
 
