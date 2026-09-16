@@ -1141,7 +1141,21 @@
       return response;
     } catch (err) {
       clearTimeout(id);
-      throw err;
+      // Ubah error AbortController yang mentah & membingungkan ("signal is
+      // aborted without reason") menjadi pesan yang bisa dipahami user, dan
+      // bedakan dari error jaringan biasa (mis. HP offline / DNS gagal).
+      if (err && err.name === "AbortError") {
+        const timeoutErr = new Error(
+          `Server tidak merespon dalam ${Math.round(timeoutMs / 1000)} detik. Kemungkinan Apps Script sedang sibuk (banyak siswa mengisi presensi bersamaan) atau koneksi lambat.`,
+        );
+        timeoutErr.isTimeout = true;
+        throw timeoutErr;
+      }
+      const netErr = new Error(
+        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.",
+      );
+      netErr.isNetworkError = true;
+      throw netErr;
     }
   }
 
@@ -1184,9 +1198,13 @@
     const url = isAll
       ? `${SCRIPT_URL}?sheet=${encodedSheet}&action=all&_t=${now}`
       : `${SCRIPT_URL}?sheet=${encodedSheet}&_t=${now}`;
+    // Data "all" (seluruh sheet) lebih berat drpd "headers", jadi dikasih
+    // jatah waktu lebih longgar supaya tidak keburu di-abort saat server
+    // lagi rame (banyak siswa submit presensi bersamaan).
+    const timeoutMs = isAll ? 20000 : 14000;
 
     try {
-      const res = await fetchJsonWithTimeout(url, {}, 14000);
+      const res = await fetchJsonWithTimeout(url, {}, timeoutMs);
       const data = await res.json();
 
       // Simpan ke cache
@@ -1271,11 +1289,17 @@
       }
     }, 90);
 
-    // Watchdog safety timeout (15s): Otomatis pulihkan UI jika jaringan lambat / tertahan
+    // Watchdog safety timeout (35s): Otomatis pulihkan UI HANYA jika benar-
+    // benar macet total. Sebelumnya 15 detik — terlalu pendek dibanding
+    // proses verifikasi Login Walas + pengambilan data dashboard yang
+    // wajar bisa memakan waktu s/d ~28-34 detik saat Apps Script sedang
+    // sibuk (mis. banyak siswa mengisi presensi bersamaan). Watchdog yang
+    // terlalu pendek membuat loading "hilang" duluan padahal prosesnya
+    // masih berjalan di belakang layar — itulah yang terlihat seperti macet.
     loadingSafetyTimeout = setTimeout(() => {
-      console.warn("showLoading watchdog timeout (15s) dipicu. Memulihkan UI.");
+      console.warn("showLoading watchdog timeout (35s) dipicu. Memulihkan UI.");
       hideLoading();
-    }, 15000);
+    }, 35000);
   }
 
   function hideLoading() {
@@ -1594,25 +1618,35 @@
     const pw = String(password || "").trim();
     if (!pw) return { ok: false, error: "Password tidak boleh kosong" };
 
-    // METODE 1: Cek ke server Apps Script (verifyAdminKelas)
+    // Dulu ada 3 tahap cek berurutan (server verify -> cache header -> force
+    // refresh header) yang total worst-case-nya bisa sampai ~48 detik kalau
+    // server lambat. Sekarang disederhanakan jadi 2 tahap (worst-case ~28
+    // detik), dan setiap tahap dicatat apakah gagalnya karena KONEKSI/SERVER
+    // lambat atau memang PASSWORD salah, supaya pesannya akurat.
+    let adaMasalahKoneksi = false;
+
+    // TAHAP 1: Cek ke server Apps Script (action verifyAdminKelas)
     try {
       const j = await postToAppsScript(
-        {
-          action: "verifyAdminKelas",
-          kelas: sheet,
-          password: pw,
-        },
+        { action: "verifyAdminKelas", kelas: sheet, password: pw },
         1,
-        10000,
+        7000,
       );
       if (j && j.ok) return { ok: true };
+      // j ada tapi ok:false -> server sempat menjawab (mungkin memang salah,
+      // atau action ini belum didukung backend). Bukan masalah koneksi,
+      // lanjut ke tahap 2 sbg fallback tanpa menandai error koneksi.
     } catch (err) {
       console.warn("verifyAdminKelas network error:", err);
+      adaMasalahKoneksi = true;
     }
 
-    // METODE 2: Cocokkan dengan classPassword sheet atau namaGuru di _CONFIG via GET
+    // TAHAP 2: Cocokkan dengan classPassword sheet / namaGuru (force refresh
+    // langsung dari Google Sheets, jadi tidak perlu tahap ke-3 yang cuma
+    // mengulang hal yang sama dengan data cache).
     try {
-      const d = await getSheetData(sheet, "headers", false);
+      const d = await getSheetData(sheet, "headers", true);
+      adaMasalahKoneksi = false; // fetch ini berhasil, koneksi baik-baik saja
       if (d) {
         const cp = String(d.classPassword || "").trim();
         const ng = String(d.namaGuru || "").trim();
@@ -1628,28 +1662,17 @@
         }
       }
     } catch (e) {
-      console.warn("Gagal cek via sheet headers cache:", e);
+      console.warn("Gagal cek via sheet headers (force refresh):", e);
+      adaMasalahKoneksi = true;
     }
 
-    // METODE 3: Pastikan sekali lagi jika classPassword di sheet cocok (force refresh GET langsung dari Google Sheets)
-    try {
-      const dFresh = await getSheetData(sheet, "headers", true);
-      if (dFresh) {
-        const cp = String(dFresh.classPassword || "").trim();
-        const ng = String(dFresh.namaGuru || "").trim();
-        if (cp && cp.toLowerCase() === pw.toLowerCase()) {
-          return { ok: true };
-        }
-        if (
-          ng &&
-          (ng.toLowerCase().startsWith(pw.toLowerCase() + " ") ||
-            ng.toLowerCase() === pw.toLowerCase())
-        ) {
-          return { ok: true };
-        }
-      }
-    } catch (e) {}
-
+    if (adaMasalahKoneksi) {
+      return {
+        ok: false,
+        error:
+          "Tidak dapat terhubung ke server (mungkin sedang sibuk). Silakan coba lagi — ini bukan berarti password salah.",
+      };
+    }
     return { ok: false, error: "Password admin salah!" };
   }
 
@@ -1706,8 +1729,8 @@
         </div>
 
         <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;border-top:1px solid var(--border);padding-top:16px;">
-          <button class="action-del" style="margin:0;padding:8px 18px;" onclick="closeOverlay()">Batal</button>
-          <button class="action-save" style="margin:0;background:var(--primary);padding:8px 22px;font-weight:600;" onclick="submitWalasPromptPassword('${sheet}')">
+          <button class="action-del" style="margin:0;padding:8px 18px;" onclick="batalLoginWalas()">Batal</button>
+          <button id="btnMasukWalas" class="action-save" style="margin:0;background:var(--primary);padding:8px 22px;font-weight:600;" onclick="submitWalasPromptPassword('${sheet}')">
             Masuk Sekarang ➔
           </button>
         </div>
@@ -1726,13 +1749,38 @@
     }, 100);
   }
 
+  // Token global: dipakai supaya hasil verifikasi yang datang terlambat
+  // (mis. user sudah klik Batal, atau sudah coba login ulang) tidak
+  // nyelonong membuka dashboard / menampilkan error secara tiba-tiba.
+  let walasRequestToken = 0;
+
+  function batalLoginWalas() {
+    walasRequestToken++; // anggap basi proses verifikasi yg mungkin masih jalan
+    closeOverlay();
+  }
+
   async function submitWalasPromptPassword(sheet) {
+    const btn = document.getElementById("btnMasukWalas");
+    // Cegah klik ganda / Enter berkali-kali saat proses sebelumnya masih
+    // berjalan — salah satu penyebab tampilan jadi tidak menentu karena
+    // beberapa request numpuk bersamaan.
+    if (btn && btn.disabled) return;
+
     const inp = document.getElementById("inputWalasPromptPassword");
     const pass = inp ? inp.value.trim() : "";
     if (!pass) {
       if (inp) inp.focus();
       return alert("Silakan masukkan password admin walas!");
     }
+
+    const myToken = ++walasRequestToken;
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
+      btn.style.cursor = "not-allowed";
+      btn.textContent = "Memverifikasi...";
+    }
+    if (inp) inp.disabled = true;
 
     // ⚡ MUNCULKAN LOADING BAR REALTIME SECARA INSTAN (0ms)!
     showLoading(
@@ -1742,6 +1790,10 @@
 
     try {
       const j = await cekPasswordKeServer(sheet, pass);
+      // Kalau sudah ada percobaan login baru / user sudah Batal, abaikan
+      // saja hasil yang telat ini.
+      if (myToken !== walasRequestToken) return;
+
       if (!j || !j.ok) {
         hideLoading();
         return showWalasLoginModal(sheet, j?.error || "Password admin salah!");
@@ -1758,6 +1810,7 @@
       );
       await openAdminModal(sheet);
     } catch (err) {
+      if (myToken !== walasRequestToken) return;
       console.error("submitWalasPromptPassword error:", err);
       hideLoading();
       showWalasLoginModal(sheet, "Gagal login: " + (err.message || err));
@@ -1907,21 +1960,14 @@
       "Mengambil daftar seluruh kelas terdaftar...",
     );
     try {
-      // KODE BARU (Perbaikan)
-      const j = await postToAppsScript({
-        action: "getDaftarKelasAdmin",
-        ...superAdminSesi,
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "getDaftarKelasAdmin",
+          ...superAdminSesi,
+        }),
       });
-
-      // Wajib tambahkan hideLoading() jika gagal, agar tidak stuck!
-      if (!j || !j.ok) {
-        hideLoading();
-        closeOverlay();
-        superAdminSesi = null;
-        return openSuperAdminPanel(
-          j?.error || "Gagal memuat daftar kelas. Cek jaringan.",
-        );
-      }
+      const j = await r.json();
 
       if (!j.ok) {
         closeOverlay();
@@ -2149,7 +2195,15 @@
   }
 
   /* === UPDATE: MODAL LOGIN WALAS DENGAN EDIT DATA LANGSUNG TERBUKA (PADAT & BERISI) === */
+  // Guard anti tumpang-tindih: openAdminModal dipanggil dari beberapa
+  // tempat (login sukses, cache password tersimpan, tombol Segarkan) yang
+  // bisa terpicu berkali-kali sebelum proses sebelumnya selesai.
+  let adminModalLoading = false;
+
   async function openAdminModal(sheet, forceRefresh = false) {
+    if (adminModalLoading) return; // sudah ada proses buka dashboard yang berjalan
+    adminModalLoading = true;
+    const myToken = ++walasRequestToken;
     try {
       showLoading(
         "Login Walas — " + sheet,
@@ -2158,6 +2212,7 @@
 
       // Ambil seluruh baris data spreadsheet
       const d = await getSheetData(sheet, "all", forceRefresh);
+      if (myToken !== walasRequestToken) return; // ada proses lain yg lebih baru
       if (!d || d.error) {
         hideLoading();
         alert(
@@ -2326,11 +2381,23 @@
       renderEditTable();
       setTimeout(renderEditTable, 40);
     } catch (err) {
+      if (myToken !== walasRequestToken) return;
       hideLoading();
+      const pesan =
+        err && err.isTimeout
+          ? err.message
+          : `Gagal memuat dashboard walas: ${err.message || err}`;
       showOverlay(
-        `<p style='color:var(--danger);padding:20px;font-weight:600;'>❌ Gagal memuat dashboard walas: ${err.message || err}</p>`,
+        `<div style="padding:20px;text-align:center;">
+          <p style="color:var(--danger);font-weight:600;margin-bottom:16px;">❌ ${pesan}</p>
+          <button class="action-save" style="margin:0;padding:8px 22px;font-weight:600;" onclick="openAdminModal('${sheet}', true)">
+            🔄 Coba Lagi
+          </button>
+        </div>`,
         { viewId: "admin_error", title: "Error" },
       );
+    } finally {
+      adminModalLoading = false;
     }
   }
 
