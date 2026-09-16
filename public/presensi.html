@@ -997,7 +997,13 @@
   /* === KONFIGURASI === */
   const SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyPCKZSnnr_O6yRKBgok2XEHC9MRERDFa8t5a-SO5RPDy52xnQknAxgCFlUzouSBVfP/exec";
-  const KELAS = [
+  // KELAS_FALLBACK dipakai untuk render pertama kali secara instan (sebelum
+  // sempat menghubungi server) & sebagai cadangan kalau server gagal
+  // dihubungi. Daftar kelas yang SEBENARNYA dipakai (window.KELAS_AKTIF)
+  // selalu disegarkan dari _CONFIG lewat action "getDaftarKelasPublik",
+  // supaya kelas baru yang dibuat superadmin otomatis muncul di dropdown
+  // tanpa perlu edit array ini secara manual lagi.
+  const KELAS_FALLBACK = [
     // === KELAS X ===
     { id: "XTPL", label: "X TPL", tingkat: "X" },
     //{ id: "XDPIB", label: "X DPIB", tingkat: "X" },
@@ -1041,19 +1047,95 @@
     //{ id: "XIITPL", label: "TPL", tingkat: "XII" },
   ];
 
+  // Daftar kelas yang benar-benar dipakai untuk render dropdown saat ini.
+  // Mulai dari fallback, lalu ditimpa/ditambah begitu server merespons.
+  window.KELAS_AKTIF = KELAS_FALLBACK.slice();
+
+  // Gabungkan daftar dari server dengan fallback (server jadi prioritas
+  // kalau ada bentrok id), lalu urutkan sesuai tingkat X -> XI -> XII.
+  function gabungkanDanUrutkanKelas(daftarServer) {
+    const urutanTingkat = { X: 0, XI: 1, XII: 2, LAINNYA: 3 };
+    const map = new Map();
+    KELAS_FALLBACK.forEach((k) => map.set(k.id, k));
+    (daftarServer || []).forEach((k) => {
+      if (!k || !k.id) return;
+      map.set(k.id, {
+        id: k.id,
+        label: k.label || k.id,
+        tingkat: k.tingkat || "LAINNYA",
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const ta = urutanTingkat[a.tingkat] ?? 9;
+      const tb = urutanTingkat[b.tingkat] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return String(a.label).localeCompare(String(b.label), "id", {
+        sensitivity: "base",
+      });
+    });
+  }
+
   /* === RENDER 1 CARD SAJA === */
   const grid = document.getElementById("kelasGrid");
 
   function buildOptgroupKelas() {
-    const tingkatUrutan = ["X", "XI", "XII"];
+    const tingkatUrutan = ["X", "XI", "XII", "LAINNYA"];
+    const sumberKelas =
+      window.KELAS_AKTIF && window.KELAS_AKTIF.length
+        ? window.KELAS_AKTIF
+        : KELAS_FALLBACK;
     return tingkatUrutan
       .map((tingkat) => {
-        const opsi = KELAS.filter((k) => k.tingkat === tingkat)
+        const opsi = sumberKelas
+          .filter((k) => (k.tingkat || "LAINNYA") === tingkat)
           .map((k) => `<option value="${k.id}">${k.label}</option>`)
           .join("");
-        return `<optgroup label="KELAS ${tingkat}">${opsi}</optgroup>`;
+        if (!opsi) return "";
+        const labelTingkat =
+          tingkat === "LAINNYA" ? "KELAS LAINNYA" : `KELAS ${tingkat}`;
+        return `<optgroup label="${labelTingkat}">${opsi}</optgroup>`;
       })
       .join("");
+  }
+
+  // Segarkan daftar kelas dari server (_CONFIG) di latar belakang, supaya
+  // kelas baru yang dibuat lewat Panel Superadmin otomatis muncul di
+  // dropdown tanpa perlu memuat ulang / mengedit kode ini secara manual.
+  // Dipanggil sekali saat halaman dibuka, dan lagi setiap kali superadmin
+  // menambah/menghapus/mensinkron kelas.
+  async function segarkanDaftarKelasDariServer() {
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getDaftarKelasPublik" }),
+      });
+      const j = await r.json();
+      if (!j || !j.ok || !Array.isArray(j.daftar)) return;
+
+      window.KELAS_AKTIF = gabungkanDanUrutkanKelas(j.daftar);
+
+      const select = document.getElementById("kelasSelect");
+      if (!select) return;
+
+      const nilaiSebelumnya = select.value;
+      select.innerHTML = buildOptgroupKelas();
+
+      if (
+        nilaiSebelumnya &&
+        [...select.options].some((o) => o.value === nilaiSebelumnya)
+      ) {
+        select.value = nilaiSebelumnya;
+      } else {
+        const terakhir = localStorage.getItem("kelasTerakhir");
+        if (terakhir && [...select.options].some((o) => o.value === terakhir)) {
+          select.value = terakhir;
+        }
+      }
+    } catch (err) {
+      // Diamkan: kalau server gagal dihubungi, dropdown tetap memakai
+      // daftar kelas fallback/terakhir yang sudah ter-render.
+      console.warn("Gagal menyegarkan daftar kelas dari server:", err);
+    }
   }
 
   const el = document.createElement("div");
@@ -1104,6 +1186,11 @@
       if (select && select.value) prefetchKelas(select.value);
     }, 600);
   })();
+
+  // Segarkan daftar kelas dari server segera setelah halaman terbuka,
+  // supaya kelas yang baru dibuat superadmin (di perangkat lain / sesi
+  // lain) otomatis ikut muncul tanpa perlu reload manual berkali-kali.
+  segarkanDaftarKelasDariServer();
 
   /* === ADMIN BERDASARKAN DROPDOWN === */
   function openAdminBySelect() {
@@ -1954,6 +2041,23 @@
     await renderSuperAdminPanel();
   }
 
+  /* === TOGGLE TAMPIL/SEMBUNYI PASSWORD DI PANEL SUPERADMIN === */
+  function toggleKelasPassword(btn) {
+    const span = btn.previousElementSibling;
+    if (!span || !span.classList || !span.classList.contains("kelas-pw"))
+      return;
+    const tampil = span.dataset.tampil === "1";
+    if (tampil) {
+      span.textContent = "••••••••";
+      span.dataset.tampil = "0";
+      btn.textContent = "👁️";
+    } else {
+      span.textContent = span.dataset.pw || "-";
+      span.dataset.tampil = "1";
+      btn.textContent = "🙈";
+    }
+  }
+
   async function renderSuperAdminPanel() {
     showLoading(
       "Memuat daftar kelas...",
@@ -1980,16 +2084,39 @@
       const daftarHtml =
         j.daftar.length > 0
           ? j.daftar
-              .map(
-                (k) => `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-          <div>
-            <div style="font-weight:600;">${k.kelas}</div>
-            <div class="small" style="color:${k.sheetAda ? "var(--text-muted)" : "var(--danger)"};">${k.sheetAda ? "Sheet ada" : "⚠️ Sheet tidak ditemukan (data nyasar)"}</div>
+              .map((k) => {
+                const adminPw = String(k.adminPassword || "-").replace(
+                  /"/g,
+                  "&quot;",
+                );
+                const presensiPw = String(k.presensiPassword || "-").replace(
+                  /"/g,
+                  "&quot;",
+                );
+                return `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;">${k.kelas} <span class="small" style="font-weight:500;color:var(--text-muted);">(${k.tingkat || "-"})</span></div>
+              <div class="small" style="color:${k.sheetAda ? "var(--text-muted)" : "var(--danger)"};">${k.sheetAda ? `Sheet ada • ${k.jumlahSiswa} siswa` : "⚠️ Sheet tidak ditemukan (data nyasar)"}</div>
+            </div>
+            <button class="action-del" style="padding:6px 12px;margin:0;" onclick="hapusKelasDariPanel('${k.kelas}')">🗑️ Hapus</button>
           </div>
-          <button class="action-del" style="padding:6px 12px;margin:0;" onclick="hapusKelasDariPanel('${k.kelas}')">🗑️ Hapus</button>
-        </div>`,
-              )
+          <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="white-space:nowrap;">🔑 <b>Password Admin:</b></span>
+              <span class="kelas-pw" data-pw="${adminPw}" style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:6px;">••••••••</span>
+              <button type="button" class="action-edit" style="padding:2px 8px;font-size:11px;margin:0;" onclick="toggleKelasPassword(this)">👁️</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="white-space:nowrap;">🧑‍🎓 <b>Password Presensi:</b></span>
+              <span class="kelas-pw" data-pw="${presensiPw}" style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:6px;">••••••••</span>
+              <button type="button" class="action-edit" style="padding:2px 8px;font-size:11px;margin:0;" onclick="toggleKelasPassword(this)">👁️</button>
+            </div>
+          </div>
+          ${k.namaGuru ? `<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">👤 <b>Wali:</b> ${k.namaGuru}</div>` : ""}
+        </div>`;
+              })
               .join("")
           : `<p class="small">Belum ada kelas terdaftar.</p>`;
 
@@ -2004,6 +2131,7 @@
         <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="action-edit" style="margin:0;" onclick="jalankanSyncKelasTjkt()">🔄 Sinkron Kelas TJKT dari Data Siswa</button>
           <button class="action-edit" style="margin:0;" onclick="jalankanBuatSemuaKelas()">🏫 Buat Semua Kelas Dasar Sekolah</button>
+          <button class="action-edit" style="margin:0;background:#059669;" onclick="jalankanSyncSiswaSemuaKelas()">🧑‍🎓 Sinkron Siswa dari Data Induk (Semua Kelas)</button>
         </div>
 
         <h4 style="margin-bottom:8px;">Daftar Kelas Terdaftar (${j.daftar.length})</h4>
@@ -2019,6 +2147,10 @@
         viewId: "superAdminPanel",
         title: "Panel Superadmin",
       });
+
+      // Segarkan dropdown pilihan kelas di halaman utama supaya selalu
+      // sinkron dengan _CONFIG setiap kali panel superadmin dibuka.
+      segarkanDaftarKelasDariServer();
     } catch (err) {
       closeOverlay();
       alert("Gagal memuat panel superadmin: " + (err.message || err));
@@ -2050,6 +2182,7 @@
         `✅ Kelas "${j.kelas}" berhasil dibuat!\n\nPassword Admin   : ${j.adminPassword}\nPassword Presensi: ${j.presensiPassword}\n\n⚠️ Catat sekarang, tidak ditampilkan lagi otomatis (tapi tersimpan apa adanya di sheet _CONFIG kalau lupa).`,
       );
       renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
     } catch (err) {
       alert("Gagal menambah kelas: " + (err.message || err));
       renderSuperAdminPanel();
@@ -2080,6 +2213,7 @@
       else alert("✅ " + j.message);
 
       renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
     } catch (err) {
       alert("Gagal menghapus kelas: " + (err.message || err));
       renderSuperAdminPanel();
@@ -2114,6 +2248,7 @@
         alert("Tidak ada kelas baru dari data siswa. Semua sudah tersedia.");
       }
       renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
     } catch (err) {
       alert("Gagal sinkron: " + (err.message || err));
       renderSuperAdminPanel();
@@ -2157,12 +2292,86 @@
             <button class="action-del" onclick="renderSuperAdminPanel()">Kembali ke Panel</button>
           </div>
         `);
+        segarkanDaftarKelasDariServer();
       } else {
         alert("Tidak ada kelas baru — semua kelas dasar sudah ada.");
         renderSuperAdminPanel();
       }
     } catch (err) {
       alert("Gagal membuat kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  /* === SINKRON SISWA DARI DATA INDUK (SISWA @ Spreadsheet MAGANG) UNTUK
+     SEMUA KELAS SEKALIGUS — dipanggil dari Panel Superadmin. Siswa yang
+     namanya sudah ada di suatu kelas TIDAK akan diduplikasi. Sheet SISWA
+     induk di Spreadsheet MAGANG hanya DIBACA, tidak pernah diubah/dihapus
+     oleh proses ini maupun oleh proses hapus siswa di menu "Kelola Siswa". === */
+  async function jalankanSyncSiswaSemuaKelas() {
+    if (
+      !confirm(
+        "Sinkron akan menambahkan siswa BARU dari sheet SISWA (Spreadsheet MAGANG) ke setiap kelas yang cocok.\n\n• Siswa yang namanya sudah ada di kelas TIDAK akan diduplikasi.\n• Data induk SISWA di Spreadsheet MAGANG TIDAK akan diubah/dihapus.\n\nLanjutkan?",
+      )
+    )
+      return;
+
+    try {
+      showLoading(
+        "Menyinkronkan siswa dari data induk...",
+        "Mencocokkan nama siswa untuk setiap kelas terdaftar...",
+      );
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "syncSemuaSiswaDariInduk",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      const adaTambahan = (j.hasil || []).filter(
+        (h) => h.ditambahkan && h.ditambahkan.length > 0,
+      );
+      const adaError = (j.hasil || []).filter((h) => h.error);
+
+      if (adaTambahan.length === 0) {
+        let pesan =
+          "Tidak ada siswa baru. Semua kelas sudah sinkron dengan data induk SISWA.";
+        if (adaError.length > 0) {
+          pesan +=
+            "\n\n⚠️ Kelas bermasalah:\n" +
+            adaError.map((h) => `• ${h.kelas}: ${h.error}`).join("\n");
+        }
+        alert(pesan);
+        return renderSuperAdminPanel();
+      }
+
+      let teks = `Total ${j.totalDitambahkan} siswa baru ditambahkan:\n\n`;
+      adaTambahan.forEach((h) => {
+        teks += `• ${h.kelas} (+${h.ditambahkan.length}):\n   ${h.ditambahkan.join(", ")}\n\n`;
+      });
+      if (adaError.length > 0) {
+        teks +=
+          "⚠️ Kelas bermasalah:\n" +
+          adaError.map((h) => `• ${h.kelas}: ${h.error}`).join("\n");
+      }
+
+      showOverlay(`
+        <h3 style="margin-top:0;">✅ Sinkron Siswa Selesai</h3>
+        <p class="small">Sheet SISWA (data induk) di Spreadsheet MAGANG tidak diubah — proses ini hanya menambah nama siswa baru ke sheet kelas terkait.</p>
+        <textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:12px;padding:10px;border-radius:8px;border:1px solid var(--border);">${teks}</textarea>
+        <div style="margin-top:16px;display:flex;">
+          <button class="action-del" onclick="renderSuperAdminPanel()">Kembali ke Panel</button>
+        </div>
+      `);
+    } catch (err) {
+      alert("Gagal sinkron siswa: " + (err.message || err));
       renderSuperAdminPanel();
     }
   }
@@ -2424,6 +2633,7 @@
 
       html += `</div>
       <p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
+      <p style="margin-top:4px;font-size:12px;color:var(--text-muted);">ℹ️ Menghapus nama di daftar ini (✕ lalu "Simpan Daftar") hanya menghapusnya dari kelas presensi ini. Data siswa induk di sheet <b>SISWA</b> pada Spreadsheet MAGANG tidak akan ikut terhapus.</p>
       <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
         <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
