@@ -1,138 +1,77 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   getSemuaSiswaUntukTambahMapel,
   simpanSiswaMapel,
   addSiswa,
 } from "../../../lib/api";
 
-const KELAS_OPTIONS = (
-  <>
-    <optgroup label="Kelas X" className="font-bold text-slate-900 bg-white">
-      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">
-        X TJKT 1
-      </option>
-      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">
-        X TJKT 2
-      </option>
-      <option value="X DPIB" className="font-medium text-slate-800 bg-white">
-        X DPIB
-      </option>
-      <option value="X TAV" className="font-medium text-slate-800 bg-white">
-        X TAV
-      </option>
-      <option
-        value="X GEOMATIKA"
-        className="font-medium text-slate-800 bg-white"
-      >
-        X GEOMATIKA
-      </option>
-      <option value="X TO 1" className="font-medium text-slate-800 bg-white">
-        X TO1
-      </option>
-      <option value="X TO 2" className="font-medium text-slate-800 bg-white">
-        X TO2
-      </option>
-      <option value="X TO 3" className="font-medium text-slate-800 bg-white">
-        X TO3
-      </option>
-      <option value="X TO 4" className="font-medium text-slate-800 bg-white">
-        X TO4
-      </option>
-      <option value="X TPL" className="font-medium text-slate-800 bg-white">
-        X TPL
-      </option>
-      <option value="X TITL 1" className="font-medium text-slate-800 bg-white">
-        X TITL 1
-      </option>
-      <option value="X TITL 2" className="font-medium text-slate-800 bg-white">
-        X TITL 2
-      </option>
-    </optgroup>
-    <optgroup label="Kelas XI" className="font-bold text-slate-900 bg-white">
-      <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">
-        XI TJKT 1
-      </option>
-      <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">
-        XI TJKT 2
-      </option>
-      <option value="XI DPIB" className="font-medium text-slate-800 bg-white">
-        XI DPIB
-      </option>
-      <option value="XI TAV" className="font-medium text-slate-800 bg-white">
-        XI TAV
-      </option>
-      <option
-        value="XI GEOMATIKA"
-        className="font-medium text-slate-800 bg-white"
-      >
-        XI GEOMATIKA
-      </option>
-      <option value="XI TBSM 1" className="font-medium text-slate-800 bg-white">
-        XI TBSM 1
-      </option>
-      <option value="XI TBSM 2" className="font-medium text-slate-800 bg-white">
-        XI TBSM 2
-      </option>
-      <option value="XI TAB" className="font-medium text-slate-800 bg-white">
-        XI TAB
-      </option>
-      <option value="XI TKR" className="font-medium text-slate-800 bg-white">
-        XI TKRO
-      </option>
-      <option value="XI TPL" className="font-medium text-slate-800 bg-white">
-        XI TPL
-      </option>
-      <option value="XI TITL 1" className="font-medium text-slate-800 bg-white">
-        XI TITL 1
-      </option>
-      <option value="XI TITL 2" className="font-medium text-slate-800 bg-white">
-        XI TITL 2
-      </option>
-    </optgroup>
-    <optgroup label="Kelas XII" className="font-bold text-slate-900 bg-white">
-      <option value="TKJ 1" className="font-medium text-slate-800 bg-white">
-        XII TJKT 1
-      </option>
-      <option value="TKJ 2" className="font-medium text-slate-800 bg-white">
-        XII TJKT 2
-      </option>
-      <option value="DPIB" className="font-medium text-slate-800 bg-white">
-        XII DPIB
-      </option>
-      <option value="TAV" className="font-medium text-slate-800 bg-white">
-        XII TAV
-      </option>
-      <option value="GEOMATIKA" className="font-medium text-slate-800 bg-white">
-        XII GEOMATIKA
-      </option>
-      <option value="TBSM 1" className="font-medium text-slate-800 bg-white">
-        XII TBSM 1
-      </option>
-      <option value="TBSM 2" className="font-medium text-slate-800 bg-white">
-        XII TBSM 2
-      </option>
-      <option value="TAB" className="font-medium text-slate-800 bg-white">
-        XII TAB
-      </option>
-      <option value="TKR" className="font-medium text-slate-800 bg-white">
-        XII TKRO
-      </option>
-      <option value="TPL" className="font-medium text-slate-800 bg-white">
-        XII TPL
-      </option>
-      <option value="TITL" className="font-medium text-slate-800 bg-white">
-        XII TITL
-      </option>
-    </optgroup>
-    <optgroup label="Lainnya" className="font-bold text-slate-900 bg-white">
-      <option value="CONTOH" className="font-medium text-slate-800 bg-white">
-        KELAS CONTOH
-      </option>
-    </optgroup>
-  </>
-);
+// =====================================================
+// MODEL KELAS BAKU (DIPERTAHANKAN)
+// Dipakai KHUSUS untuk form "Daftarkan Siswa Baru"
+// (siswa yang belum ada sama sekali di spreadsheet),
+// karena untuk siswa yang benar-benar baru tidak ada
+// data kelas yang bisa dibaca dari server.
+// Disusun sebagai data array (bukan JSX manual) supaya
+// label & value tidak gampang salah ketik/tidak sinkron.
+// =====================================================
+const KELAS_DATA = [
+  {
+    label: "Kelas X",
+    items: [
+      { label: "X TJKT 1", val: "X TKJ 1" },
+      { label: "X TJKT 2", val: "X TKJ 2" },
+      { label: "X DPIB", val: "X DPIB" },
+      { label: "X TAV", val: "X TAV" },
+      { label: "X GEOMATIKA", val: "X GEOMATIKA" },
+      { label: "X TO1", val: "X TO 1" },
+      { label: "X TO2", val: "X TO 2" },
+      { label: "X TO3", val: "X TO 3" },
+      { label: "X TO4", val: "X TO 4" },
+      { label: "X TPL", val: "X TPL" },
+      { label: "X TITL 1", val: "X TITL 1" },
+      { label: "X TITL 2", val: "X TITL 2" },
+    ],
+  },
+  {
+    label: "Kelas XI",
+    items: [
+      { label: "XI TJKT 1", val: "XI TKJ 1" },
+      { label: "XI TJKT 2", val: "XI TKJ 2" },
+      { label: "XI DPIB", val: "XI DPIB" },
+      { label: "XI TAV", val: "XI TAV" },
+      { label: "XI GEOMATIKA", val: "XI GEOMATIKA" },
+      { label: "XI TBSM 1", val: "XI TBSM 1" },
+      { label: "XI TBSM 2", val: "XI TBSM 2" },
+      { label: "XI TAB", val: "XI TAB" },
+      { label: "XI TKRO", val: "XI TKR" },
+      { label: "XI TPL", val: "XI TPL" },
+      { label: "XI TITL 1", val: "XI TITL 1" },
+      { label: "XI TITL 2", val: "XI TITL 2" },
+    ],
+  },
+  {
+    label: "Kelas XII",
+    items: [
+      { label: "XII TJKT 1", val: "TKJ 1" },
+      { label: "XII TJKT 2", val: "TKJ 2" },
+      { label: "XII DPIB", val: "DPIB" },
+      { label: "XII TAV", val: "TAV" },
+      { label: "XII GEOMATIKA", val: "GEOMATIKA" },
+      { label: "XII TBSM 1", val: "TBSM 1" },
+      { label: "XII TBSM 2", val: "TBSM 2" },
+      { label: "XII TAB", val: "TAB" },
+      { label: "XII TKRO", val: "TKR" },
+      { label: "XII TPL", val: "TPL" },
+      { label: "XII TITL", val: "TITL" },
+    ],
+  },
+  {
+    label: "Lainnya",
+    items: [{ label: "KELAS CONTOH", val: "CONTOH" }],
+  },
+];
 
 export default function ModalTambahSiswa({
   isOpen,
@@ -152,51 +91,87 @@ export default function ModalTambahSiswa({
   const [kelasBaru, setKelasBaru] = useState(mapel?.kelas || "");
   const [savingBaru, setSavingBaru] = useState(false);
 
-  useEffect(() => {
-    let ignore = false;
-    async function loadData() {
-      if (!guru?.id || !mapel?.idMapel) return;
-      setLoadingKandidat(true);
-      try {
-        const result = await getSemuaSiswaUntukTambahMapel(
-          guru.id,
-          mapel.idMapel,
-        );
-        if (!ignore) {
-          setKandidatSiswa(result.success ? result.data || [] : []);
-        }
-      } catch (err) {
-        console.error("ERROR LOAD KANDIDAT SISWA:", err);
-        if (!ignore) setKandidatSiswa([]);
-      } finally {
-        if (!ignore) setLoadingKandidat(false);
-      }
-    }
+  // =====================================================
+  // PROTEKSI RACE-CONDITION (request-id)
+  // =====================================================
+  const requestIdRef = useRef(0);
 
-    if (isOpen && guru?.id && mapel?.idMapel) {
-      loadData();
-    }
-    return () => {
-      ignore = true;
-    };
-  }, [isOpen, guru?.id, mapel?.idMapel]);
-
-  async function loadKandidat() {
+  const loadKandidat = useCallback(async () => {
     if (!guru?.id || !mapel?.idMapel) return;
+    const currentRequestId = ++requestIdRef.current;
     setLoadingKandidat(true);
     try {
       const result = await getSemuaSiswaUntukTambahMapel(
         guru.id,
         mapel.idMapel,
       );
-      setKandidatSiswa(result.success ? result.data || [] : []);
+      if (requestIdRef.current === currentRequestId) {
+        setKandidatSiswa(result.success ? result.data || [] : []);
+      }
     } catch (err) {
       console.error("ERROR LOAD KANDIDAT SISWA:", err);
-      setKandidatSiswa([]);
+      if (requestIdRef.current === currentRequestId) {
+        setKandidatSiswa([]);
+      }
     } finally {
-      setLoadingKandidat(false);
+      if (requestIdRef.current === currentRequestId) {
+        setLoadingKandidat(false);
+      }
     }
-  }
+  }, [guru?.id, mapel?.idMapel]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadKandidat();
+      setKelasBaru(mapel?.kelas || "");
+    }
+  }, [isOpen, loadKandidat, mapel?.kelas]);
+
+  // =====================================================
+  // PENGELOMPOKAN FILTER KELAS DINAMIS (DARI SERVER)
+  // Kelas dikelompokkan ke X, XI, XII.
+  // Jika nama kelas tidak memiliki "X", masuk ke XII.
+  // =====================================================
+  const { grupKelasTersedia, totalKelasTersedia } = useMemo(() => {
+    const uniqueClasses = Array.from(
+      new Set(kandidatSiswa.map((s) => (s.kelas || "").trim()).filter(Boolean)),
+    ).sort();
+
+    const groups = {
+      "Kelas X": [],
+      "Kelas XI": [],
+      "Kelas XII": [],
+    };
+
+    uniqueClasses.forEach((kelas) => {
+      const kUpper = kelas.toUpperCase();
+      if (kUpper.includes("XII")) {
+        groups["Kelas XII"].push(kelas);
+      } else if (kUpper.includes("XI")) {
+        groups["Kelas XI"].push(kelas);
+      } else if (kUpper.includes("X")) {
+        groups["Kelas X"].push(kelas);
+      } else {
+        // Bagi yang lainnya tidak ada angka X nya, jadikan bagian kelas XII
+        groups["Kelas XII"].push(kelas);
+      }
+    });
+
+    return {
+      grupKelasTersedia: groups,
+      totalKelasTersedia: uniqueClasses.length,
+    };
+  }, [kandidatSiswa]);
+
+  const kandidatTersaring = useMemo(() => {
+    return kandidatSiswa.filter((s) => {
+      const cocokNama = (s.nama || "")
+        .toLowerCase()
+        .includes(searchTambah.toLowerCase());
+      const cocokKelas = !filterKelasTambah || s.kelas === filterKelasTambah;
+      return cocokNama && cocokKelas;
+    });
+  }, [kandidatSiswa, searchTambah, filterKelasTambah]);
 
   async function tambahSiswaKeMapel(siswa) {
     setMenambahId(siswa.idSiswa);
@@ -305,14 +280,6 @@ export default function ModalTambahSiswa({
 
   if (!isOpen || !mapel) return null;
 
-  const kandidatTersaring = kandidatSiswa.filter((s) => {
-    const cocokNama = (s.nama || "")
-      .toLowerCase()
-      .includes(searchTambah.toLowerCase());
-    const cocokKelas = !filterKelasTambah || s.kelas === filterKelasTambah;
-    return cocokNama && cocokKelas;
-  });
-
   const tidakDitemukan =
     !loadingKandidat &&
     searchTambah.trim() !== "" &&
@@ -347,7 +314,6 @@ export default function ModalTambahSiswa({
             </button>
           </div>
 
-          {/* Tombol Baru di Atas: Daftarkan Siswa yang Tidak Ada di Server */}
           <button
             onClick={() => {
               setNamaBaru(searchTambah);
@@ -359,7 +325,6 @@ export default function ModalTambahSiswa({
             <span>Daftarkan Siswa yang Tidak Ada di Server</span>
           </button>
 
-          {/* Kolom Pencarian Nama Siswa */}
           <div className="mt-3">
             <input
               type="text"
@@ -373,7 +338,7 @@ export default function ModalTambahSiswa({
             />
           </div>
 
-          {/* Dropdown Filter Kelas (TEKS HITAM JELAS & TERBACA) */}
+          {/* Dropdown Filter Kelas yang Sudah Dikelompokkan */}
           <div className="mt-2">
             <select
               value={filterKelasTambah}
@@ -381,16 +346,71 @@ export default function ModalTambahSiswa({
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-800 outline-none shadow-sm focus:ring-2 focus:ring-emerald-400 transition-all cursor-pointer"
             >
               <option value="" className="text-slate-800 bg-white font-bold">
-                -- Semua Kelas --
+                -- Semua Kelas ({totalKelasTersedia}) --
               </option>
-              {KELAS_OPTIONS}
+
+              {grupKelasTersedia["Kelas X"].length > 0 && (
+                <optgroup
+                  label="Kelas X"
+                  className="font-bold text-slate-900 bg-slate-100"
+                >
+                  {grupKelasTersedia["Kelas X"].map((kelas) => (
+                    <option
+                      key={kelas}
+                      value={kelas}
+                      className="font-medium text-slate-800 bg-white"
+                    >
+                      {kelas}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {grupKelasTersedia["Kelas XI"].length > 0 && (
+                <optgroup
+                  label="Kelas XI"
+                  className="font-bold text-slate-900 bg-slate-100"
+                >
+                  {grupKelasTersedia["Kelas XI"].map((kelas) => (
+                    <option
+                      key={kelas}
+                      value={kelas}
+                      className="font-medium text-slate-800 bg-white"
+                    >
+                      {kelas}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {grupKelasTersedia["Kelas XII"].length > 0 && (
+                <optgroup
+                  label="Kelas XII"
+                  className="font-bold text-slate-900 bg-slate-100"
+                >
+                  {grupKelasTersedia["Kelas XII"].map((kelas) => (
+                    <option
+                      key={kelas}
+                      value={kelas}
+                      className="font-medium text-slate-800 bg-white"
+                    >
+                      {kelas}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+
+            {!loadingKandidat && totalKelasTersedia === 0 && (
+              <p className="mt-1 text-[10px] text-emerald-100/90 font-semibold">
+                Belum ada data kelas yang terbaca dari siswa di server.
+              </p>
+            )}
           </div>
         </div>
 
         {/* Konten Daftar Siswa */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50">
-          {/* Form Pendaftaran Siswa Baru (Muncul jika tombol atas / tidak ditemukan diklik) */}
           {showFormBaru && (
             <div className="rounded-2xl border-2 border-emerald-400 bg-emerald-50/90 p-4 space-y-3 shadow-sm mb-3">
               <div className="flex items-center justify-between">
@@ -429,7 +449,23 @@ export default function ModalTambahSiswa({
                   <option value="" className="text-slate-800 bg-white">
                     -- Pilih kelas --
                   </option>
-                  {KELAS_OPTIONS}
+                  {KELAS_DATA.map((group) => (
+                    <optgroup
+                      key={group.label}
+                      label={group.label}
+                      className="font-bold text-slate-900 bg-white"
+                    >
+                      {group.items.map((opt) => (
+                        <option
+                          key={opt.val}
+                          value={opt.val}
+                          className="font-medium text-slate-800 bg-white"
+                        >
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </label>
 

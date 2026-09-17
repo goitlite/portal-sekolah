@@ -2143,6 +2143,7 @@
         <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="action-edit" style="margin:0;" onclick="jalankanSyncKelasTjkt()">🔄 Sinkron Kelas TJKT dari Data Siswa</button>
           <button class="action-edit" style="margin:0;" onclick="jalankanBuatSemuaKelas()">🏫 Buat Semua Kelas Dasar Sekolah</button>
+          <button class="action-edit" style="margin:0;background:#b45309;" onclick="jalankanPerbaikiKolomNama()" title="Perbaiki kelas lama yang jumlah siswanya kelebihan 1 karena kolom C berisi label 'Nama'">🩹 Perbaiki Kolom "Nama" yang Salah</button>
         </div>
 
         <h4 style="margin-bottom:8px;">Daftar Kelas Terdaftar (${j.daftar.length})</h4>
@@ -2310,6 +2311,55 @@
       }
     } catch (err) {
       alert("Gagal membuat kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  /* === PERBAIKI KOLOM "NAMA" YANG SALAH DI KELAS LAMA ===
+     Kelas yang dibuat sebelum perbaikan ini punya label teks "Nama" di
+     kolom C, sehingga sistem menghitungnya sebagai 1 "siswa" tambahan dan
+     siswa asli tergeser ke kolom D dst. Tombol ini memindai SEMUA kelas
+     terdaftar dan menghapus kolom label itu (kalau ada), sehingga siswa
+     asli otomatis bergeser mundur ke posisi yang benar mulai kolom C. */
+  async function jalankanPerbaikiKolomNama() {
+    if (
+      !confirm(
+        'Ini akan memindai SEMUA kelas dan menghapus kolom C kalau isinya persis label "Nama" (bug lama saat membuat kelas). Data siswa yang sudah ada TIDAK akan hilang — hanya bergeser mundur 1 kolom ke posisi yang benar. Lanjutkan?',
+      )
+    )
+      return;
+
+    try {
+      showLoading(
+        "Memindai kolom 'Nama' yang salah...",
+        "Memeriksa setiap kelas terdaftar...",
+      );
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "perbaikiKolomNamaKelas",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      const diperbaiki = j.diperbaiki || [];
+      if (diperbaiki.length === 0) {
+        alert("✅ Tidak ada kelas yang perlu diperbaiki. Semua sudah benar.");
+      } else {
+        diperbaiki.forEach((kelas) => invalidateSheetCache(kelas));
+        alert(
+          `✅ ${diperbaiki.length} kelas diperbaiki:\n\n${diperbaiki.join("\n")}\n\nJumlah siswa di kelas-kelas ini sekarang sudah akurat.`,
+        );
+      }
+      renderSuperAdminPanel();
+    } catch (err) {
+      alert("Gagal memperbaiki kolom: " + (err.message || err));
       renderSuperAdminPanel();
     }
   }
