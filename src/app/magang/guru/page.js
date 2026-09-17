@@ -937,29 +937,6 @@ function DashboardGuruContent() {
                 Guru Mapel
               </span>
             </button>
-
-            {/* Tab: Wali Kelas */}
-            <button
-              onClick={() => setActiveMenuTab("walas")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
-                activeMenuTab === "walas"
-                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
-                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
-              }`}
-            >
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
-                  activeMenuTab === "walas" ? "opacity-10" : "opacity-20"
-                }`}
-              >
-                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
-                  🏫
-                </span>
-              </div>
-              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
-                Wali Kelas
-              </span>
-            </button>
           </div>
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
@@ -1068,40 +1045,6 @@ function DashboardGuruContent() {
                 icon="🖨️"
                 bgGrad="from-fuchsia-600 to-pink-600"
                 onClick={() => setShowCetakMapelModal(true)}
-              />
-            </div>
-          )}
-
-          {/* 5. KONTEN TAB WALI KELAS */}
-          {activeMenuTab === "walas" && (
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
-              <SolidCompactCard
-                title="Kelola Walas"
-                desc="Akses presensi & dashboard walas"
-                icon="📋"
-                bgGrad="from-emerald-600 to-teal-700"
-                onClick={() => {
-                  try {
-                    const walasCache = JSON.parse(
-                      localStorage.getItem("walasAuth") || "{}",
-                    );
-                    const sheets = Object.keys(walasCache).filter(
-                      (k) => walasCache[k],
-                    );
-                    const lastSheet =
-                      localStorage.getItem("walasLastSheet") ||
-                      (sheets.length > 0 ? sheets[0] : "");
-                    if (lastSheet) {
-                      router.push(
-                        `/presensi?mode=walas&kelas=${encodeURIComponent(lastSheet)}`,
-                      );
-                    } else {
-                      router.push("/presensi?mode=walas");
-                    }
-                  } catch (e) {
-                    router.push("/presensi?mode=walas");
-                  }
-                }}
               />
             </div>
           )}
@@ -2213,15 +2156,11 @@ function SolidCompactCard({
 }) {
   const formatTitleWithBadge = (text) => {
     if (!text) return text;
-    const regex = /(PKL|WALI|WALAS)/gi;
+    const regex = /(PKL|WALI)/gi;
     const parts = text.split(regex);
 
     return parts.map((part, index) => {
-      if (
-        part.toUpperCase() === "PKL" ||
-        part.toUpperCase() === "WALI" ||
-        part.toUpperCase() === "WALAS"
-      ) {
+      if (part.toUpperCase() === "PKL" || part.toUpperCase() === "WALI") {
         return (
           <span
             key={index}
