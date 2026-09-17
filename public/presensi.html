@@ -1,0 +1,5221 @@
+<!-- ✅ PRESENSI TJKT FINAL 2025 — Versi Profesional UI (Tabel Berwarna & Tombol Admin) -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
+
+<style>
+  /* === Variabel Warna & Tema Profesional === */
+  :root {
+    --bg: #f8fafc;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --info: #0ea5e9;
+    --info-hover: #0284c7;
+    --success: #16a34a;
+    --success-hover: #15803d;
+    --danger: #dc2626;
+    --warning: #f59e0b;
+    --dark: #0f172a;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --card-shadow:
+      0 4px 10px -1px rgba(245, 158, 11, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    --card-shadow-hover:
+      0 20px 25px -5px rgba(245, 158, 11, 0.2),
+      0 10px 10px -5px rgba(245, 158, 11, 0.06);
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    font-family: "Inter", Arial, sans-serif;
+    color: var(--dark);
+    line-height: 1.5;
+  }
+
+  .presensi-root {
+    padding: 40px 20px 60px;
+  }
+
+  .presensi-root h2 {
+    margin: 0 0 40px;
+    color: var(--dark);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  /* === Badge Judul Penting === */
+  .badge-title {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 6px 16px;
+    border-radius: 30px;
+    box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 2px solid #fff;
+  }
+
+  .presensi-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+    min-height: 200px;
+  }
+
+  /* === Kartu Kelas === */
+  .kelas-card {
+    background: linear-gradient(135deg, #ffffff 0%, #fffdf0 50%, #fef08a 100%);
+    border-radius: 16px;
+    padding: 30px 24px;
+    box-shadow: var(--card-shadow);
+    text-align: center;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid #fde047;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .kelas-card::before {
+    content: "📚";
+    font-size: 42px;
+    display: block;
+    margin-bottom: 12px;
+    filter: drop-shadow(0 4px 6px rgba(245, 158, 11, 0.2));
+  }
+
+  .kelas-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--card-shadow-hover);
+    border-color: #facc15;
+  }
+
+  .kelas-card h3 {
+    margin: 0 0 20px;
+    font-size: 20px;
+    color: var(--dark);
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .kelas-card.tingkat-x {
+    border-top: 5px solid #3b82f6;
+  }
+  .kelas-card.tingkat-xi {
+    border-top: 5px solid #10b981;
+  }
+  .kelas-card.tingkat-xii {
+    border-top: 5px solid #f59e0b;
+  }
+
+  /* === Tombol === */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(100% - 12px);
+    margin: 6px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .btn-isi {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-isi:hover {
+    background: var(--primary-hover);
+    transform: scale(1.02);
+  }
+  .btn-isi:active {
+    transform: scale(0.98);
+  }
+
+  .btn-rekap {
+    background: var(--info);
+    color: #fff;
+  }
+  .btn-rekap:hover {
+    background: var(--info-hover);
+    transform: scale(1.02);
+  }
+  .btn-rekap:active {
+    transform: scale(0.98);
+  }
+
+  /* Tombol Walas (Di sebelah dropdown) */
+  .btn-walas {
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--success);
+    color: #fff;
+    border: none;
+    padding: 0 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    height: 41px; /* Menyesuaikan dengan perkiraan tinggi select */
+    white-space: nowrap; /* Mencegah teks turun ke bawah */
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    flex-shrink: 0;
+  }
+
+  .btn-walas:hover {
+    background: var(--success-hover);
+    transform: scale(1.02);
+  }
+  .btn-walas:active {
+    transform: scale(0.98);
+  }
+
+  /* Tombol Panel Admin (sekarang di dalam kartu, gaya konsisten .btn) */
+  .btn-superadmin {
+    background: var(--success);
+    color: #fff;
+  }
+  .btn-superadmin:hover {
+    background: var(--success-hover);
+    transform: scale(1.02);
+  }
+  .btn-superadmin:active {
+    transform: scale(0.98);
+  }
+
+  /* === Form Element === */
+  .input,
+  select,
+  textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 6px;
+    margin-bottom: 12px;
+    font-family: inherit;
+    color: var(--dark);
+    background-color: #fff;
+    transition: all 0.2s;
+    box-sizing: border-box;
+  }
+
+  .input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  /* Warna Pilihan Presensi */
+  .select-presensi {
+    font-weight: 600;
+    transition:
+      background-color 0.3s,
+      color 0.3s;
+  }
+  .select-presensi.hadir {
+    background-color: #dcfce7 !important;
+    color: #15803d !important;
+    border-color: #bbf7d0;
+  }
+  .select-presensi.sakit {
+    background-color: #fef3c7 !important;
+    color: #b45309 !important;
+    border-color: #fde68a;
+  }
+  .select-presensi.izin {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    border-color: #bae6fd;
+  }
+  .select-presensi.alfa {
+    background-color: #ffedd5 !important;
+    color: #c2410c !important;
+    border-color: #fed7aa;
+  }
+  .select-presensi.cabut {
+    background-color: #fee2e2 !important;
+    color: #b91c1c !important;
+    border-color: #fecaca;
+  }
+
+  .opt-hadir {
+    background-color: #dcfce7;
+    color: #15803d;
+    font-weight: bold;
+  }
+  .opt-sakit {
+    background-color: #fef3c7;
+    color: #b45309;
+    font-weight: bold;
+  }
+  .opt-izin {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    font-weight: bold;
+  }
+  .opt-alfa {
+    background-color: #ffedd5;
+    color: #c2410c;
+    font-weight: bold;
+  }
+  .opt-cabut {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    font-weight: bold;
+  }
+
+  /* === Popup Overlay === */
+  .popup-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    backdrop-filter: blur(5px);
+  }
+  .popup-overlay[style*="flex"] {
+    pointer-events: auto;
+  }
+  .popup-overlay:not([style*="flex"]) {
+    pointer-events: none;
+  }
+
+  .popup {
+    background: #fff;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    padding: 32px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: popupFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes popupFade {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    background: #f1f5f9;
+    color: var(--text-muted);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: bold;
+    font-size: 16px;
+  }
+  .close:hover {
+    background: #e2e8f0;
+    color: var(--danger);
+    transform: rotate(90deg);
+  }
+
+  /* === Tombol Aksi di Popup === */
+  .action-btn,
+  .action-save,
+  .action-edit,
+  .action-del {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-family: inherit;
+    margin-right: 6px;
+  }
+  .action-save {
+    background: var(--success);
+    color: #fff;
+  }
+  .action-edit {
+    background: var(--warning);
+    color: #fff;
+  }
+  .action-del {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  .action-save:hover,
+  .action-edit:hover,
+  .action-del:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  .action-save:active,
+  .action-edit:active,
+  .action-del:active {
+    transform: translateY(0);
+  }
+
+  /* === Tabel (Desain Clean dengan Sentuhan Warna Elegan) === */
+  .table-freeze-wrapper {
+    max-height: 65vh;
+    overflow: auto;
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+  .table th,
+  .table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .table th:last-child,
+  .table td:last-child {
+    border-right: none;
+  }
+
+  /* Header Tabel Warna Emas/Kuning Halus */
+  .table th {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    font-weight: 600;
+    color: #92400e;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #fde68a;
+  }
+  .table tr:last-child td {
+    border-bottom: none;
+  }
+  /* Zebra cross table (selang-seling warna) */
+  .table tbody tr:nth-child(even) td {
+    background: #fffdf0;
+  }
+  .table tbody tr:hover td {
+    background: #fef9c3;
+  }
+
+  /* Freeze Header & Kolom Kiri */
+  .table-freeze-wrapper thead th {
+    position: sticky;
+    top: 0;
+    background: #fffbeb;
+    z-index: 3;
+    box-shadow: 0 2px 0 #fde68a;
+  }
+  .table-freeze-wrapper th:first-child,
+  .table-freeze-wrapper td:first-child {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 2;
+    box-shadow: 2px 0 0 var(--border);
+  }
+  /* Efek Hover dan Zebra di Kolom Kiri (Freeze) */
+  .table-freeze-wrapper tr:nth-child(even) td:first-child {
+    background: #fffdf0;
+  }
+  .table-freeze-wrapper tr:hover td:first-child {
+    background: #fef9c3;
+  }
+  .table-freeze-wrapper thead th:first-child {
+    z-index: 4;
+    background: #fffbeb;
+    box-shadow: 2px 2px 0 #fde68a;
+  }
+
+  /* Scrollbar Elegan untuk Tabel & Popup */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* === Details & Summary === */
+  details {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--dark);
+    list-style: none;
+    display: flex;
+    align-items: center;
+  }
+  details summary::before {
+    content: "▸";
+    margin-right: 8px;
+    transition: transform 0.2s;
+  }
+  details[open] summary::before {
+    transform: rotate(90deg);
+  }
+  details p {
+    margin: 12px 0 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  /* === DATA MENTAH FULL HEIGHT === */
+  .raw-full {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+  }
+
+  /* === WARNA PERSENTASE KEHADIRAN (Lebih Halus) === */
+  .persen-merah {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    font-weight: 700;
+    text-align: center;
+  }
+  .persen-kuning {
+    background: #fef3c7 !important;
+    color: #b45309 !important;
+    font-weight: 700;
+    text-align: center;
+  }
+  .persen-hijau {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  /* =========================================
+   === RESPONSIVE PADAT (COMPACT) MOBILE ===
+   ========================================= */
+  @media (max-width: 720px) {
+    .presensi-root {
+      padding: 16px 12px 30px;
+    }
+    .presensi-root h2 {
+      font-size: 20px;
+      margin-bottom: 24px;
+      gap: 6px;
+    }
+    .presensi-grid {
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+
+    .kelas-card {
+      padding: 20px 16px;
+      min-height: 140px;
+    }
+    .kelas-card::before {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .kelas-card h3 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      width: 100%;
+      margin: 4px 0;
+      padding: 10px;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+    .input,
+    select,
+    textarea {
+      padding: 8px 12px;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .popup-overlay {
+      padding: 12px;
+    }
+    .popup {
+      max-width: 100%;
+      padding: 20px 16px;
+      border-radius: 12px;
+    }
+    .close {
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      font-size: 14px;
+    }
+
+    .table th,
+    .table td {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .table th {
+      font-size: 11px;
+    }
+
+    .action-save,
+    .action-edit,
+    .action-del {
+      padding: 8px 12px;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .badge-title {
+      font-size: 11px;
+      padding: 4px 12px;
+    }
+  }
+
+  /* === Top Progress Bar (Visual Indicator Seluruh Proses) === */
+  .top-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 4px;
+    width: 0%;
+    background: linear-gradient(90deg, #2563eb, #0ea5e9, #10b981);
+    z-index: 99999;
+    transition:
+      width 0.2s ease,
+      opacity 0.4s ease;
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .top-progress-bar.active {
+    opacity: 1;
+  }
+
+  /* === Mode Persentase Bar & Loading Modern === */
+  .global-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .global-loading-overlay.active {
+    display: flex !important;
+    opacity: 1 !important;
+  }
+  .loading-box {
+    text-align: center;
+    padding: 30px 16px;
+  }
+  .progress-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 28px 24px;
+    max-width: 440px;
+    margin: 0 auto;
+    text-align: center;
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border);
+  }
+  .progress-ring-container {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .progress-spinner {
+    position: absolute;
+    inset: 0;
+    border: 4px solid #e2e8f0;
+    border-top: 4px solid var(--primary);
+    border-right: 4px solid var(--info);
+    border-radius: 50%;
+    animation: spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+  }
+  .progress-percent-text {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-main-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 6px;
+  }
+  .progress-bar-track {
+    width: 100%;
+    height: 10px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 14px 0 10px;
+    border: 1px solid #e2e8f0;
+    position: relative;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+    border-radius: 20px;
+    transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-status-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    min-height: 20px;
+  }
+
+  /* === Navigasi Floating Window Admin (Back & Close All) === */
+  .btn-modal-back {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    background: #f1f5f9;
+    color: var(--dark);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+  .btn-modal-back:hover {
+    background: #e2e8f0;
+    color: var(--primary);
+    transform: translateX(-2px);
+  }
+  .btn-modal-close-all {
+    position: absolute;
+    right: 64px;
+    top: 20px;
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    border-radius: 18px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+  .btn-modal-close-all:hover {
+    background: #fecaca;
+    color: #991b1b;
+  }
+  .speed-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-top: 8px;
+  }
+
+  /* === Tampilan Padat & Berisi untuk Dashboard Walas === */
+  .walas-dashboard-container {
+    animation: popupFade 0.25s ease-out;
+  }
+  .input-compact {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    height: 34px !important;
+    border-radius: 7px !important;
+  }
+  .btn-compact {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    height: 34px !important;
+    border-radius: 7px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+  }
+  .table-compact th {
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    background: #f1f5f9 !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 2 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  .table-compact td {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    vertical-align: middle !important;
+  }
+  .table-compact .cellEdit,
+  .table-compact .cellEditBaru {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    height: 30px !important;
+    margin: 0 !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    min-width: 90px !important;
+  }
+  .table-compact-wrapper {
+    max-height: 52vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+</style>
+
+<!-- Top Progress Bar -->
+<div id="topProgressBar" class="top-progress-bar"></div>
+
+<!-- Global Loading & Realtime Progress Overlay (Non-intrusive) -->
+<div id="globalLoadingOverlay" class="global-loading-overlay">
+  <div class="progress-card">
+    <div class="progress-ring-container">
+      <div class="progress-spinner"></div>
+      <div id="progressPercent" class="progress-percent-text">15%</div>
+    </div>
+    <div id="progressTitle" class="progress-main-title">Memuat data...</div>
+    <div class="progress-bar-track">
+      <div
+        id="progressBarFill"
+        class="progress-bar-fill"
+        style="width: 15%"
+      ></div>
+    </div>
+    <div id="progressSubtitle" class="progress-status-desc">
+      Menghubungkan ke server...
+    </div>
+    <button
+      type="button"
+      onclick="hideLoading()"
+      style="
+        margin-top: 12px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      "
+      onmouseover="this.style.background = '#e2e8f0'"
+      onmouseout="this.style.background = '#f1f5f9'"
+      title="Tutup indikator loading jika koneksi tertahan"
+    >
+      ✕ Batalkan / Tutup
+    </button>
+  </div>
+</div>
+
+<div class="presensi-root">
+  <div style="display: flex; justify-content: center; margin-bottom: 12px">
+    <img
+      id="logoSekolahEl"
+      src="/logo.png"
+      alt="Logo SMKN 1 Teluk Kuantan"
+      crossorigin="anonymous"
+      style="width: 64px; height: 64px; object-fit: contain"
+      onerror="this.style.display = 'none'"
+    />
+  </div>
+  <h2><span class="badge-title">SMKN 1 TELUK KUANTAN</span></h2>
+  <div id="kelasGrid" class="presensi-grid"></div>
+</div>
+
+<div id="overlay" class="popup-overlay">
+  <div class="popup">
+    <button
+      id="modalBackBtn"
+      class="btn-modal-back"
+      onclick="closeOverlay()"
+      title="Kembali ke jendela sebelumnya"
+    >
+      <span style="font-size: 16px; line-height: 1">‹</span> Kembali
+    </button>
+    <button
+      id="modalCloseAllBtn"
+      class="btn-modal-close-all"
+      onclick="closeOverlay(true)"
+      title="Tutup seluruh jendela & kembali ke beranda"
+    >
+      Tutup Semua
+    </button>
+    <div class="close" onclick="closeOverlay()" title="Tutup">✕</div>
+    <div id="popupBody"></div>
+  </div>
+</div>
+
+<script>
+  function hitungTotalPertemuanAll() {
+    const setHari = new Set();
+    Object.values(window._bulanan || {}).forEach((perSiswa) => {
+      Object.values(perSiswa).forEach((b) => {
+        b.hari.forEach((h) => setHari.add(h));
+      });
+    });
+    return setHari.size;
+  }
+
+  function updateJudulRekap(bulanKey) {
+    const judul = document.getElementById("rekapJudul");
+    const sub = document.getElementById("rekapSubJudul");
+    if (!judul || !sub) return;
+
+    if (bulanKey === "ALL") {
+      judul.innerText = "Rekap Kehadiran";
+      sub.innerHTML = `Kelas: <b>${currentSheet}</b> — Semua Bulan`;
+      return;
+    }
+
+    const [y, m] = bulanKey.split("-");
+    const namaBulan = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    judul.innerText = "📊 Rekap Kehadiran";
+    sub.innerHTML = `Kelas: <b>${currentSheet}</b> — Bulan: <b>${namaBulan[+m]} ${y}</b>`;
+  }
+
+  // Fungsi helper untuk mewarnai dropdown presensi otomatis
+  function updateSelectColor(el) {
+    el.classList.remove("hadir", "sakit", "izin", "alfa", "cabut");
+    if (el.value) {
+      el.classList.add(el.value.toLowerCase());
+    }
+  }
+
+  /* === KONFIGURASI === */
+  const SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbyPCKZSnnr_O6yRKBgok2XEHC9MRERDFa8t5a-SO5RPDy52xnQknAxgCFlUzouSBVfP/exec";
+  // KELAS_FALLBACK dipakai untuk render pertama kali secara instan (sebelum
+  // sempat menghubungi server) & sebagai cadangan kalau server gagal
+  // dihubungi. Daftar kelas yang SEBENARNYA dipakai (window.KELAS_AKTIF)
+  // selalu disegarkan dari _CONFIG lewat action "getDaftarKelasPublik",
+  // supaya kelas baru yang dibuat superadmin otomatis muncul di dropdown
+  // tanpa perlu edit array ini secara manual lagi.
+  const KELAS_FALLBACK = [
+    // === KELAS X ===
+    { id: "XTPL", label: "X TPL", tingkat: "X" },
+    //{ id: "XDPIB", label: "X DPIB", tingkat: "X" },
+    //{ id: "XGEOMATIKA", label: "X GEOMATIKA", tingkat: "X" },
+    //{ id: "XTAV", label: "X TAV", tingkat: "X" },
+    //{ id: "XTITL1", label: "X TITL 1", tingkat: "X" },
+    //{ id: "XTITL2", label: "X TITL 2", tingkat: "X" },
+    { id: "XTJKT1", label: "X TJKT 1", tingkat: "X" },
+    { id: "XTJKT2", label: "X TJKT 2", tingkat: "X" },
+    //{ id: "XTO1", label: "X TO 1", tingkat: "X" },
+    //{ id: "XTO2", label: "X TO 2", tingkat: "X" },
+    //{ id: "XTO3", label: "X TO 3", tingkat: "X" },
+    //{ id: "XTO4", label: "X TO 4", tingkat: "X" },
+
+    // === KELAS XI ===
+    //{ id: "XIDPIB", label: "XI DPIB", tingkat: "XI" },
+    //{ id: "XIGEOMATIKA", label: "XI GEOMATIKA", tingkat: "XI" },
+    //{ id: "XITAB", label: "XI TAB", tingkat: "XI" },
+    //{ id: "XITAV", label: "XI TAV", tingkat: "XI" },
+    //{ id: "XITBSM1", label: "XI TBSM 1", tingkat: "XI" },
+    //{ id: "XITBSM2", label: "XI TBSM 2", tingkat: "XI" },
+    //{ id: "XITITL1", label: "XI TITL 1", tingkat: "XI" },
+    //{ id: "XITITL2", label: "XI TITL 2", tingkat: "XI" },
+    { id: "XITJKT1", label: "XI TJKT 1", tingkat: "XI" },
+    { id: "XITJKT2", label: "XI TJKT 2", tingkat: "XI" },
+    //{ id: "XITKR", label: "XI TKR", tingkat: "XI" },
+    //{ id: "XITPL", label: "XI TPL", tingkat: "XI" },
+
+    // === KELAS XII (raw data tidak pakai prefix tingkat, tapi id di
+    // sini tetap dikasih awalan XII biar tidak bentrok & jelas) ===
+    //{ id: "XIIDPIB", label: "DPIB", tingkat: "XII" },
+    //{ id: "XIIGEOMATIKA", label: "GEOMATIKA", tingkat: "XII" },
+    //{ id: "XIITAB", label: "TAB", tingkat: "XII" },
+    //{ id: "XIITAV", label: "TAV", tingkat: "XII" },
+    //{ id: "XIITBSM1", label: "TBSM 1", tingkat: "XII" },
+    //{ id: "XIITBSM2", label: "TBSM 2", tingkat: "XII" },
+    //{ id: "XIITITL", label: "TITL", tingkat: "XII" },
+    { id: "XIITJKT1", label: "TJKT 1", tingkat: "XII" },
+    { id: "XIITJKT2", label: "TJKT 2", tingkat: "XII" },
+    //{ id: "XIITKR", label: "TKR", tingkat: "XII" },
+    //{ id: "XIITPL", label: "TPL", tingkat: "XII" },
+  ];
+
+  // Daftar kelas yang benar-benar dipakai untuk render dropdown saat ini.
+  // Mulai dari fallback, lalu ditimpa/ditambah begitu server merespons.
+  window.KELAS_AKTIF = KELAS_FALLBACK.slice();
+
+  // PENTING: begitu server berhasil dihubungi, daftar dari server adalah
+  // SATU-SATUNYA sumber kebenaran (termasuk kalau hasilnya kosong/berkurang
+  // karena ada kelas yang baru dihapus superadmin). KELAS_FALLBACK cuma
+  // dipakai sebagai cadangan kalau server sama sekali tidak bisa dihubungi
+  // (offline/timeout) — TIDAK digabung dengan hasil server, supaya kelas
+  // yang sudah dihapus tidak "hidup lagi" di dropdown.
+  function gabungkanDanUrutkanKelas(daftarServer) {
+    const urutanTingkat = { X: 0, XI: 1, XII: 2, LAINNYA: 3 };
+    const sumber =
+      Array.isArray(daftarServer) && daftarServer.length > 0
+        ? daftarServer
+            .filter((k) => k && k.id)
+            .map((k) => ({
+              id: k.id,
+              label: k.label || k.id,
+              tingkat: k.tingkat || "LAINNYA",
+            }))
+        : KELAS_FALLBACK.slice();
+
+    return sumber.sort((a, b) => {
+      const ta = urutanTingkat[a.tingkat] ?? 9;
+      const tb = urutanTingkat[b.tingkat] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return String(a.label).localeCompare(String(b.label), "id", {
+        sensitivity: "base",
+      });
+    });
+  }
+
+  /* === RENDER 1 CARD SAJA === */
+  const grid = document.getElementById("kelasGrid");
+
+  function buildOptgroupKelas() {
+    const tingkatUrutan = ["X", "XI", "XII", "LAINNYA"];
+    const sumberKelas =
+      window.KELAS_AKTIF && window.KELAS_AKTIF.length
+        ? window.KELAS_AKTIF
+        : KELAS_FALLBACK;
+    return tingkatUrutan
+      .map((tingkat) => {
+        const opsi = sumberKelas
+          .filter((k) => (k.tingkat || "LAINNYA") === tingkat)
+          .map((k) => `<option value="${k.id}">${k.label}</option>`)
+          .join("");
+        if (!opsi) return "";
+        const labelTingkat =
+          tingkat === "LAINNYA" ? "KELAS LAINNYA" : `KELAS ${tingkat}`;
+        return `<optgroup label="${labelTingkat}">${opsi}</optgroup>`;
+      })
+      .join("");
+  }
+
+  // Segarkan daftar kelas dari server (_CONFIG) di latar belakang, supaya
+  // kelas baru yang dibuat lewat Panel Superadmin otomatis muncul di
+  // dropdown tanpa perlu memuat ulang / mengedit kode ini secara manual.
+  // Dipanggil sekali saat halaman dibuka, dan lagi setiap kali superadmin
+  // menambah/menghapus/mensinkron kelas.
+  async function segarkanDaftarKelasDariServer() {
+    try {
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getDaftarKelasPublik" }),
+      });
+      const j = await r.json();
+      if (!j || !j.ok || !Array.isArray(j.daftar)) return;
+
+      window.KELAS_AKTIF = gabungkanDanUrutkanKelas(j.daftar);
+
+      const select = document.getElementById("kelasSelect");
+      if (!select) return;
+
+      const nilaiSebelumnya = select.value;
+      select.innerHTML = buildOptgroupKelas();
+
+      if (
+        nilaiSebelumnya &&
+        [...select.options].some((o) => o.value === nilaiSebelumnya)
+      ) {
+        select.value = nilaiSebelumnya;
+      } else {
+        const terakhir = localStorage.getItem("kelasTerakhir");
+        if (terakhir && [...select.options].some((o) => o.value === terakhir)) {
+          select.value = terakhir;
+        }
+      }
+    } catch (err) {
+      // Diamkan: kalau server gagal dihubungi, dropdown tetap memakai
+      // daftar kelas fallback/terakhir yang sudah ter-render.
+      console.warn("Gagal menyegarkan daftar kelas dari server:", err);
+    }
+  }
+
+  const el = document.createElement("div");
+  el.className = "kelas-card tingkat-x";
+  el.innerHTML = `
+  <h3>Presensi Sekolah</h3>
+
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; margin-bottom: 12px;">
+    <select id="kelasSelect" class="input" style="margin: 0; flex: 1; min-width: 140px;" onchange="localStorage.setItem('kelasTerakhir', this.value); prefetchKelas(this.value)">
+      ${buildOptgroupKelas()}
+    </select>
+    <button class="btn-walas" onclick="openAdminBySelect()">🔑 Login Walas</button>
+  </div>
+
+  <button class="btn btn-isi" onclick="resetModalStack(); openPresensi(document.getElementById('kelasSelect').value)">
+    📝 Isi Presensi
+  </button>
+
+  <button class="btn btn-rekap" onclick="resetModalStack(); openRekap(document.getElementById('kelasSelect').value)">
+    📊 Rekap
+  </button>
+
+  <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
+    <button class="btn btn-superadmin" title="Panel Superadmin (Kelola Kelas)" onclick="resetModalStack(); openSuperAdminPanel()">
+      🛠️ Panel Admin
+    </button>
+  </div>
+
+  <div style="display:flex; justify-content:center; margin-top:10px;">
+    <span class="speed-mode-badge" title="Data di-cache di client & server untuk proses baca super cepat">⚡ Fast Read & Percentage Bar Mode Aktif</span>
+  </div>
+`;
+  grid.appendChild(el);
+
+  // Pulihkan kelas yang terakhir dipilih (kalau masih ada di daftar) & prefetch data
+  (function pulihkanKelasTerakhir() {
+    const terakhir = localStorage.getItem("kelasTerakhir");
+    const select = document.getElementById("kelasSelect");
+    if (
+      terakhir &&
+      select &&
+      [...select.options].some((o) => o.value === terakhir)
+    ) {
+      select.value = terakhir;
+    }
+    // Prefetch latar belakang untuk kelas aktif
+    setTimeout(() => {
+      if (select && select.value) prefetchKelas(select.value);
+    }, 600);
+  })();
+
+  // Segarkan daftar kelas dari server segera setelah halaman terbuka,
+  // supaya kelas yang baru dibuat superadmin (di perangkat lain / sesi
+  // lain) otomatis ikut muncul tanpa perlu reload manual berkali-kali.
+  segarkanDaftarKelasDariServer();
+
+  /* === ADMIN BERDASARKAN DROPDOWN === */
+  function openAdminBySelect() {
+    resetModalStack();
+    const sheet = document.getElementById("kelasSelect").value;
+    openAdminPrompt(sheet);
+  }
+
+  /* === 1. CLIENT DATA CACHE & PERFORMANCE ACCELERATOR === */
+  const sheetDataCache = {
+    all: {}, // sheetName -> { data, timestamp }
+    headers: {}, // sheetName -> { data, timestamp }
+  };
+  const CACHE_TTL_MS = 90 * 1000; // 90 detik cache client
+
+  function invalidateSheetCache(sheet) {
+    if (sheet) {
+      delete sheetDataCache.all[sheet];
+      delete sheetDataCache.headers[sheet];
+    } else {
+      sheetDataCache.all = {};
+      sheetDataCache.headers = {};
+    }
+  }
+
+  async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 14000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      return response;
+    } catch (err) {
+      clearTimeout(id);
+      // Ubah error AbortController yang mentah & membingungkan ("signal is
+      // aborted without reason") menjadi pesan yang bisa dipahami user, dan
+      // bedakan dari error jaringan biasa (mis. HP offline / DNS gagal).
+      if (err && err.name === "AbortError") {
+        const timeoutErr = new Error(
+          `Server tidak merespon dalam ${Math.round(timeoutMs / 1000)} detik. Kemungkinan Apps Script sedang sibuk (banyak siswa mengisi presensi bersamaan) atau koneksi lambat.`,
+        );
+        timeoutErr.isTimeout = true;
+        throw timeoutErr;
+      }
+      const netErr = new Error(
+        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.",
+      );
+      netErr.isNetworkError = true;
+      throw netErr;
+    }
+  }
+
+  async function getSheetData(sheet, action = "headers", forceRefresh = false) {
+    const isAll = action === "all";
+    const store = isAll ? sheetDataCache.all : sheetDataCache.headers;
+    const now = Date.now();
+
+    // 1. Cek cache lokal jika masih segar dan tidak force refresh
+    if (
+      !forceRefresh &&
+      store[sheet] &&
+      now - store[sheet].timestamp < CACHE_TTL_MS
+    ) {
+      return store[sheet].data;
+    }
+
+    // 2. Jika minta 'headers' tapi 'all' sudah ada dan masih segar di cache, ekstraksi langsung (0ms)
+    if (
+      !forceRefresh &&
+      !isAll &&
+      sheetDataCache.all[sheet] &&
+      now - sheetDataCache.all[sheet].timestamp < CACHE_TTL_MS
+    ) {
+      const allData = sheetDataCache.all[sheet].data;
+      const values = allData.values || [];
+      if (values.length > 0) {
+        const headers = values[0].slice(2);
+        const classPassword = values[1] ? values[1][1] || "" : "";
+        return {
+          headers,
+          classPassword,
+          namaGuru: allData.namaGuru || "",
+        };
+      }
+    }
+
+    // 3. Request ke Apps Script dengan timeout aman dan URI encode
+    const encodedSheet = encodeURIComponent(sheet);
+    const url = isAll
+      ? `${SCRIPT_URL}?sheet=${encodedSheet}&action=all&_t=${now}`
+      : `${SCRIPT_URL}?sheet=${encodedSheet}&_t=${now}`;
+    // Data "all" (seluruh sheet) lebih berat drpd "headers", jadi dikasih
+    // jatah waktu lebih longgar supaya tidak keburu di-abort saat server
+    // lagi rame (banyak siswa submit presensi bersamaan).
+    const timeoutMs = isAll ? 20000 : 14000;
+
+    try {
+      const res = await fetchJsonWithTimeout(url, {}, timeoutMs);
+      const data = await res.json();
+
+      // Simpan ke cache
+      store[sheet] = {
+        data,
+        timestamp: now,
+      };
+
+      return data;
+    } catch (fetchErr) {
+      console.warn("getSheetData fetch error:", fetchErr);
+      // Jika fetch gagal tapi ada cache lama, gunakan cache lama daripada freeze
+      if (store[sheet] && store[sheet].data) {
+        return store[sheet].data;
+      }
+      throw fetchErr;
+    }
+  }
+
+  // Pre-fetch data di latar belakang saat dropdown kelas dipilih
+  function prefetchKelas(sheet) {
+    if (!sheet) return;
+    getSheetData(sheet, "all").catch(() => {});
+  }
+
+  /* === 2. CONTROLLER PROGRESS BAR DENGAN PERSENTASE & WATCHDOG ANTI-STUK === */
+  let activeProgressTimer = null;
+  let loadingSafetyTimeout = null;
+
+  function updateProgressBar(percent, title, subtitle) {
+    const percentEl = document.getElementById("progressPercent");
+    const barEl = document.getElementById("progressBarFill");
+    const titleEl = document.getElementById("progressTitle");
+    const subEl = document.getElementById("progressSubtitle");
+    const topBar = document.getElementById("topProgressBar");
+
+    const p = Math.min(100, Math.max(0, Math.round(percent)));
+    if (percentEl) percentEl.textContent = `${p}%`;
+    if (barEl) barEl.style.width = `${p}%`;
+    if (title && titleEl) titleEl.textContent = title;
+    if (subtitle && subEl) subEl.textContent = subtitle;
+
+    if (topBar) {
+      topBar.classList.add("active");
+      topBar.style.width = `${p}%`;
+    }
+  }
+
+  function showLoading(
+    text = "Memuat data...",
+    subtitle = "Menghubungkan ke server...",
+  ) {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.add("active");
+
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.classList.add("active");
+      topBar.style.width = "15%";
+    }
+
+    updateProgressBar(15, text, subtitle);
+
+    let currentP = 15;
+    activeProgressTimer = setInterval(() => {
+      if (currentP < 88) {
+        const inc = currentP < 40 ? 7 : currentP < 70 ? 3.5 : 1.2;
+        currentP += inc;
+        let sub = subtitle;
+        if (currentP > 60) sub = "Membaca baris dan memproses struktur data...";
+        else if (currentP > 30) sub = "Mengambil data spreadsheet Google...";
+        updateProgressBar(currentP, text, sub);
+      }
+    }, 90);
+
+    // Watchdog safety timeout (35s): Otomatis pulihkan UI HANYA jika benar-
+    // benar macet total. Sebelumnya 15 detik — terlalu pendek dibanding
+    // proses verifikasi Login Walas + pengambilan data dashboard yang
+    // wajar bisa memakan waktu s/d ~28-34 detik saat Apps Script sedang
+    // sibuk (mis. banyak siswa mengisi presensi bersamaan). Watchdog yang
+    // terlalu pendek membuat loading "hilang" duluan padahal prosesnya
+    // masih berjalan di belakang layar — itulah yang terlihat seperti macet.
+    loadingSafetyTimeout = setTimeout(() => {
+      console.warn("showLoading watchdog timeout (35s) dipicu. Memulihkan UI.");
+      hideLoading();
+    }, 35000);
+  }
+
+  function hideLoading() {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.remove("active");
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.classList.remove("active");
+      topBar.style.width = "0%";
+    }
+  }
+
+  async function finishProgress(doneMessage = "Selesai 100%!") {
+    if (activeProgressTimer) {
+      clearInterval(activeProgressTimer);
+      activeProgressTimer = null;
+    }
+    if (loadingSafetyTimeout) {
+      clearTimeout(loadingSafetyTimeout);
+      loadingSafetyTimeout = null;
+    }
+    updateProgressBar(100, "Berhasil!", doneMessage);
+    await new Promise((r) => setTimeout(r, 160));
+    const overlay = document.getElementById("globalLoadingOverlay");
+    if (overlay) overlay.classList.remove("active");
+    const topBar = document.getElementById("topProgressBar");
+    if (topBar) {
+      topBar.style.width = "100%";
+      setTimeout(() => {
+        topBar.classList.remove("active");
+        topBar.style.width = "0%";
+      }, 250);
+    }
+  }
+
+  /* === 3. FLOATING WINDOW STACK & NAVIGATION CONTROLLER === */
+  let modalHistory = [];
+  let currentModalView = null;
+
+  function resetModalStack() {
+    modalHistory = [];
+    currentModalView = null;
+    updateModalNavUI();
+  }
+
+  function captureCurrentModalState() {
+    if (!currentModalView) return null;
+    const popupBody = document.getElementById("popupBody");
+    if (!popupBody) return null;
+
+    // Preservasi isi form & input agar tidak hilang saat navigasi bolak-balik
+    popupBody.querySelectorAll("input, select, textarea").forEach((el) => {
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (el.checked) el.setAttribute("checked", "checked");
+        else el.removeAttribute("checked");
+      } else if (el.tagName === "SELECT") {
+        el.querySelectorAll("option").forEach((opt) => {
+          if (opt.value === el.value) opt.setAttribute("selected", "selected");
+          else opt.removeAttribute("selected");
+        });
+      } else if (el.tagName === "TEXTAREA") {
+        el.textContent = el.value;
+      } else {
+        el.setAttribute("value", el.value);
+      }
+    });
+
+    const popup = document.querySelector(".popup");
+    return {
+      viewId: currentModalView.viewId,
+      title: currentModalView.title || "",
+      sheet: currentModalView.sheet || "",
+      html: popupBody.innerHTML,
+      scrollTop: popup ? popup.scrollTop : 0,
+    };
+  }
+
+  function updateModalNavUI() {
+    const backBtn = document.getElementById("modalBackBtn");
+    const closeAllBtn = document.getElementById("modalCloseAllBtn");
+    const closeBtn = document.querySelector(".popup .close");
+
+    if (modalHistory.length > 0) {
+      if (backBtn) {
+        backBtn.style.display = "inline-flex";
+        const prev = modalHistory[modalHistory.length - 1];
+        backBtn.title = `Kembali ke ${prev.title || "jendela sebelumnya"}`;
+      }
+      if (closeAllBtn) closeAllBtn.style.display = "inline-flex";
+      if (closeBtn) closeBtn.title = "Kembali ke jendela sebelumnya";
+    } else {
+      if (backBtn) backBtn.style.display = "none";
+      if (closeAllBtn) closeAllBtn.style.display = "none";
+      if (closeBtn) closeBtn.title = "Tutup jendela";
+    }
+  }
+
+  function showOverlay(html, meta = {}) {
+    hideLoading();
+
+    const newViewId = meta.viewId || "view_" + Date.now();
+    const newTitle = meta.title || "";
+    const newSheet = meta.sheet || window.currentSheet || "";
+
+    // Simpan jendela aktif saat ini ke stack jika berpindah ke jendela baru
+    if (currentModalView && currentModalView.viewId !== newViewId) {
+      const existingIdx = modalHistory.findIndex((m) => m.viewId === newViewId);
+      if (existingIdx !== -1) {
+        modalHistory = modalHistory.slice(0, existingIdx);
+      } else {
+        const saved = captureCurrentModalState();
+        if (saved) modalHistory.push(saved);
+      }
+    }
+
+    currentModalView = {
+      viewId: newViewId,
+      title: newTitle,
+      sheet: newSheet,
+    };
+
+    document.getElementById("popupBody").innerHTML = html;
+    document.getElementById("overlay").style.display = "flex";
+
+    const popup = document.querySelector(".popup");
+    if (popup) popup.scrollTop = 0;
+
+    updateModalNavUI();
+  }
+
+  function closeOverlay(forceCloseAll = false) {
+    hideLoading();
+
+    // Jika ada riwayat floating window sebelumnya dan bukan force close all:
+    if (!forceCloseAll && modalHistory.length > 0) {
+      const prev = modalHistory.pop();
+      currentModalView = {
+        viewId: prev.viewId,
+        title: prev.title,
+        sheet: prev.sheet,
+      };
+      document.getElementById("popupBody").innerHTML = prev.html;
+      document.getElementById("overlay").style.display = "flex";
+      const popup = document.querySelector(".popup");
+      if (popup && prev.scrollTop) popup.scrollTop = prev.scrollTop;
+      updateModalNavUI();
+      return;
+    }
+
+    // Tutup seluruhnya jika riwayat kosong atau forceCloseAll = true
+    modalHistory = [];
+    currentModalView = null;
+    document.getElementById("overlay").style.display = "none";
+    document.getElementById("popupBody").innerHTML = "";
+    updateModalNavUI();
+  }
+
+  /* === ISI PRESENSI === */
+  async function openPresensi(sheet) {
+    try {
+      showLoading("Memuat data presensi...", "Mengambil daftar siswa kelas...");
+      const data = await getSheetData(sheet, "headers");
+      if (data.error) {
+        await finishProgress("Gagal");
+        return showOverlay("<p style='color:red'>" + data.error + "</p>", {
+          viewId: "presensi_" + sheet,
+          title: "Isi Presensi",
+          sheet,
+        });
+      }
+      const headers = data.headers || [];
+
+      // Form password dipindahkan ke bawah
+      const passForm = `
+      <div style="margin-top:15px; margin-bottom:10px;">
+        <label style="font-weight:600; display:block; margin-bottom:4px;">Password Kelas</label>
+        <input type='password' id='presPass' class='input' style="margin-bottom:0;" placeholder='Masukkan password kelas'>
+      </div>`;
+
+      let html = `<h3 style="margin-top:0;">Isi Presensi — ${sheet}</h3><form id='formPresensi'>`;
+
+      // Form daftar siswa/presensi
+      headers.forEach((h) => {
+        html += `<div><b style="font-size:14px;">${h}</b><br>
+      <select name='${h}' class='input select-presensi hadir' onchange="updateSelectColor(this)">
+        <option value="Hadir" class="opt-hadir">Hadir</option>
+        <option value="Sakit" class="opt-sakit">Sakit</option>
+        <option value="Izin" class="opt-izin">Izin</option>
+        <option value="Alfa" class="opt-alfa">Alfa</option>
+        <option value="Cabut" class="opt-cabut">Cabut</option>
+      </select></div>`;
+      });
+
+      // Password diletakkan tepat di atas tombol Kirim
+      html += `</form>${passForm}<div style='margin-top:20px; display:flex;'>
+    <button class='action-save' onclick="submitPresensi('${sheet}')">Kirim</button>
+    <button class='action-del' onclick="closeOverlay()">Batal</button></div>`;
+      await finishProgress("Presensi Siap Diisi!");
+      showOverlay(html, {
+        viewId: "presensi_" + sheet,
+        title: `Isi Presensi — ${sheet}`,
+        sheet,
+      });
+    } catch (err) {
+      showOverlay(
+        `<p style='color:var(--danger);padding:20px;'>Gagal memuat presensi: ${err.message || err}</p>`,
+        { viewId: "presensi_error", title: "Error" },
+      );
+    }
+  }
+
+  async function submitPresensi(sheet) {
+    try {
+      const pass = document.getElementById("presPass").value.trim();
+      if (!pass) return alert("Masukkan password kelas!");
+
+      showLoading(
+        "Mengirim presensi...",
+        "Menyimpan data kehadiran ke spreadsheet...",
+      );
+      const form = document.getElementById("formPresensi");
+      const entries = {};
+      for (let el of form.elements) {
+        if (el.name) entries[el.name] = el.value;
+      }
+      const body = {
+        action: "addPresensi",
+        kelas: sheet,
+        password: pass,
+        entries,
+      };
+      const j = await postToAppsScript(body);
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Presensi Tersimpan 100%!");
+        alert("✅ Presensi tersimpan");
+        closeOverlay(true);
+      } else {
+        hideLoading();
+        alert("❌ Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
+    } catch (err) {
+      hideLoading();
+      alert("❌ Gagal mengirim presensi: " + (err.message || err));
+    }
+  }
+
+  /* === ADMIN / LOGIN WALAS === */
+  // Password admin per kelas disimpan di localStorage (per perangkat)
+  // supaya tidak perlu diketik ulang tiap buka Login Walas. Kalau
+  // perangkat dipakai bersama, pakai tombol "Logout Walas" di dalam
+  // modal untuk menghapus cache-nya.
+  let adminPasswordAktif = null;
+
+  function getCacheWalas() {
+    try {
+      return JSON.parse(localStorage.getItem("walasAuth") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function simpanCacheWalas(sheet, password) {
+    const cache = getCacheWalas();
+    cache[sheet] = password;
+    localStorage.setItem("walasAuth", JSON.stringify(cache));
+  }
+  function hapusCacheWalas(sheet) {
+    const cache = getCacheWalas();
+    delete cache[sheet];
+    localStorage.setItem("walasAuth", JSON.stringify(cache));
+  }
+
+  async function postToAppsScript(payload, maxRetries = 1, timeoutMs = 12000) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const r = await fetchJsonWithTimeout(
+          SCRIPT_URL,
+          {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+          },
+          timeoutMs,
+        );
+        const text = await r.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === "object") {
+            return parsed;
+          }
+        } catch (err) {
+          console.warn("GAS returned non-JSON response:", text.slice(0, 150));
+        }
+      } catch (netErr) {
+        console.warn(`postToAppsScript attempt ${attempt + 1} failed:`, netErr);
+      }
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    return {
+      ok: false,
+      error: "Respon server tidak valid atau koneksi terputus.",
+    };
+  }
+
+  async function cekPasswordKeServer(sheet, password) {
+    const pw = String(password || "").trim();
+    if (!pw) return { ok: false, error: "Password tidak boleh kosong" };
+
+    // Dulu ada 3 tahap cek berurutan (server verify -> cache header -> force
+    // refresh header) yang total worst-case-nya bisa sampai ~48 detik kalau
+    // server lambat. Sekarang disederhanakan jadi 2 tahap (worst-case ~28
+    // detik), dan setiap tahap dicatat apakah gagalnya karena KONEKSI/SERVER
+    // lambat atau memang PASSWORD salah, supaya pesannya akurat.
+    let adaMasalahKoneksi = false;
+
+    // TAHAP 1: Cek ke server Apps Script (action verifyAdminKelas)
+    try {
+      const j = await postToAppsScript(
+        { action: "verifyAdminKelas", kelas: sheet, password: pw },
+        1,
+        7000,
+      );
+      if (j && j.ok) return { ok: true };
+      // j ada tapi ok:false -> server sempat menjawab (mungkin memang salah,
+      // atau action ini belum didukung backend). Bukan masalah koneksi,
+      // lanjut ke tahap 2 sbg fallback tanpa menandai error koneksi.
+    } catch (err) {
+      console.warn("verifyAdminKelas network error:", err);
+      adaMasalahKoneksi = true;
+    }
+
+    // TAHAP 2: Cocokkan dengan classPassword sheet / namaGuru (force refresh
+    // langsung dari Google Sheets, jadi tidak perlu tahap ke-3 yang cuma
+    // mengulang hal yang sama dengan data cache).
+    try {
+      const d = await getSheetData(sheet, "headers", true);
+      adaMasalahKoneksi = false; // fetch ini berhasil, koneksi baik-baik saja
+      if (d) {
+        const cp = String(d.classPassword || "").trim();
+        const ng = String(d.namaGuru || "").trim();
+        if (cp && cp.toLowerCase() === pw.toLowerCase()) {
+          return { ok: true };
+        }
+        if (
+          ng &&
+          (ng.toLowerCase().startsWith(pw.toLowerCase() + " ") ||
+            ng.toLowerCase() === pw.toLowerCase())
+        ) {
+          return { ok: true };
+        }
+      }
+    } catch (e) {
+      console.warn("Gagal cek via sheet headers (force refresh):", e);
+      adaMasalahKoneksi = true;
+    }
+
+    if (adaMasalahKoneksi) {
+      return {
+        ok: false,
+        error:
+          "Tidak dapat terhubung ke server (mungkin sedang sibuk). Silakan coba lagi — ini bukan berarti password salah.",
+      };
+    }
+    return { ok: false, error: "Password admin salah!" };
+  }
+
+  function togglePasswordVisibility(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    el.type = el.type === "password" ? "text" : "password";
+  }
+
+  function showWalasLoginModal(sheet, pesanError = "") {
+    const sumberKelas =
+      window.KELAS_AKTIF && window.KELAS_AKTIF.length
+        ? window.KELAS_AKTIF
+        : KELAS_FALLBACK;
+    const k = sumberKelas.find((x) => x.id === sheet) || { label: sheet };
+
+    const html = `
+      <div style="max-width:420px;margin:0 auto;text-align:left;">
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="font-size:38px;margin-bottom:6px;">🔑</div>
+          <h3 style="margin:0;font-size:20px;font-weight:700;color:var(--dark);">
+            Login Walas — <span style="color:var(--primary);">${k.label}</span>
+          </h3>
+          <p style="font-size:13px;color:var(--text-muted);margin:6px 0 0;">
+            Masukkan password admin wali kelas untuk mengelola & mengedit presensi.
+          </p>
+        </div>
+
+        ${
+          pesanError
+            ? `<div style="background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+                <span>⚠️</span> <span>${pesanError}</span>
+              </div>`
+            : ""
+        }
+
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--dark);">
+            Password Admin Walas
+          </label>
+          <div style="position:relative;">
+            <input 
+              type="password" 
+              id="inputWalasPromptPassword" 
+              class="input" 
+              placeholder="Masukkan password..." 
+              style="width:100%;box-sizing:border-box;margin:0;padding-right:44px;height:42px;font-size:14px;"
+              autocomplete="current-password"
+              onkeydown="if(event.key === 'Enter') submitWalasPromptPassword('${sheet}')"
+            />
+            <button 
+              type="button"
+              onclick="togglePasswordVisibility('inputWalasPromptPassword')" 
+              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:18px;cursor:pointer;padding:6px 8px;opacity:0.7;"
+              title="Lihat / Sembunyikan Password"
+            >👁️</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;border-top:1px solid var(--border);padding-top:16px;">
+          <button class="action-del" style="margin:0;padding:8px 18px;" onclick="batalLoginWalas()">Batal</button>
+          <button id="btnMasukWalas" class="action-save" style="margin:0;background:var(--primary);padding:8px 22px;font-weight:600;" onclick="submitWalasPromptPassword('${sheet}')">
+            Masuk Sekarang ➔
+          </button>
+        </div>
+      </div>
+    `;
+
+    showOverlay(html, {
+      viewId: "walasLoginPrompt_" + sheet,
+      title: `Login Walas — ${k.label}`,
+      sheet,
+    });
+
+    setTimeout(() => {
+      const inp = document.getElementById("inputWalasPromptPassword");
+      if (inp) inp.focus();
+    }, 100);
+  }
+
+  // Token global: dipakai supaya hasil verifikasi yang datang terlambat
+  // (mis. user sudah klik Batal, atau sudah coba login ulang) tidak
+  // nyelonong membuka dashboard / menampilkan error secara tiba-tiba.
+  let walasRequestToken = 0;
+
+  function batalLoginWalas() {
+    walasRequestToken++; // anggap basi proses verifikasi yg mungkin masih jalan
+    closeOverlay();
+  }
+
+  async function submitWalasPromptPassword(sheet) {
+    const btn = document.getElementById("btnMasukWalas");
+    // Cegah klik ganda / Enter berkali-kali saat proses sebelumnya masih
+    // berjalan — salah satu penyebab tampilan jadi tidak menentu karena
+    // beberapa request numpuk bersamaan.
+    if (btn && btn.disabled) return;
+
+    const inp = document.getElementById("inputWalasPromptPassword");
+    const pass = inp ? inp.value.trim() : "";
+    if (!pass) {
+      if (inp) inp.focus();
+      return alert("Silakan masukkan password admin walas!");
+    }
+
+    const myToken = ++walasRequestToken;
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
+      btn.style.cursor = "not-allowed";
+      btn.textContent = "Memverifikasi...";
+    }
+    if (inp) inp.disabled = true;
+
+    // ⚡ MUNCULKAN LOADING BAR REALTIME SECARA INSTAN (0ms)!
+    showLoading(
+      "Login Walas — " + sheet,
+      "Memverifikasi kredensial walas ke server...",
+    );
+
+    try {
+      const j = await cekPasswordKeServer(sheet, pass);
+      // Kalau sudah ada percobaan login baru / user sudah Batal, abaikan
+      // saja hasil yang telat ini.
+      if (myToken !== walasRequestToken) return;
+
+      if (!j || !j.ok) {
+        hideLoading();
+        return showWalasLoginModal(sheet, j?.error || "Password admin salah!");
+      }
+
+      // Berhasil login
+      adminPasswordAktif = pass;
+      simpanCacheWalas(sheet, pass);
+
+      updateProgressBar(
+        65,
+        "Login Walas Berhasil!",
+        "Menyiapkan tabel data presensi...",
+      );
+      await openAdminModal(sheet);
+    } catch (err) {
+      if (myToken !== walasRequestToken) return;
+      console.error("submitWalasPromptPassword error:", err);
+      hideLoading();
+      showWalasLoginModal(sheet, "Gagal login: " + (err.message || err));
+    }
+  }
+
+  async function openAdminPrompt(sheet) {
+    if (!sheet) {
+      sheet = document.getElementById("kelasSelect")?.value;
+      if (!sheet) return alert("Pilih kelas terlebih dahulu!");
+    }
+
+    const cache = getCacheWalas();
+    const passTersimpan = cache[sheet];
+
+    // ============================================================
+    // 1. CEK PASSWORD YANG TERSIMPAN
+    // ============================================================
+    if (passTersimpan) {
+      try {
+        showLoading(
+          "Login Walas — " + sheet,
+          "Memeriksa sesi login yang tersimpan...",
+        );
+
+        const hasil = await cekPasswordKeServer(sheet, passTersimpan);
+
+        // ========================================================
+        // PASSWORD CACHE MASIH VALID
+        // ========================================================
+        if (hasil && hasil.ok) {
+          adminPasswordAktif = passTersimpan;
+
+          updateProgressBar(
+            60,
+            "Sesi Login Valid",
+            "Menyiapkan dashboard walas...",
+          );
+
+          return await openAdminModal(sheet);
+        }
+
+        // ========================================================
+        // PASSWORD CACHE SUDAH TIDAK VALID
+        // Misalnya password Walas sudah diganti
+        // ========================================================
+        console.warn(
+          "Password Walas tersimpan sudah tidak valid untuk kelas:",
+          sheet,
+        );
+
+        hapusCacheWalas(sheet);
+        adminPasswordAktif = null;
+
+        hideLoading();
+
+        // Tampilkan login ulang dengan pesan yang jelas
+        return showWalasLoginModal(
+          sheet,
+          "Sesi login sebelumnya sudah tidak berlaku. Silakan masukkan password Walas yang baru.",
+        );
+      } catch (err) {
+        console.error("Validasi cache login Walas gagal:", err);
+
+        hideLoading();
+
+        // Jangan langsung menghapus cache jika masalahnya hanya koneksi.
+        // Pengguna masih diberi kesempatan login ulang.
+        return showWalasLoginModal(
+          sheet,
+          "Gagal memeriksa sesi login. Silakan masukkan password Walas.",
+        );
+      }
+    }
+
+    // ============================================================
+    // 2. BELUM ADA PASSWORD TERSIMPAN
+    // ============================================================
+    showWalasLoginModal(sheet);
+  }
+
+  function logoutWalas(sheet) {
+    hapusCacheWalas(sheet);
+    adminPasswordAktif = null;
+    alert("Sesi Login Walas untuk kelas ini sudah dihapus dari perangkat ini.");
+    closeOverlay(true);
+  }
+
+  /* === PANEL SUPERADMIN: KELOLA KELAS === */
+  let superAdminSesi = null;
+
+  async function openSuperAdminPanel(pesanError) {
+    if (superAdminSesi) {
+      return renderSuperAdminPanel();
+    }
+
+    showOverlay(
+      `
+      <h3 style="margin-top:0;">🔐 Login Superadmin</h3>
+      ${
+        pesanError
+          ? `<p style="color:var(--danger);font-weight:600;margin-top:0;">❌ ${pesanError}</p>`
+          : ""
+      }
+      <div style="margin-bottom:12px;">
+        <label style="font-weight:600;display:block;margin-bottom:4px;">Username Superadmin</label>
+        <input id="suUsername" class="input" style="margin:0;" placeholder="superadmin" autocomplete="off">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-weight:600;display:block;margin-bottom:4px;">Password Superadmin</label>
+        <input id="suPassword" type="password" class="input" style="margin:0;" placeholder="Password" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="action-save" style="margin:0;" onclick="submitSuperAdminLogin()">Masuk</button>
+        <button class="action-del" style="margin:0;" onclick="closeOverlay()">Batal</button>
+      </div>
+    `,
+      {
+        viewId: "superAdminLogin",
+        title: "Login Superadmin",
+      },
+    );
+
+    const pass = document.getElementById("suPassword");
+    if (pass) {
+      pass.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitSuperAdminLogin();
+      });
+    }
+  }
+
+  async function submitSuperAdminLogin() {
+    const superUsername = document.getElementById("suUsername").value.trim();
+    const superPassword = document.getElementById("suPassword").value;
+
+    if (!superUsername || !superPassword) {
+      return alert("Username dan password wajib diisi.");
+    }
+
+    superAdminSesi = { superUsername, superPassword };
+    await renderSuperAdminPanel();
+  }
+
+  /* === TOGGLE TAMPIL/SEMBUNYI PASSWORD DI PANEL SUPERADMIN === */
+  function toggleKelasPassword(btn) {
+    const span = btn.previousElementSibling;
+    if (!span || !span.classList || !span.classList.contains("kelas-pw"))
+      return;
+    const tampil = span.dataset.tampil === "1";
+    if (tampil) {
+      span.textContent = "••••••••";
+      span.dataset.tampil = "0";
+      btn.textContent = "👁️";
+    } else {
+      span.textContent = span.dataset.pw || "-";
+      span.dataset.tampil = "1";
+      btn.textContent = "🙈";
+    }
+  }
+
+  async function renderSuperAdminPanel() {
+    showLoading(
+      "Memuat daftar kelas...",
+      "Mengambil daftar seluruh kelas terdaftar...",
+    );
+    try {
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "getDaftarKelasAdmin",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        closeOverlay();
+        superAdminSesi = null;
+        return openSuperAdminPanel(
+          j.error || "Gagal memuat daftar kelas. Cek username/password.",
+        );
+      }
+
+      const daftarHtml =
+        j.daftar.length > 0
+          ? j.daftar
+              .map((k) => {
+                const adminPw = String(k.adminPassword || "-").replace(
+                  /"/g,
+                  "&quot;",
+                );
+                const presensiPw = String(k.presensiPassword || "-").replace(
+                  /"/g,
+                  "&quot;",
+                );
+                return `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;">${k.kelas} <span class="small" style="font-weight:500;color:var(--text-muted);">(${k.tingkat || "-"})</span></div>
+              <div class="small" style="color:${k.sheetAda ? "var(--text-muted)" : "var(--danger)"};">${k.sheetAda ? `Sheet ada • ${k.jumlahSiswa} siswa` : "⚠️ Sheet tidak ditemukan (data nyasar)"}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="action-edit" style="padding:6px 12px;margin:0;" onclick="syncSiswaKelasDariPanel('${k.kelas}')" title="Sinkron nama siswa kelas ini dari sheet SISWA (Spreadsheet MAGANG)">🔄 Sinkron Siswa</button>
+              <button class="action-del" style="padding:6px 12px;margin:0;" onclick="hapusKelasDariPanel('${k.kelas}')">🗑️ Hapus</button>
+            </div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="white-space:nowrap;">🔑 <b>Password Admin:</b></span>
+              <span class="kelas-pw" data-pw="${adminPw}" style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:6px;">••••••••</span>
+              <button type="button" class="action-edit" style="padding:2px 8px;font-size:11px;margin:0;" onclick="toggleKelasPassword(this)">👁️</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="white-space:nowrap;">🧑‍🎓 <b>Password Presensi:</b></span>
+              <span class="kelas-pw" data-pw="${presensiPw}" style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:6px;">••••••••</span>
+              <button type="button" class="action-edit" style="padding:2px 8px;font-size:11px;margin:0;" onclick="toggleKelasPassword(this)">👁️</button>
+            </div>
+          </div>
+          ${k.namaGuru ? `<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">👤 <b>Wali:</b> ${k.namaGuru}</div>` : ""}
+        </div>`;
+              })
+              .join("")
+          : `<p class="small">Belum ada kelas terdaftar.</p>`;
+
+      const superHtml = `
+        <h3 style="margin-top:0;">🛠️ Panel Superadmin — Kelola Kelas</h3>
+
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <input id="namaKelasBaru" class="input" style="margin:0;" placeholder="Nama kelas baru, mis. XI TKR 2">
+          <button class="action-save" style="margin:0;white-space:nowrap;" onclick="tambahKelasDariPanel()">➕ Tambah</button>
+        </div>
+
+        <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="action-edit" style="margin:0;" onclick="jalankanSyncKelasTjkt()">🔄 Sinkron Kelas TJKT dari Data Siswa</button>
+          <button class="action-edit" style="margin:0;" onclick="jalankanBuatSemuaKelas()">🏫 Buat Semua Kelas Dasar Sekolah</button>
+        </div>
+
+        <h4 style="margin-bottom:8px;">Daftar Kelas Terdaftar (${j.daftar.length})</h4>
+        <div style="max-height:280px;overflow-y:auto;">${daftarHtml}</div>
+
+        <div style="margin-top:16px;display:flex;">
+          <button class="action-del" onclick="closeOverlay()">Tutup</button>
+        </div>
+      `;
+
+      await finishProgress("Panel Admin Siap!");
+      showOverlay(superHtml, {
+        viewId: "superAdminPanel",
+        title: "Panel Superadmin",
+      });
+
+      // Segarkan dropdown pilihan kelas di halaman utama supaya selalu
+      // sinkron dengan _CONFIG setiap kali panel superadmin dibuka.
+      segarkanDaftarKelasDariServer();
+    } catch (err) {
+      closeOverlay();
+      alert("Gagal memuat panel superadmin: " + (err.message || err));
+    }
+  }
+
+  async function tambahKelasDariPanel() {
+    const namaKelas = document.getElementById("namaKelasBaru").value.trim();
+    if (!namaKelas) return alert("Nama kelas tidak boleh kosong.");
+
+    try {
+      showLoading(`Membuat kelas "${namaKelas}"...`);
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "tambahKelasBaru",
+          namaKelas,
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      alert(
+        `✅ Kelas "${j.kelas}" berhasil dibuat!\n\nPassword Admin   : ${j.adminPassword}\nPassword Presensi: ${j.presensiPassword}\n\n⚠️ Catat sekarang, tidak ditampilkan lagi otomatis (tapi tersimpan apa adanya di sheet _CONFIG kalau lupa).`,
+      );
+      renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
+    } catch (err) {
+      alert("Gagal menambah kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function hapusKelasDariPanel(namaKelas) {
+    if (
+      !confirm(
+        `Yakin hapus kelas "${namaKelas}"?\n\nIni akan menghapus SHEET beserta SELURUH DATA PRESENSI di kelas ini secara PERMANEN. Tindakan ini tidak bisa dibatalkan.`,
+      )
+    )
+      return;
+
+    try {
+      showLoading(`Menghapus kelas "${namaKelas}"...`);
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "hapusKelas",
+          namaKelas,
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+      else alert("✅ " + j.message);
+
+      renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
+    } catch (err) {
+      alert("Gagal menghapus kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function jalankanSyncKelasTjkt() {
+    try {
+      showLoading("Menyinkronkan kelas TJKT dari data siswa...");
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "syncKelasFromSiswa",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      if (j.dibuat && j.dibuat.length > 0) {
+        let pesan = "✅ Kelas baru dibuat dari data siswa:\n\n";
+        j.dibuat.forEach((kls) => {
+          pesan += `• ${kls.kelas}\n  Admin: ${kls.adminPassword}\n  Presensi: ${kls.presensiPassword}\n\n`;
+        });
+        pesan += "⚠️ Catat password di atas sekarang.";
+        alert(pesan);
+      } else {
+        alert("Tidak ada kelas baru dari data siswa. Semua sudah tersedia.");
+      }
+      renderSuperAdminPanel();
+      segarkanDaftarKelasDariServer();
+    } catch (err) {
+      alert("Gagal sinkron: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  async function jalankanBuatSemuaKelas() {
+    if (
+      !confirm(
+        "Ini akan membuat sheet untuk SEMUA kelas dasar sekolah yang belum ada (bisa puluhan sekaligus). Lanjutkan?",
+      )
+    )
+      return;
+
+    try {
+      showLoading("Membuat kelas dasar sekolah yang belum ada...");
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "buatSemuaKelasSekolah",
+          ...superAdminSesi,
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal: " + (j.error || "Terjadi kesalahan"));
+        return renderSuperAdminPanel();
+      }
+
+      if (j.dibuat && j.dibuat.length > 0) {
+        let teks = "";
+        j.dibuat.forEach((kls) => {
+          teks += `${kls.label} (${kls.kelas})\n  Admin: ${kls.adminPassword}\n  Presensi: ${kls.presensiPassword}\n\n`;
+        });
+        showOverlay(`
+          <h3 style="margin-top:0;">✅ ${j.dibuat.length} Kelas Baru Dibuat</h3>
+          <p class="small">Catat semua password di bawah ini SEKARANG. Kalau lupa, password juga tersimpan apa adanya di sheet <b>_CONFIG</b>.</p>
+          <textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:12px;padding:10px;border-radius:8px;border:1px solid var(--border);">${teks}</textarea>
+          <div style="margin-top:16px;display:flex;">
+            <button class="action-del" onclick="renderSuperAdminPanel()">Kembali ke Panel</button>
+          </div>
+        `);
+        segarkanDaftarKelasDariServer();
+      } else {
+        alert("Tidak ada kelas baru — semua kelas dasar sudah ada.");
+        renderSuperAdminPanel();
+      }
+    } catch (err) {
+      alert("Gagal membuat kelas: " + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  /* === SINKRON SISWA PER KELAS — dari Panel Superadmin ===
+     Menjalankan sinkron untuk SATU kelas saja (dipilih sendiri oleh
+     superadmin), memakai action "syncNamaSiswa" yang sama seperti tombol
+     "🔄 Sinkron dari Data Siswa" di menu Kelola Siswa. Siswa yang namanya
+     sudah ada di kelas tidak akan diduplikasi. Sheet SISWA (data induk)
+     di Spreadsheet MAGANG hanya DIBACA, tidak pernah ditulis/dihapus. */
+  async function syncSiswaKelasDariPanel(kelas) {
+    try {
+      showLoading(
+        `Menyinkronkan siswa kelas "${kelas}"...`,
+        "Menyaring siswa baru & mengurutkan abjad...",
+      );
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "syncNamaSiswa", kelas }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        await finishProgress("Gagal");
+        alert(
+          `❌ Gagal sinkron kelas "${kelas}": ` +
+            (j.error || "Terjadi kesalahan"),
+        );
+        return renderSuperAdminPanel();
+      }
+
+      invalidateSheetCache(kelas);
+      await finishProgress("Sinkron Selesai 100%!");
+
+      const ditambahkan = j.ditambahkan || [];
+      if (ditambahkan.length > 0) {
+        alert(
+          `✅ ${kelas}: ${ditambahkan.length} siswa baru ditambahkan.\n\n${ditambahkan.join("\n")}`,
+        );
+      } else {
+        alert(
+          `✅ ${kelas}: tidak ada siswa baru, semua sudah sinkron dengan data induk SISWA.`,
+        );
+      }
+      renderSuperAdminPanel();
+    } catch (err) {
+      alert(`Gagal sinkron kelas "${kelas}": ` + (err.message || err));
+      renderSuperAdminPanel();
+    }
+  }
+
+  /* === SINKRON NAMA SISWA UNTUK 1 KELAS (dari panel admin) === */
+  async function syncNamaSiswaSheet(sheet) {
+    try {
+      showLoading(
+        "Menyinkronkan nama siswa...",
+        "Menyaring siswa baru & mengurutkan abjad...",
+      );
+      const r = await fetchJsonWithTimeout(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "syncNamaSiswa", kelas: sheet }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        await finishProgress("Gagal");
+        alert("❌ Gagal sinkron: " + (j.error || "Terjadi kesalahan"));
+        return openKelolaSiswa(sheet);
+      }
+      invalidateSheetCache(sheet);
+      await finishProgress("Sinkron Selesai 100%!");
+      alert(j.message || "✅ Sinkron selesai");
+      openKelolaSiswa(sheet);
+    } catch (err) {
+      alert("Gagal sinkron nama siswa: " + (err.message || err));
+    }
+  }
+
+  /* === UPDATE: MODAL LOGIN WALAS DENGAN EDIT DATA LANGSUNG TERBUKA (PADAT & BERISI) === */
+  // Guard anti tumpang-tindih: openAdminModal dipanggil dari beberapa
+  // tempat (login sukses, cache password tersimpan, tombol Segarkan) yang
+  // bisa terpicu berkali-kali sebelum proses sebelumnya selesai.
+  let adminModalLoading = false;
+
+  async function openAdminModal(sheet, forceRefresh = false) {
+    if (adminModalLoading) return; // sudah ada proses buka dashboard yang berjalan
+    adminModalLoading = true;
+    const myToken = ++walasRequestToken;
+    try {
+      showLoading(
+        "Login Walas — " + sheet,
+        "Mengambil data presensi & hak akses...",
+      );
+
+      // Ambil seluruh baris data spreadsheet
+      const d = await getSheetData(sheet, "all", forceRefresh);
+      if (myToken !== walasRequestToken) return; // ada proses lain yg lebih baru
+      if (!d || d.error) {
+        hideLoading();
+        alert(
+          "Gagal memuat data kelas: " +
+            (d?.error || "Koneksi ke spreadsheet terputus."),
+        );
+        return;
+      }
+      const rows = d.values || [];
+      const namaGuru = d.namaGuru || "";
+
+      window._rawHeaders = rows[0] || [];
+      window._rawRows = rows.slice(1);
+      window._rosterAktif = (window._rawHeaders || []).slice(2);
+      window._rawByMonth = {};
+
+      const pw = rows[1] && rows[1][1] ? rows[1][1] : d.classPassword || "";
+
+      // Hitung data per bulan
+      window._rawRows.forEach((row, i) => {
+        const dt = new Date(row[0]);
+        if (isNaN(dt)) return;
+        const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+        if (!window._rawByMonth[key]) window._rawByMonth[key] = [];
+        window._rawByMonth[key].push({ row, index: i });
+      });
+
+      const totalPertemuan = window._rawRows.length;
+      const totalSiswa = window._rosterAktif.length;
+
+      let html = `
+      <div class="walas-dashboard-container">
+        <!-- BARIS ATAS: HEADER & AKSI CEPAT -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h3 style="margin:0;font-size:18px;font-weight:700;display:flex;align-items:center;gap:6px;">
+              <span>🏢</span> Dashboard Walas — <span style="color:var(--primary);">${sheet}</span>
+            </h3>
+            <span class="speed-mode-badge" style="margin:0;">⚡ Live Edit Ready</span>
+            <span style="font-size:12px;font-weight:600;background:#e0f2fe;color:#0284c7;padding:3px 8px;border-radius:12px;">👥 ${totalSiswa} Siswa</span>
+            <span style="font-size:12px;font-weight:600;background:#fef3c7;color:#b45309;padding:3px 8px;border-radius:12px;">📅 ${totalPertemuan} Pertemuan</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <button class="btn-compact action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')" title="Cetak Seluruh Data Mentah Harian Siswa (Format A4 Landscape)">
+              🖨️ Cetak Data Mentah
+            </button>
+            <button class="btn-compact action-save" style="background:var(--info);" onclick="openFormLaporanWalas('${sheet}')" title="Cetak Formulir Laporan Walas Lengkap (A-D)">
+              🖨️ Cetak Laporan (A-D)
+            </button>
+            <button class="btn-compact action-edit" style="background:#475569;" onclick="openKelolaSiswa('${sheet}')" title="Kelola Nama Siswa Kelas Ini">
+              🧑‍🎓 Kelola Siswa
+            </button>
+            <button class="btn-compact" style="background:#e2e8f0;color:var(--dark);" onclick="openAdminModal('${sheet}', true)" title="Segarkan Data dari Server">
+              🔄 Segarkan
+            </button>
+            <button class="btn-compact" style="background:#fee2e2;color:#b91c1c;" onclick="logoutWalas('${sheet}')" title="Keluar dari Sesi Walas">
+              🚪 Logout
+            </button>
+          </div>
+        </div>
+
+        <!-- BARIS KEDUA: FORM IDENTITAS GURU WALI & PASSWORD KELAS (PADAT & BERISI) -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:10px;margin-bottom:12px;">
+          <!-- Kartu Guru Wali Compact -->
+          <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">👤 Wali Kelas:</span>
+            <input id="namaGuruWalas" class="input input-compact" style="margin:0;flex:1;min-width:130px;" placeholder="Nama Lengkap Walas" value="${String(namaGuru).replace(/"/g, "&quot;")}">
+            <button class="action-save btn-compact" style="margin:0;white-space:nowrap;padding:4px 10px;" onclick="simpanNamaGuruDariModal('${sheet}')">💾 Simpan</button>
+          </div>
+
+          <!-- Kartu Password Presensi Siswa Compact -->
+          <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--dark);white-space:nowrap;">🔑 Password Kelas:</span>
+            <input id="classPw" class="input input-compact" style="margin:0;flex:1;min-width:110px;" value="${String(pw).replace(/'/g, "&#39;")}" placeholder="Password Presensi Siswa">
+            <button class="action-save btn-compact" style="margin:0;white-space:nowrap;padding:4px 10px;" onclick="setClassPassword('${sheet}')">💾 Simpan</button>
+          </div>
+        </div>
+
+        <!-- BARIS KETIGA: TOOLBAR TABEL EDIT DATA (BULAN & TOMBOL AKSI) -->
+        <div style="background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <label style="font-weight:700;font-size:13px;color:var(--dark);display:flex;align-items:center;gap:4px;">
+              <span>📅</span> Filter Bulan:
+            </label>
+            <select id="editBulan" class="input input-compact" style="width:auto;min-width:160px;margin:0;font-weight:600;" onchange="renderEditTable()">
+              <option value="ALL">Semua Bulan (${totalPertemuan} data)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="btn-compact btn-walas" style="margin:0;background:#f59e0b;color:#fff;" onclick="tambahBarisTanggalBaru()">
+              ➕ Tambah Tanggal
+            </button>
+            <button class="btn-compact action-save" style="margin:0;background:var(--primary);font-weight:700;" onclick="saveEditedRaw('${sheet}')">
+              💾 Simpan Perubahan
+            </button>
+          </div>
+        </div>
+
+        <!-- BARIS KEEMPAT: TABEL DATA MENTAH PRESENSI DENGAN WRAPPER PADAT & BERISI -->
+        <div class="table-compact-wrapper" style="margin-bottom:12px;">
+          <table class="table table-compact">
+            <thead>
+              <tr>
+                ${window._rawHeaders.map((h, idx) => `<th style="${idx < 2 ? "background:#e2e8f0;font-weight:700;" : ""}">${h}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody id="editTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- FOOTER: TOMBOL SIMPAN & TUTUP -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:12px;color:var(--text-muted);">
+            💡 Tips: Ubah status kehadiran langsung pada kolom siswa, lalu klik <b>Simpan Perubahan</b>.
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="action-save btn-compact" style="padding:6px 18px;font-weight:700;" onclick="saveEditedRaw('${sheet}')">
+              💾 Simpan Perubahan
+            </button>
+            <button class="action-del btn-compact" style="padding:6px 14px;" onclick="closeOverlay()">
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+      `;
+
+      await finishProgress("Dashboard Walas Siap!");
+
+      showOverlay(html, {
+        viewId: "adminModal_" + sheet,
+        title: `Login Walas — ${sheet}`,
+        sheet,
+      });
+
+      // Isi opsi dropdown bulan
+      const sel = document.getElementById("editBulan");
+      if (sel) {
+        Object.keys(window._rawByMonth)
+          .sort()
+          .forEach((k) => {
+            const [y, m] = k.split("-");
+            const nm = [
+              "Januari",
+              "Februari",
+              "Maret",
+              "April",
+              "Mei",
+              "Juni",
+              "Juli",
+              "Agustus",
+              "September",
+              "Oktober",
+              "November",
+              "Desember",
+            ][m];
+            const count = window._rawByMonth[k].length;
+            sel.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${k}">${nm} ${y} (${count})</option>`,
+            );
+          });
+      }
+
+      // Render isi tabel langsung
+      renderEditTable();
+      setTimeout(renderEditTable, 40);
+    } catch (err) {
+      if (myToken !== walasRequestToken) return;
+      hideLoading();
+      const pesan =
+        err && err.isTimeout
+          ? err.message
+          : `Gagal memuat dashboard walas: ${err.message || err}`;
+      showOverlay(
+        `<div style="padding:20px;text-align:center;">
+          <p style="color:var(--danger);font-weight:600;margin-bottom:16px;">❌ ${pesan}</p>
+          <button class="action-save" style="margin:0;padding:8px 22px;font-weight:600;" onclick="openAdminModal('${sheet}', true)">
+            🔄 Coba Lagi
+          </button>
+        </div>`,
+        { viewId: "admin_error", title: "Error" },
+      );
+    } finally {
+      adminModalLoading = false;
+    }
+  }
+
+  /* === FUNGSI: TAMPILAN TAMBAH/HAPUS SISWA === */
+  async function openKelolaSiswa(sheet) {
+    try {
+      showLoading("Memuat daftar siswa...", "Mengambil daftar nama siswa...");
+      const d = await getSheetData(sheet, "headers");
+      const headers = d.headers || [];
+
+      let html = `
+    <h3 style="margin-top:0;">🧑‍🎓 Tambah/Hapus Siswa — <span style="color:var(--primary);">${sheet}</span></h3>
+    
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div id='list' style='max-height:50vh;overflow:auto;border:1px solid var(--border);padding:12px;border-radius:12px;background:#f8fafc;'>`;
+
+      headers.forEach((h, i) => {
+        html += `<div style='display:flex;gap:8px;margin-bottom:8px;align-items:center;'>
+        <span style="width:24px;color:var(--text-muted);font-size:14px;">${i + 1}.</span>
+        <input class='input nameInput' style="margin:0;" value='${h.replace(/'/g, "&#39;")}'>
+        <button class='action-del' style="margin:0;padding:8px 12px;" onclick='this.parentElement.remove()'>✕</button>
+      </div>`;
+      });
+
+      html += `</div>
+      <p style="margin-top:12px;font-size:12px;color:var(--text-muted);">Penambahan siswa baru dilakukan lewat menu Guru Wali, lalu klik "🔄 Sinkron dari Data Siswa" di sini.</p>
+      <p style="margin-top:4px;font-size:12px;color:var(--text-muted);">ℹ️ Menghapus nama di daftar ini (✕ lalu "Simpan Daftar") hanya menghapusnya dari kelas presensi ini. Data siswa induk di sheet <b>SISWA</b> pada Spreadsheet MAGANG tidak akan ikut terhapus.</p>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class='action-save' onclick="saveHeader('${sheet}')">Simpan Daftar</button>
+        <button class='action-edit' onclick="syncNamaSiswaSheet('${sheet}')">🔄 Sinkron dari Data Siswa</button>
+        <button class='action-del' onclick="closeOverlay()">⬅️ Kembali ke Dashboard</button>
+      </div>
+    </div>`;
+
+      await finishProgress("Daftar Siswa Siap!");
+      showOverlay(html, {
+        viewId: "kelolaSiswa_" + sheet,
+        title: `Kelola Siswa — ${sheet}`,
+        sheet,
+      });
+    } catch (err) {
+      showOverlay(
+        `<p style='color:var(--danger);padding:20px;'>Gagal memuat: ${err.message || err}</p>`,
+        { viewId: "kelola_error", title: "Error" },
+      );
+    }
+  }
+
+  /* === SIMPAN NAMA GURU WALI (tersimpan di server, muncul otomatis lagi) === */
+  async function simpanNamaGuruDariModal(sheet) {
+    const namaGuru = document.getElementById("namaGuruWalas").value.trim();
+    if (!namaGuru) return alert("Nama wali kelas tidak boleh kosong.");
+    if (!adminPasswordAktif) {
+      return alert(
+        "Sesi Login Walas tidak ditemukan, silakan tutup lalu Login Walas lagi.",
+      );
+    }
+
+    try {
+      showLoading(
+        "Menyimpan nama guru...",
+        "Memperbarui identitas guru wali...",
+      );
+      const j = await postToAppsScript({
+        action: "simpanNamaGuruWalas",
+        kelas: sheet,
+        adminPassword: adminPasswordAktif,
+        namaGuru,
+      });
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Nama Tersimpan!");
+        alert("✅ Nama guru wali disimpan.");
+        openAdminModal(sheet, true);
+      } else {
+        hideLoading();
+        alert("❌ Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
+    } catch (err) {
+      hideLoading();
+      alert("Gagal menyimpan nama guru: " + (err.message || err));
+    }
+  }
+
+  /* === LIHAT REKAP DARI DALAM FORM LAPORAN WALAS ===
+     Membuka Rekap akan mengganti isi popup, jadi isian Lampiran B/C/D
+     yang belum disimpan akan hilang — makanya dikonfirmasi dulu. */
+  function lihatRekapDariLaporanWalas(sheet) {
+    const adaIsian =
+      document.querySelectorAll(
+        "#tabelPermasalahan .walas-nama, #tabelKondisiKelas .walas-piket, #tabelKondisiKelas .walas-inventaris, #tabelMutasi .walas-nama",
+      ).length > 0 &&
+      [
+        ...document.querySelectorAll(
+          "#tabelPermasalahan input, #tabelKondisiKelas input, #tabelMutasi input",
+        ),
+      ].some((i) => i.value.trim());
+
+    if (
+      adaIsian &&
+      !confirm(
+        "Isian Lampiran B/C/D yang belum disimpan akan hilang kalau pindah ke Rekap. Lanjutkan?",
+      )
+    ) {
+      return;
+    }
+    openRekap(sheet);
+  }
+
+  /* === LAPORAN WALAS: COVER + A. IDENTITAS + B. PERMASALAHAN SISWA +
+     C. KONDISI KELAS + D. MUTASI SISWA ===
+     Bagian B disimpan ke sheet WALAS (sesuai yang sudah dibuat manual
+     di spreadsheet). Bagian C & D HANYA untuk kebutuhan cetak, tidak
+     disimpan ke sheet manapun — sesuai permintaan (input saja). */
+  async function openFormLaporanWalas(sheet) {
+    if (!adminPasswordAktif) {
+      return alert(
+        "Sesi Login Walas tidak ditemukan, silakan tutup lalu Login Walas lagi.",
+      );
+    }
+
+    const namaGuru =
+      document.getElementById("namaGuruWalas")?.value.trim() ||
+      window._namaGuruAktif ||
+      "";
+    window._namaGuruAktif = namaGuru; // simpan supaya tetap terbawa walau modal berganti
+    window._sheetAktifLaporanWalas = sheet; // dipakai saat upload foto per baris
+
+    const roster = window._rosterAktif || [];
+    const jumlahSiswa = roster.length;
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    showLoading(
+      "Memuat data laporan walas...",
+      "Mengambil riwayat data & identitas...",
+    );
+
+    // Ambil data Lampiran B yang sudah pernah disimpan guru ini
+    let itemPermasalahanLama = [];
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "getWalasPermasalahan",
+          kelas: sheet,
+          adminPassword: adminPasswordAktif,
+          namaGuru,
+        }),
+      });
+      const j = await r.json();
+      if (j.ok) itemPermasalahanLama = j.items || [];
+    } catch (err) {
+      // gagal ambil data lama, lanjut dengan form kosong
+    }
+
+    // Ambil data mentah presensi untuk siapkan filter bulan Lampiran A
+    window._dataMentahLampiranA = await ambilDataMentahUntukLampiranA(sheet);
+    const bulanList = window._dataMentahLampiranA.bulanList || [];
+    const opsiBulan =
+      `<option value="ALL">Semua Bulan</option>` +
+      bulanList
+        .map((bk) => {
+          const [thn, bln] = bk.split("-").map(Number);
+          const label = new Date(thn, bln, 1).toLocaleDateString("id-ID", {
+            month: "long",
+            year: "numeric",
+          });
+          return `<option value="${bk}">${label}</option>`;
+        })
+        .join("");
+
+    const datalistSiswa = `<datalist id="datalistSiswaWalas">${roster
+      .map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`)
+      .join("")}</datalist>`;
+
+    const htmlLaporan = `
+      <h3 style="margin-top:0;">🖨️ Laporan Walas — ${sheet}</h3>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+        <p style="margin:0 0 8px;font-size:13px;color:var(--dark);">
+          <b>Wali Kelas:</b> ${namaGuru || "-"} &nbsp;|&nbsp;
+          <b>Kelas:</b> ${sheet} &nbsp;|&nbsp;
+          <b>Jumlah Siswa:</b> ${jumlahSiswa} &nbsp;|&nbsp;
+          <b>Tanggal:</b> ${tanggalCetak}
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="action-edit" style="margin:0;padding:6px 12px;font-size:12px;" onclick="lihatRekapDariLaporanWalas('${sheet}')">📊 Lihat Rekap Kehadiran</button>
+          <label style="font-size:12px;font-weight:600;color:var(--dark);">Lampiran A untuk bulan:</label>
+          <select id="bulanLampiranA" class="input" style="margin:0;width:auto;min-width:150px;">${opsiBulan}</select>
+        </div>
+        <p class="small" style="margin:8px 0 0;color:var(--text-muted);">Lampiran A (Rekap Kehadiran) otomatis disertakan saat PDF dicetak sesuai bulan yang dipilih di atas.</p>
+      </div>
+
+      ${datalistSiswa}
+
+      <h4 style="margin-bottom:8px;">LAMPIRAN B. Permasalahan Siswa</h4>
+      <div id="tabelPermasalahan"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelPermasalahan','permasalahan')">➕ Tambah Baris</button>
+
+      <h4 style="margin:22px 0 8px;">LAMPIRAN C. Kondisi Kelas</h4>
+      <div id="tabelKondisiKelas"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelKondisiKelas','kondisi')">➕ Tambah Baris</button>
+
+      <h4 style="margin:22px 0 8px;">LAMPIRAN D. Mutasi Siswa</h4>
+      <div id="tabelMutasi"></div>
+      <button class="action-edit" style="margin-top:4px;" onclick="tambahBarisWalas('tabelMutasi','mutasi')">➕ Tambah Baris</button>
+
+      <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
+        <button class="action-save" onclick="simpanDanCetakLaporanWalas('${sheet}')">💾 Simpan &amp; Cetak PDF</button>
+        <button class="action-del" onclick="closeOverlay()">Kembali</button>
+      </div>
+    `;
+
+    await finishProgress("Form Laporan Siap!");
+    showOverlay(htmlLaporan, {
+      viewId: "formWalas_" + sheet,
+      title: `Laporan Walas — ${sheet}`,
+      sheet,
+    });
+
+    // Lampiran B: isi ulang dari data lama kalau ada, kalau tidak 1 baris kosong
+    if (itemPermasalahanLama.length > 0) {
+      itemPermasalahanLama.forEach((it) =>
+        tambahBarisWalas("tabelPermasalahan", "permasalahan", it),
+      );
+    } else {
+      tambahBarisWalas("tabelPermasalahan", "permasalahan");
+    }
+    tambahBarisWalas("tabelKondisiKelas", "kondisi");
+    tambahBarisWalas("tabelMutasi", "mutasi");
+  }
+
+  function tambahBarisWalas(containerId, jenis, prefill) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const esc = (v) => String(v || "").replace(/"/g, "&quot;");
+
+    const div = document.createElement("div");
+    div.className = "baris-walas";
+    div.style.cssText =
+      "display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;flex-wrap:wrap;";
+
+    if (jenis === "permasalahan") {
+      div.innerHTML = `
+        <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa" value="${esc(prefill?.namaSiswa)}">
+        <input class="input walas-proses" style="margin:0;flex:2;min-width:180px;" placeholder="Proses Penyelesaian" value="${esc(prefill?.proses)}">
+        <input class="input walas-ket" style="margin:0;flex:1;min-width:140px;" placeholder="Keterangan" value="${esc(prefill?.keterangan)}">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:76px;">
+          <input type="file" accept="image/*" class="walas-foto-file" style="font-size:10px;width:76px;" onchange="uploadFotoPermasalahanRow(this)">
+          <img class="walas-foto-preview" src="${esc(prefill?.fotoUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);${prefill?.fotoUrl ? "" : "display:none;"}">
+          <input type="hidden" class="walas-foto-url" value="${esc(prefill?.fotoUrl)}">
+        </div>
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    } else if (jenis === "kondisi") {
+      div.innerHTML = `
+        <input class="input walas-piket" style="margin:0;flex:1;min-width:140px;" placeholder="Pelaksanaan Piket">
+        <input class="input walas-inventaris" style="margin:0;flex:1;min-width:140px;" placeholder="Inventaris Kelas">
+        <input class="input walas-ket" style="margin:0;flex:1;min-width:140px;" placeholder="Keterangan">
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    } else if (jenis === "mutasi") {
+      div.innerHTML = `
+        <input class="input walas-nama" list="datalistSiswaWalas" style="margin:0;flex:1;min-width:140px;" placeholder="Nama Siswa">
+        <select class="input walas-jenis" style="margin:0;flex:1;min-width:130px;">
+          <option value="Mutasi Masuk">Mutasi Masuk</option>
+          <option value="Mutasi Keluar">Mutasi Keluar</option>
+        </select>
+        <input class="input walas-ket" style="margin:0;flex:2;min-width:160px;" placeholder="Keterangan (asal/tujuan sekolah)">
+        <input type="date" class="input walas-tanggal" style="margin:0;flex:1;min-width:130px;">
+        <button class="action-del" style="margin:0;padding:8px 12px;" onclick="this.parentElement.remove()">✕</button>`;
+    }
+
+    container.appendChild(div);
+  }
+
+  /* === UPLOAD FOTO PER BARIS LAMPIRAN B ===
+     Foto dikompres dulu di browser (biar tidak berat), lalu diupload
+     ke Google Drive lewat GAS. URL hasilnya disimpan di input hidden
+     .walas-foto-url, dipakai nanti untuk bikin barcode/QR saat cetak. */
+  function kompresGambarUntukUpload(file, maxDim = 900, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width;
+          let h = img.height;
+          if (w > h && w > maxDim) {
+            h = Math.round(h * (maxDim / w));
+            w = maxDim;
+          } else if (h > maxDim) {
+            w = Math.round(w * (maxDim / h));
+            h = maxDim;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => reject(new Error("Gagal membaca gambar."));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error("Gagal membaca file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadFotoPermasalahanRow(inputEl) {
+    const file = inputEl.files[0];
+    if (!file) return;
+
+    const div = inputEl.closest(".baris-walas");
+    const preview = div.querySelector(".walas-foto-preview");
+    const hiddenUrl = div.querySelector(".walas-foto-url");
+
+    if (!adminPasswordAktif || !window._sheetAktifLaporanWalas) {
+      alert("Sesi Login Walas tidak ditemukan, silakan Login Walas lagi.");
+      inputEl.value = "";
+      return;
+    }
+
+    inputEl.disabled = true;
+    try {
+      const base64 = await kompresGambarUntukUpload(file);
+
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "uploadFotoPermasalahan",
+          kelas: window._sheetAktifLaporanWalas,
+          adminPassword: adminPasswordAktif,
+          base64Data: base64,
+          fileName: `permasalahan_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+        }),
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        alert("❌ Gagal upload foto: " + (j.error || "Terjadi kesalahan"));
+        return;
+      }
+
+      hiddenUrl.value = j.url;
+      preview.src = j.url;
+      preview.style.display = "block";
+    } catch (err) {
+      alert("Gagal upload foto: " + (err.message || err));
+    } finally {
+      inputEl.disabled = false;
+    }
+  }
+
+  async function simpanDanCetakLaporanWalas(sheet) {
+    const namaGuru = window._namaGuruAktif || "";
+
+    const dataPermasalahan = [
+      ...document.querySelectorAll("#tabelPermasalahan .baris-walas"),
+    ]
+      .map((div) => ({
+        namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
+        proses: div.querySelector(".walas-proses")?.value.trim() || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+        fotoUrl: div.querySelector(".walas-foto-url")?.value.trim() || "",
+      }))
+      .filter((it) => it.namaSiswa);
+
+    const dataKondisiKelas = [
+      ...document.querySelectorAll("#tabelKondisiKelas .baris-walas"),
+    ]
+      .map((div) => ({
+        piket: div.querySelector(".walas-piket")?.value.trim() || "",
+        inventaris: div.querySelector(".walas-inventaris")?.value.trim() || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+      }))
+      .filter((it) => it.piket || it.inventaris || it.keterangan);
+
+    const dataMutasi = [
+      ...document.querySelectorAll("#tabelMutasi .baris-walas"),
+    ]
+      .map((div) => ({
+        namaSiswa: div.querySelector(".walas-nama")?.value.trim() || "",
+        jenis: div.querySelector(".walas-jenis")?.value || "",
+        keterangan: div.querySelector(".walas-ket")?.value.trim() || "",
+        tanggal: div.querySelector(".walas-tanggal")?.value || "",
+      }))
+      .filter((it) => it.namaSiswa);
+
+    // Bagian B disimpan ke sheet WALAS. Bagian C & D sengaja tidak
+    // dikirim ke server — cuma dipakai untuk cetak PDF.
+    if (dataPermasalahan.length > 0) {
+      if (!adminPasswordAktif) {
+        return alert(
+          "Sesi Login Walas tidak ditemukan, silakan Login Walas lagi.",
+        );
+      }
+      try {
+        const r = await fetch(SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "simpanWalasPermasalahan",
+            kelas: sheet,
+            adminPassword: adminPasswordAktif,
+            namaGuru,
+            items: dataPermasalahan,
+          }),
+        });
+        const j = await r.json();
+        if (!j.ok) {
+          alert(
+            "⚠️ Gagal menyimpan Bagian B ke sistem: " +
+              (j.error || "Terjadi kesalahan") +
+              "\n\nPDF tetap akan dicetak dengan data yang sudah diisi.",
+          );
+        }
+      } catch (err) {
+        alert(
+          "⚠️ Gagal menyimpan Bagian B ke sistem: " +
+            (err.message || err) +
+            "\n\nPDF tetap akan dicetak.",
+        );
+      }
+    }
+
+    const bulanKey = document.getElementById("bulanLampiranA")?.value || "ALL";
+
+    await cetakPdfLaporanWalas(
+      sheet,
+      namaGuru,
+      dataPermasalahan,
+      dataKondisiKelas,
+      dataMutasi,
+      bulanKey,
+    );
+  }
+
+  /* === DATA MENTAH REKAP KEHADIRAN (untuk Lampiran A) ===
+     Dipecah jadi 2 tahap: (1) ambil & kelompokkan data mentah per
+     bulan sekali saat form dibuka, (2) hitung ulang totalnya sesuai
+     bulan yang dipilih tepat sebelum PDF dicetak — tanpa fetch ulang. */
+  async function ambilDataMentahUntukLampiranA(sheet) {
+    const d = await getSheetData(sheet, "all");
+    const rows = d.values || [];
+    if (rows.length < 2) {
+      return { headers: [], bulanan: {}, bulanList: [], totalRows: 0 };
+    }
+
+    const headers = rows[0].slice(2);
+    const bulanan = {}; // nama -> { "tahun-bulan": {hadir,sakit,izin,alfa,cabut,hari:Set} }
+    const bulanSet = new Set();
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const waktu = row[0];
+      if (!waktu) continue;
+      const tgl = new Date(waktu);
+      if (isNaN(tgl.getTime())) continue;
+
+      const bk = `${tgl.getFullYear()}-${tgl.getMonth()}`;
+      const hariKey = tgl.toDateString();
+      bulanSet.add(bk);
+
+      row.slice(2).forEach((st, i) => {
+        const nama = headers[i];
+        if (!nama) return;
+        if (!bulanan[nama]) bulanan[nama] = {};
+        if (!bulanan[nama][bk]) {
+          bulanan[nama][bk] = {
+            hadir: 0,
+            sakit: 0,
+            izin: 0,
+            alfa: 0,
+            cabut: 0,
+            hari: new Set(),
+          };
+        }
+        bulanan[nama][bk].hari.add(hariKey);
+        const status = (st || "").toString();
+        if (status === "Hadir") bulanan[nama][bk].hadir++;
+        else if (status === "Sakit") bulanan[nama][bk].sakit++;
+        else if (status === "Izin") bulanan[nama][bk].izin++;
+        else if (status === "Alfa") bulanan[nama][bk].alfa++;
+        else if (status === "Cabut") bulanan[nama][bk].cabut++;
+      });
+    }
+
+    return {
+      headers,
+      bulanan,
+      bulanList: [...bulanSet].sort(),
+      totalRows: rows.length - 1,
+    };
+  }
+
+  function hitungRekapDariDataMentah(dataMentah, bulanKey) {
+    const { headers, bulanan, totalRows } = dataMentah;
+    const pilihBulan = bulanKey && bulanKey !== "ALL" ? bulanKey : "ALL";
+
+    let totals, totalPertemuan;
+
+    if (pilihBulan === "ALL") {
+      totals = headers.map((nama) => {
+        const perBulan = bulanan[nama] || {};
+        const agg = { Hadir: 0, Sakit: 0, Izin: 0, Alfa: 0, Cabut: 0 };
+        Object.values(perBulan).forEach((b) => {
+          agg.Hadir += b.hadir;
+          agg.Sakit += b.sakit;
+          agg.Izin += b.izin;
+          agg.Alfa += b.alfa;
+          agg.Cabut += b.cabut;
+        });
+        return agg;
+      });
+
+      const setHariAll = new Set();
+      headers.forEach((nama) => {
+        const perBulan = bulanan[nama] || {};
+        Object.values(perBulan).forEach((b) =>
+          b.hari.forEach((h) => setHariAll.add(h)),
+        );
+      });
+      totalPertemuan = setHariAll.size || totalRows;
+    } else {
+      totals = headers.map((nama) => {
+        const b = (bulanan[nama] && bulanan[nama][pilihBulan]) || {
+          hadir: 0,
+          sakit: 0,
+          izin: 0,
+          alfa: 0,
+          cabut: 0,
+        };
+        return {
+          Hadir: b.hadir,
+          Sakit: b.sakit,
+          Izin: b.izin,
+          Alfa: b.alfa,
+          Cabut: b.cabut,
+        };
+      });
+
+      const setHariBulan = new Set();
+      headers.forEach((nama) => {
+        const b = bulanan[nama] && bulanan[nama][pilihBulan];
+        if (b) b.hari.forEach((h) => setHariBulan.add(h));
+      });
+      totalPertemuan = setHariBulan.size;
+    }
+
+    const totalSiswa = headers.length;
+    const totalHadir = totals.reduce((sum, t) => sum + (t.Hadir || 0), 0);
+    const kapasitas = totalSiswa * totalPertemuan;
+    const rataKehadiran = kapasitas
+      ? ((totalHadir / kapasitas) * 100).toFixed(2)
+      : "0.00";
+
+    return {
+      headers,
+      totals,
+      sessionCount: totalPertemuan,
+      totalPertemuan,
+      totalSiswa,
+      rataKehadiran,
+    };
+  }
+
+  async function cetakPdfLaporanWalas(
+    sheet,
+    namaGuru,
+    dataPermasalahan,
+    dataKondisiKelas,
+    dataMutasi,
+    bulanKey,
+  ) {
+    showLoading("Menyiapkan Lampiran A (Rekap Kehadiran)...");
+    const dataMentah =
+      window._dataMentahLampiranA ||
+      (await ambilDataMentahUntukLampiranA(sheet));
+    const rekap = hitungRekapDariDataMentah(dataMentah, bulanKey || "ALL");
+
+    const namaBulanTerpilih =
+      bulanKey && bulanKey !== "ALL"
+        ? (() => {
+            const [thn, bln] = bulanKey.split("-").map(Number);
+            return new Date(thn, bln, 1).toLocaleDateString("id-ID", {
+              month: "long",
+              year: "numeric",
+            });
+          })()
+        : "Semua Bulan";
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const jumlahSiswa = (window._rosterAktif || []).length;
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    // === KOP / COVER ===
+    const logoEl = document.getElementById("logoSekolahEl");
+    let y = 14;
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+      try {
+        doc.addImage(logoEl, "PNG", (pageWidth - 20) / 2, 8, 20, 20);
+        y = 8 + 20 + 6;
+      } catch (e) {
+        // lanjut tanpa logo kalau gagal ditempel
+      }
+    }
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, "bold");
+    doc.text("SMKN 1 TELUK KUANTAN", pageWidth / 2, y, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("LAPORAN GURU WALI KELAS", pageWidth / 2, y + 6, {
+      align: "center",
+    });
+    doc.setFont(undefined, "normal");
+
+    y += 16;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, pageWidth - 15, y);
+    y += 8;
+
+    // === A. IDENTITAS ===
+    doc.setFontSize(10);
+    const identitas = [
+      ["Nama Wali Kelas", namaGuru || "-"],
+      ["Kelas", sheet],
+      ["Jumlah Siswa", String(jumlahSiswa)],
+      ["Tanggal Cetak", tanggalCetak],
+    ];
+    identitas.forEach(([label, value], i) => {
+      const yy = y + i * 6;
+      doc.text(label, 15, yy);
+      doc.text(":", 60, yy);
+      doc.text(String(value), 64, yy);
+    });
+    y += identitas.length * 6 + 10;
+
+    // === LAMPIRAN A. REKAP KEHADIRAN SISWA (model tabel sama seperti
+    // PDF Rekap Kehadiran yang sudah ada) ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN A. REKAP KEHADIRAN SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Periode: ${namaBulanTerpilih}`, 15, y + 5);
+    doc.setTextColor(0);
+    y += 10;
+
+    // === 3 KARTU RINGKASAN (Total Siswa / Total Pertemuan / Rata-rata) ===
+    {
+      const cardW = 55;
+      const cardH = 18;
+      const gap = 6;
+      const startX = (pageWidth - (cardW * 3 + gap * 2)) / 2;
+      doc.setDrawColor(180);
+      doc.setFillColor(255, 255, 255);
+
+      function drawCardLampiranA(x, judul, nilai) {
+        doc.rect(x, y, cardW, cardH);
+        doc.setFontSize(8.5);
+        doc.text(judul, x + cardW / 2, y + 6.5, { align: "center" });
+        doc.setFontSize(12);
+        doc.text(String(nilai), x + cardW / 2, y + 13.5, { align: "center" });
+      }
+
+      drawCardLampiranA(startX, "Total Siswa", rekap.totalSiswa);
+      drawCardLampiranA(
+        startX + cardW + gap,
+        "Total Pertemuan",
+        rekap.totalPertemuan,
+      );
+      drawCardLampiranA(
+        startX + (cardW + gap) * 2,
+        "Rata-rata Kehadiran",
+        rekap.rataKehadiran + "%",
+      );
+      y += cardH + 10;
+    }
+
+    const bodyA =
+      rekap.headers.length > 0
+        ? rekap.headers.map((name, i) => {
+            const t = rekap.totals[i];
+            const hadir = t.Hadir || 0;
+            const persen =
+              rekap.sessionCount > 0
+                ? ((hadir / rekap.sessionCount) * 100).toFixed(2)
+                : "0.00";
+            return [
+              i + 1,
+              name,
+              hadir,
+              t.Sakit || 0,
+              t.Izin || 0,
+              t.Alfa || 0,
+              t.Cabut || 0,
+              persen + "%",
+            ];
+          })
+        : [["-", "Belum ada data presensi", "-", "-", "-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [
+        [
+          "No",
+          "Nama Lengkap",
+          "Hadir",
+          "Sakit",
+          "Izin",
+          "Alfa",
+          "Cabut",
+          "% Kehadiran",
+        ],
+      ],
+      body: bodyA,
+      theme: "grid",
+      styles: {
+        fontSize: 8,
+        halign: "center",
+        valign: "middle",
+        cellPadding: 2,
+      },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontSize: 9,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 8 },
+        1: { cellWidth: 45 },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 15 },
+        5: { cellWidth: 15 },
+        6: { cellWidth: 15 },
+        7: { cellWidth: 20 },
+      },
+      didParseCell(data) {
+        if (data.column.index === 7 && data.section === "body") {
+          const v = parseFloat(data.cell.raw);
+          if (v < 50) data.cell.styles.textColor = [200, 0, 0];
+          else if (v < 70) data.cell.styles.textColor = [200, 140, 0];
+          else data.cell.styles.textColor = [0, 140, 70];
+        }
+      },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === LAMPIRAN B. PERMASALAHAN SISWA ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN B. PERMASALAHAN SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+
+    // Generate QR code untuk tiap baris yang punya foto (barcode foto,
+    // mirip fitur Jurnal Guru Wali di sistem MAGANG). Harus selesai
+    // dulu sebelum autoTable digambar karena didDrawCell sinkron.
+    const adaFotoUntukDiCetak = dataPermasalahan.some((it) => it.fotoUrl);
+    if (adaFotoUntukDiCetak && !window.QRCode) {
+      alert(
+        "⚠️ Library QR Code gagal dimuat (mungkin koneksi internet lambat/terblokir), jadi kolom Barcode Foto akan kosong di PDF ini. Coba refresh halaman lalu cetak ulang.",
+      );
+    }
+
+    const qrFotoB = [];
+    for (const it of dataPermasalahan) {
+      if (it.fotoUrl && window.QRCode) {
+        try {
+          qrFotoB.push(
+            await QRCode.toDataURL(it.fotoUrl, { width: 120, margin: 1 }),
+          );
+        } catch (e) {
+          console.error("Gagal generate QR untuk", it.fotoUrl, e);
+          qrFotoB.push(null);
+        }
+      } else {
+        qrFotoB.push(null);
+      }
+    }
+
+    const bodyB =
+      dataPermasalahan.length > 0
+        ? dataPermasalahan.map((it, i) => [
+            i + 1,
+            it.namaSiswa,
+            it.proses || "-",
+            it.keterangan || "-",
+            "",
+          ])
+        : [["-", "-", "-", "-", ""]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [
+        [
+          "No",
+          "Nama Siswa",
+          "Proses Penyelesaian",
+          "Keterangan",
+          "Barcode Foto",
+        ],
+      ],
+      body: bodyB,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5, minCellHeight: 20 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 40 },
+        4: { cellWidth: 22, halign: "center" },
+      },
+      margin: { left: 15, right: 15 },
+      didDrawCell: (data) => {
+        if (data.section === "body" && data.column.index === 4) {
+          const qr = qrFotoB[data.row.index];
+          if (qr) {
+            const ukuran = Math.min(data.cell.width, data.cell.height) - 4;
+            doc.addImage(
+              qr,
+              "PNG",
+              data.cell.x + (data.cell.width - ukuran) / 2,
+              data.cell.y + (data.cell.height - ukuran) / 2,
+              ukuran,
+              ukuran,
+            );
+          }
+        }
+      },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === C. KONDISI KELAS ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN C. KONDISI KELAS", 15, y);
+    doc.setFont(undefined, "normal");
+
+    const bodyC =
+      dataKondisiKelas.length > 0
+        ? dataKondisiKelas.map((it, i) => [
+            i + 1,
+            it.piket || "-",
+            it.inventaris || "-",
+            it.keterangan || "-",
+          ])
+        : [["-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [["No", "Pelaksanaan Piket", "Inventaris Kelas", "Keterangan"]],
+      body: bodyC,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: { 0: { cellWidth: 10, halign: "center" } },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // === D. MUTASI SISWA ===
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("LAMPIRAN D. MUTASI SISWA", 15, y);
+    doc.setFont(undefined, "normal");
+
+    const bodyD =
+      dataMutasi.length > 0
+        ? dataMutasi.map((it, i) => [
+            i + 1,
+            it.namaSiswa,
+            it.jenis || "-",
+            it.keterangan || "-",
+            it.tanggal ? formatTanggal(it.tanggal) : "-",
+          ])
+        : [["-", "-", "-", "-", "-"]];
+
+    doc.autoTable({
+      startY: y + 4,
+      head: [["No", "Nama Siswa", "Jenis Mutasi", "Keterangan", "Tanggal"]],
+      body: bodyD,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        halign: "center",
+      },
+      columnStyles: { 0: { cellWidth: 10, halign: "center" } },
+      margin: { left: 15, right: 15 },
+    });
+    y = doc.lastAutoTable.finalY + 24;
+
+    // === TANDA TANGAN ===
+    if (y > 260) {
+      doc.addPage();
+      y = 30;
+    }
+    doc.setFontSize(10);
+    doc.text(`Teluk Kuantan, ${tanggalCetak}`, pageWidth - 70, y);
+    doc.text("Guru Wali Kelas,", pageWidth - 70, y + 6);
+    doc.text(namaGuru || "___________________", pageWidth - 70, y + 28);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth - 70, y + 29, pageWidth - 15, y + 29);
+
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(
+      "diunduh dari tjktsmkn1telukkuantan.web.id",
+      pageWidth - 10,
+      pageH - 8,
+      { align: "right" },
+    );
+
+    doc.save(`Laporan-Walas-${sheet}.pdf`);
+    closeOverlay();
+  }
+
+  async function setClassPassword(sheet) {
+    try {
+      const v = document.getElementById("classPw").value.trim();
+      if (!v) return alert("Isi password!");
+      showLoading(
+        "Menyimpan password...",
+        "Memperbarui password presensi kelas di sheet...",
+      );
+      const j = await postToAppsScript({
+        action: "setPassword",
+        kelas: sheet,
+        newPassword: v,
+      });
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Password Diperbarui!");
+        alert("✅ Password disimpan");
+        openAdminModal(sheet, true);
+      } else {
+        hideLoading();
+        alert("Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
+    } catch (err) {
+      hideLoading();
+      alert("Gagal menyimpan password: " + (err.message || err));
+    }
+  }
+
+  async function saveHeader(sheet) {
+    try {
+      const names = [...document.querySelectorAll(".nameInput")]
+        .map((i) => i.value.trim())
+        .filter((x) => x);
+      showLoading(
+        "Menyimpan daftar siswa...",
+        "Mengirim nama siswa ke spreadsheet...",
+      );
+      const j = await postToAppsScript({
+        action: "updateHeader",
+        kelas: sheet,
+        headers: names,
+      });
+      if (j && j.ok) {
+        invalidateSheetCache(sheet);
+        await finishProgress("Daftar Siswa Tersimpan!");
+        alert("✅ Nama tersimpan");
+        closeOverlay();
+      } else {
+        hideLoading();
+        alert("Gagal: " + (j?.error || "Terjadi kesalahan"));
+      }
+    } catch (err) {
+      hideLoading();
+      alert("Gagal menyimpan daftar: " + (err.message || err));
+    }
+  }
+
+  /* === FORMAT TIMESTAMP → DD/MM/YYYY === */
+  function formatTanggal(value) {
+    const d = new Date(value);
+    if (isNaN(d)) return value;
+    const dd = d.getDate().toString().padStart(2, "0");
+    const mm = (d.getMonth() + 1).toString().padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  /* === REKAP TERBARU === */
+  async function openRekap(sheet, forceRefresh = false) {
+    showLoading(
+      "Memuat rekap kehadiran...",
+      "Mengambil seluruh riwayat kehadiran...",
+    );
+    window.currentSheet = sheet;
+
+    try {
+      const d = await getSheetData(sheet, "all", forceRefresh);
+      const rows = d.values || [];
+      if (rows.length < 2) {
+        await finishProgress("Data Kosong");
+        return showOverlay(
+          `<h3 style="margin-top:0;">${sheet}</h3><p class="small">Belum ada data.</p>`,
+          { viewId: "rekap_" + sheet, title: `Rekap — ${sheet}`, sheet },
+        );
+      }
+
+      const headers = rows[0].slice(2);
+
+      // Simpan info guru wali & jumlah siswa untuk dipakai di PDF
+      window._namaGuruAktif = d.namaGuru || "";
+      window._jumlahSiswaAktif = headers.length;
+      const last = rows[rows.length - 1];
+      const tanggal = formatTanggal(last[0] || "");
+      const vals = last.slice(2);
+
+      const countsToday = { Hadir: 0, Sakit: 0, Izin: 0, Alfa: 0, Cabut: 0 };
+      const listsToday = {
+        Hadir: [],
+        Sakit: [],
+        Izin: [],
+        Alfa: [],
+        Cabut: [],
+      };
+
+      headers.forEach((name, i) => {
+        const st = (vals[i] || "").toString();
+        if (countsToday[st] !== undefined) {
+          countsToday[st]++;
+          listsToday[st].push(name);
+        }
+      });
+
+      let html = `<h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">📅 Rekap Terbaru — ${sheet}</h3>`;
+      html += `<p style="color:var(--text-muted);">Tanggal: <b style="color:var(--dark);">${tanggal}</b></p>`;
+      html += `<div style="background:#f8fafc;padding:12px 16px;border-radius:10px;border:1px solid var(--border);margin-bottom:16px;">
+      <b style="color:var(--success);">Hadir: ${countsToday.Hadir}</b> | <b style="color:var(--warning);">Sakit: ${countsToday.Sakit}</b> | <b>Izin: ${countsToday.Izin}</b> | <b style="color:var(--danger);">Alfa: ${countsToday.Alfa}</b> | <b style="color:#b45309;">Cabut: ${countsToday.Cabut}</b>
+    </div>`;
+
+      const showCats = ["Sakit", "Izin", "Alfa", "Cabut"];
+      showCats.forEach((cat) => {
+        if (listsToday[cat] && listsToday[cat].length) {
+          html += `<details open><summary>${cat} (${listsToday[cat].length})</summary><p>${listsToday[cat].join(", ")}</p></details>`;
+        }
+      });
+
+      const totals = headers.map(() => ({
+        Hadir: 0,
+        Sakit: 0,
+        Izin: 0,
+        Alfa: 0,
+        Cabut: 0,
+      }));
+
+      // REKAP BULANAN
+      const bulanan = {};
+      const bulanSet = new Set();
+
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const waktu = row[0];
+        if (!waktu) continue;
+
+        const d = new Date(waktu);
+        if (isNaN(d)) continue;
+
+        const bulanKey = `${d.getFullYear()}-${d.getMonth()}`;
+        const hariKey = d.toDateString();
+        bulanSet.add(bulanKey);
+
+        row.slice(2).forEach((st, i) => {
+          const nama = headers[i];
+          if (!bulanan[nama]) bulanan[nama] = {};
+          if (!bulanan[nama][bulanKey]) {
+            bulanan[nama][bulanKey] = {
+              hadir: 0,
+              sakit: 0,
+              izin: 0,
+              alfa: 0,
+              cabut: 0,
+              hari: new Set(),
+            };
+          }
+
+          bulanan[nama][bulanKey].hari.add(hariKey);
+          const status = (st || "").toString();
+
+          if (status === "Hadir") bulanan[nama][bulanKey].hadir++;
+          if (status === "Sakit") bulanan[nama][bulanKey].sakit++;
+          if (status === "Izin") bulanan[nama][bulanKey].izin++;
+          if (status === "Alfa") bulanan[nama][bulanKey].alfa++;
+          if (status === "Cabut") bulanan[nama][bulanKey].cabut++;
+        });
+      }
+
+      for (let r = 1; r < rows.length; r++) {
+        const rowVals = rows[r].slice(2);
+        rowVals.forEach((v, i) => {
+          const st = (v || "").toString();
+          if (totals[i][st] !== undefined) totals[i][st] = totals[i][st] + 1;
+        });
+      }
+
+      // SIMPAN REKAP BULANAN KE GLOBAL
+      window._bulanan = bulanan;
+      window._bulanList = [...bulanSet].sort();
+
+      const sessionCount = rows.length - 1;
+
+      html += `
+<hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
+<h3 id="rekapJudul" style="text-align:center;margin-bottom:8px;">
+  📊 Rekap Kehadiran
+</h3>
+<p id="rekapSubJudul" style="text-align:center;margin-top:0;color:var(--text-muted);">
+  Kelas: <b style="color:var(--dark);">${sheet}</b> — Semua Bulan
+</p>
+`;
+
+      html += `
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0;background:#f8fafc;padding:12px 16px;border-radius:10px;border:1px solid var(--border);">
+  <b style="font-size:14px;">📅 Filter Bulan:</b>
+<select id="filterBulan" class="input" style="max-width:220px;margin:0;"
+        onchange="applyBulanFilter(this.value)">
+    <option value="ALL">Semua Bulan</option>
+    ${window._bulanList
+      .map((b) => {
+        const [y, m] = b.split("-");
+        const lbl =
+          [
+            "Januari",
+            "Februari",
+            "Maret",
+            "April",
+            "Mei",
+            "Juni",
+            "Juli",
+            "Agustus",
+            "September",
+            "Oktober",
+            "November",
+            "Desember",
+          ][m] +
+          " " +
+          y;
+        return `<option value="${b}">${lbl}</option>`;
+      })
+      .join("")}
+  </select>
+</div>
+`;
+
+      html += `<div class="table-freeze-wrapper rekap-freeze">
+  <table class="table"><thead><tr>
+               <th>No</th><th>Nama Lengkap</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alfa</th><th>Cabut</th><th>% Kehadiran</th>
+             </tr></thead><tbody>`;
+
+      for (let i = 0; i < headers.length; i++) {
+        const name = headers[i] || "";
+        const t = totals[i];
+        const hadir = t.Hadir || 0;
+        const totalMarked = t.Hadir + t.Sakit + t.Izin + t.Alfa + t.Cabut;
+        const persenNum = sessionCount > 0 ? (hadir / sessionCount) * 100 : 0;
+        const persen = persenNum.toFixed(2);
+
+        let persenClass = "persen-hijau";
+        if (persenNum < 50) persenClass = "persen-merah";
+        else if (persenNum < 70) persenClass = "persen-kuning";
+
+        html += `<tr class="rekap-row"
+        data-nama="${name.replace(/"/g, "&quot;")}" data-hadir="${hadir}" data-sakit="${t.Sakit || 0}" data-izin="${t.Izin || 0}" data-alfa="${t.Alfa || 0}" data-cabut="${t.Cabut || 0}" data-persen="${persen}">
+        <td>${i + 1}</td>
+        <td style="font-weight:500;">${name}</td>
+        <td class="col-hadir">${hadir}</td>
+        <td class="col-sakit">${t.Sakit || 0}</td>
+        <td class="col-izin">${t.Izin || 0}</td>
+        <td class="col-alfa">${t.Alfa || 0}</td>
+        <td class="col-cabut">${t.Cabut || 0}</td>
+       <td class="col-persen ${persenClass}" style="border-radius:4px;">${persen}%</td>
+      </tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+
+      // CARD RINGKASAN REKAP
+      html += `
+<div id="rekapRingkasan"
+     style="
+       margin-top:24px;
+       display:grid;
+       grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+       gap:16px;
+     ">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--card-shadow);">
+    <div style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">👥 Total Siswa</div>
+    <div id="ringTotalSiswa" style="font-size:32px;font-weight:700;color:var(--dark);">0</div>
+  </div>
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--card-shadow);">
+    <div style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">📅 Total Pertemuan</div>
+    <div id="ringTotalPertemuan" style="font-size:32px;font-weight:700;color:var(--primary);">0</div>
+  </div>
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--card-shadow);">
+    <div style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">📊 Rata-rata Kehadiran</div>
+    <div id="ringRataKehadiran" style="font-size:32px;font-weight:700;color:var(--success);">0%</div>
+  </div>
+</div>
+`;
+
+      // Footer tombol
+      html += `
+<div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:24px;">
+  <button class="action-edit" style="background:#0284c7;" onclick="openRekap('${sheet}', true)" title="Muat ulang data paling segar dari server">🔄 Segarkan Data</button>
+  <button class="action-edit" style="background:#475569;" onclick="toggleFullscreen()">🖥 Fullscreen</button>
+  <button class="action-save" onclick="downloadPDF()">📄 Download PDF</button>
+  <button class="action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')" title="Cetak Data Mentah Presensi Harian (Format A4 Landscape)">🖨️ Cetak Data Mentah (A4)</button>
+  <button class="action-edit" onclick="showRawData('${sheet}')">📊 Data Mentah</button>
+  <button class="action-edit" style="background:var(--warning);" onclick="openAdminPrompt('${sheet}')">🔑 Login Walas</button>
+  <button class="action-del" onclick="closeOverlay()">Tutup</button>
+</div>`;
+
+      await finishProgress("Rekap Berhasil Dimuat!");
+      showOverlay(html, {
+        viewId: "rekap_" + sheet,
+        title: `Rekap — ${sheet}`,
+        sheet,
+      });
+      setTimeout(() => applyBulanFilter("ALL"), 50);
+    } catch (err) {
+      hideLoading();
+      showOverlay(
+        `<div class='small' style='color:var(--danger);padding:20px;'>Gagal memuat rekap: ${err.message || err}</div>`,
+        { viewId: "rekap_error", title: "Error" },
+      );
+      console.error(err);
+    }
+  }
+
+  /* === LIHAT DATA MENTAH === */
+  async function showRawData(sheet) {
+    showLoading("Memuat data mentah...", "Membaca baris data spreadsheet...");
+
+    try {
+      const d = await getSheetData(sheet, "all");
+      const rows = d.values || [];
+
+      if (rows.length < 1) {
+        await finishProgress("Data Kosong");
+        showOverlay(
+          `<h3 style="margin-top:0;">${sheet}</h3><p>Belum ada data.</p>`,
+          {
+            viewId: "rawData_" + sheet,
+            title: `Data Mentah — ${sheet}`,
+            sheet,
+          },
+        );
+        return;
+      }
+
+      const headers = rows[0];
+      const data = rows.slice(1);
+
+      const passIndex = headers.findIndex((h) =>
+        h.toString().toLowerCase().replace(/\s+/g, "").includes("pass"),
+      );
+
+      let html = `<h3 style="margin-top:0;">📄 Data Mentah — ${sheet}</h3>`;
+
+      html += `<div class="table-freeze-wrapper raw-full" style="margin-bottom:20px;">
+               <table class="table">
+                 <thead><tr>`;
+
+      headers.forEach((h, i) => {
+        if (i !== passIndex) html += `<th>${h}</th>`;
+      });
+
+      html += `</tr></thead><tbody>`;
+
+      data.forEach((row) => {
+        html += `<tr>`;
+        row.forEach((cell, i) => {
+          if (i !== passIndex) {
+            if (headers[i].toLowerCase().includes("timestamp")) {
+              html += `<td>${formatTanggal(cell)}</td>`;
+            } else {
+              html += `<td>${cell}</td>`;
+            }
+          }
+        });
+        html += `</tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+      html += `<div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+               <div style="font-size:12px;color:var(--text-muted);">
+                 💡 Tips: Unduh laporan data mentah lengkap dalam lembar kerja <b>A4 Landscape</b> dengan seluruh data presensi tersusun rapi.
+               </div>
+               <div style="display:flex;gap:8px;">
+                 <button class="action-save" style="background:#059669;" onclick="downloadDataMentahPDF('${sheet}')">🖨️ Cetak PDF Data Mentah (A4 Landscape)</button>
+                 <button class="action-del" onclick="closeOverlay()">Tutup</button>
+               </div>
+             </div>`;
+
+      await finishProgress("Data Mentah Siap!");
+      showOverlay(html, {
+        viewId: "rawData_" + sheet,
+        title: `Data Mentah — ${sheet}`,
+        sheet,
+      });
+    } catch (err) {
+      showOverlay(
+        `<p style="color:var(--danger)">Gagal memuat data mentah: ${err.message}</p>`,
+        { viewId: "raw_error", title: "Error" },
+      );
+    }
+  }
+
+  /* === EDIT DATA MENTAH === */
+  async function openEditRaw(sheet) {
+    try {
+      showLoading(
+        "Memuat data mentah...",
+        "Menyiapkan lembar kerja edit data...",
+      );
+
+      const d = await getSheetData(sheet, "all");
+      const rows = d.values || [];
+
+      if (rows.length < 2) {
+        await finishProgress("Data Kosong");
+        alert("Data kosong");
+        closeOverlay();
+        return;
+      }
+
+      window._rawHeaders = rows[0];
+      window._rawRows = rows.slice(1);
+      window._rawByMonth = {};
+
+      window._rawRows.forEach((row, i) => {
+        const dt = new Date(row[0]);
+        if (isNaN(dt)) return;
+        const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+        if (!window._rawByMonth[key]) window._rawByMonth[key] = [];
+        window._rawByMonth[key].push({ row, index: i });
+      });
+
+      let html = `
+      <h3 style="margin-top:0;">✏️ Edit Data Mentah — ${sheet}</h3>
+
+      <div style="background:#f8fafc;padding:12px 16px;border-radius:10px;border:1px solid var(--border);margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label style="font-weight:600;font-size:14px;">📅 Pilih Bulan:</label>
+        <select id="editBulan" class="input" style="max-width:200px;margin:0;" onchange="renderEditTable()">
+          <option value="ALL">Semua Bulan</option>
+        </select>
+        <button class="btn-walas" style="margin-left:auto;" onclick="tambahBarisTanggalBaru()">➕ Tambah Baris Tanggal</button>
+      </div>
+
+      <div class="table-freeze-wrapper raw-full">
+        <table class="table">
+          <thead><tr>
+            ${window._rawHeaders.map((h) => `<th>${h}</th>`).join("")}
+          </tr></thead>
+          <tbody id="editTbody"></tbody>
+        </table>
+      </div>
+
+      <div style="text-align:right;margin-top:20px">
+        <button class="action-save" onclick="saveEditedRaw('${sheet}')">
+          💾 Simpan Perubahan
+        </button>
+        <button class="action-del" onclick="closeOverlay()">Batal</button>
+      </div>
+    `;
+
+      await finishProgress("Editor Siap!");
+      showOverlay(html, {
+        viewId: "editRaw_" + sheet,
+        title: `Edit Data — ${sheet}`,
+        sheet,
+      });
+
+      const sel = document.getElementById("editBulan");
+      Object.keys(window._rawByMonth)
+        .sort()
+        .forEach((k) => {
+          const [y, m] = k.split("-");
+          const nm = [
+            "Januari",
+            "Februari",
+            "Maret",
+            "April",
+            "Mei",
+            "Juni",
+            "Juli",
+            "Agustus",
+            "September",
+            "Oktober",
+            "November",
+            "Desember",
+          ][m];
+          sel.insertAdjacentHTML(
+            "beforeend",
+            `<option value="${k}">${nm} ${y}</option>`,
+          );
+        });
+
+      setTimeout(renderEditTable, 50);
+    } catch (err) {
+      showOverlay(
+        `<p style="color:var(--danger)">Gagal memuat editor data: ${err.message || err}</p>`,
+        { viewId: "edit_error", title: "Error" },
+      );
+    }
+  }
+
+  /*simpan*/
+  async function saveEditedRaw(sheet) {
+    try {
+      const edits = [...document.querySelectorAll(".cellEdit")].map((el) => ({
+        rowIndex: parseInt(el.dataset.r) + 2,
+        colIndex: parseInt(el.dataset.c) + 1,
+        value: el.value,
+      }));
+
+      const barisBaruEls = [
+        ...document.querySelectorAll("#editTbody tr[data-baris-baru]"),
+      ];
+
+      if (edits.length === 0 && barisBaruEls.length === 0) {
+        return alert("Tidak ada perubahan untuk disimpan.");
+      }
+
+      if (!confirm("Simpan semua perubahan ke Google Sheet?")) return;
+
+      showLoading(
+        "Menyimpan perubahan...",
+        "Mengirim perubahan baris ke Google Sheets...",
+      );
+
+      if (edits.length > 0) {
+        const j = await postToAppsScript({
+          action: "editRawData",
+          kelas: sheet,
+          edits,
+        });
+        if (!j.ok) {
+          hideLoading();
+          alert(
+            "❌ Gagal simpan perubahan sel: " + (j.error || "Tidak diketahui"),
+          );
+          return;
+        }
+      }
+
+      if (barisBaruEls.length > 0 && !adminPasswordAktif) {
+        hideLoading();
+        alert(
+          "⚠️ Sesi Login Walas tidak ditemukan, baris baru GAGAL disimpan. Perubahan sel di atas (kalau ada) sudah tersimpan.",
+        );
+        return;
+      }
+
+      for (const tr of barisBaruEls) {
+        const tanggal = tr.dataset.tanggalBaru;
+        const statusPerSiswa = {};
+        tr.querySelectorAll(".cellEditBaru").forEach((sel) => {
+          statusPerSiswa[sel.dataset.nama] = sel.value;
+        });
+
+        const j2 = await postToAppsScript({
+          action: "tambahBarisPresensiManual",
+          kelas: sheet,
+          adminPassword: adminPasswordAktif,
+          tanggal,
+          statusPerSiswa,
+        });
+        if (!j2.ok) {
+          hideLoading();
+          alert(
+            `❌ Gagal tambah baris tanggal ${tanggal}: ` +
+              (j2.error || "Tidak diketahui"),
+          );
+          return;
+        }
+      }
+
+      invalidateSheetCache(sheet);
+      await finishProgress("Perubahan Tersimpan 100%!");
+      alert("✅ Data berhasil diperbarui");
+      openAdminModal(sheet, true);
+    } catch (err) {
+      hideLoading();
+      alert("❌ Gagal menyimpan perubahan: " + (err.message || err));
+    }
+  }
+
+  /* === TAMBAH BARIS TANGGAL BARU (Edit Data / Login Walas) ===
+     Menambahkan 1 baris presensi baru langsung di tabel Edit Data,
+     dengan dropdown status per siswa (sama seperti baris yang sudah
+     ada). Baru benar-benar tersimpan ke sheet saat "Simpan Perubahan"
+     ditekan. */
+  function tambahBarisTanggalBaru() {
+    const tanggalInput = prompt(
+      "Tanggal presensi baru (YYYY-MM-DD):",
+      new Date().toISOString().slice(0, 10),
+    );
+    if (!tanggalInput) return;
+
+    const tbody = document.getElementById("editTbody");
+    if (!tbody) return;
+
+    const namaSiswaList = (window._rawHeaders || []).slice(2);
+
+    let tr = `<tr data-baris-baru="true" data-tanggal-baru="${tanggalInput}" style="background:#f0fdf4;">`;
+    tr += `<td>${formatTanggal(tanggalInput)} <span class="small" style="color:var(--success);font-weight:700;">(baru)</span></td>`;
+    tr += `<td>(diisi Login Walas)</td>`;
+    namaSiswaList.forEach((nama) => {
+      const namaAman = String(nama).replace(/"/g, "&quot;");
+      tr += `<td>
+        <select class="input cellEditBaru select-presensi hadir" data-nama="${namaAman}" onchange="updateSelectColor(this)">
+          <option value="Hadir" class="opt-hadir" selected>Hadir</option>
+          <option value="Sakit" class="opt-sakit">Sakit</option>
+          <option value="Izin" class="opt-izin">Izin</option>
+          <option value="Alfa" class="opt-alfa">Alfa</option>
+          <option value="Cabut" class="opt-cabut">Cabut</option>
+        </select>
+      </td>`;
+    });
+    tr += "</tr>";
+
+    tbody.insertAdjacentHTML("beforeend", tr);
+  }
+
+  function toggleFullscreen() {
+    const popup = document.querySelector(".popup");
+    if (!document.fullscreenElement) {
+      popup.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  function applyBulanFilter(bulanKey) {
+    let setHariBulan = new Set();
+    let totalSiswa = 0;
+    let totalHadir = 0;
+    let totalPertemuan = 0;
+
+    updateJudulRekap(bulanKey);
+    document.querySelectorAll(".rekap-row").forEach((row) => {
+      const nama = row.dataset.nama;
+
+      if (bulanKey === "ALL") {
+        row.querySelector(".col-hadir").innerText = row.dataset.hadir;
+        row.querySelector(".col-sakit").innerText = row.dataset.sakit;
+        row.querySelector(".col-izin").innerText = row.dataset.izin;
+        row.querySelector(".col-alfa").innerText = row.dataset.alfa;
+        row.querySelector(".col-cabut").innerText = row.dataset.cabut;
+
+        const td = row.querySelector(".col-persen");
+        const persenNum = parseFloat(row.dataset.persen);
+
+        td.innerText = persenNum.toFixed(2) + "%";
+
+        td.classList.remove("persen-merah", "persen-kuning", "persen-hijau");
+
+        if (persenNum < 50) td.classList.add("persen-merah");
+        else if (persenNum < 70) td.classList.add("persen-kuning");
+        else td.classList.add("persen-hijau");
+
+        totalSiswa++;
+        totalHadir += parseInt(row.dataset.hadir || 0);
+        return;
+      }
+
+      const r = window._bulanan?.[nama]?.[bulanKey];
+      if (!r) {
+        row.querySelector(".col-hadir").innerText = "0";
+        row.querySelector(".col-sakit").innerText = "0";
+        row.querySelector(".col-izin").innerText = "0";
+        row.querySelector(".col-alfa").innerText = "0";
+        row.querySelector(".col-cabut").innerText = "0";
+        row.querySelector(".col-persen").innerText = "0%";
+        return;
+      }
+
+      if (r) {
+        totalSiswa++;
+        totalHadir += r.hadir;
+        r.hari.forEach((h) => {
+          setHariBulan.add(h);
+        });
+      }
+
+      row.querySelector(".col-hadir").innerText = r.hadir;
+      row.querySelector(".col-sakit").innerText = r.sakit;
+      row.querySelector(".col-izin").innerText = r.izin;
+      row.querySelector(".col-alfa").innerText = r.alfa;
+      row.querySelector(".col-cabut").innerText = r.cabut;
+
+      const total = r.hari.size;
+      const persenNum = total ? (r.hadir / total) * 100 : 0;
+
+      const td = row.querySelector(".col-persen");
+
+      td.classList.remove("persen-merah", "persen-kuning", "persen-hijau");
+
+      if (persenNum < 50) {
+        td.classList.add("persen-merah");
+      } else if (persenNum < 70) {
+        td.classList.add("persen-kuning");
+      } else {
+        td.classList.add("persen-hijau");
+      }
+
+      td.innerText = persenNum.toFixed(2) + "%";
+    });
+
+    if (bulanKey === "ALL") {
+      totalPertemuan = hitungTotalPertemuanAll();
+    } else {
+      totalPertemuan = setHariBulan.size;
+    }
+
+    document.getElementById("ringTotalSiswa").innerText = totalSiswa;
+    document.getElementById("ringTotalPertemuan").innerText = totalPertemuan;
+
+    const kapasitas = totalSiswa * totalPertemuan;
+    const rata = kapasitas
+      ? ((totalHadir / kapasitas) * 100).toFixed(2)
+      : "0.00";
+    document.getElementById("ringRataKehadiran").innerText = rata + "%";
+  }
+
+  /* === Bersihkan emoji sebelum dikirim ke jsPDF ===
+     Font default jsPDF (WinAnsiEncoding) tidak mendukung emoji —
+     kalau dibiarkan, hasilnya karakter rusak semacam "Ø=ÜÊ" di PDF.
+     Emoji aman dipakai di tampilan HTML biasa, jadi fungsi ini HANYA
+     dipakai tepat sebelum teks masuk ke doc.text()/autoTable(). */
+  function bersihkanEmojiUntukPDF(teks) {
+    return String(teks || "")
+      .replace(
+        /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\uFE0F]/gu,
+        "",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    const sheet =
+      window.currentSheet ||
+      document.getElementById("kelasSelect")?.value ||
+      "Kelas";
+    const totalSiswa =
+      document.getElementById("ringTotalSiswa")?.innerText || "0";
+    const totalPertemuan =
+      document.getElementById("ringTotalPertemuan")?.innerText || "0";
+    const rata =
+      document.getElementById("ringRataKehadiran")?.innerText || "0%";
+
+    const filterBulanEl = document.getElementById("filterBulan");
+    const periodeBulan =
+      filterBulanEl && filterBulanEl.selectedIndex >= 0
+        ? filterBulanEl.options[filterBulanEl.selectedIndex].text
+        : "Semua Bulan";
+
+    const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    const namaGuruWali = bersihkanEmojiUntukPDF(
+      window._namaGuruAktif ||
+        document.getElementById("namaGuruWalas")?.value ||
+        "-",
+    );
+
+    // === KOP / HEADER RESMI (PERSIS LOGIN WALAS) ===
+    const logoEl = document.getElementById("logoSekolahEl");
+    let y = 14;
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+      try {
+        doc.addImage(logoEl, "PNG", (pageWidth - 20) / 2, 8, 20, 20);
+        y = 8 + 20 + 6;
+      } catch (e) {}
+    }
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, "bold");
+    doc.setTextColor(0);
+    doc.text("SMKN 1 TELUK KUANTAN", pageWidth / 2, y, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("LAPORAN REKAPITULASI KEHADIRAN SISWA", pageWidth / 2, y + 6, {
+      align: "center",
+    });
+    doc.setFont(undefined, "normal");
+
+    y += 14;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, pageWidth - 15, y);
+    y += 8;
+
+    // === IDENTITAS RESMI (PERSIS LOGIN WALAS) ===
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    const identitas = [
+      ["Nama Guru Wali", namaGuruWali || "-"],
+      ["Kelas", sheet],
+      ["Periode Kehadiran", periodeBulan],
+      ["Jumlah Siswa", String(totalSiswa)],
+      ["Tanggal Cetak", tanggalCetak],
+    ];
+    identitas.forEach(([label, value], i) => {
+      const yy = y + i * 6;
+      doc.text(label, 15, yy);
+      doc.text(":", 58, yy);
+      doc.text(String(value), 62, yy);
+    });
+    y += identitas.length * 6 + 8;
+
+    // === 3 KARTU RINGKASAN (PERSIS LOGIN WALAS) ===
+    {
+      const cardW = 55;
+      const cardH = 18;
+      const gap = 6;
+      const startX = (pageWidth - (cardW * 3 + gap * 2)) / 2;
+      doc.setDrawColor(180);
+      doc.setFillColor(255, 255, 255);
+      doc.setTextColor(0);
+
+      function drawCard(x, judul, nilai) {
+        doc.rect(x, y, cardW, cardH);
+        doc.setFontSize(8.5);
+        doc.text(judul, x + cardW / 2, y + 6.5, { align: "center" });
+        doc.setFontSize(12);
+        doc.text(String(nilai), x + cardW / 2, y + 13.5, { align: "center" });
+      }
+
+      drawCard(startX, "Total Siswa", totalSiswa);
+      drawCard(startX + cardW + gap, "Total Pertemuan", totalPertemuan);
+      drawCard(startX + (cardW + gap) * 2, "Rata-rata Kehadiran", rata);
+      y += cardH + 8;
+    }
+
+    // === TABEL KEHADIRAN SISWA DENGAN TEMA ROYAL BLUE (PERSIS LOGIN WALAS) ===
+    const head = [
+      [
+        "No",
+        "Nama Lengkap",
+        "Hadir",
+        "Sakit",
+        "Izin",
+        "Alfa",
+        "Cabut",
+        "% Kehadiran",
+      ],
+    ];
+
+    const body = [];
+    document.querySelectorAll(".rekap-row").forEach((tr) => {
+      const row = [];
+      tr.querySelectorAll("td").forEach((td) => {
+        row.push(td.innerText.trim());
+      });
+      if (row.length > 0) body.push(row);
+    });
+
+    doc.autoTable({
+      startY: y,
+      head: head,
+      body:
+        body.length > 0
+          ? body
+          : [["-", "Belum ada data presensi", "-", "-", "-", "-", "-", "-"]],
+      theme: "grid",
+      styles: {
+        fontSize: 8,
+        halign: "center",
+        valign: "middle",
+        cellPadding: 2,
+      },
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontSize: 9,
+        halign: "center",
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 45, halign: "left" },
+        2: { cellWidth: 15, halign: "center" },
+        3: { cellWidth: 15, halign: "center" },
+        4: { cellWidth: 15, halign: "center" },
+        5: { cellWidth: 15, halign: "center" },
+        6: { cellWidth: 15, halign: "center" },
+        7: { cellWidth: 20, halign: "center" },
+      },
+      didParseCell(data) {
+        if (data.column.index === 7 && data.section === "body") {
+          const v = parseFloat(data.cell.raw);
+          if (v < 50) data.cell.styles.textColor = [200, 0, 0];
+          else if (v < 70) data.cell.styles.textColor = [200, 140, 0];
+          else data.cell.styles.textColor = [0, 140, 70];
+        }
+      },
+      margin: { left: 15, right: 15 },
+    });
+
+    y = doc.lastAutoTable.finalY + 16;
+    if (y > 245) {
+      doc.addPage();
+      y = 25;
+    }
+
+    // === TANDA TANGAN RESMI GURU WALI KELAS (PERSIS LOGIN WALAS) ===
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text(`Teluk Kuantan, ${tanggalCetak}`, pageWidth - 70, y);
+    doc.text("Guru Wali Kelas,", pageWidth - 70, y + 6);
+    doc.text(namaGuruWali || "___________________", pageWidth - 70, y + 28);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth - 70, y + 29, pageWidth - 15, y + 29);
+
+    // === FOOTER NOTE ===
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(
+      "diunduh dari portalsmkn1telku.vercel.app",
+      pageWidth - 15,
+      pageH - 8,
+      { align: "right" },
+    );
+
+    const namaFileBulan = bersihkanEmojiUntukPDF(periodeBulan).replace(
+      /[^a-zA-Z0-9]/g,
+      "_",
+    );
+    doc.save(`Rekap-Kehadiran-${sheet}-${namaFileBulan}.pdf`);
+  }
+
+  /* === CETAK DATA MENTAH PRESENSI FORMAT A4 LANDSCAPE (AKOMODIR BANYAK BULAN & BANYAK SISWA) === */
+  async function downloadDataMentahPDF(sheet) {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      return alert("Pustaka jsPDF belum dimuat. Silakan muat ulang halaman.");
+    }
+
+    const kelasAktif =
+      sheet ||
+      window.currentSheet ||
+      document.getElementById("kelasSelect")?.value ||
+      "Kelas";
+
+    showLoading(
+      "Mempersiapkan PDF Data Mentah...",
+      `Mengambil & menyusun data presensi kelas ${kelasAktif}...`,
+    );
+
+    try {
+      // 1. Ambil data lengkap
+      let d = null;
+      if (
+        window._rawHeaders &&
+        window._rawHeaders.length > 2 &&
+        window._rawRows &&
+        window.currentSheet === kelasAktif
+      ) {
+        d = {
+          values: [window._rawHeaders, ...window._rawRows],
+          namaGuru:
+            window._namaGuruAktif ||
+            document.getElementById("namaGuruWalas")?.value ||
+            "",
+        };
+      } else {
+        d = await getSheetData(kelasAktif, "all");
+      }
+
+      const rows = (d && d.values) || [];
+      if (rows.length < 2) {
+        hideLoading();
+        return alert(
+          "Belum ada data presensi mentah untuk dicetak pada kelas ini.",
+        );
+      }
+
+      const rawHeaders = rows[0] || [];
+      // Kolom nama siswa (kolom index 2 ke atas)
+      const daftarSiswa = rawHeaders
+        .slice(2)
+        .map((s) => bersihkanEmojiUntukPDF(String(s).trim()))
+        .filter(Boolean);
+
+      if (daftarSiswa.length === 0) {
+        hideLoading();
+        return alert("Daftar nama siswa kosong.");
+      }
+
+      // 2. Deteksi filter bulan aktif dari UI (Login Walas #editBulan atau Rekap #filterBulan)
+      const editBulanEl = document.getElementById("editBulan");
+      const filterBulanEl = document.getElementById("filterBulan");
+      const activeBulanVal =
+        (editBulanEl ? editBulanEl.value : null) ||
+        (filterBulanEl ? filterBulanEl.value : null) ||
+        "ALL";
+
+      const NAMA_BULAN = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+
+      // 3. Kelompokkan data per bulan ("YYYY-M")
+      const rawDataRows = rows.slice(1).filter((r) => r && r[0]);
+      const rowsByMonth = {};
+      const fallbackRows = [];
+
+      rawDataRows.forEach((r) => {
+        const dt = new Date(r[0]);
+        if (!isNaN(dt.getTime())) {
+          const mKey = `${dt.getFullYear()}-${dt.getMonth()}`;
+          if (!rowsByMonth[mKey]) rowsByMonth[mKey] = [];
+          rowsByMonth[mKey].push(r);
+        } else {
+          fallbackRows.push(r);
+        }
+      });
+
+      // Urutkan kunci bulan secara kronologis (misal: Juli -> Agustus -> September...)
+      const sortedMonthKeys = Object.keys(rowsByMonth).sort((a, b) => {
+        const [y1, m1] = a.split("-").map(Number);
+        const [y2, m2] = b.split("-").map(Number);
+        return y1 === y2 ? m1 - m2 : y1 - y2;
+      });
+
+      // Tentukan bulan mana saja yang akan dicetak
+      let targetMonthKeys = [];
+      let isSingleMonth = false;
+
+      if (activeBulanVal !== "ALL") {
+        if (rowsByMonth[activeBulanVal]) {
+          targetMonthKeys = [activeBulanVal];
+          isSingleMonth = true;
+        } else {
+          hideLoading();
+          return alert("Tidak ada data presensi pada bulan yang dipilih.");
+        }
+      } else {
+        targetMonthKeys = sortedMonthKeys;
+        if (targetMonthKeys.length === 0 && fallbackRows.length > 0) {
+          targetMonthKeys = ["ALL"];
+          rowsByMonth["ALL"] = fallbackRows;
+        }
+      }
+
+      if (targetMonthKeys.length === 0) {
+        hideLoading();
+        return alert("Tidak ada data pertemuan presensi yang dapat dicetak.");
+      }
+
+      const namaGuru = bersihkanEmojiUntukPDF(
+        d.namaGuru ||
+          window._namaGuruAktif ||
+          document.getElementById("namaGuruWalas")?.value ||
+          "-",
+      );
+
+      const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+
+      // 4. Inisialisasi dokumen jsPDF A4 Landscape (297 mm x 210 mm)
+      const doc = new jsPDF("landscape", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth(); // 297 mm
+      const pageHeight = doc.internal.pageSize.getHeight(); // 210 mm
+      const logoEl = document.getElementById("logoSekolahEl");
+
+      // Ukuran adaptif untuk mengakomodir banyak siswa
+      const totalSiswa = daftarSiswa.length;
+      const isBanyakSiswa = totalSiswa > 33;
+      const baseFontSize = isBanyakSiswa ? 6.3 : 6.8;
+      const baseCellPadding = isBanyakSiswa ? 0.75 : 0.95;
+
+      let isFirstPageOverall = true;
+
+      // Helper function menggambar Kop & Header halaman
+      function drawKopLandscape(docRef, judulPeriode, infoBagian = "") {
+        let yPos = 8;
+        if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+          try {
+            docRef.addImage(logoEl, "PNG", 10, yPos, 14, 14);
+          } catch (e) {}
+        }
+
+        docRef.setFontSize(12.5);
+        docRef.setFont(undefined, "bold");
+        docRef.setTextColor(15, 23, 42);
+        docRef.text("SMKN 1 TELUK KUANTAN", 28, yPos + 4.5);
+
+        docRef.setFontSize(9.5);
+        docRef.text(
+          "LAPORAN DATA MENTAH PRESENSI SISWA (JURNAL HARIAN)",
+          28,
+          yPos + 9.5,
+        );
+
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7.5);
+        docRef.setTextColor(100);
+        const subInfo = infoBagian ? ` — ${infoBagian}` : "";
+        docRef.text(
+          `Tahun Ajaran 2026/2027 • Format Lembar Kerja A4 Landscape${subInfo}`,
+          28,
+          yPos + 13.5,
+        );
+
+        yPos += 16;
+        docRef.setDrawColor(203, 213, 225);
+        docRef.setLineWidth(0.4);
+        docRef.line(10, yPos, pageWidth - 10, yPos);
+        yPos += 3;
+
+        // 4 Kolom Identitas Rapi
+        docRef.setFontSize(8);
+        docRef.setTextColor(30, 41, 59);
+
+        const col1X = 10;
+        const col2X = 80;
+        const col3X = 150;
+        const col4X = 220;
+
+        docRef.text("Kelas", col1X, yPos + 3);
+        docRef.text(`:  ${kelasAktif}`, col1X + 18, yPos + 3);
+
+        docRef.text("Guru Wali kelas", col2X, yPos + 3);
+        docRef.text(`:  ${namaGuru || "-"}`, col2X + 20, yPos + 3);
+
+        docRef.text("Periode", col3X, yPos + 3);
+        docRef.text(`:  ${judulPeriode}`, col3X + 18, yPos + 3);
+
+        docRef.text("Tgl Cetak", col4X, yPos + 3);
+        docRef.text(`:  ${tanggalCetak}`, col4X + 20, yPos + 3);
+
+        return yPos + 7;
+      }
+
+      // Helper function menggambar Blok Tanda Tangan Resmi
+      function drawSignatureBlock(docRef, startYPos) {
+        const sigHeightNeeded = 26;
+        let finalY = startYPos;
+        if (finalY + sigHeightNeeded > pageHeight - 8) {
+          docRef.addPage("a4", "landscape");
+          finalY = 22;
+        } else {
+          finalY = Math.max(finalY + 6, pageHeight - 24);
+        }
+
+        docRef.setFontSize(7.8);
+        docRef.setTextColor(30, 41, 59);
+
+        // Kiri: Mengetahui Kepala Sekolah
+        const leftSigX = 18;
+        docRef.text("Mengetahui,", leftSigX, finalY - 12);
+        docRef.text("Kepala SMKN 1 Teluk Kuantan", leftSigX, finalY - 8.5);
+        docRef.setFont(undefined, "bold");
+        docRef.text("HURDISMAN, S.Pd", leftSigX, finalY);
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7);
+        docRef.text("NIP. 19690804 199412 1 002", leftSigX, finalY + 3.5);
+
+        // Kanan: Guru Wali Kelas
+        const rightSigX = pageWidth - 65;
+        docRef.setFontSize(7.8);
+        docRef.text(`Teluk Kuantan, ${tanggalCetak}`, rightSigX, finalY - 12);
+        docRef.text(`Guru Wali Kelas ${kelasAktif}`, rightSigX, finalY - 8.5);
+        docRef.setFont(undefined, "bold");
+        docRef.text(
+          namaGuru || "( .................................... )",
+          rightSigX,
+          finalY,
+        );
+        docRef.setFont(undefined, "normal");
+        docRef.setFontSize(7);
+        docRef.text("NIP. -", rightSigX, finalY + 3.5);
+      }
+
+      // 5. PROSES PER BULAN (Setiap bulan mendapatkan halaman tersendiri yang tersusun rapi)
+      targetMonthKeys.forEach((mKey) => {
+        const monthRows = rowsByMonth[mKey] || [];
+        if (monthRows.length === 0) return;
+
+        // Urutkan tanggal pada bulan ini dari terlama ke terbaru
+        monthRows.sort((a, b) => {
+          const ta = new Date(a[0]).getTime();
+          const tb = new Date(b[0]).getTime();
+          if (isNaN(ta) || isNaN(tb)) return 0;
+          return ta - tb;
+        });
+
+        let labelBulan = "Semua Pertemuan";
+        if (mKey !== "ALL") {
+          const [thn, bln] = mKey.split("-").map(Number);
+          labelBulan = `Bulan ${NAMA_BULAN[bln] || ""} ${thn}`;
+        }
+
+        // Jika tanggal dalam satu bulan > 22 hari, chunk per 20 hari agar tidak gepeng
+        const maxDatesPerTable = 20;
+        const monthChunks = [];
+        for (let i = 0; i < monthRows.length; i += maxDatesPerTable) {
+          monthChunks.push(monthRows.slice(i, i + maxDatesPerTable));
+        }
+
+        // Hitung akumulasi kehadiran per siswa untuk bulan ini
+        const totalPertemuanBulan = monthRows.length;
+        const ringkasanBulan = daftarSiswa.map((_, sIdx) => {
+          let h = 0,
+            s = 0,
+            i = 0,
+            a = 0,
+            c = 0;
+          monthRows.forEach((row) => {
+            const st = String(row[sIdx + 2] || "")
+              .trim()
+              .toLowerCase();
+            if (st === "hadir" || st === "h") h++;
+            else if (st === "sakit" || st === "s") s++;
+            else if (st === "izin" || st === "i") i++;
+            else if (st === "alfa" || st === "a") a++;
+            else if (st === "cabut" || st === "c") c++;
+          });
+          const persentase =
+            totalPertemuanBulan > 0
+              ? ((h / totalPertemuanBulan) * 100).toFixed(0) + "%"
+              : "0%";
+          return { h, s, i, a, c, persentase };
+        });
+
+        monthChunks.forEach((chunkRows, chunkIdx) => {
+          if (!isFirstPageOverall) {
+            doc.addPage("a4", "landscape");
+          }
+          isFirstPageOverall = false;
+
+          const infoBagian =
+            monthChunks.length > 1
+              ? `Bagian ${chunkIdx + 1} dari ${monthChunks.length}`
+              : "";
+          const startTableY = drawKopLandscape(doc, labelBulan, infoBagian);
+
+          // Susun Table Header
+          const tableHead = ["No", "Nama Siswa"];
+          chunkRows.forEach((row) => {
+            const dt = new Date(row[0]);
+            if (!isNaN(dt.getTime())) {
+              const dStr = String(dt.getDate()).padStart(2, "0");
+              const mStr = String(dt.getMonth() + 1).padStart(2, "0");
+              tableHead.push(`${dStr}/${mStr}`);
+            } else {
+              tableHead.push(String(row[0]).slice(0, 5));
+            }
+          });
+
+          const isLastChunkOfMonth = chunkIdx === monthChunks.length - 1;
+          if (isLastChunkOfMonth) {
+            tableHead.push("H", "S", "I", "A", "C", "%");
+          }
+
+          // Susun Table Body
+          const tableBody = [];
+          daftarSiswa.forEach((namaSiswa, sIdx) => {
+            const rowData = [String(sIdx + 1), namaSiswa];
+
+            chunkRows.forEach((row) => {
+              const val = String(row[sIdx + 2] || "").trim();
+              let kode = "-";
+              const lower = val.toLowerCase();
+              if (lower === "hadir" || lower === "h") kode = "H";
+              else if (lower === "sakit" || lower === "s") kode = "S";
+              else if (lower === "izin" || lower === "i") kode = "I";
+              else if (lower === "alfa" || lower === "a") kode = "A";
+              else if (lower === "cabut" || lower === "c") kode = "C";
+              rowData.push(kode);
+            });
+
+            if (isLastChunkOfMonth) {
+              const r = ringkasanBulan[sIdx];
+              rowData.push(
+                String(r.h),
+                String(r.s),
+                String(r.i),
+                String(r.a),
+                String(r.c),
+                r.persentase,
+              );
+            }
+
+            tableBody.push(rowData);
+          });
+
+          // Baris Total Hadir Harian per Tanggal
+          const totalHarianRow = ["", "Total Hadir"];
+          chunkRows.forEach((row) => {
+            let countHadir = 0;
+            daftarSiswa.forEach((_, sIdx) => {
+              const val = String(row[sIdx + 2] || "")
+                .trim()
+                .toLowerCase();
+              if (val === "hadir" || val === "h") countHadir++;
+            });
+            totalHarianRow.push(String(countHadir));
+          });
+
+          if (isLastChunkOfMonth) {
+            const grandH = ringkasanBulan.reduce((sum, x) => sum + x.h, 0);
+            const grandS = ringkasanBulan.reduce((sum, x) => sum + x.s, 0);
+            const grandI = ringkasanBulan.reduce((sum, x) => sum + x.i, 0);
+            const grandA = ringkasanBulan.reduce((sum, x) => sum + x.a, 0);
+            const grandC = ringkasanBulan.reduce((sum, x) => sum + x.c, 0);
+            const grandKap = totalSiswa * totalPertemuanBulan;
+            const grandRata =
+              grandKap > 0
+                ? ((grandH / grandKap) * 100).toFixed(0) + "%"
+                : "0%";
+            totalHarianRow.push(
+              String(grandH),
+              String(grandS),
+              String(grandI),
+              String(grandA),
+              String(grandC),
+              grandRata,
+            );
+          }
+          tableBody.push(totalHarianRow);
+
+          // Lebar kolom responsif
+          const colStyles = {
+            0: { cellWidth: 7, halign: "center" },
+            1: { cellWidth: 50, halign: "left", fontStyle: "bold" },
+          };
+
+          const dateColStartIndex = 2;
+          const dateColEndIndex = dateColStartIndex + chunkRows.length;
+          for (let c = dateColStartIndex; c < dateColEndIndex; c++) {
+            colStyles[c] = { halign: "center" };
+          }
+
+          if (isLastChunkOfMonth) {
+            colStyles[dateColEndIndex] = { cellWidth: 5.8, halign: "center" }; // H
+            colStyles[dateColEndIndex + 1] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // S
+            colStyles[dateColEndIndex + 2] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // I
+            colStyles[dateColEndIndex + 3] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // A
+            colStyles[dateColEndIndex + 4] = {
+              cellWidth: 5.8,
+              halign: "center",
+            }; // C
+            colStyles[dateColEndIndex + 5] = {
+              cellWidth: 9,
+              halign: "center",
+              fontStyle: "bold",
+            }; // %
+          }
+
+          doc.autoTable({
+            startY: startTableY,
+            head: [tableHead],
+            body: tableBody,
+            theme: "grid",
+            styles: {
+              fontSize: baseFontSize,
+              cellPadding: baseCellPadding,
+              lineColor: [226, 232, 240],
+              lineWidth: 0.15,
+              valign: "middle",
+              overflow: "ellipsize",
+            },
+            headStyles: {
+              fillColor: [37, 99, 235], // Royal Blue
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              halign: "center",
+              fontSize: baseFontSize + 0.3,
+            },
+            columnStyles: colStyles,
+            showHead: "everyPage",
+            margin: { left: 10, right: 10, top: 10, bottom: 25 },
+            didParseCell: function (data) {
+              if (data.section === "head") {
+                if (data.column.index === 1) data.cell.styles.halign = "left";
+                return;
+              }
+
+              // Baris Total Hadir (paling bawah)
+              if (data.row.index === tableBody.length - 1) {
+                data.cell.styles.fillColor = [241, 245, 249];
+                data.cell.styles.fontStyle = "bold";
+                data.cell.styles.textColor = [30, 41, 59];
+                return;
+              }
+
+              // Pewarnaan status presensi
+              const val = String(data.cell.raw || "").trim();
+              if (val === "H") {
+                data.cell.styles.textColor = [22, 101, 52];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "S") {
+                data.cell.styles.textColor = [29, 78, 216];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "I") {
+                data.cell.styles.textColor = [180, 83, 9];
+                data.cell.styles.fontStyle = "bold";
+              } else if (val === "A") {
+                data.cell.styles.textColor = [220, 38, 38];
+                data.cell.styles.fontStyle = "bold";
+                data.cell.styles.fillColor = [254, 242, 242];
+              } else if (val === "C") {
+                data.cell.styles.textColor = [126, 34, 206];
+                data.cell.styles.fontStyle = "bold";
+              }
+            },
+          });
+
+          // Legenda kode status di bawah tabel
+          const finalY = doc.lastAutoTable
+            ? doc.lastAutoTable.finalY + 3.5
+            : startTableY + 10;
+          doc.setFontSize(6.8);
+          doc.setTextColor(100);
+          doc.text(
+            "Keterangan: H = Hadir | S = Sakit | I = Izin | A = Alfa (Tanpa Keterangan) | C = Cabut (Meninggalkan Pembelajaran)",
+            10,
+            Math.min(finalY, pageHeight - 24),
+          );
+
+          // Jika hanya 1 bulan dan chunk terakhir, gambar tanda tangan langsung di halaman ini
+          if (isSingleMonth && isLastChunkOfMonth) {
+            drawSignatureBlock(doc, finalY);
+          }
+        });
+      });
+
+      // 6. JIKA MENCETAK SEMUA BULAN (MULTI-BULAN): Buat halaman Rekapitulasi Akumulasi Keseluruhan Semester
+      if (!isSingleMonth && targetMonthKeys.length > 1) {
+        doc.addPage("a4", "landscape");
+        const startRecapY = drawKopLandscape(
+          doc,
+          "Akumulasi Keseluruhan Semester (Semua Bulan)",
+          "Ringkasan Kumulatif",
+        );
+
+        const totalSemuaPertemuan = rawDataRows.length;
+        const recapTableHead = [
+          [
+            "No",
+            "Nama Siswa",
+            "Total Hadir",
+            "Sakit",
+            "Izin",
+            "Alfa",
+            "Cabut",
+            "Total Pertemuan",
+            "% Kehadiran Total",
+          ],
+        ];
+
+        const recapTableBody = [];
+        let grandHadirAll = 0,
+          grandSakitAll = 0,
+          grandIzinAll = 0,
+          grandAlfaAll = 0,
+          grandCabutAll = 0;
+
+        daftarSiswa.forEach((namaSiswa, sIdx) => {
+          let h = 0,
+            s = 0,
+            i = 0,
+            a = 0,
+            c = 0;
+          rawDataRows.forEach((row) => {
+            const st = String(row[sIdx + 2] || "")
+              .trim()
+              .toLowerCase();
+            if (st === "hadir" || st === "h") h++;
+            else if (st === "sakit" || st === "s") s++;
+            else if (st === "izin" || st === "i") i++;
+            else if (st === "alfa" || st === "a") a++;
+            else if (st === "cabut" || st === "c") c++;
+          });
+
+          grandHadirAll += h;
+          grandSakitAll += s;
+          grandIzinAll += i;
+          grandAlfaAll += a;
+          grandCabutAll += c;
+
+          const pct =
+            totalSemuaPertemuan > 0
+              ? ((h / totalSemuaPertemuan) * 100).toFixed(1) + "%"
+              : "0%";
+
+          recapTableBody.push([
+            String(sIdx + 1),
+            namaSiswa,
+            String(h),
+            String(s),
+            String(i),
+            String(a),
+            String(c),
+            String(totalSemuaPertemuan),
+            pct,
+          ]);
+        });
+
+        // Baris total keseluruhan
+        const grandKapasitasAll = totalSiswa * totalSemuaPertemuan;
+        const grandPersenAll =
+          grandKapasitasAll > 0
+            ? ((grandHadirAll / grandKapasitasAll) * 100).toFixed(1) + "%"
+            : "0%";
+
+        recapTableBody.push([
+          "",
+          "TOTAL KESELURUHAN SISWA",
+          String(grandHadirAll),
+          String(grandSakitAll),
+          String(grandIzinAll),
+          String(grandAlfaAll),
+          String(grandCabutAll),
+          String(totalSemuaPertemuan),
+          grandPersenAll,
+        ]);
+
+        doc.autoTable({
+          startY: startRecapY,
+          head: recapTableHead,
+          body: recapTableBody,
+          theme: "grid",
+          styles: {
+            fontSize: baseFontSize + 0.3,
+            cellPadding: baseCellPadding + 0.2,
+            lineColor: [226, 232, 240],
+            lineWidth: 0.15,
+            valign: "middle",
+          },
+          headStyles: {
+            fillColor: [37, 99, 235],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            halign: "center",
+          },
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" },
+            1: { cellWidth: 75, halign: "left", fontStyle: "bold" },
+            2: {
+              halign: "center",
+              textColor: [22, 101, 52],
+              fontStyle: "bold",
+            },
+            3: { halign: "center", textColor: [29, 78, 216] },
+            4: { halign: "center", textColor: [180, 83, 9] },
+            5: {
+              halign: "center",
+              textColor: [220, 38, 38],
+              fontStyle: "bold",
+            },
+            6: { halign: "center", textColor: [126, 34, 206] },
+            7: { halign: "center" },
+            8: { halign: "center", fontStyle: "bold" },
+          },
+          showHead: "everyPage",
+          margin: { left: 10, right: 10, top: 10, bottom: 25 },
+          didParseCell: function (data) {
+            if (data.row.index === recapTableBody.length - 1) {
+              data.cell.styles.fillColor = [241, 245, 249];
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = [30, 41, 59];
+            }
+          },
+        });
+
+        const finalRecapY = doc.lastAutoTable
+          ? doc.lastAutoTable.finalY
+          : startRecapY + 20;
+        drawSignatureBlock(doc, finalRecapY);
+      } else if (!isSingleMonth && targetMonthKeys.length === 1) {
+        // Jika hanya ada 1 bulan terdata meskipun opsi ALL dipilih
+        const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 150;
+        drawSignatureBlock(doc, finalY);
+      }
+
+      // 7. Tulis Nomor Halaman Otomatis di Setiap Lembar
+      const totalPages = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(6.8);
+        doc.setTextColor(140);
+        doc.text(
+          `Laporan Data Mentah Presensi • SMKN 1 Teluk Kuantan (portalsmkn1telku.vercel.app) — Halaman ${p} dari ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 3.8,
+          { align: "center" },
+        );
+      }
+
+      let namaFileBulan = isSingleMonth
+        ? targetMonthKeys[0]
+        : "Semua_Bulan_Semester";
+      namaFileBulan = bersihkanEmojiUntukPDF(namaFileBulan).replace(
+        /[^a-zA-Z0-9]/g,
+        "_",
+      );
+      doc.save(`Data-Mentah-Presensi-${kelasAktif}-${namaFileBulan}.pdf`);
+      await finishProgress("PDF Data Mentah Berhasil Diunduh!");
+    } catch (err) {
+      console.error("downloadDataMentahPDF error:", err);
+      hideLoading();
+      alert("Gagal membuat PDF Data Mentah: " + (err.message || err));
+    }
+  }
+
+  // Update render tabel edit form data mentah untuk warna
+  function renderEditTable() {
+    const bulanEl = document.getElementById("editBulan");
+    const bulan = bulanEl ? bulanEl.value : "ALL";
+    const tbody = document.getElementById("editTbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    const rawRows = window._rawRows || [];
+    const rawByMonth = window._rawByMonth || {};
+
+    const sumber =
+      bulan === "ALL"
+        ? rawRows.map((r, i) => ({ row: r, index: i }))
+        : rawByMonth[bulan] || [];
+
+    sumber.forEach(({ row, index }) => {
+      if (!row || !Array.isArray(row)) return;
+      let tr = "<tr>";
+      row.forEach((cell, c) => {
+        if (c >= 2) {
+          const clsStatus = cell ? String(cell).toLowerCase() : "hadir";
+          tr += `<td>
+          <select class="input cellEdit select-presensi ${clsStatus}" data-r="${index}" data-c="${c}" onchange="updateSelectColor(this)">
+            <option value="Hadir" class="opt-hadir" ${cell === "Hadir" ? "selected" : ""}>Hadir</option>
+            <option value="Sakit" class="opt-sakit" ${cell === "Sakit" ? "selected" : ""}>Sakit</option>
+            <option value="Izin" class="opt-izin" ${cell === "Izin" ? "selected" : ""}>Izin</option>
+            <option value="Alfa" class="opt-alfa" ${cell === "Alfa" ? "selected" : ""}>Alfa</option>
+            <option value="Cabut" class="opt-cabut" ${cell === "Cabut" ? "selected" : ""}>Cabut</option>
+          </select>
+        </td>`;
+        } else {
+          tr += `<td>${c === 0 ? formatTanggal(cell) : cell || ""}</td>`;
+        }
+      });
+      tr += "</tr>";
+      tbody.insertAdjacentHTML("beforeend", tr);
+    });
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
