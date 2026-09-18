@@ -3172,7 +3172,7 @@ function DashboardGuruContent() {
                 className="flex-1 rounded-xl bg-blue-800 hover:bg-blue-900 px-3 py-2.5 text-xs sm:text-sm font-black text-white transition-all active:scale-98 flex items-center justify-center gap-1.5"
               >
                 <span>✏️</span>
-                <span>Edit Biodata</span>
+                <span>Edit Nama</span>
               </button>
             </div>
           </div>
