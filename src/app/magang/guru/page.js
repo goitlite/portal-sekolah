@@ -1921,7 +1921,7 @@ function DashboardGuruContent() {
                             </div>
                             <div className="p-2.5 rounded-2xl bg-gradient-to-br from-white to-indigo-50/50 border border-indigo-200/60 shadow-xs">
                               <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800/70 block mb-0.5">
-                                👔 Guru Pembimbing
+                                👔 Guru Wali
                               </span>
                               <p className="text-[11px] font-bold text-slate-800 truncate">
                                 {siswa.namaGuru || "-"}
