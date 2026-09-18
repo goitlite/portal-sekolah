@@ -67,6 +67,8 @@ export default function PresensiPage() {
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [saveStatusText, setSaveStatusText] = useState("");
 
   const streamRef = useRef(null);
   const watchIdRef = useRef(null);
@@ -372,10 +374,25 @@ export default function PresensiPage() {
       return;
     }
 
+    let progressTimer = null;
     try {
       setSaving(true);
+      setSaveProgress(12);
+      setSaveStatusText("Menyiapkan foto & lokasi...");
 
       const photoWithWatermark = await addWatermark(photo);
+      setSaveProgress(35);
+      setSaveStatusText("Menyusun berkas bukti presensi...");
+
+      // Progress bar bergerak dinamis hingga 90% saat menunggu respon server
+      progressTimer = setInterval(() => {
+        setSaveProgress((prev) =>
+          prev < 90 ? prev + Math.floor(Math.random() * 4 + 2) : prev,
+        );
+      }, 350);
+
+      setSaveStatusText("Mengirim bukti presensi ke server...");
+      setSaveProgress((prev) => Math.max(prev, 50));
 
       const result = await savePresensi({
         idSiswa: user.id,
@@ -391,7 +408,13 @@ export default function PresensiPage() {
         keterangan: keterangan,
       });
 
+      if (progressTimer) clearInterval(progressTimer);
+
       if (result.success) {
+        setSaveProgress(100);
+        setSaveStatusText("Presensi berhasil terkirim!");
+        await new Promise((res) => setTimeout(res, 400));
+
         alert("Presensi berhasil disimpan.");
         let pembimbingList = JSON.parse(
           localStorage.getItem("magang_recent_pembimbing") || "[]",
@@ -420,10 +443,14 @@ export default function PresensiPage() {
         alert(result.message);
       }
     } catch (err) {
+      if (progressTimer) clearInterval(progressTimer);
       console.error(err);
       alert("Terjadi kesalahan saat menyimpan.");
     } finally {
+      if (progressTimer) clearInterval(progressTimer);
       setSaving(false);
+      setSaveProgress(0);
+      setSaveStatusText("");
     }
   }
 
@@ -815,7 +842,7 @@ export default function PresensiPage() {
                 className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
               >
                 {saving
-                  ? "🔄 SEDANG MENYIMPAN DATA..."
+                  ? `🔄 MENYIMPAN... (${Math.round(saveProgress)}%)`
                   : "🚀 SIMPAN & KIRIM PRESENSI"}
               </button>
 
@@ -829,6 +856,26 @@ export default function PresensiPage() {
           </div>
         </section>
       </div>
+
+      {/* MODAL / OVERLAY LOADING BAR SAAT SIMPAN & KIRIM PRESENSI */}
+      {saving && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-xs text-center bg-white p-6 rounded-3xl shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <p className="mb-4 text-base font-bold text-slate-700 tracking-wide">
+              {saveStatusText || "Menyimpan & Mengirim Presensi..."}
+            </p>
+            <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${saveProgress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-black text-slate-400">
+              {Math.round(saveProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

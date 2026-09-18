@@ -504,6 +504,7 @@ export default function GuruWaliPage() {
   const router = useRouter();
   const [dataSiswa, setDataSiswa] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState("");
   const [selectedSiswa, setSelectedSiswa] = useState(null);
   const [isPrinting, setIsPrinting] = useState(null);
@@ -528,9 +529,11 @@ export default function GuruWaliPage() {
   }, []);
 
   async function loadDataSiswaWali() {
+    let progressTimer = null;
     try {
       setLoading(true);
       setError("");
+      setLoadProgress(15);
       const session = getSession();
 
       if (!session || session.role !== "guru") {
@@ -544,18 +547,34 @@ export default function GuruWaliPage() {
         return;
       }
 
+      setLoadProgress(35);
+
+      progressTimer = setInterval(() => {
+        setLoadProgress((prev) =>
+          prev < 90 ? prev + Math.floor(Math.random() * 4 + 3) : prev,
+        );
+      }, 300);
+
       const result = await getDataSiswaWali(idGuru);
+
+      if (progressTimer) clearInterval(progressTimer);
 
       if (!result.success) {
         setError(result.message || "Gagal mengambil data.");
         return;
       }
+
+      setLoadProgress(100);
+      await new Promise((res) => setTimeout(res, 200));
       setDataSiswa(result.data || []);
     } catch (err) {
+      if (progressTimer) clearInterval(progressTimer);
       console.error("ERROR GURU WALI:", err);
       setError("Terjadi kesalahan saat mengambil data.");
     } finally {
+      if (progressTimer) clearInterval(progressTimer);
       setLoading(false);
+      setLoadProgress(0);
     }
   }
 
@@ -841,18 +860,23 @@ export default function GuruWaliPage() {
   }
 
   // =====================================================
-  // LOADING: DIGANTI MENJADI SAMA SEPERTI JS GURU
+  // LOADING: MODEL LOADING BAR SEPERTI JS GURU
   // =====================================================
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="relative mx-auto h-14 w-14">
-            <div className="absolute inset-0 rounded-full border-4 border-amber-200"></div>
-            <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-xs text-center">
+          <p className="mb-4 text-base font-bold text-slate-600 tracking-wide">
+            Menyinkronkan Data Siswa Wali...
+          </p>
+          <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${loadProgress}%` }}
+            />
           </div>
-          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
-            Memuat Data Siswa Wali...
+          <p className="mt-2 text-xs font-black text-slate-400">
+            {Math.round(loadProgress)}%
           </p>
         </div>
       </main>
