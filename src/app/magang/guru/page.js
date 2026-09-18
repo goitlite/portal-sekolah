@@ -15,12 +15,15 @@ import {
   getRekapSemua, // ⬅️ TAMBAHKAN
   getGuru, // ⬅️ TAMBAHKAN
   getMapelByGuru,
+  getBiodataSiswa,
+  updateBiodataSiswa,
 } from "../lib/api";
 import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
 import { generateLaporanMapelPDF } from "./guru-mapel/generateLaporanMapelPDF";
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
 import CetakLaporanMapelModal from "./guru-mapel/CetakLaporanMapelModal";
+import ModalPresensiMapel from "./guru-mapel/ModalPresensiMapel";
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
 import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
@@ -91,6 +94,63 @@ function kirimLoginWhatsApp(idSiswa, namaSiswa) {
   const url = `https://wa.me/?text=${encodeURIComponent(pesan)}`;
   window.open(url, "_blank");
 }
+
+// =========================================================
+// KONFIGURASI: CATATAN PERKEMBANGAN MURID (LAMPIRAN B)
+// =========================================================
+const ASPEK_PEMANTAUAN = [
+  { key: "akademik", label: "Akademik" },
+  { key: "karakter", label: "Karakter" },
+  { key: "sosial", label: "Sosial-Emosional" },
+  { key: "disiplin", label: "Kedisiplinan" },
+  { key: "potensi", label: "Potensi & Minat" },
+];
+
+const NAMA_BULAN_INDO = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+const formatBulanTahun = (nilaiBulan) => {
+  if (!nilaiBulan) return "-";
+  const [tahun, bulan] = String(nilaiBulan).split("-");
+  const indexBulan = Number(bulan) - 1;
+  const namaBulan = NAMA_BULAN_INDO[indexBulan] || bulan;
+  return `${namaBulan} ${tahun}`;
+};
+
+const capitalize = (str) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+
+const FORM_CATATAN_KOSONG = {
+  periodeAwal: "",
+  periodeAkhir: "",
+  desAkademik: "",
+  tinAkademik: "",
+  ketAkademik: "",
+  desKarakter: "",
+  tinKarakter: "",
+  ketKarakter: "",
+  desSosial: "",
+  tinSosial: "",
+  ketSosial: "",
+  desDisiplin: "",
+  tinDisiplin: "",
+  ketDisiplin: "",
+  desPotensi: "",
+  tinPotensi: "",
+  ketPotensi: "",
+};
 
 // Bungkus satu request dengan batas waktu — tanpa ini, kalau Apps Script
 // macet/lambat merespons, request bisa menggantung tanpa batas dan spinner
@@ -221,6 +281,13 @@ function DashboardGuruContent() {
   const [searchSiswaWali, setSearchSiswaWali] = useState("");
   const [selectedSiswaWali, setSelectedSiswaWali] = useState(null);
 
+  // --- STATE CATATAN PERKEMBANGAN (LAMPIRAN B) ---
+  const [showCatatanModal, setShowCatatanModal] = useState(false);
+  const [siswaCatatanAktif, setSiswaCatatanAktif] = useState(null);
+  const [loadingCatatan, setLoadingCatatan] = useState(false);
+  const [savingCatatan, setSavingCatatan] = useState(false);
+  const [formCatatan, setFormCatatan] = useState(FORM_CATATAN_KOSONG);
+
   // --- STATE KHUSUS TAB GURU MAPEL ---
   const [daftarMapel, setDaftarMapel] = useState([]);
   const [loadingMapel, setLoadingMapel] = useState(false);
@@ -228,6 +295,7 @@ function DashboardGuruContent() {
   const [mapelLoaded, setMapelLoaded] = useState(false);
   const [searchMapel, setSearchMapel] = useState("");
   const [cetakMapelCardLoadingId, setCetakCardLoadingId] = useState(null);
+  const [mapelPresensiAktif, setMapelPresensiAktif] = useState(null);
 
   const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
     useState(false);
@@ -930,6 +998,106 @@ function DashboardGuruContent() {
     return await loadSiswaWaliData(false);
   };
 
+  // --- HANDLER CATATAN PERKEMBANGAN MURID (LAMPIRAN B) ---
+  async function handleBukaCatatanPerkembangan(siswa) {
+    if (!siswa) return;
+    const studentId = siswa.idSiswa || siswa.id || siswa.ID_SISWA || siswa.ID;
+    setSiswaCatatanAktif(siswa);
+    setShowCatatanModal(true);
+    setLoadingCatatan(true);
+    setFormCatatan(FORM_CATATAN_KOSONG);
+
+    try {
+      if (!studentId) {
+        console.warn("ID Siswa tidak ditemukan:", siswa);
+        return;
+      }
+      const res = await getBiodataSiswa(String(studentId));
+
+      if (!res?.success) {
+        console.warn("Gagal mengambil catatan perkembangan:", res?.message);
+        return;
+      }
+
+      const data = res.data || {};
+
+      setFormCatatan({
+        periodeAwal: data.periodeAwal || "",
+        periodeAkhir: data.periodeAkhir || "",
+        desAkademik: data.desAkademik || "",
+        tinAkademik: data.tinAkademik || "",
+        ketAkademik: data.ketAkademik || "",
+        desKarakter: data.desKarakter || "",
+        tinKarakter: data.tinKarakter || "",
+        ketKarakter: data.ketKarakter || "",
+        desSosial: data.desSosial || "",
+        tinSosial: data.tinSosial || "",
+        ketSosial: data.ketSosial || "",
+        desDisiplin: data.desDisiplin || "",
+        tinDisiplin: data.tinDisiplin || "",
+        ketDisiplin: data.ketDisiplin || "",
+        desPotensi: data.desPotensi || "",
+        tinPotensi: data.tinPotensi || "",
+        ketPotensi: data.ketPotensi || "",
+      });
+    } catch (error) {
+      console.error("Gagal mengambil catatan perkembangan:", error);
+      alert("Gagal mengambil data catatan perkembangan sebelumnya.");
+    } finally {
+      setLoadingCatatan(false);
+    }
+  }
+
+  function tutupCatatanModal() {
+    setShowCatatanModal(false);
+    setSiswaCatatanAktif(null);
+    setFormCatatan(FORM_CATATAN_KOSONG);
+  }
+
+  function updateFieldCatatan(key, value) {
+    setFormCatatan((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSimpanCatatanPerkembangan() {
+    if (!siswaCatatanAktif) return;
+    const studentId =
+      siswaCatatanAktif.idSiswa ||
+      siswaCatatanAktif.id ||
+      siswaCatatanAktif.ID_SISWA ||
+      siswaCatatanAktif.ID;
+
+    if (!studentId) {
+      alert("ID Siswa tidak ditemukan.");
+      return;
+    }
+
+    if (!formCatatan.periodeAwal || !formCatatan.periodeAkhir) {
+      alert("Pilih periode pemantauan (bulan awal dan bulan akhir) dulu.");
+      return;
+    }
+
+    setSavingCatatan(true);
+    try {
+      const res = await updateBiodataSiswa({
+        idSiswa: String(studentId),
+        ...formCatatan,
+      });
+
+      if (!res?.success) {
+        alert(res?.message || "Gagal menyimpan catatan perkembangan.");
+        return;
+      }
+
+      alert("Catatan perkembangan berhasil disimpan.");
+      tutupCatatanModal();
+    } catch (error) {
+      console.error("Gagal menyimpan catatan perkembangan:", error);
+      alert("Terjadi kesalahan saat menyimpan catatan perkembangan.");
+    } finally {
+      setSavingCatatan(false);
+    }
+  }
+
   // Status gagal total (tidak ada cache & fetch gagal setelah retry) —
   // tampilkan tombol refresh, jangan biarkan pengguna terjebak di spinner.
   if (loadFailed) {
@@ -1626,28 +1794,34 @@ function DashboardGuruContent() {
                     return (
                       <div
                         key={siswa.idSiswa || idx}
-                        className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:border-blue-300"
+                        className="group flex flex-col overflow-hidden rounded-[1.75rem] border border-[#EADBBD] bg-gradient-to-b from-[#FFFDF9] via-[#FAF6ED] to-[#F5EEDD] shadow-[0_6px_25px_rgba(217,180,74,0.12)] hover:shadow-[0_14px_35px_rgba(217,180,74,0.22)] hover:border-[#D4AF37] transition-all duration-300"
                       >
-                        {/* HEADER KARTU (NAVY) */}
-                        <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-4 text-white">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-xl sm:text-2xl shadow-inner border border-white/20">
+                        {/* HEADER KARTU: ELEGAN BLUE-NAVY DENGAN SENTUHAN EMAS */}
+                        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-4 sm:p-5 text-white border-b border-[#D4AF37]/30">
+                          {/* Ambient Glow Emas Lembut */}
+                          <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br from-amber-400/20 via-yellow-400/10 to-transparent blur-2xl"></div>
+
+                          <div className="relative z-10 flex items-start gap-3.5">
+                            <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 via-white/10 to-indigo-500/25 text-2xl shadow-inner border border-amber-300/40">
                               👨‍🎓
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <h3 className="truncate text-sm sm:text-base font-black text-white leading-tight">
+                                <h3 className="truncate text-sm sm:text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-100 to-yellow-100 leading-tight drop-shadow-xs">
                                   {namaBersih || "-"}
                                 </h3>
                                 {kelas && (
-                                  <span className="inline-flex items-center shrink-0 rounded-md bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2 py-0.5 text-[10px] font-black text-amber-950 border border-amber-200 shadow-sm">
+                                  <span className="inline-flex items-center shrink-0 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2.5 py-0.5 text-[10px] font-black text-amber-950 border border-amber-200/90 shadow-sm">
                                     {kelas}
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-1 flex items-center justify-between gap-2">
-                                <p className="text-[11px] font-bold text-blue-200">
-                                  ID: {siswa.idSiswa || "-"}
+                              <div className="mt-1.5 flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-bold text-amber-200/90 tracking-wide">
+                                  ID:{" "}
+                                  <span className="text-white font-black">
+                                    {siswa.idSiswa || "-"}
+                                  </span>
                                 </p>
                                 {siswa.idSiswa && (
                                   <button
@@ -1658,8 +1832,8 @@ function DashboardGuruContent() {
                                         siswa.nama,
                                       )
                                     }
-                                    title="Kirim info login siswa via WA"
-                                    className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm transition-all hover:scale-105 active:scale-95"
+                                    title="Bagi ID login siswa via WhatsApp"
+                                    className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 px-2.5 py-1 text-[10px] font-black text-white shadow-sm border border-emerald-400/30 transition-all hover:scale-105 active:scale-95"
                                   >
                                     <span>📲</span>
                                     <span>Bagi ID</span>
@@ -1670,13 +1844,13 @@ function DashboardGuruContent() {
                           </div>
                         </div>
 
-                        {/* INFORMASI PENTING (BODY KARTU) */}
-                        <div className="flex flex-1 flex-col p-4 bg-slate-50/70 space-y-3">
+                        {/* INFORMASI PENTING (BODY KARTU BERWARNA LEMBUT & ELEGAN) */}
+                        <div className="flex flex-1 flex-col p-4 sm:p-5 bg-gradient-to-b from-white/90 via-[#FFFDF9]/95 to-[#FAF6ED] space-y-3">
                           {/* 1. KONTAK WHATSAPP SISWA & ORANG TUA */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {/* WHATSAPP SISWA */}
-                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                            <div className="p-3 rounded-2xl bg-gradient-to-br from-white via-emerald-50/40 to-emerald-100/30 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800/80 block mb-1.5 flex items-center gap-1">
                                 📱 WA Siswa
                               </span>
                               {siswa.noHp ? (
@@ -1684,21 +1858,21 @@ function DashboardGuruContent() {
                                   href={getWhatsAppUrl(siswa.noHp)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline break-all"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white text-xs font-black shadow-xs transition-all active:scale-95 break-all w-full justify-center"
                                 >
                                   <span>💬</span>
                                   <span>{siswa.noHp}</span>
                                 </a>
                               ) : (
-                                <span className="text-xs font-semibold text-slate-400 italic">
+                                <span className="text-xs font-semibold text-slate-400 italic block py-0.5">
                                   Belum diisi
                                 </span>
                               )}
                             </div>
 
                             {/* WHATSAPP ORANG TUA */}
-                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                            <div className="p-3 rounded-2xl bg-gradient-to-br from-white via-teal-50/40 to-cyan-100/30 border border-teal-200/80 shadow-xs transition-all hover:border-teal-300">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-teal-800/80 block mb-1.5 flex items-center gap-1">
                                 👨‍👩‍👧 WA {labelOrtu}
                               </span>
                               {ortuHp ? (
@@ -1706,13 +1880,13 @@ function DashboardGuruContent() {
                                   href={getWhatsAppUrl(ortuHp)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline break-all"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-700 hover:brightness-110 text-white text-xs font-black shadow-xs transition-all active:scale-95 break-all w-full justify-center"
                                 >
                                   <span>💬</span>
                                   <span>{ortuHp}</span>
                                 </a>
                               ) : (
-                                <span className="text-xs font-semibold text-slate-400 italic">
+                                <span className="text-xs font-semibold text-slate-400 italic block py-0.5">
                                   Belum diisi
                                 </span>
                               )}
@@ -1720,11 +1894,11 @@ function DashboardGuruContent() {
                           </div>
 
                           {/* 2. ALAMAT SISWA */}
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                              📍 Alamat
+                          <div className="p-3 rounded-2xl bg-gradient-to-br from-white to-amber-50/30 border border-amber-200/60 shadow-xs">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-900/70 block mb-1 flex items-center gap-1">
+                              📍 Alamat Domisili
                             </span>
-                            <p className="text-xs font-semibold text-slate-700 line-clamp-2">
+                            <p className="text-xs font-semibold text-slate-700 leading-relaxed line-clamp-2">
                               {siswa.alamat ? (
                                 siswa.alamat
                               ) : (
@@ -1735,54 +1909,47 @@ function DashboardGuruContent() {
                             </p>
                           </div>
 
-                          {/* 3. TEMPAT MAGANG & PEMBIMBING (JIKA ADA) */}
+                          {/* 3. TEMPAT MAGANG & PEMBIMBING */}
                           <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                                🏢 Magang
+                            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-white to-blue-50/50 border border-blue-200/60 shadow-xs">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-blue-800/70 block mb-0.5">
+                                🏢 Magang / DUDI
                               </span>
-                              <p className="text-[11px] font-bold text-slate-700 truncate">
+                              <p className="text-[11px] font-bold text-slate-800 truncate">
                                 {siswa.tempatMagang || "-"}
                               </p>
                             </div>
-                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                                👔 Pembimbing
+                            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-white to-indigo-50/50 border border-indigo-200/60 shadow-xs">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800/70 block mb-0.5">
+                                👔 Guru Pembimbing
                               </span>
-                              <p className="text-[11px] font-bold text-slate-700 truncate">
+                              <p className="text-[11px] font-bold text-slate-800 truncate">
                                 {siswa.namaGuru || "-"}
                               </p>
                             </div>
                           </div>
 
                           {/* 4. TOMBOL AKSI KARTU */}
-                          <div className="pt-1 mt-auto grid grid-cols-2 gap-2">
+                          <div className="pt-2 mt-auto grid grid-cols-2 gap-2.5">
                             <button
                               type="button"
                               onClick={() => setSelectedSiswaWali(siswa)}
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-2 text-xs font-black text-blue-800 transition-all active:scale-95"
+                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-100 hover:from-blue-100 hover:to-indigo-100 border border-blue-300/80 px-2.5 py-2.5 text-[11px] sm:text-xs font-black text-blue-900 shadow-xs transition-all active:scale-95"
                             >
                               <span>👁️</span>
                               <span>Profil Lengkap</span>
                             </button>
 
+                            {/* GANTI EDIT MENJADI CATATAN PERKEMBANGAN */}
                             <button
                               type="button"
-                              onClick={() => {
-                                const match = (siswa.nama || "").match(
-                                  /\[(.*?)\]/,
-                                );
-                                const extractedKelas = match
-                                  ? match[1]
-                                  : siswa.kelas || "";
-                                router.push(
-                                  `/magang/guru/guru-wali/tambah?editId=${siswa.idSiswa}&kelas=${encodeURIComponent(extractedKelas)}`,
-                                );
-                              }}
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-2 text-xs font-black text-amber-800 transition-all active:scale-95"
+                              onClick={() =>
+                                handleBukaCatatanPerkembangan(siswa)
+                              }
+                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-700 hover:brightness-110 border border-indigo-400/50 px-2.5 py-2.5 text-[11px] sm:text-xs font-black text-white shadow-md shadow-indigo-500/20 transition-all active:scale-95"
                             >
-                              <span>✏️</span>
-                              <span>Edit</span>
+                              <span>📝</span>
+                              <span>Catatan Perkembangan</span>
                             </button>
                           </div>
                         </div>
@@ -1959,14 +2126,8 @@ function DashboardGuruContent() {
                         <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
                           <button
                             type="button"
-                            onClick={() => {
-                              localStorage.setItem(
-                                "mapelAktifId",
-                                mapel.idMapel,
-                              );
-                              router.push("/magang/guru/guru-mapel/kelola");
-                            }}
-                            title="Buka presensi & nilai mapel ini"
+                            onClick={() => setMapelPresensiAktif(mapel)}
+                            title="Buka popup presensi & nilai mapel ini"
                             className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
                           >
                             <span>📊</span>
@@ -2004,13 +2165,24 @@ function DashboardGuruContent() {
                               );
                               router.push("/magang/guru/guru-mapel/kelola");
                             }}
-                            className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
+                            title="Buka pengaturan lengkap mapel"
+                            className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
                           >
                             <span>⚙️</span>
                             <span>Kelola Mapel</span>
                           </button>
                         </div>
                       </div>
+
+                      {/* TOMBOL BUKA PRESENSI & NILAI (POPUP SEPERTI KELOLA MAPEL) */}
+                      <button
+                        type="button"
+                        onClick={() => setMapelPresensiAktif(mapel)}
+                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 active:scale-[0.98] px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-amber-950 shadow-md border border-amber-300 transition-all cursor-pointer"
+                      >
+                        <span>📊</span>
+                        <span>BUKA PRESENSI & NILAI</span>
+                      </button>
                     </div>
                   ))}
               </div>
@@ -2968,9 +3140,21 @@ function DashboardGuruContent() {
               <button
                 type="button"
                 onClick={() => setSelectedSiswaWali(null)}
-                className="flex-1 rounded-xl bg-slate-200 hover:bg-slate-300 px-4 py-2.5 text-xs sm:text-sm font-black text-slate-700 transition-all active:scale-98"
+                className="flex-1 rounded-xl bg-slate-200 hover:bg-slate-300 px-3 py-2.5 text-xs sm:text-sm font-black text-slate-700 transition-all active:scale-98"
               >
                 Tutup Profil
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const s = selectedSiswaWali;
+                  setSelectedSiswaWali(null);
+                  handleBukaCatatanPerkembangan(s);
+                }}
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 px-3 py-2.5 text-xs sm:text-sm font-black text-white transition-all active:scale-98 flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>📝</span>
+                <span>Catatan</span>
               </button>
               <button
                 type="button"
@@ -2985,7 +3169,7 @@ function DashboardGuruContent() {
                     `/magang/guru/guru-wali/tambah?editId=${selectedSiswaWali.idSiswa}&kelas=${encodeURIComponent(extractedKelas)}`,
                   );
                 }}
-                className="flex-1 rounded-xl bg-blue-800 hover:bg-blue-900 px-4 py-2.5 text-xs sm:text-sm font-black text-white transition-all active:scale-98 flex items-center justify-center gap-1.5"
+                className="flex-1 rounded-xl bg-blue-800 hover:bg-blue-900 px-3 py-2.5 text-xs sm:text-sm font-black text-white transition-all active:scale-98 flex items-center justify-center gap-1.5"
               >
                 <span>✏️</span>
                 <span>Edit Biodata</span>
@@ -2993,6 +3177,233 @@ function DashboardGuruContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL: CATATAN PERKEMBANGAN MURID (LAMPIRAN B) */}
+      {showCatatanModal && siswaCatatanAktif && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-2 sm:p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl max-h-[92vh] flex-col overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-200">
+            {/* HEADER MODAL */}
+            <div className="shrink-0 bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 px-4 py-4 sm:px-6 sm:py-5 text-white shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-white/20 text-[10px] font-black uppercase tracking-wider">
+                      Lampiran B
+                    </span>
+                    <h2 className="text-sm sm:text-base font-black">
+                      Catatan Perkembangan Murid
+                    </h2>
+                  </div>
+                  <p className="mt-1 text-[11px] sm:text-xs text-indigo-100 font-medium">
+                    {(siswaCatatanAktif.nama || "-").replace(
+                      /\s*\[.*?\]\s*/,
+                      "",
+                    )}{" "}
+                    &middot;{" "}
+                    {(siswaCatatanAktif.nama || "").match(/\[(.*?)\]/)?.[1] ||
+                      siswaCatatanAktif.kelas ||
+                      "-"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={tutupCatatanModal}
+                  className="shrink-0 rounded-xl bg-white/10 hover:bg-white/25 px-2.5 py-1.5 text-xs font-black text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* BODY (scrollable) */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 space-y-4">
+              {loadingCatatan ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+                  <p className="text-xs sm:text-sm font-bold text-slate-500">
+                    Memuat catatan perkembangan sebelumnya...
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* INFO GURU WALI */}
+                  <div className="rounded-2xl bg-gradient-to-r from-indigo-50/70 to-blue-50/70 border border-indigo-100 p-3 text-xs sm:text-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Guru Wali
+                      </span>
+                      <p className="font-black text-indigo-950">
+                        {siswaCatatanAktif.namaGuru || user?.nama || "-"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        ID Siswa
+                      </span>
+                      <p className="font-bold text-slate-700">
+                        {siswaCatatanAktif.idSiswa ||
+                          siswaCatatanAktif.id ||
+                          "-"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* PERIODE PEMANTAUAN */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                    <label className="mb-2 block text-xs sm:text-sm font-black text-slate-800">
+                      📅 Periode Pemantauan
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                          Bulan Awal
+                        </span>
+                        <input
+                          type="month"
+                          value={formCatatan.periodeAwal}
+                          onChange={(e) =>
+                            updateFieldCatatan("periodeAwal", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+                      <div>
+                        <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-500">
+                          Bulan Akhir
+                        </span>
+                        <input
+                          type="month"
+                          value={formCatatan.periodeAkhir}
+                          onChange={(e) =>
+                            updateFieldCatatan("periodeAkhir", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+                    </div>
+                    {formCatatan.periodeAwal && formCatatan.periodeAkhir && (
+                      <p className="mt-2 text-[11px] sm:text-xs font-bold text-indigo-600 bg-indigo-50/80 px-2.5 py-1 rounded-lg inline-block">
+                        Periode: {formatBulanTahun(formCatatan.periodeAwal)} —{" "}
+                        {formatBulanTahun(formCatatan.periodeAkhir)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* ASPEK PEMANTAUAN */}
+                  <div className="space-y-3.5">
+                    {ASPEK_PEMANTAUAN.map((aspek) => (
+                      <div
+                        key={aspek.key}
+                        className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-xs"
+                      >
+                        <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-indigo-50/40 px-3.5 py-2.5 text-xs sm:text-sm font-black text-indigo-900 border-b border-slate-100 flex items-center justify-between">
+                          <span>{aspek.label}</span>
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100/70 px-2 py-0.5 rounded">
+                            Aspek
+                          </span>
+                        </div>
+                        <div className="p-3.5 space-y-3">
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-600">
+                              Deskripsi Perkembangan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`des${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `des${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              placeholder={`Tulis deskripsi perkembangan ${aspek.label.toLowerCase()}...`}
+                              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
+                            />
+                          </div>
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-600">
+                              Tindak Lanjut yang Dilakukan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`tin${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `tin${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Tindakan bimbingan atau solusi yang diberikan..."
+                              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
+                            />
+                          </div>
+                          <div>
+                            <span className="mb-1 block text-[10px] sm:text-xs font-bold text-slate-600">
+                              Keterangan Tambahan
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={formCatatan[`ket${capitalize(aspek.key)}`]}
+                              onChange={(e) =>
+                                updateFieldCatatan(
+                                  `ket${capitalize(aspek.key)}`,
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Keterangan opsional atau catatan khusus..."
+                              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* FOOTER */}
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-3 sm:p-4 flex gap-2.5">
+              <button
+                type="button"
+                onClick={tutupCatatanModal}
+                disabled={savingCatatan}
+                className="flex-1 rounded-xl bg-white border border-slate-300 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-slate-700 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSimpanCatatanPerkembangan}
+                disabled={loadingCatatan || savingCatatan}
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-md shadow-indigo-500/20 transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {savingCatatan ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💾</span>
+                    <span>Simpan Catatan</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PRESENSI & NILAI MAPEL (POPUP RESPONSIF & PADAT) */}
+      {mapelPresensiAktif && (
+        <ModalPresensiMapel
+          isOpen={!!mapelPresensiAktif}
+          onClose={() => setMapelPresensiAktif(null)}
+          guru={user}
+          mapel={mapelPresensiAktif}
+        />
       )}
     </main>
   );
