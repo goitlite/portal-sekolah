@@ -14,9 +14,11 @@ import {
   getJurnalPKL,
   getRekapSemua, // ⬅️ TAMBAHKAN
   getGuru, // ⬅️ TAMBAHKAN
+  getMapelByGuru,
 } from "../lib/api";
 import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
+import { generateLaporanMapelPDF } from "./guru-mapel/generateLaporanMapelPDF";
 import CetakLaporanGuruWaliModal from "./guru-wali/CetakLaporanGuruWaliModal";
 import CetakLaporanMapelModal from "./guru-mapel/CetakLaporanMapelModal";
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
@@ -61,6 +63,33 @@ function formatTanggal(waktu) {
       second: "2-digit",
     }) + " WIB"
   );
+}
+
+// Format nomor WhatsApp (08xxx / 62xxx -> https://wa.me/62xxx)
+function getWhatsAppUrl(noHp) {
+  if (!noHp) return null;
+  let nomor = String(noHp).replace(/\D/g, "");
+  if (!nomor) return null;
+  if (nomor.startsWith("0")) {
+    nomor = "62" + nomor.substring(1);
+  } else if (!nomor.startsWith("62")) {
+    nomor = "62" + nomor;
+  }
+  return `https://wa.me/${nomor}`;
+}
+
+// Bagikan template ID login ke nomor WhatsApp siswa
+function kirimLoginWhatsApp(idSiswa, namaSiswa) {
+  if (!idSiswa) {
+    alert("ID siswa tidak tersedia.");
+    return;
+  }
+  const namaBersih = String(namaSiswa || "Siswa")
+    .replace(/\s*\[.*?\]\s*/, "")
+    .trim();
+  const pesan = `Halo ${namaBersih}.\n\nSilakan login ke Portal SMKN 1 Teluk Kuantan:\nhttps://portalsmkn1telku.vercel.app/\n\nGunakan ID sesuai kartu Anda:\nNama: ${namaBersih}\nID: ${idSiswa}`;
+  const url = `https://wa.me/?text=${encodeURIComponent(pesan)}`;
+  window.open(url, "_blank");
 }
 
 // Bungkus satu request dengan batas waktu — tanpa ini, kalau Apps Script
@@ -183,6 +212,22 @@ function DashboardGuruContent() {
   const [loadingCetakWali, setLoadingCetakWali] = useState(false);
   const [showLaporanWaliModal, setShowLaporanWaliModal] = useState(false);
   const [showCetakMapelModal, setShowCetakMapelModal] = useState(false);
+
+  // --- STATE KHUSUS TAB GURU WALI ---
+  const [dataSiswaWali, setDataSiswaWali] = useState([]);
+  const [loadingSiswaWali, setLoadingSiswaWali] = useState(false);
+  const [errorSiswaWali, setErrorSiswaWali] = useState("");
+  const [siswaWaliLoaded, setSiswaWaliLoaded] = useState(false);
+  const [searchSiswaWali, setSearchSiswaWali] = useState("");
+  const [selectedSiswaWali, setSelectedSiswaWali] = useState(null);
+
+  // --- STATE KHUSUS TAB GURU MAPEL ---
+  const [daftarMapel, setDaftarMapel] = useState([]);
+  const [loadingMapel, setLoadingMapel] = useState(false);
+  const [errorMapel, setErrorMapel] = useState("");
+  const [mapelLoaded, setMapelLoaded] = useState(false);
+  const [searchMapel, setSearchMapel] = useState("");
+  const [cetakMapelCardLoadingId, setCetakCardLoadingId] = useState(null);
 
   const [loadingCetakLaporanMonitoring, setLoadingCetakLaporanMonitoring] =
     useState(false);
@@ -737,15 +782,152 @@ function DashboardGuruContent() {
     }
   };
 
+  // --- AMBIL DAFTAR SISWA WALI (Lazy-load & Caching) ---
+  const loadSiswaWaliData = useCallback(
+    async (forceRefresh = false) => {
+      if (!user?.id) return [];
+      const cacheKey = `siswaWaliCache_${user.id}`;
+
+      // Gunakan cache session agar instan jika bukan refresh manual
+      if (!forceRefresh) {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setDataSiswaWali(parsed);
+              setSiswaWaliLoaded(true);
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.warn("Gagal membaca cache siswa wali:", e);
+        }
+      }
+
+      setLoadingSiswaWali(true);
+      setErrorSiswaWali("");
+
+      try {
+        const res = await fetchStepWithRetry(() => getDataSiswaWali(user.id), {
+          retries: 1,
+          timeoutMs: 15000,
+        });
+
+        if (res && res.success) {
+          const list = Array.isArray(res.data) ? res.data : [];
+          setDataSiswaWali(list);
+          setSiswaWaliLoaded(true);
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(list));
+          } catch (e) {}
+          return list;
+        } else {
+          setErrorSiswaWali(res?.message || "Gagal mengambil data siswa wali.");
+          return [];
+        }
+      } catch (err) {
+        console.error("Error load siswa wali:", err);
+        setErrorSiswaWali(
+          "Terjadi kendala koneksi saat mengambil data siswa wali.",
+        );
+        return [];
+      } finally {
+        setLoadingSiswaWali(false);
+      }
+    },
+    [user?.id],
+  );
+
+  // --- AMBIL DAFTAR MAPEL (Lazy-load & Caching) ---
+  const loadMapelData = useCallback(
+    async (forceRefresh = false) => {
+      if (!user?.id) return [];
+      const cacheKey = `mapelCache_${user.id}`;
+
+      if (!forceRefresh) {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setDaftarMapel(parsed);
+              setMapelLoaded(true);
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.warn("Gagal membaca cache mapel:", e);
+        }
+      }
+
+      setLoadingMapel(true);
+      setErrorMapel("");
+
+      try {
+        const res = await fetchStepWithRetry(() => getMapelByGuru(user.id), {
+          retries: 1,
+          timeoutMs: 15000,
+        });
+
+        if (res && res.success) {
+          const list = Array.isArray(res.data) ? res.data : [];
+          setDaftarMapel(list);
+          setMapelLoaded(true);
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(list));
+          } catch (e) {}
+          return list;
+        } else {
+          setErrorMapel(res?.message || "Gagal mengambil data mata pelajaran.");
+          return [];
+        }
+      } catch (err) {
+        console.error("Error load mapel:", err);
+        setErrorMapel(
+          "Terjadi kendala koneksi saat mengambil data mata pelajaran.",
+        );
+        return [];
+      } finally {
+        setLoadingMapel(false);
+      }
+    },
+    [user?.id],
+  );
+
+  // Lazy trigger data fetching saat tab Guru Wali atau Guru Mapel dipilih
+  useEffect(() => {
+    if (activeMenuTab === "wali" && !siswaWaliLoaded && user?.id) {
+      loadSiswaWaliData(false);
+    } else if (activeMenuTab === "mapel" && !mapelLoaded && user?.id) {
+      loadMapelData(false);
+    }
+  }, [
+    activeMenuTab,
+    siswaWaliLoaded,
+    mapelLoaded,
+    user?.id,
+    loadSiswaWaliData,
+    loadMapelData,
+  ]);
+
+  // Handler cetak laporan PDF langsung dari kartu Mapel
+  const handleCetakPdfMapelDirect = async (mapel) => {
+    try {
+      setCetakCardLoadingId(mapel.idMapel);
+      await generateLaporanMapelPDF({ guru: user, mapel });
+    } catch (err) {
+      console.error("Gagal cetak PDF mapel:", err);
+      alert(err?.message || "Gagal mencetak laporan PDF mapel.");
+    } finally {
+      setCetakCardLoadingId(null);
+    }
+  };
+
   // --- AMBIL DAFTAR SISWA WALI (untuk pilihan cetak Lampiran A & B) ---
   const fetchDaftarSiswaWaliDashboard = async () => {
-    if (!user?.id) return [];
-    const result = await getDataSiswaWali(user.id);
-    if (!result?.success) {
-      console.warn("Gagal mengambil daftar siswa wali:", result?.message);
-      return [];
-    }
-    return result.data || [];
+    if (dataSiswaWali && dataSiswaWali.length > 0) return dataSiswaWali;
+    return await loadSiswaWaliData(false);
   };
 
   // Status gagal total (tidak ada cache & fetch gagal setelah retry) —
@@ -1050,227 +1232,791 @@ function DashboardGuruContent() {
           )}
         </div>
 
-        {/* MONITORING LAPANGAN */}
-        <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-5 sm:p-6 shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#D9B44A]/40 pb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-                📸 Monitoring Lapangan
-              </h2>
-              <p className="text-xs sm:text-sm font-semibold text-amber-900/70">
-                Pilih area penempatan aktif untuk meninjau log presensi mandiri
-                siswa.
-              </p>
-            </div>
-          </div>
+        {/* ======================================================== */}
+        {/* KONTEN DINAMIS BERDASARKAN TAB JENIS PEMBIMBING TERPILIH */}
+        {/* ======================================================== */}
 
-          <div className="mt-5 space-y-3.5">
-            {tempatMagang.length === 0 ? (
-              <div className="text-center py-6 bg-white/60 rounded-2xl border border-dashed border-[#D9B44A]">
-                <p className="text-sm font-bold text-amber-900/60">
-                  Belum ada lokasi tempat magang terdaftar.
+        {/* 1. JIKA TAB PEMBIMBING PKL: TAMPILKAN MONITORING, STATISTIK & AKTIVITAS TERKINI */}
+        {activeMenuTab === "pembimbing" && (
+          <>
+            {/* MONITORING LAPANGAN */}
+            <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-5 sm:p-6 shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#D9B44A]/40 pb-4">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
+                    📸 Monitoring Lapangan
+                  </h2>
+                  <p className="text-xs sm:text-sm font-semibold text-amber-900/70">
+                    Pilih area penempatan aktif untuk meninjau log presensi
+                    mandiri siswa.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3.5">
+                {tempatMagang.length === 0 ? (
+                  <div className="text-center py-6 bg-white/60 rounded-2xl border border-dashed border-[#D9B44A]">
+                    <p className="text-sm font-bold text-amber-900/60">
+                      Belum ada lokasi tempat magang terdaftar.
+                    </p>
+                  </div>
+                ) : (
+                  tempatMagang.map((item, index) => (
+                    <div
+                      key={index}
+                      className="rounded-2xl border border-[#D9B44A]/60 bg-white/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA */}
+                        <div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
+                            <span className="text-sm sm:text-base">📍</span>{" "}
+                            {item.tempat}
+                          </h3>
+                          <p className="text-xs sm:text-sm font-bold text-slate-500 mt-0.5">
+                            Terbimbing:{" "}
+                            <span className="text-blue-600 font-extrabold">
+                              {item.jumlah} Siswa
+                            </span>
+                          </p>
+                        </div>
+
+                        {/* BAGIAN TOMBOL */}
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+                          <button
+                            onClick={() => {
+                              const date = new Date();
+                              const namaBulan = [
+                                "Januari",
+                                "Februari",
+                                "Maret",
+                                "April",
+                                "Mei",
+                                "Juni",
+                                "Juli",
+                                "Agustus",
+                                "September",
+                                "Oktober",
+                                "November",
+                                "Desember",
+                              ];
+                              const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
+
+                              localStorage.setItem(
+                                "targetTempatRekap",
+                                item.tempat,
+                              );
+                              localStorage.setItem("targetGuruRekap", user.id);
+                              localStorage.setItem(
+                                "targetBulanRekap",
+                                bulanTerbaru,
+                              );
+
+                              router.push("/magang/rekap");
+                            }}
+                            className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                          >
+                            👁️ LIHAT AKTIVITAS
+                          </button>
+
+                          <button
+                            onClick={() => mulaiMonitoring(item.tempat)}
+                            className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                          >
+                            📷 MONITORING AREA
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* STATISTIK CARD GRID */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <Card
+                title="Jumlah Siswa"
+                value={dashboard?.jumlahSiswa ?? "--"}
+                accentColor="border-indigo-500"
+                textColor="text-indigo-600"
+                icon="👥"
+                onClick={() =>
+                  handleCardClick(
+                    "Daftar Jumlah Siswa",
+                    dashboard?.listJumlahSiswa,
+                  )
+                }
+              />
+              <Card
+                title="Hadir Hari Ini"
+                value={dashboard?.hadirHariIni ?? "--"}
+                accentColor="border-emerald-500"
+                textColor="text-emerald-600"
+                icon="✅"
+                onClick={() =>
+                  handleCardClick(
+                    "Siswa Hadir Hari Ini",
+                    dashboard?.listHadirHariIni,
+                  )
+                }
+              />
+              <Card
+                title="Total Kehadiran"
+                value={dashboard?.totalHadir ?? "--"}
+                accentColor="border-blue-500"
+                textColor="text-blue-600"
+                icon="📊"
+                onClick={() =>
+                  handleCardClick(
+                    "Log Total Kehadiran",
+                    dashboard?.listTotalHadir,
+                  )
+                }
+              />
+              <Card
+                title="Izin / Sakit"
+                value={dashboard?.izinSakit ?? "--"}
+                accentColor="border-amber-500"
+                textColor="text-amber-600"
+                icon="🤒"
+                onClick={() =>
+                  handleCardClick(
+                    "Daftar Siswa Izin / Sakit",
+                    dashboard?.listIzinSakit,
+                  )
+                }
+              />
+            </div>
+
+            {/* TABEL AKTIVITAS TERBARU */}
+            <div className="rounded-[2rem] bg-white border border-slate-200 shadow-md overflow-hidden">
+              <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
+                    ⚡ Aktivitas Terkini
+                  </h2>
+                  <p className="text-xs sm:text-sm font-medium text-slate-500">
+                    Log pengiriman presensi & pemantauan foto riil siswa di
+                    lapangan.
+                  </p>
+                </div>
+                {aktivitas.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setGalleryIndex(0);
+                      setShowGallery(true);
+                    }}
+                    className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold py-2.5 px-5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <span>👁️</span> Lihat Semuanya
+                  </button>
+                )}
+              </div>
+
+              <div className="p-4 sm:p-6">
+                {aktivitas.length === 0 ? (
+                  <p className="text-center py-8 text-sm font-semibold text-slate-400">
+                    Belum ada aktivitas presensi masuk hari ini.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+                    {aktivitas.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3.5 rounded-2xl border border-slate-100 bg-gradient-to-br from-white to-slate-50/50 p-3.5 shadow-sm"
+                      >
+                        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
+                          <img
+                            src={optimizeFotoUrl(item.foto, 160)}
+                            alt="Aktivitas"
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => {
+                              e.currentTarget.style.border = "2px solid red";
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <span
+                            className={`inline-block rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                              item.jenis === "PRESENSI"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-blue-50 text-blue-700 border border-blue-200"
+                            }`}
+                          >
+                            {item.jenis}
+                          </span>
+
+                          <h3 className="mt-1 text-xs sm:text-sm font-black text-slate-800 truncate">
+                            {item.nama}
+                          </h3>
+                          <p className="text-[11px] font-bold text-slate-500 truncate flex items-center gap-0.5">
+                            📍 {item.tempat}
+                          </p>
+                          <p className="text-[10px] font-medium text-slate-400 mt-0.5">
+                            ⏱️ {formatTanggal(item.waktu)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ======================================================= */}
+        {/* 2. KONTEN TAB: GURU WALI */}
+        {/* ======================================================= */}
+        {activeMenuTab === "wali" && (
+          <div className="space-y-6">
+            {/* HEADER SEKSI GURU WALI */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">👨‍🏫</span>
+                  <h2 className="text-lg sm:text-xl font-black text-slate-800">
+                    Daftar Siswa Wali
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-blue-800 text-xs font-black">
+                    {dataSiswaWali.length} Siswa
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                  Kontak dan informasi penting siswa perwalian untuk komunikasi
+                  cepat via WhatsApp.
                 </p>
               </div>
-            ) : (
-              tempatMagang.map((item, index) => (
-                <div
-                  key={index}
-                  className="rounded-2xl border border-[#D9B44A]/60 bg-white/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA */}
-                    <div>
-                      <h3 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
-                        <span className="text-sm sm:text-base">📍</span>{" "}
-                        {item.tempat}
-                      </h3>
-                      <p className="text-xs sm:text-sm font-bold text-slate-500 mt-0.5">
-                        Terbimbing:{" "}
-                        <span className="text-blue-600 font-extrabold">
-                          {item.jumlah} Siswa
-                        </span>
-                      </p>
-                    </div>
 
-                    {/* BAGIAN TOMBOL */}
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto mt-3 sm:mt-0">
-                      <button
-                        onClick={() => {
-                          const date = new Date();
-                          const namaBulan = [
-                            "Januari",
-                            "Februari",
-                            "Maret",
-                            "April",
-                            "Mei",
-                            "Juni",
-                            "Juli",
-                            "Agustus",
-                            "September",
-                            "Oktober",
-                            "November",
-                            "Desember",
-                          ];
-                          const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
-
-                          localStorage.setItem(
-                            "targetTempatRekap",
-                            item.tempat,
-                          );
-                          localStorage.setItem("targetGuruRekap", user.id);
-                          localStorage.setItem(
-                            "targetBulanRekap",
-                            bulanTerbaru,
-                          );
-
-                          router.push("/magang/rekap");
-                        }}
-                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
-                      >
-                        👁️ LIHAT AKTIVITAS
-                      </button>
-
-                      <button
-                        onClick={() => mulaiMonitoring(item.tempat)}
-                        className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
-                      >
-                        📷 MONITORING AREA
-                      </button>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex-1 sm:w-64">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    value={searchSiswaWali}
+                    onChange={(e) => setSearchSiswaWali(e.target.value)}
+                    placeholder="Cari nama, ID, kelas..."
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-medium transition-all"
+                  />
                 </div>
-              ))
-            )}
-          </div>
-        </div>
 
-        {/* STATISTIK CARD GRID */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card
-            title="Jumlah Siswa"
-            value={dashboard?.jumlahSiswa ?? "--"}
-            accentColor="border-indigo-500"
-            textColor="text-indigo-600"
-            icon="👥"
-            onClick={() =>
-              handleCardClick("Daftar Jumlah Siswa", dashboard?.listJumlahSiswa)
-            }
-          />
-          <Card
-            title="Hadir Hari Ini"
-            value={dashboard?.hadirHariIni ?? "--"}
-            accentColor="border-emerald-500"
-            textColor="text-emerald-600"
-            icon="✅"
-            onClick={() =>
-              handleCardClick(
-                "Siswa Hadir Hari Ini",
-                dashboard?.listHadirHariIni,
-              )
-            }
-          />
-          <Card
-            title="Total Kehadiran"
-            value={dashboard?.totalHadir ?? "--"}
-            accentColor="border-blue-500"
-            textColor="text-blue-600"
-            icon="📊"
-            onClick={() =>
-              handleCardClick("Log Total Kehadiran", dashboard?.listTotalHadir)
-            }
-          />
-          <Card
-            title="Izin / Sakit"
-            value={dashboard?.izinSakit ?? "--"}
-            accentColor="border-amber-500"
-            textColor="text-amber-600"
-            icon="🤒"
-            onClick={() =>
-              handleCardClick(
-                "Daftar Siswa Izin / Sakit",
-                dashboard?.listIzinSakit,
-              )
-            }
-          />
-        </div>
-
-        {/* TABEL AKTIVITAS TERBARU */}
-        <div className="rounded-[2rem] bg-white border border-slate-200 shadow-md overflow-hidden">
-          <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-                ⚡ Aktivitas Terkini
-              </h2>
-              <p className="text-xs sm:text-sm font-medium text-slate-500">
-                Log pengiriman presensi & pemantauan foto riil siswa di
-                lapangan.
-              </p>
-            </div>
-            {aktivitas.length > 0 && (
-              <button
-                onClick={() => {
-                  setGalleryIndex(0);
-                  setShowGallery(true);
-                }}
-                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold py-2.5 px-5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                <span>👁️</span> Lihat Semuanya
-              </button>
-            )}
-          </div>
-
-          <div className="p-4 sm:p-6">
-            {aktivitas.length === 0 ? (
-              <p className="text-center py-8 text-sm font-semibold text-slate-400">
-                Belum ada aktivitas presensi masuk hari ini.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-                {aktivitas.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3.5 rounded-2xl border border-slate-100 bg-gradient-to-br from-white to-slate-50/50 p-3.5 shadow-sm"
+                <button
+                  type="button"
+                  onClick={() => loadSiswaWaliData(true)}
+                  disabled={loadingSiswaWali}
+                  title="Segarkan data siswa wali"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 shrink-0"
+                >
+                  <span
+                    className={
+                      loadingSiswaWali ? "animate-spin inline-block" : ""
+                    }
                   >
-                    <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
-                      <img
-                        src={optimizeFotoUrl(item.foto, 160)}
-                        alt="Aktivitas"
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          e.currentTarget.style.border = "2px solid red";
-                        }}
-                      />
-                    </div>
+                    🔄
+                  </span>
+                  <span className="hidden sm:inline">Segarkan</span>
+                </button>
+              </div>
+            </div>
 
-                    <div className="flex-1 min-w-0">
-                      <span
-                        className={`inline-block rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                          item.jenis === "PRESENSI"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border border-blue-200"
-                        }`}
-                      >
-                        {item.jenis}
-                      </span>
+            {/* ERROR STATE */}
+            {errorSiswaWali && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700 flex items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚠️</span>
+                  <span className="text-xs sm:text-sm font-semibold">
+                    {errorSiswaWali}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadSiswaWaliData(true)}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shrink-0"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
 
-                      <h3 className="mt-1 text-xs sm:text-sm font-black text-slate-800 truncate">
-                        {item.nama}
-                      </h3>
-                      <p className="text-[11px] font-bold text-slate-500 truncate flex items-center gap-0.5">
-                        📍 {item.tempat}
-                      </p>
-                      <p className="text-[10px] font-medium text-slate-400 mt-0.5">
-                        ⏱️ {formatTanggal(item.waktu)}
-                      </p>
-                    </div>
+            {/* LOADING SKELETON */}
+            {loadingSiswaWali && (
+              <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3, 4, 5, 6].map((sk) => (
+                  <div
+                    key={sk}
+                    className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5 space-y-3"
+                  >
+                    <div className="h-5 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-4 bg-slate-100 rounded w-1/2"></div>
+                    <div className="h-10 bg-slate-100 rounded-xl"></div>
+                    <div className="h-8 bg-slate-100 rounded-xl"></div>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* EMPTY STATE */}
+            {!loadingSiswaWali &&
+              !errorSiswaWali &&
+              dataSiswaWali.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 sm:p-12 text-center shadow-sm">
+                  <span className="text-5xl">👨‍🎓</span>
+                  <h3 className="mt-3 text-base sm:text-lg font-black text-slate-700">
+                    Belum Ada Siswa Wali
+                  </h3>
+                  <p className="mt-1 text-xs sm:text-sm text-slate-500 max-w-md mx-auto font-medium">
+                    Belum terdapat siswa yang terhubung dengan akun guru wali
+                    ini. Anda dapat mendaftarkan siswa baru.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/magang/guru/guru-wali/tambah")}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 text-xs sm:text-sm font-bold shadow-md transition-all active:scale-95"
+                  >
+                    ➕ Tambah Siswa Wali Baru
+                  </button>
+                </div>
+              )}
+
+            {/* GRID KARTU SISWA WALI */}
+            {!loadingSiswaWali && (
+              <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {dataSiswaWali
+                  .filter((siswa) => {
+                    if (!searchSiswaWali.trim()) return true;
+                    const q = searchSiswaWali.toLowerCase();
+                    const nama = String(siswa.nama || "").toLowerCase();
+                    const idS = String(siswa.idSiswa || "").toLowerCase();
+                    const kelas = String(siswa.kelas || "").toLowerCase();
+                    const tempat = String(
+                      siswa.tempatMagang || "",
+                    ).toLowerCase();
+                    return (
+                      nama.includes(q) ||
+                      idS.includes(q) ||
+                      kelas.includes(q) ||
+                      tempat.includes(q)
+                    );
+                  })
+                  .map((siswa, idx) => {
+                    const namaMentah = siswa.nama || "-";
+                    const matchKelas = namaMentah.match(/\[(.*?)\]/);
+                    const kelas = matchKelas ? matchKelas[1] : siswa.kelas;
+                    const namaBersih = namaMentah
+                      .replace(/\s*\[.*?\]\s*/, "")
+                      .trim();
+
+                    const ortuHp =
+                      siswa.kontakAyah ||
+                      siswa.kontakIbu ||
+                      siswa.noHpOrtu ||
+                      siswa.noHpOrangTua;
+                    const labelOrtu = siswa.kontakAyah
+                      ? "Ayah"
+                      : siswa.kontakIbu
+                        ? "Ibu"
+                        : "Ortu";
+
+                    return (
+                      <div
+                        key={siswa.idSiswa || idx}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:border-blue-300"
+                      >
+                        {/* HEADER KARTU (NAVY) */}
+                        <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-4 text-white">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-xl sm:text-2xl shadow-inner border border-white/20">
+                              👨‍🎓
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <h3 className="truncate text-sm sm:text-base font-black text-white leading-tight">
+                                  {namaBersih || "-"}
+                                </h3>
+                                {kelas && (
+                                  <span className="inline-flex items-center shrink-0 rounded-md bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2 py-0.5 text-[10px] font-black text-amber-950 border border-amber-200 shadow-sm">
+                                    {kelas}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-bold text-blue-200">
+                                  ID: {siswa.idSiswa || "-"}
+                                </p>
+                                {siswa.idSiswa && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      kirimLoginWhatsApp(
+                                        siswa.idSiswa,
+                                        siswa.nama,
+                                      )
+                                    }
+                                    title="Kirim info login siswa via WA"
+                                    className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm transition-all hover:scale-105 active:scale-95"
+                                  >
+                                    <span>📲</span>
+                                    <span>Bagi ID</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* INFORMASI PENTING (BODY KARTU) */}
+                        <div className="flex flex-1 flex-col p-4 bg-slate-50/70 space-y-3">
+                          {/* 1. KONTAK WHATSAPP SISWA & ORANG TUA */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {/* WHATSAPP SISWA */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                                📱 WA Siswa
+                              </span>
+                              {siswa.noHp ? (
+                                <a
+                                  href={getWhatsAppUrl(siswa.noHp)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline break-all"
+                                >
+                                  <span>💬</span>
+                                  <span>{siswa.noHp}</span>
+                                </a>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-400 italic">
+                                  Belum diisi
+                                </span>
+                              )}
+                            </div>
+
+                            {/* WHATSAPP ORANG TUA */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                                👨‍👩‍👧 WA {labelOrtu}
+                              </span>
+                              {ortuHp ? (
+                                <a
+                                  href={getWhatsAppUrl(ortuHp)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline break-all"
+                                >
+                                  <span>💬</span>
+                                  <span>{ortuHp}</span>
+                                </a>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-400 italic">
+                                  Belum diisi
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. ALAMAT SISWA */}
+                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-xs">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                              📍 Alamat
+                            </span>
+                            <p className="text-xs font-semibold text-slate-700 line-clamp-2">
+                              {siswa.alamat ? (
+                                siswa.alamat
+                              ) : (
+                                <span className="italic text-slate-400">
+                                  Belum ada data alamat
+                                </span>
+                              )}
+                            </p>
+                          </div>
+
+                          {/* 3. TEMPAT MAGANG & PEMBIMBING (JIKA ADA) */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                                🏢 Magang
+                              </span>
+                              <p className="text-[11px] font-bold text-slate-700 truncate">
+                                {siswa.tempatMagang || "-"}
+                              </p>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                                👔 Pembimbing
+                              </span>
+                              <p className="text-[11px] font-bold text-slate-700 truncate">
+                                {siswa.namaGuru || "-"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* 4. TOMBOL AKSI KARTU */}
+                          <div className="pt-1 mt-auto grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSiswaWali(siswa)}
+                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-2 text-xs font-black text-blue-800 transition-all active:scale-95"
+                            >
+                              <span>👁️</span>
+                              <span>Profil Lengkap</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const match = (siswa.nama || "").match(
+                                  /\[(.*?)\]/,
+                                );
+                                const extractedKelas = match
+                                  ? match[1]
+                                  : siswa.kelas || "";
+                                router.push(
+                                  `/magang/guru/guru-wali/tambah?editId=${siswa.idSiswa}&kelas=${encodeURIComponent(extractedKelas)}`,
+                                );
+                              }}
+                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-2 text-xs font-black text-amber-800 transition-all active:scale-95"
+                            >
+                              <span>✏️</span>
+                              <span>Edit</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* ======================================================= */}
+        {/* 3. KONTEN TAB: GURU MAPEL */}
+        {/* ======================================================= */}
+        {activeMenuTab === "mapel" && (
+          <div className="space-y-6">
+            {/* HEADER SEKSI GURU MAPEL */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">📚</span>
+                  <h2 className="text-lg sm:text-xl font-black text-slate-800">
+                    Mata Pelajaran Anda
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-100 border border-cyan-200 text-cyan-800 text-xs font-black">
+                    {daftarMapel.length} Mapel
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                  Kelola presensi, nilai, dan daftar siswa per pertemuan
+                  pembelajaran.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex-1 sm:w-64">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    value={searchMapel}
+                    onChange={(e) => setSearchMapel(e.target.value)}
+                    placeholder="Cari mapel, kelas..."
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-medium transition-all"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
+                  className="px-3.5 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 shrink-0"
+                >
+                  <span>➕</span>
+                  <span className="hidden sm:inline">Tambah Mapel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => loadMapelData(true)}
+                  disabled={loadingMapel}
+                  title="Segarkan data mapel"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 shrink-0"
+                >
+                  <span
+                    className={loadingMapel ? "animate-spin inline-block" : ""}
+                  >
+                    🔄
+                  </span>
+                  <span className="hidden sm:inline">Segarkan</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ERROR STATE */}
+            {errorMapel && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700 flex items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚠️</span>
+                  <span className="text-xs sm:text-sm font-semibold">
+                    {errorMapel}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadMapelData(true)}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shrink-0"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
+
+            {/* LOADING SKELETON */}
+            {loadingMapel && (
+              <div className="space-y-4">
+                {[1, 2, 3].map((sk) => (
+                  <div
+                    key={sk}
+                    className="animate-pulse rounded-[2rem] border border-blue-900/30 bg-blue-950/20 p-6 space-y-3"
+                  >
+                    <div className="h-6 bg-slate-200 rounded w-1/3"></div>
+                    <div className="h-4 bg-slate-100 rounded w-1/4"></div>
+                    <div className="h-10 bg-slate-100 rounded-xl"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* EMPTY STATE */}
+            {!loadingMapel && !errorMapel && daftarMapel.length === 0 && (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 sm:p-12 text-center shadow-sm">
+                <span className="text-5xl">📚</span>
+                <h3 className="mt-3 text-base sm:text-lg font-black text-slate-700">
+                  Belum Ada Mata Pelajaran
+                </h3>
+                <p className="mt-1 text-xs sm:text-sm text-slate-500 max-w-md mx-auto font-medium">
+                  Bapak/Ibu belum menambahkan mata pelajaran. Buat mata
+                  pelajaran sekarang untuk mulai mencatat presensi dan nilai.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white px-5 py-2.5 text-xs sm:text-sm font-bold shadow-md transition-all active:scale-95"
+                >
+                  ➕ Tambah Mapel Baru
+                </button>
+              </div>
+            )}
+
+            {/* LIST KARTU MAPEL (SESUAI DENGAN KELOLA MAPEL) */}
+            {!loadingMapel && (
+              <div className="space-y-4 sm:space-y-5">
+                {daftarMapel
+                  .filter((m) => {
+                    if (!searchMapel.trim()) return true;
+                    const q = searchMapel.toLowerCase();
+                    const nama = String(m.namaMapel || "").toLowerCase();
+                    const kelas = String(m.kelas || "").toLowerCase();
+                    const ket = String(m.keterangan || "").toLowerCase();
+                    return (
+                      nama.includes(q) || kelas.includes(q) || ket.includes(q)
+                    );
+                  })
+                  .map((mapel) => (
+                    <div
+                      key={mapel.idMapel}
+                      className="rounded-[2rem] overflow-hidden shadow-lg border border-blue-800 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-5 sm:p-6 text-white transition-all hover:shadow-xl"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 drop-shadow-sm">
+                              {mapel.namaMapel}
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {mapel.kelas && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
+                                Kelas {mapel.kelas}
+                              </span>
+                            )}
+                          </div>
+
+                          {mapel.keterangan && (
+                            <p className="text-xs sm:text-sm text-blue-200 font-medium mt-3">
+                              {mapel.keterangan}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* TOMBOL AKSI KANAN */}
+                        <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              localStorage.setItem(
+                                "mapelAktifId",
+                                mapel.idMapel,
+                              );
+                              router.push("/magang/guru/guru-mapel/kelola");
+                            }}
+                            title="Buka presensi & nilai mapel ini"
+                            className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
+                          >
+                            <span>📊</span>
+                            <span>Presensi & Nilai</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCetakPdfMapelDirect(mapel)}
+                            disabled={cetakMapelCardLoadingId === mapel.idMapel}
+                            title="Cetak Laporan Presensi & Nilai PDF"
+                            className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
+                          >
+                            {cetakMapelCardLoadingId === mapel.idMapel ? (
+                              <>
+                                <span className="inline-block animate-spin">
+                                  ⏳
+                                </span>
+                                <span>Mencetak...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>🖨️</span>
+                                <span>Cetak PDF</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              localStorage.setItem(
+                                "mapelAktifId",
+                                mapel.idMapel,
+                              );
+                              router.push("/magang/guru/guru-mapel/kelola");
+                            }}
+                            className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <span>⚙️</span>
+                            <span>Kelola Mapel</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* MODAL POP-UP NAMA SISWA */}
@@ -1998,6 +2744,256 @@ function DashboardGuruContent() {
         onClose={() => setShowCetakMapelModal(false)}
         guru={user}
       />
+
+      {/* MODAL PROFIL LENGKAP SISWA WALI */}
+      {selectedSiswaWali && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedSiswaWali(null);
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* TEMA WARNA HEADER MODAL */}
+            <div className="shrink-0 bg-gradient-to-r from-blue-900 to-indigo-800 p-4 sm:p-5 text-white">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-2xl shadow-inner border border-white/20">
+                    👨‍🎓
+                  </div>
+                  <div>
+                    {(() => {
+                      const namaMentah = selectedSiswaWali.nama || "-";
+                      const matchKelas = namaMentah.match(/\[(.*?)\]/);
+                      const kelas = matchKelas
+                        ? matchKelas[1]
+                        : selectedSiswaWali.kelas;
+                      const namaBersih = namaMentah
+                        .replace(/\s*\[.*?\]\s*/, "")
+                        .trim();
+
+                      return (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base sm:text-lg font-black text-white">
+                            {namaBersih || "-"}
+                          </h3>
+                          {kelas && (
+                            <span className="rounded-md bg-gradient-to-r from-amber-400 to-yellow-400 px-2 py-0.5 text-[10px] font-black text-amber-950">
+                              {kelas}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <div className="mt-1 flex items-center gap-2 text-xs text-blue-200">
+                      <span>ID: {selectedSiswaWali.idSiswa || "-"}</span>
+                      {selectedSiswaWali.noHp && (
+                        <>
+                          <span>&bull;</span>
+                          <a
+                            href={getWhatsAppUrl(selectedSiswaWali.noHp)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-300 font-bold hover:underline flex items-center gap-1"
+                          >
+                            💬 {selectedSiswaWali.noHp}
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSiswaWali(null)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/20 text-sm font-black text-white hover:bg-black/40 hover:scale-105 active:scale-95 transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto p-4 sm:p-5 space-y-4 text-slate-800 text-xs sm:text-sm">
+              {/* DATA SEKOLAH & MAGANG */}
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 space-y-2">
+                <h4 className="font-black text-slate-800 flex items-center gap-2 mb-2 text-xs uppercase tracking-wider text-blue-900">
+                  🏫 Data Magang & Pembimbing
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 block">
+                      Guru Pembimbing:
+                    </span>
+                    <span className="font-bold text-slate-800">
+                      {selectedSiswaWali.namaGuru || "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 block">
+                      Tempat Magang:
+                    </span>
+                    <span className="font-bold text-slate-800">
+                      {selectedSiswaWali.tempatMagang || "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* DATA KONTAK & ALAMAT */}
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 space-y-2">
+                <h4 className="font-black text-slate-800 flex items-center gap-2 mb-2 text-xs uppercase tracking-wider text-blue-900">
+                  📱 Kontak & Alamat
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 block">
+                      No. HP Siswa:
+                    </span>
+                    {selectedSiswaWali.noHp ? (
+                      <a
+                        href={getWhatsAppUrl(selectedSiswaWali.noHp)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
+                      >
+                        💬 {selectedSiswaWali.noHp} (Buka WhatsApp)
+                      </a>
+                    ) : (
+                      <span className="text-slate-400 italic">Belum diisi</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 block">
+                      Tempat, Tanggal Lahir:
+                    </span>
+                    <span className="font-bold text-slate-800">
+                      {[
+                        selectedSiswaWali.tempatLahir,
+                        selectedSiswaWali.tglLahir,
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "-"}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-[11px] font-bold text-slate-500 block">
+                      Alamat Domisili:
+                    </span>
+                    <span className="font-semibold text-slate-800">
+                      {selectedSiswaWali.alamat || "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* DATA ORANG TUA */}
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 space-y-2">
+                <h4 className="font-black text-slate-800 flex items-center gap-2 mb-2 text-xs uppercase tracking-wider text-blue-900">
+                  👨‍👩‍👧 Data Orang Tua
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-500 uppercase block mb-1">
+                      👨 Ayah
+                    </span>
+                    <p className="font-bold text-slate-800">
+                      {selectedSiswaWali.ayah || "-"}
+                    </p>
+                    {selectedSiswaWali.pekerjaanAyah && (
+                      <p className="text-xs text-slate-500">
+                        Pekerjaan: {selectedSiswaWali.pekerjaanAyah}
+                      </p>
+                    )}
+                    {selectedSiswaWali.kontakAyah ? (
+                      <a
+                        href={getWhatsAppUrl(selectedSiswaWali.kontakAyah)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline mt-1"
+                      >
+                        💬 {selectedSiswaWali.kontakAyah} (Chat WA)
+                      </a>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mt-0.5">
+                        Kontak belum diisi
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-500 uppercase block mb-1">
+                      👩 Ibu
+                    </span>
+                    <p className="font-bold text-slate-800">
+                      {selectedSiswaWali.ibu || "-"}
+                    </p>
+                    {selectedSiswaWali.pekerjaanIbu && (
+                      <p className="text-xs text-slate-500">
+                        Pekerjaan: {selectedSiswaWali.pekerjaanIbu}
+                      </p>
+                    )}
+                    {selectedSiswaWali.kontakIbu ? (
+                      <a
+                        href={getWhatsAppUrl(selectedSiswaWali.kontakIbu)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline mt-1"
+                      >
+                        💬 {selectedSiswaWali.kontakIbu} (Chat WA)
+                      </a>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mt-0.5">
+                        Kontak belum diisi
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* HARAPAN / CITA-CITA (JIKA ADA) */}
+              {selectedSiswaWali.harapan && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 block mb-1">
+                    🎯 Cita-cita / Harapan Siswa:
+                  </span>
+                  <p className="text-xs sm:text-sm font-semibold text-slate-700 leading-relaxed">
+                    {selectedSiswaWali.harapan}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* FOOTER MODAL */}
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-3 sm:p-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedSiswaWali(null)}
+                className="flex-1 rounded-xl bg-slate-200 hover:bg-slate-300 px-4 py-2.5 text-xs sm:text-sm font-black text-slate-700 transition-all active:scale-98"
+              >
+                Tutup Profil
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const match = (selectedSiswaWali.nama || "").match(
+                    /\[(.*?)\]/,
+                  );
+                  const extractedKelas = match
+                    ? match[1]
+                    : selectedSiswaWali.kelas || "";
+                  router.push(
+                    `/magang/guru/guru-wali/tambah?editId=${selectedSiswaWali.idSiswa}&kelas=${encodeURIComponent(extractedKelas)}`,
+                  );
+                }}
+                className="flex-1 rounded-xl bg-blue-800 hover:bg-blue-900 px-4 py-2.5 text-xs sm:text-sm font-black text-white transition-all active:scale-98 flex items-center justify-center gap-1.5"
+              >
+                <span>✏️</span>
+                <span>Edit Biodata</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
