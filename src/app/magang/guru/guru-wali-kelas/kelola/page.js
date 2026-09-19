@@ -204,6 +204,88 @@ export default function KelolaWaliKelasPage() {
   const [error, setError] = useState("");
 
   const [daftarWali, setDaftarWali] = useState([]);
+  const [searchWali, setSearchWali] = useState("");
+  const [statsPresensiHariIniWali, setStatsPresensiHariIniWali] = useState({});
+  const [loadingStatsWali, setLoadingStatsWali] = useState({});
+
+  // --- AMBIL STATISTIK PRESENSI HARI INI KELAS WALI ---
+  const loadStatsHariIniWali = useCallback(
+    async (idWali) => {
+      if (!guru?.id || !idWali) return;
+      setLoadingStatsWali((prev) => ({ ...prev, [idWali]: true }));
+
+      try {
+        const todayISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+        const res = await getPresensiWaliGrid(guru.id, idWali);
+
+        if (res && res.success && res.data) {
+          const siswaList = res.data.siswa || [];
+          const presensiList = res.data.presensi || [];
+
+          const siswaMap = {};
+          siswaList.forEach((s) => {
+            siswaMap[String(s.idSiswa || s.id)] = s.nama || s.namaSiswa || "";
+          });
+
+          const todayRecords = presensiList.filter(
+            (p) => String(p.tanggal).trim() === todayISO,
+          );
+
+          let hadir = 0;
+          let sakit = 0;
+          let izin = 0;
+          let alfa = 0;
+          let cabut = 0;
+          const absenList = [];
+
+          todayRecords.forEach((p) => {
+            const st = String(p.status || "Hadir").trim();
+            const sid = String(p.idSiswa).trim();
+            const nama = siswaMap[sid] || p.namaSiswa || `Siswa ${sid}`;
+
+            if (st === "Hadir") {
+              hadir++;
+            } else {
+              if (st === "Sakit") sakit++;
+              else if (st === "Izin") izin++;
+              else if (st === "Alfa") alfa++;
+              else if (st === "Cabut") cabut++;
+
+              absenList.push({
+                idSiswa: sid,
+                nama,
+                status: st,
+                keterangan: p.keterangan || "",
+              });
+            }
+          });
+
+          setStatsPresensiHariIniWali((prev) => ({
+            ...prev,
+            [idWali]: {
+              sudahDiisi: todayRecords.length > 0,
+              totalSiswa: siswaList.length,
+              hadir,
+              sakit,
+              izin,
+              alfa,
+              cabut,
+              absenList,
+              tanggal: todayISO,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn(
+          "Gagal memuat statistik presensi hari ini kelas wali:",
+          err,
+        );
+      } finally {
+        setLoadingStatsWali((prev) => ({ ...prev, [idWali]: false }));
+      }
+    },
+    [guru?.id],
+  );
 
   // Form Tambah Kelas Wali
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -296,8 +378,12 @@ export default function KelolaWaliKelasPage() {
           createdAt: w.createdAt || w.CREATED_AT || "",
         }));
         setLoadProgress(100);
-        await new Promise((res) => setTimeout(res, 200));
         setDaftarWali(normalized);
+        normalized.forEach((w) => {
+          if (w.idWali) {
+            loadStatsHariIniWali(w.idWali);
+          }
+        });
       } else {
         setError(result.message || "Gagal mengambil data kelas wali.");
         setDaftarWali([]);
@@ -638,11 +724,40 @@ export default function KelolaWaliKelasPage() {
         </section>
 
         {/* DAFTAR KARTU KELAS WALI */}
-        <section>
-          <h2 className="text-base sm:text-lg font-black text-slate-800 mb-4 px-2">
-            🏫 Daftar Kelas Wali Anda (
-            {Array.isArray(daftarWali) ? daftarWali.length : 0})
-          </h2>
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-black text-slate-800 px-1">
+              🏫 Daftar Kelas Wali Anda (
+              {Array.isArray(daftarWali) ? daftarWali.length : 0})
+            </h2>
+
+            {/* PENCARIAN & SEGAR KAN */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 sm:w-64">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">
+                  🔍
+                </span>
+                <input
+                  type="text"
+                  value={searchWali}
+                  onChange={(e) => setSearchWali(e.target.value)}
+                  placeholder="Cari kelas..."
+                  className="w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-teal-500 transition-all shadow-xs"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadWali(guru?.id)}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shrink-0 shadow-xs active:scale-95"
+              >
+                <span className={loading ? "animate-spin inline-block" : ""}>
+                  🔄
+                </span>
+                <span className="hidden sm:inline">Segarkan</span>
+              </button>
+            </div>
+          </div>
 
           {!Array.isArray(daftarWali) || daftarWali.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400 text-sm font-medium shadow-sm">
@@ -650,20 +765,42 @@ export default function KelolaWaliKelasPage() {
             </div>
           ) : (
             <div className="space-y-4 sm:space-y-6">
-              {daftarWali.map((wali, idx) => {
-                const isEditing = editingId === wali.idWali;
-                const isExpanded = expandedWaliId === wali.idWali;
-                const petugas = getPetugasFromWali(wali);
-                const { cleanText } = parseKeteranganWali(
-                  wali.keterangan || "",
-                );
+              {daftarWali
+                .filter((w) => {
+                  if (!searchWali.trim()) return true;
+                  const q = searchWali.toLowerCase();
+                  const nama = String(w.namaKelas || "").toLowerCase();
+                  const kelas = String(w.kelas || "").toLowerCase();
+                  const ket = String(w.keterangan || "").toLowerCase();
+                  return (
+                    nama.includes(q) || kelas.includes(q) || ket.includes(q)
+                  );
+                })
+                .map((wali, idx) => {
+                  const isEditing = editingId === wali.idWali;
+                  const isExpanded = expandedWaliId === wali.idWali;
+                  const petugas = getPetugasFromWali(wali);
+                  const { cleanText } = parseKeteranganWali(
+                    wali.keterangan || "",
+                  );
+                  const stats = statsPresensiHariIniWali[wali.idWali];
+                  const isLoadingStats = loadingStatsWali[wali.idWali];
+                  const totalSiswaDisplay =
+                    stats?.totalSiswa || wali.jumlahSiswa || 0;
 
-                return (
-                  <div
-                    key={wali.idWali || `wali-${idx}`}
-                    className="rounded-[2rem] overflow-hidden shadow-lg border border-teal-800 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-900 transition-all"
-                  >
-                    <div className="p-5 sm:p-6 text-white">
+                  // Format tanggal hari ini
+                  const todayStr = new Date().toLocaleDateString("id-ID", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  });
+
+                  return (
+                    <div
+                      key={wali.idWali || `wali-${idx}`}
+                      className="rounded-[2rem] overflow-hidden shadow-lg border border-teal-800 bg-gradient-to-br from-teal-950 via-teal-900 to-slate-950 p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4"
+                    >
                       {isEditing ? (
                         <div className="space-y-3 bg-white p-4 rounded-xl shadow-inner text-slate-800">
                           <input
@@ -680,12 +817,14 @@ export default function KelolaWaliKelasPage() {
                           />
                           <div className="flex gap-2 pt-1">
                             <button
+                              type="button"
                               onClick={() => simpanEdit(wali.idWali)}
                               className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-black px-5 py-2.5 shadow-md transition-colors"
                             >
                               💾 Simpan
                             </button>
                             <button
+                              type="button"
                               onClick={batalEdit}
                               className="rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black px-5 py-2.5 transition-colors"
                             >
@@ -694,138 +833,320 @@ export default function KelolaWaliKelasPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2 flex-wrap">
-                              <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white to-teal-200 drop-shadow-sm">
-                                {wali.namaKelas}
-                              </h3>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {wali.kelas && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-800/60 border border-teal-500/40 text-teal-100">
-                                  Kelas {wali.kelas}
-                                </span>
-                              )}
-                              {wali.jumlahSiswa !== undefined && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-100">
-                                  👥 {wali.jumlahSiswa} Siswa
-                                </span>
-                              )}
-                              {petugas?.namaSiswa && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/25 border border-amber-300/50 text-amber-200 shadow-xs">
-                                  ⭐ Petugas: {petugas.namaSiswa}
-                                </span>
-                              )}
-                            </div>
-                            {cleanText && (
-                              <p className="text-xs sm:text-sm text-teal-200 font-medium mt-3">
-                                {cleanText}
-                              </p>
-                            )}
-                          </div>
+                        <>
+                          {/* ============================================================ */}
+                          {/* BAGIAN ATAS: NAMA KELAS, BADGES & TOMBOL AKSI CEPAT */}
+                          {/* ============================================================ */}
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-teal-100 to-emerald-200 drop-shadow-sm">
+                                  {wali.namaKelas}
+                                </h3>
+                              </div>
 
-                          {/* Tombol Aksi */}
-                          <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
-                            <button
-                              onClick={() => setWaliPetugasTarget(wali)}
-                              title="Tunjuk siswa sebagai petugas presensi kelas ini"
-                              className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-amber-950 border border-amber-300/60 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>⭐</span>
-                              <span>Petugas Presensi</span>
-                            </button>
-
-                            <button
-                              onClick={() => setWaliTambahTarget(wali)}
-                              title="Tambah / Daftarkan Siswa ke Kelas Wali Ini"
-                              className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>➕</span>
-                              <span>Tambah Siswa</span>
-                            </button>
-
-                            <button
-                              onClick={() => setWaliJurnalTarget(wali)}
-                              title="Catat Jurnal Bimbingan"
-                              className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-indigo-400/40 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>📝</span>
-                              <span>Jurnal</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleCetakPDF(wali)}
-                              disabled={cetakLoadingId === wali.idWali}
-                              title="Cetak Laporan Presensi PDF"
-                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
-                            >
-                              {cetakLoadingId === wali.idWali ? (
-                                <>
-                                  <span className="inline-block animate-spin">
-                                    ⏳
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {wali.kelas && (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-800/60 border border-teal-500/40 text-teal-100">
+                                    Kelas {wali.kelas}
                                   </span>
-                                  <span>Mencetak...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🖨️</span>
-                                  <span>Cetak PDF</span>
-                                </>
+                                )}
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-100">
+                                  👥 {totalSiswaDisplay} Siswa
+                                </span>
+                                {petugas?.namaSiswa && (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/25 border border-amber-300/50 text-amber-200 shadow-xs">
+                                    ⭐ Petugas: {petugas.namaSiswa}
+                                  </span>
+                                )}
+                              </div>
+
+                              {cleanText && (
+                                <p className="text-xs text-teal-200/90 font-medium italic pt-0.5">
+                                  {cleanText}
+                                </p>
                               )}
-                            </button>
+                            </div>
 
-                            <button
-                              onClick={() => mulaiEdit(wali)}
-                              className="rounded-xl bg-amber-500/20 border border-amber-400/40 px-4 py-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/40 transition-colors"
-                            >
-                              ✏️ Edit
-                            </button>
+                            {/* TOMBOL AKSI KANAN */}
+                            <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
+                              <button
+                                type="button"
+                                onClick={() => setWaliPetugasTarget(wali)}
+                                title="Tunjuk siswa sebagai petugas presensi kelas ini"
+                                className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-amber-950 border border-amber-300/60 shadow-md transition-all flex items-center gap-1.5"
+                              >
+                                <span>⭐</span>
+                                <span>Petugas Presensi</span>
+                              </button>
 
-                            <button
-                              onClick={() => hapusWaliHandler(wali)}
-                              className="rounded-xl bg-rose-500/20 border border-rose-400/40 px-4 py-2.5 text-xs font-black text-rose-200 hover:bg-rose-500/40 transition-colors"
-                            >
-                              🗑️ Hapus
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => setWaliTambahTarget(wali)}
+                                title="Tambah / Daftarkan Siswa ke Kelas Wali Ini"
+                                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
+                              >
+                                <span>➕</span>
+                                <span>Tambah Siswa</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setWaliJurnalTarget(wali)}
+                                title="Catat Jurnal Bimbingan Siswa"
+                                className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-indigo-400/40 shadow-md transition-all flex items-center gap-1.5"
+                              >
+                                <span>📝</span>
+                                <span>Jurnal</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCetakPDF(wali)}
+                                disabled={cetakLoadingId === wali.idWali}
+                                title="Cetak Laporan Presensi PDF"
+                                className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
+                              >
+                                {cetakLoadingId === wali.idWali ? (
+                                  <>
+                                    <span className="inline-block animate-spin">
+                                      ⏳
+                                    </span>
+                                    <span>Mencetak...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🖨️</span>
+                                    <span>Cetak PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => mulaiEdit(wali)}
+                                title="Edit nama kelas dan keterangan"
+                                className="rounded-xl bg-amber-500/20 border border-amber-400/40 px-3 py-2 sm:py-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/40 transition-colors flex items-center gap-1.5 active:scale-95"
+                              >
+                                <span>✏️</span>
+                                <span>Edit</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => hapusWaliHandler(wali)}
+                                title="Hapus kelas wali"
+                                className="rounded-xl bg-rose-500/20 border border-rose-400/40 px-3 py-2 sm:py-2.5 text-xs font-black text-rose-200 hover:bg-rose-500/40 transition-colors flex items-center gap-1.5 active:scale-95"
+                              >
+                                <span>🗑️</span>
+                                <span>Hapus</span>
+                              </button>
+                            </div>
                           </div>
+
+                          {/* ============================================================ */}
+                          {/* PANEL STATISTIK PRESENSI HARI INI (PADAT & COMPACT) */}
+                          {/* ============================================================ */}
+                          <div className="rounded-2xl border border-teal-700/60 bg-teal-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
+                            {/* Header Bar Statistik */}
+                            <div className="flex items-center justify-between gap-2 border-b border-teal-800/60 pb-2.5 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">📊</span>
+                                <div>
+                                  <span className="text-xs font-black tracking-wide text-white block sm:inline">
+                                    Presensi Hari Ini
+                                  </span>
+                                  <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
+                                    ({todayStr})
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {isLoadingStats ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-800/70 text-teal-200 text-[10px] font-bold animate-pulse">
+                                    ⏳ Memeriksa...
+                                  </span>
+                                ) : stats?.sudahDiisi ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                    ✅ Sudah Diisi
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
+                                    ⚪ Belum Diisi
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Mini Counters Grid (Padat 5 Kolom) */}
+                            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
+                              <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
+                                  Hadir
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-emerald-100">
+                                  {stats?.hadir || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
+                                  Sakit
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-blue-100">
+                                  {stats?.sakit || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
+                                  Izin
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-amber-100">
+                                  {stats?.izin || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
+                                  Alfa
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-rose-100">
+                                  {stats?.alfa || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
+                                  Cabut
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-violet-100">
+                                  {stats?.cabut || 0}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Daftar Siswa Sakit, Izin, Alfa, Cabut Hari Ini (Padat & Compact) */}
+                            <div className="pt-1">
+                              {stats?.sudahDiisi ? (
+                                stats?.absenList?.length > 0 ? (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                                        <span>⚠️</span>
+                                        <span>
+                                          Siswa Tidak Hadir Hari Ini (
+                                          {stats.absenList.length}):
+                                        </span>
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                      {stats.absenList.map((item, i) => {
+                                        let colorStyle =
+                                          "bg-rose-500/20 text-rose-200 border-rose-500/40";
+                                        if (item.status === "Sakit") {
+                                          colorStyle =
+                                            "bg-blue-500/20 text-blue-200 border-blue-500/40";
+                                        } else if (item.status === "Izin") {
+                                          colorStyle =
+                                            "bg-amber-500/20 text-amber-200 border-amber-500/40";
+                                        } else if (item.status === "Cabut") {
+                                          colorStyle =
+                                            "bg-violet-500/20 text-violet-200 border-violet-500/40";
+                                        }
+
+                                        return (
+                                          <div
+                                            key={i}
+                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
+                                          >
+                                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
+                                              {item.status}
+                                            </span>
+                                            <span className="truncate max-w-[150px] sm:max-w-[220px]">
+                                              {item.nama}
+                                            </span>
+                                            {item.keterangan && (
+                                              <span className="text-[10px] text-white/60 font-medium italic truncate max-w-[120px]">
+                                                ({item.keterangan})
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
+                                    <span>✨</span>
+                                    <span>
+                                      Semua siswa hadir hari ini (
+                                      {totalSiswaDisplay} siswa) — Nihil Absen.
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="text-[11px] text-teal-200/80 font-medium italic flex items-center gap-1.5 bg-teal-900/30 rounded-xl px-3 py-1.5">
+                                  <span>💡</span>
+                                  <span>
+                                    Presensi hari ini belum diisi. Gunakan
+                                    tombol di bawah untuk membuka tabel presensi
+                                    kelas.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ============================================================ */}
+                          {/* TOMBOL UTAMA: BUKA / TUTUP PRESENSI HARIAN KELAS */}
+                          {/* ============================================================ */}
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(wali.idWali)}
+                            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black shadow-md border transition-all cursor-pointer active:scale-[0.99] ${
+                              isExpanded
+                                ? "bg-slate-800 text-amber-300 border-amber-400/40 hover:bg-slate-700"
+                                : "bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 text-amber-950 border-amber-300"
+                            }`}
+                          >
+                            <span>{isExpanded ? "🔽" : "📅"}</span>
+                            <span>
+                              {isExpanded
+                                ? "TUTUP PRESENSI HARIAN"
+                                : "BUKA PRESENSI HARIAN"}
+                            </span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* ============================================================ */}
+                      {/* TABEL PRESENSI GRID SAAT DI-EXPAND */}
+                      {/* ============================================================ */}
+                      {isExpanded && !isEditing && (
+                        <div className="bg-slate-50 border-t border-teal-800 rounded-2xl p-2 sm:p-4 text-slate-800 shadow-inner overflow-hidden">
+                          <PresensiWaliGrid
+                            ref={activeGridRef}
+                            guru={guru}
+                            wali={wali}
+                            onBukaTambah={() => setWaliTambahTarget(wali)}
+                            onPresensiSaved={() =>
+                              loadStatsHariIniWali(wali.idWali)
+                            }
+                            onClose={() => {
+                              setExpandedWaliId(pendingOpenId);
+                              setPendingOpenId(null);
+                              setShowCloseModal(false);
+                              loadStatsHariIniWali(wali.idWali);
+                            }}
+                          />
                         </div>
                       )}
-
-                      {!isEditing && (
-                        <button
-                          onClick={() => toggleExpand(wali.idWali)}
-                          className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 sm:py-3.5 text-[11px] sm:text-sm font-black shadow-md transition-all ${
-                            isExpanded
-                              ? "bg-amber-400 text-amber-950 hover:bg-amber-500 border border-amber-300"
-                              : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                          }`}
-                        >
-                          {isExpanded
-                            ? "🔽 TUTUP PRESENSI HARIAN"
-                            : "📅 BUKA PRESENSI HARIAN"}
-                        </button>
-                      )}
                     </div>
-
-                    {isExpanded && !isEditing && (
-                      <div className="bg-slate-50 border-t border-slate-200 p-2 sm:p-5 text-slate-800">
-                        <PresensiWaliGrid
-                          ref={activeGridRef}
-                          guru={guru}
-                          wali={wali}
-                          onBukaTambah={() => setWaliTambahTarget(wali)}
-                          onClose={() => {
-                            setExpandedWaliId(pendingOpenId);
-                            setPendingOpenId(null);
-                            setShowCloseModal(false);
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </section>
@@ -888,6 +1209,9 @@ export default function KelolaWaliKelasPage() {
               activeGridRef.current.reloadGrid();
             }
             loadWali(guru?.id);
+            if (waliTambahTarget?.idWali) {
+              loadStatsHariIniWali(waliTambahTarget.idWali);
+            }
           }}
         />
 
@@ -946,7 +1270,7 @@ export default function KelolaWaliKelasPage() {
 // KOMPONEN: TABEL PRESENSI HARIAN (per Tanggal)
 // =========================================================================
 const PresensiWaliGrid = forwardRef(function PresensiWaliGrid(
-  { guru, wali, onBukaTambah, onClose },
+  { guru, wali, onBukaTambah, onClose, onPresensiSaved },
   ref,
 ) {
   const [loading, setLoading] = useState(true);
@@ -1102,6 +1426,7 @@ const PresensiWaliGrid = forwardRef(function PresensiWaliGrid(
         alert(
           `✅ Presensi tersimpan.\nTotal: ${result.data?.tersimpan || cells.length} data diproses.`,
         );
+        if (onPresensiSaved) onPresensiSaved();
       } else {
         alert(result.message || "Gagal menyimpan presensi.");
       }
@@ -1137,6 +1462,7 @@ const PresensiWaliGrid = forwardRef(function PresensiWaliGrid(
           return salinan;
         });
         alert(`✅ "${siswa.nama}" dihapus dari kelas wali ini.`);
+        if (onPresensiSaved) onPresensiSaved();
       } else {
         alert(result.message || "Gagal menghapus siswa dari kelas wali.");
       }
