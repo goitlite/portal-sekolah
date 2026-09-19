@@ -532,3 +532,95 @@ export async function saveJurnalMapel(data) {
 export async function getJurnalMapel(idGuru, idMapel) {
   return request("getJurnalMapel", { idGuru, idMapel });
 }
+
+/**
+ * ====================================================================
+ * GURU WALI KELAS (Presensi Harian + Jurnal Bimbingan)
+ * ====================================================================
+ * Menggunakan spreadsheet MAPEL_DATA_SMKN1TK yang sama, tapi
+ * dengan 4 sheet baru: WALI_KELAS, SISWA_WALI_KELAS,
+ * PRESENSI_WALI_KELAS, JURNAL_WALI_KELAS.
+ *
+ * Constraint eksklusif: 1 siswa hanya boleh 1 Guru Wali Kelas.
+ * ====================================================================
+ */
+
+// Daftar kelas wali milik guru
+export async function getWaliKelasByGuru(idGuru) {
+  return request("getWaliKelasByGuru", { idGuru });
+}
+
+// Tambah kelas wali baru (+ auto-enroll siswa sekelas)
+export async function addWaliKelas(data) {
+  return request("addWaliKelas", data);
+}
+
+// Edit nama/keterangan kelas wali
+export async function editWaliKelas(data) {
+  return request("editWaliKelas", data);
+}
+
+// Hapus kelas wali + seluruh data terkait
+export async function deleteWaliKelas(data) {
+  return request("deleteWaliKelas", data);
+}
+
+// Daftar siswa terdaftar di kelas wali
+export async function getSiswaWaliKelas(idGuru, idWali) {
+  return request("getSiswaWaliKelas", { idGuru, idWali });
+}
+
+// Tambah 1 siswa ke kelas wali (cek eksklusif)
+export async function simpanSiswaWaliKelas(data) {
+  return request("simpanSiswaWaliKelas", data);
+}
+
+// Hapus siswa dari kelas wali (cascade presensi + jurnal)
+export async function hapusSiswaWaliKelas(data) {
+  return request("hapusSiswaWaliKelas", data);
+}
+
+// List siswa yang bisa ditambahkan (belum punya guru wali kelas lain)
+export async function getSemuaSiswaUntukTambahWali(idGuru, idWali) {
+  return request("getSemuaSiswaUntukTambahWali", { idGuru, idWali });
+}
+
+// Sinkron semua siswa sekelas ke kelas wali (yang belum punya wali lain)
+export async function sinkronSiswaWaliKelas(data) {
+  return request("sinkronSiswaWaliKelas", data);
+}
+
+// Grid presensi per tanggal (key: idSiswa_YYYY-MM-DD)
+export async function getPresensiWaliGrid(idGuru, idWali) {
+  return request("getPresensiWaliGrid", { idGuru, idWali });
+}
+
+// Simpan presensi harian (upsert per siswa+tanggal)
+export async function savePresensiWaliKelas(data) {
+  return request("savePresensiWaliKelas", {
+    idGuru: data.idGuru,
+    idWali: data.idWali,
+    cells: data.cells || [],
+  });
+}
+
+// Simpan jurnal bimbingan wali kelas (+ foto)
+export async function saveJurnalWaliKelas(data) {
+  return request("saveJurnalWaliKelas", {
+    idGuru: data.idGuru,
+    idWali: data.idWali,
+    idSiswa: data.idSiswa,
+    idSiswaList: data.idSiswaList,
+    tanggal: data.tanggal,
+    formatPertemuan: data.formatPertemuan || "Individu",
+    topik: data.topik || "",
+    tindakLanjut: data.tindakLanjut || "",
+    keterangan: data.keterangan || "",
+    fotoUrl: data.fotoUrl || "",
+  });
+}
+
+// Ambil semua jurnal wali kelas per guru (idWali opsional)
+export async function getJurnalWaliKelas(idGuru, idWali) {
+  return request("getJurnalWaliKelas", { idGuru, idWali: idWali || "" });
+}

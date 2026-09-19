@@ -21,6 +21,8 @@ import RuangBelajarTKA from "./RuangBelajarTKA";
 // 📚 MODAL MAPEL & 📝 MODAL CATATAN WALI
 import ModalKehadiranMapel from "./ModalKehadiranMapel";
 import ModalCatatanWali from "./ModalCatatanWali";
+import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
+import { findPetugasWaliKelasForSiswa } from "../lib/petugasPresensiHelper";
 
 // --- HELPER FORMAT WAKTU & TANGGAL ---
 function formatWaktu(timestamp) {
@@ -182,6 +184,11 @@ export default function DashboardSiswa() {
   // Modals state
   const [showModalCatatan, setShowModalCatatan] = useState(false);
   const [showModalMapel, setShowModalMapel] = useState(false);
+  const [showModalPresensiPetugas, setShowModalPresensiPetugas] =
+    useState(false);
+
+  // Status Petugas Presensi Kelas
+  const [petugasWaliData, setPetugasWaliData] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     if (!isLoggedIn()) {
@@ -201,6 +208,12 @@ export default function DashboardSiswa() {
       setLoadFailed(false);
       setLoadFailedMessage("");
       setLoadProgress(8);
+
+      // Cek apakah siswa merupakan petugas presensi kelas
+      const pInfo = findPetugasWaliKelasForSiswa(session.id);
+      if (pInfo) {
+        setPetugasWaliData(pInfo);
+      }
     }
 
     // Cek preference lokal tanggal presensi hari ini
@@ -431,6 +444,22 @@ export default function DashboardSiswa() {
     };
   }, [loadDashboard]);
 
+  // Cek berkala / saat tab kembali aktif jika penunjukan baru saja dilakukan guru
+  useEffect(() => {
+    if (!user?.id) return;
+    const checkPetugas = () => {
+      const pInfo = findPetugasWaliKelasForSiswa(user.id);
+      if (pInfo) {
+        setPetugasWaliData(pInfo);
+      }
+    };
+    checkPetugas();
+    window.addEventListener("focus", checkPetugas);
+    return () => {
+      window.removeEventListener("focus", checkPetugas);
+    };
+  }, [user?.id]);
+
   function handleLogout() {
     if (!confirm("Keluar dari portal sekolah?")) return;
     localStorage.removeItem(CACHE_KEY);
@@ -580,6 +609,18 @@ export default function DashboardSiswa() {
           </div>
 
           <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
+            {/* ⭐ PETUGAS PRESENSI KELAS (JIKA DITUNJUK OLEH WALI KELAS) */}
+            {petugasWaliData && (
+              <MenuCard
+                title="Presensi Kelas"
+                subtitle={`Petugas ${petugasWaliData.namaKelas || "Kelas"}`}
+                icon="⭐"
+                bgGrad="from-teal-600 via-emerald-600 to-teal-800 shadow-teal-500/25 border-amber-300/40"
+                badge="Petugas"
+                onClick={() => setShowModalPresensiPetugas(true)}
+              />
+            )}
+
             {/* 1. PRESENSI MAGANG HARI INI */}
             {!sudahMagang ? (
               <MenuCardDisabled
@@ -672,6 +713,40 @@ export default function DashboardSiswa() {
             />
           </div>
         </div>
+
+        {/* ============================================================ */}
+        {/* BANNER SPOTLIGHT: PETUGAS PRESENSI KELAS (JIKA DITUNJUK) */}
+        {/* ============================================================ */}
+        {petugasWaliData && (
+          <div className="rounded-[2rem] bg-gradient-to-br from-teal-900 via-emerald-900 to-slate-900 p-5 sm:p-7 text-white shadow-lg border border-teal-400/40 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-black uppercase tracking-wider border border-amber-400/30">
+                  ⭐ Mandat Petugas Presensi Kelas
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-teal-100 to-emerald-200">
+                  Petugas Presensi: {petugasWaliData.namaKelas}
+                </h3>
+                <p className="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
+                  Kamu ditunjuk untuk mengisi presensi harian seluruh siswa di
+                  kelas {petugasWaliData.namaKelas}. Pengisian dilakukan 1 kali
+                  sehari dengan default Hadir semua.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setShowModalPresensiPetugas(true)}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <span>📋</span>
+                  <span>Isi Presensi Kelas</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ============================================================ */}
         {/* BANNER SPOTLIGHT: CATATAN GURU WALI */}
@@ -894,6 +969,15 @@ export default function DashboardSiswa() {
         onClose={() => setShowModalMapel(false)}
         user={user}
       />
+
+      {petugasWaliData && (
+        <ModalPresensiPetugasSiswa
+          isOpen={showModalPresensiPetugas}
+          onClose={() => setShowModalPresensiPetugas(false)}
+          petugasInfo={petugasWaliData}
+          user={user}
+        />
+      )}
     </main>
   );
 }
