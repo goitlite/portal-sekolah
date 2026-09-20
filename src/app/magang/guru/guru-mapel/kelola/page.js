@@ -6,6 +6,7 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, isLoggedIn } from "../../../lib/auth";
@@ -189,6 +190,142 @@ export default function KelolaMapelPage() {
   const [error, setError] = useState("");
 
   const [daftarMapel, setDaftarMapel] = useState([]);
+  const [searchMapel, setSearchMapel] = useState("");
+  const [statsPresensiMapel, setStatsPresensiMapel] = useState({});
+  const [loadingStatsMapel, setLoadingStatsMapel] = useState({});
+  const [selectedPertemuanMapel, setSelectedPertemuanMapel] = useState({});
+
+  // Helper format tanggal pertemuan mapel
+  const formatTanggalMapelIndo = (tanggalStr) => {
+    if (!tanggalStr) return "";
+    try {
+      const d = new Date(tanggalStr);
+      if (isNaN(d.getTime())) return String(tanggalStr);
+      return d.toLocaleDateString("id-ID", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(tanggalStr);
+    }
+  };
+
+  // --- AMBIL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA MAPEL ---
+  const loadStatsMapel = useCallback(
+    async (idMapel) => {
+      if (!guru?.id || !idMapel) return;
+      setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: true }));
+
+      try {
+        const res = await getPresensiMapelGrid(guru.id, idMapel);
+        if (res && res.success && res.data) {
+          const siswaList = res.data.siswa || [];
+          const presensiList = res.data.presensi || [];
+
+          const siswaMap = {};
+          siswaList.forEach((s) => {
+            siswaMap[String(s.idSiswa || s.id)] = s.nama || s.namaSiswa || "";
+          });
+
+          const meetingsMap = {};
+          presensiList.forEach((p) => {
+            if (!p.pertemuanKe) return;
+            const pKe = Number(p.pertemuanKe);
+            if (!meetingsMap[pKe]) {
+              meetingsMap[pKe] = { tanggal: p.tanggal || "", records: [] };
+            }
+            if (p.tanggal && !meetingsMap[pKe].tanggal) {
+              meetingsMap[pKe].tanggal = p.tanggal;
+            }
+            if (p.status) {
+              meetingsMap[pKe].records.push(p);
+            }
+          });
+
+          const validMeetings = Object.keys(meetingsMap)
+            .map(Number)
+            .filter((p) => meetingsMap[p].records.length > 0)
+            .sort((a, b) => a - b);
+
+          const latestP =
+            validMeetings.length > 0 ? Math.max(...validMeetings) : null;
+
+          const perPertemuan = {};
+          Object.keys(meetingsMap).forEach((pStr) => {
+            const pKe = Number(pStr);
+            const mData = meetingsMap[pKe];
+            let hadir = 0,
+              sakit = 0,
+              izin = 0,
+              alfa = 0,
+              cabut = 0;
+            const absenList = [];
+            let totalNilai = 0;
+            let countNilai = 0;
+
+            mData.records.forEach((rec) => {
+              const st = String(rec.status || "").trim();
+              const sid = String(rec.idSiswa).trim();
+              const nama = siswaMap[sid] || rec.namaSiswa || `Siswa ${sid}`;
+
+              if (st === "Hadir") {
+                hadir++;
+                const n = Number(rec.nilai);
+                if (Number.isFinite(n) && n > 0) {
+                  totalNilai += n;
+                  countNilai++;
+                }
+              } else if (st === "Sakit") {
+                sakit++;
+                absenList.push({ idSiswa: sid, nama, status: "Sakit" });
+              } else if (st === "Izin") {
+                izin++;
+                absenList.push({ idSiswa: sid, nama, status: "Izin" });
+              } else if (st === "Alfa") {
+                alfa++;
+                absenList.push({ idSiswa: sid, nama, status: "Alfa" });
+              } else if (st === "Cabut") {
+                cabut++;
+                absenList.push({ idSiswa: sid, nama, status: "Cabut" });
+              }
+            });
+
+            const rataRataNilai =
+              countNilai > 0 ? (totalNilai / countNilai).toFixed(1) : null;
+
+            perPertemuan[pKe] = {
+              tanggal: mData.tanggal,
+              hadir,
+              sakit,
+              izin,
+              alfa,
+              cabut,
+              sudahDiisi: mData.records.length > 0,
+              absenList,
+              rataRataNilai,
+            };
+          });
+
+          setStatsPresensiMapel((prev) => ({
+            ...prev,
+            [idMapel]: {
+              totalSiswa: siswaList.length,
+              validMeetings,
+              latestP,
+              perPertemuan,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn("Gagal memuat statistik presensi mapel:", err);
+      } finally {
+        setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: false }));
+      }
+    },
+    [guru?.id],
+  );
 
   // State untuk Card Tambah Mapel
   const [isFormMapelOpen, setIsFormMapelOpen] = useState(false);
@@ -252,7 +389,11 @@ export default function KelolaMapelPage() {
       setError("");
       const result = await getMapelByGuru(idGuru);
       if (result.success) {
-        setDaftarMapel(result.data || []);
+        const list = result.data || [];
+        setDaftarMapel(list);
+        list.forEach((m) => {
+          if (m.idMapel) loadStatsMapel(m.idMapel);
+        });
       } else {
         setError(result.message || "Gagal mengambil data mapel.");
       }
@@ -626,37 +767,89 @@ export default function KelolaMapelPage() {
         </section>
 
         {/* DAFTAR KARTU MAPEL (BIRU) */}
-        <section>
-          <h2 className="text-base sm:text-lg font-black text-slate-800 mb-4 px-2">
-            📋 Daftar Mapel Anda ({daftarMapel.length})
-          </h2>
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-black text-slate-800 px-1">
+              📋 Daftar Mapel Anda (
+              {Array.isArray(daftarMapel) ? daftarMapel.length : 0})
+            </h2>
 
-          {daftarMapel.length === 0 ? (
+            {/* PENCARIAN & SEGAR KAN */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 sm:w-64">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">
+                  🔍
+                </span>
+                <input
+                  type="text"
+                  value={searchMapel}
+                  onChange={(e) => setSearchMapel(e.target.value)}
+                  placeholder="Cari mapel atau kelas..."
+                  className="w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500 transition-all shadow-xs"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadMapel(guru?.id)}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shrink-0 shadow-xs active:scale-95"
+              >
+                <span className={loading ? "animate-spin inline-block" : ""}>
+                  🔄
+                </span>
+                <span className="hidden sm:inline">Segarkan</span>
+              </button>
+            </div>
+          </div>
+
+          {!Array.isArray(daftarMapel) || daftarMapel.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400 text-sm font-medium shadow-sm">
               Belum ada mapel. Tambahkan mapel pertama Bapak/Ibu di atas.
             </div>
           ) : (
             <div className="space-y-4 sm:space-y-6">
-              {daftarMapel.map((mapel) => {
-                const isEditing = editingId === mapel.idMapel;
-                const isAktif = mapelAktifId === mapel.idMapel;
-                const isExpanded = expandedMapelId === mapel.idMapel;
+              {daftarMapel
+                .filter((m) => {
+                  if (!searchMapel.trim()) return true;
+                  const q = searchMapel.toLowerCase();
+                  const nama = String(m.namaMapel || "").toLowerCase();
+                  const kelas = String(m.kelas || "").toLowerCase();
+                  const ket = String(m.keterangan || "").toLowerCase();
+                  return (
+                    nama.includes(q) || kelas.includes(q) || ket.includes(q)
+                  );
+                })
+                .map((mapel) => {
+                  const isEditing = editingId === mapel.idMapel;
+                  const isAktif = mapelAktifId === mapel.idMapel;
+                  const isExpanded = expandedMapelId === mapel.idMapel;
+                  const stats = statsPresensiMapel[mapel.idMapel];
+                  const isLoadingStats = loadingStatsMapel[mapel.idMapel];
+                  const activeP =
+                    selectedPertemuanMapel[mapel.idMapel] ??
+                    stats?.latestP ??
+                    (stats?.validMeetings?.[0] || 1);
+                  const meetingData = stats?.perPertemuan?.[activeP];
+                  const totalSiswaDisplay =
+                    stats?.totalSiswa || mapel.jumlahSiswa || 0;
+                  const totalPertemuanDisplay =
+                    stats?.validMeetings?.length || 0;
 
-                return (
-                  <div
-                    key={mapel.idMapel}
-                    className={`rounded-[2rem] overflow-hidden shadow-lg border transition-all ${
-                      isAktif
-                        ? "border-amber-400 bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 shadow-amber-500/10"
-                        : "border-blue-800 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900"
-                    }`}
-                  >
-                    <div className="p-5 sm:p-6 text-white">
+                  return (
+                    <div
+                      key={mapel.idMapel}
+                      className={`rounded-[2rem] overflow-hidden shadow-lg border p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4 ${
+                        isAktif
+                          ? "border-amber-400 bg-gradient-to-br from-blue-950 via-indigo-950 to-slate-950 shadow-amber-500/10"
+                          : "border-blue-800 bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950"
+                      }`}
+                    >
                       {isEditing ? (
                         <div className="space-y-3 bg-white p-4 rounded-xl shadow-inner text-slate-800">
                           <input
                             value={editNama}
                             onChange={(e) => setEditNama(e.target.value)}
+                            placeholder="Nama Mapel"
                             className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
                           />
                           <input
@@ -667,12 +860,14 @@ export default function KelolaMapelPage() {
                           />
                           <div className="flex gap-2 pt-1">
                             <button
+                              type="button"
                               onClick={() => simpanEdit(mapel.idMapel)}
                               className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-5 py-2.5 shadow-md transition-colors"
                             >
                               💾 Simpan
                             </button>
                             <button
+                              type="button"
                               onClick={batalEdit}
                               className="rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black px-5 py-2.5 transition-colors"
                             >
@@ -681,126 +876,371 @@ export default function KelolaMapelPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2 flex-wrap">
-                              <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 drop-shadow-sm">
-                                {mapel.namaMapel}
-                              </h3>
-                              {isAktif && (
-                                <span className="rounded-lg bg-amber-400/20 text-amber-300 px-3 py-1 text-[10px] sm:text-xs font-black uppercase border border-amber-400/30">
-                                  ✓ Aktif Terpilih
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {mapel.kelas && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
-                                  Kelas {mapel.kelas}
-                                </span>
-                              )}
-                            </div>
-
-                            {mapel.keterangan && (
-                              <p className="text-xs sm:text-sm text-blue-200 font-medium mt-3">
-                                {mapel.keterangan}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Tombol Aksi Kanan */}
-                          <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
-                            <button
-                              onClick={() => setMapelTambahTarget(mapel)}
-                              title="Tambah / Daftarkan Siswa ke Mapel Ini"
-                              className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>➕</span>
-                              <span>Tambah Siswa</span>
-                            </button>
-                            <button
-                              onClick={() => handleCetakPdfMapel(mapel)}
-                              disabled={cetakCardLoadingId === mapel.idMapel}
-                              title="Cetak Laporan Presensi & Nilai PDF"
-                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
-                            >
-                              {cetakCardLoadingId === mapel.idMapel ? (
-                                <>
-                                  <span className="inline-block animate-spin">
-                                    ⏳
+                        <>
+                          {/* ============================================================ */}
+                          {/* BAGIAN ATAS: NAMA MAPEL, BADGES & TOMBOL AKSI CEPAT */}
+                          {/* ============================================================ */}
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-indigo-200 drop-shadow-sm">
+                                  {mapel.namaMapel}
+                                </h3>
+                                {isAktif && (
+                                  <span className="rounded-lg bg-amber-400/20 text-amber-300 px-3 py-1 text-[10px] sm:text-xs font-black uppercase border border-amber-400/30">
+                                    ✓ Aktif Terpilih
                                   </span>
-                                  <span>Mencetak...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🖨️</span>
-                                  <span>Cetak PDF</span>
-                                </>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {mapel.kelas && (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
+                                    Kelas {mapel.kelas}
+                                  </span>
+                                )}
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800/60 border border-indigo-500/40 text-indigo-100">
+                                  👥 {totalSiswaDisplay} Siswa
+                                </span>
+                                {totalPertemuanDisplay > 0 && (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
+                                    🗓️ {totalPertemuanDisplay} Pertemuan
+                                  </span>
+                                )}
+                              </div>
+
+                              {mapel.keterangan && (
+                                <p className="text-xs text-blue-200/90 font-medium italic pt-0.5">
+                                  {mapel.keterangan}
+                                </p>
                               )}
-                            </button>
-                            <button
-                              onClick={() => pilihMapelAktif(mapel)}
-                              disabled={isAktif}
-                              className={`rounded-xl px-4 py-2.5 text-xs font-black shadow-md transition-all ${
-                                isAktif
-                                  ? "bg-blue-900/50 text-blue-400 border border-blue-800/50 cursor-not-allowed opacity-60"
-                                  : "bg-blue-600 hover:bg-blue-500 text-white border border-blue-500"
-                              }`}
-                            >
-                              {isAktif ? "✓ Terpilih" : "📌 Pilih"}
-                            </button>
-                            <button
-                              onClick={() => mulaiEdit(mapel)}
-                              className="rounded-xl bg-amber-500/20 border border-amber-400/40 px-4 py-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/40 transition-colors"
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button
-                              onClick={() => hapusMapelHandler(mapel)}
-                              className="rounded-xl bg-rose-500/20 border border-rose-400/40 px-4 py-2.5 text-xs font-black text-rose-200 hover:bg-rose-500/40 transition-colors"
-                            >
-                              🗑️ Hapus
-                            </button>
+                            </div>
+
+                            {/* TOMBOL AKSI KANAN */}
+                            <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
+                              <button
+                                type="button"
+                                onClick={() => setMapelTambahTarget(mapel)}
+                                title="Tambah / Daftarkan Siswa ke Mapel Ini"
+                                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
+                              >
+                                <span>➕</span>
+                                <span>Tambah Siswa</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCetakPdfMapel(mapel)}
+                                disabled={cetakCardLoadingId === mapel.idMapel}
+                                title="Cetak Laporan Presensi & Nilai PDF"
+                                className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
+                              >
+                                {cetakCardLoadingId === mapel.idMapel ? (
+                                  <>
+                                    <span className="inline-block animate-spin">
+                                      ⏳
+                                    </span>
+                                    <span>Mencetak...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🖨️</span>
+                                    <span>Cetak PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => pilihMapelAktif(mapel)}
+                                disabled={isAktif}
+                                className={`rounded-xl px-3.5 py-2 sm:py-2.5 text-xs font-black shadow-md transition-all active:scale-95 ${
+                                  isAktif
+                                    ? "bg-blue-900/50 text-blue-400 border border-blue-800/50 cursor-not-allowed opacity-60"
+                                    : "bg-blue-600 hover:bg-blue-500 text-white border border-blue-500"
+                                }`}
+                              >
+                                {isAktif ? "✓ Terpilih" : "📌 Pilih"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => mulaiEdit(mapel)}
+                                title="Edit nama mapel dan keterangan"
+                                className="rounded-xl bg-amber-500/20 border border-amber-400/40 px-3 py-2 sm:py-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/40 transition-colors flex items-center gap-1.5 active:scale-95"
+                              >
+                                <span>✏️</span>
+                                <span>Edit</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => hapusMapelHandler(mapel)}
+                                title="Hapus mapel"
+                                className="rounded-xl bg-rose-500/20 border border-rose-400/40 px-3 py-2 sm:py-2.5 text-xs font-black text-rose-200 hover:bg-rose-500/40 transition-colors flex items-center gap-1.5 active:scale-95"
+                              >
+                                <span>🗑️</span>
+                                <span>Hapus</span>
+                              </button>
+                            </div>
                           </div>
+
+                          {/* ============================================================ */}
+                          {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA (PADAT & COMPACT) */}
+                          {/* ============================================================ */}
+                          <div className="rounded-2xl border border-blue-700/60 bg-blue-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
+                            {/* Header Bar Statistik */}
+                            <div className="flex items-center justify-between gap-2 border-b border-blue-800/60 pb-2.5 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">📊</span>
+                                <div>
+                                  <span className="text-xs font-black tracking-wide text-white block sm:inline">
+                                    Presensi Pertemuan Sebelumnya
+                                  </span>
+                                  {activeP && (
+                                    <span className="text-[11px] text-blue-200/80 font-medium sm:ml-2">
+                                      (P-{activeP}
+                                      {meetingData?.tanggal
+                                        ? ` • ${formatTanggalMapelIndo(meetingData.tanggal)}`
+                                        : ""}
+                                      )
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {isLoadingStats ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-800/70 text-blue-200 text-[10px] font-bold animate-pulse">
+                                    ⏳ Memeriksa...
+                                  </span>
+                                ) : meetingData?.sudahDiisi ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                    ✅ P-{activeP} Terisi
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
+                                    ⚪ Belum Ada Pertemuan
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Selector Pertemuan (jika lebih dari 1 pertemuan yang sudah ada) */}
+                            {stats?.validMeetings &&
+                              stats.validMeetings.length > 1 && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  <span className="text-[10px] text-blue-300 font-black uppercase tracking-wider">
+                                    Pilih Sesi:
+                                  </span>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {stats.validMeetings.map((pNum) => {
+                                      const isSel = pNum === activeP;
+                                      return (
+                                        <button
+                                          key={pNum}
+                                          type="button"
+                                          onClick={() =>
+                                            setSelectedPertemuanMapel(
+                                              (prev) => ({
+                                                ...prev,
+                                                [mapel.idMapel]: pNum,
+                                              }),
+                                            )
+                                          }
+                                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                                            isSel
+                                              ? "bg-blue-500 text-white shadow-xs border border-blue-300 scale-105"
+                                              : "bg-blue-900/60 hover:bg-blue-800/70 text-blue-200 border border-blue-700/50"
+                                          }`}
+                                        >
+                                          P-{pNum}{" "}
+                                          {pNum === stats.latestP
+                                            ? "⭐ (Terakhir)"
+                                            : ""}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                            {/* Mini Counters Grid (Padat 5 Kolom) */}
+                            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
+                              <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
+                                  Hadir
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-emerald-100">
+                                  {meetingData?.hadir || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
+                                  Sakit
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-blue-100">
+                                  {meetingData?.sakit || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
+                                  Izin
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-amber-100">
+                                  {meetingData?.izin || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
+                                  Alfa
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-rose-100">
+                                  {meetingData?.alfa || 0}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
+                                  Cabut
+                                </span>
+                                <span className="text-xs sm:text-base font-black text-violet-100">
+                                  {meetingData?.cabut || 0}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Rata-Rata Nilai & Detail Absen Siswa */}
+                            <div className="pt-1 space-y-2">
+                              {meetingData?.rataRataNilai && (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-900/60 border border-indigo-400/30 text-indigo-200 text-xs font-bold">
+                                  <span>🎯</span>
+                                  <span>
+                                    Rata-rata Nilai:{" "}
+                                    <b className="text-white">
+                                      {meetingData.rataRataNilai}
+                                    </b>
+                                  </span>
+                                </div>
+                              )}
+
+                              {meetingData?.sudahDiisi ? (
+                                meetingData?.absenList?.length > 0 ? (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                                        <span>⚠️</span>
+                                        <span>
+                                          Siswa Tidak Hadir (
+                                          {meetingData.absenList.length}):
+                                        </span>
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                      {meetingData.absenList.map((item, i) => {
+                                        let colorStyle =
+                                          "bg-rose-500/20 text-rose-200 border-rose-500/40";
+                                        if (item.status === "Sakit") {
+                                          colorStyle =
+                                            "bg-blue-500/20 text-blue-200 border-blue-500/40";
+                                        } else if (item.status === "Izin") {
+                                          colorStyle =
+                                            "bg-amber-500/20 text-amber-200 border-amber-500/40";
+                                        } else if (item.status === "Cabut") {
+                                          colorStyle =
+                                            "bg-violet-500/20 text-violet-200 border-violet-500/40";
+                                        }
+
+                                        return (
+                                          <div
+                                            key={i}
+                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
+                                          >
+                                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
+                                              {item.status}
+                                            </span>
+                                            <span className="truncate max-w-[150px] sm:max-w-[220px]">
+                                              {item.nama}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
+                                    <span>✨</span>
+                                    <span>
+                                      Semua siswa hadir pada pertemuan ini (
+                                      {totalSiswaDisplay} siswa) — Nihil Absen.
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="text-[11px] text-blue-200/80 font-medium italic flex items-center gap-1.5 bg-blue-900/30 rounded-xl px-3 py-1.5">
+                                  <span>💡</span>
+                                  <span>
+                                    Belum ada presensi pertemuan yang dicatat.
+                                    Buka tabel presensi & nilai di bawah untuk
+                                    mulai mengisi.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ============================================================ */}
+                          {/* TOMBOL UTAMA: BUKA / TUTUP PRESENSI & NILAI */}
+                          {/* ============================================================ */}
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(mapel.idMapel)}
+                            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black shadow-md border transition-all cursor-pointer active:scale-[0.99] ${
+                              isExpanded
+                                ? "bg-slate-800 text-amber-300 border-amber-400/40 hover:bg-slate-700"
+                                : "bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 text-amber-950 border-amber-300"
+                            }`}
+                          >
+                            <span>{isExpanded ? "🔽" : "📊"}</span>
+                            <span>
+                              {isExpanded
+                                ? "TUTUP PRESENSI & NILAI"
+                                : "BUKA PRESENSI & NILAI"}
+                            </span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* ============================================================ */}
+                      {/* TABEL PRESENSI GRID SAAT DI-EXPAND */}
+                      {/* ============================================================ */}
+                      {isExpanded && !isEditing && (
+                        <div className="bg-slate-50 border-t border-blue-800 rounded-2xl p-2 sm:p-4 text-slate-800 shadow-inner overflow-hidden mt-4">
+                          <PresensiMapelGrid
+                            ref={activeGridRef}
+                            guru={guru}
+                            mapel={mapel}
+                            daftarKelas={daftarKelas}
+                            onBukaTambah={() => setMapelTambahTarget(mapel)}
+                            onPresensiSaved={() =>
+                              loadStatsMapel(mapel.idMapel)
+                            }
+                            onClose={() => {
+                              setExpandedMapelId(pendingOpenId);
+                              setPendingOpenId(null);
+                              setShowCloseModal(false);
+                              loadStatsMapel(mapel.idMapel);
+                            }}
+                          />
                         </div>
                       )}
-
-                      {!isEditing && (
-                        <button
-                          onClick={() => toggleExpand(mapel.idMapel)}
-                          className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 sm:py-3.5 text-[11px] sm:text-sm font-black shadow-md transition-all ${
-                            isExpanded
-                              ? "bg-amber-400 text-amber-950 hover:bg-amber-500 border border-amber-300"
-                              : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                          }`}
-                        >
-                          {isExpanded
-                            ? "🔽 TUTUP PRESENSI & NILAI"
-                            : "📊 BUKA PRESENSI & NILAI"}
-                        </button>
-                      )}
                     </div>
-
-                    {isExpanded && !isEditing && (
-                      <div className="bg-slate-50 border-t border-slate-200 p-2 sm:p-5 text-slate-800">
-                        <PresensiMapelGrid
-                          ref={activeGridRef}
-                          guru={guru}
-                          mapel={mapel}
-                          daftarKelas={daftarKelas}
-                          onBukaTambah={() => setMapelTambahTarget(mapel)}
-                          onClose={() => {
-                            setExpandedMapelId(pendingOpenId);
-                            setPendingOpenId(null);
-                            setShowCloseModal(false);
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </section>
@@ -861,6 +1301,10 @@ export default function KelolaMapelPage() {
             if (activeGridRef.current?.reloadGrid) {
               activeGridRef.current.reloadGrid();
             }
+            loadMapel(guru?.id);
+            if (mapelTambahTarget?.idMapel) {
+              loadStatsMapel(mapelTambahTarget.idMapel);
+            }
           }}
         />
       </div>
@@ -883,7 +1327,7 @@ export default function KelolaMapelPage() {
 // KOMPONEN: TABEL PRESENSI + NILAI
 // =========================================================================
 const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
-  { guru, mapel, daftarKelas, onBukaTambah, onClose },
+  { guru, mapel, daftarKelas, onBukaTambah, onClose, onPresensiSaved },
   ref,
 ) {
   const [loading, setLoading] = useState(true);
@@ -1085,6 +1529,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
         alert(
           `✅ Presensi tersimpan.\nDiperbarui: ${result.data?.diperbarui || 0} • Baris baru: ${result.data?.ditambah || 0}`,
         );
+        if (onPresensiSaved) onPresensiSaved();
       } else {
         alert(result.message || "Gagal menyimpan presensi.");
       }
@@ -1131,6 +1576,7 @@ const PresensiMapelGrid = forwardRef(function PresensiMapelGrid(
             `✅ "${siswa.nama}" dihapus dari mapel ini. Data siswa tetap aman di sistem.`,
           );
         }
+        if (onPresensiSaved) onPresensiSaved();
       } else {
         alert(result.message || "Gagal menghapus siswa dari mapel.");
       }

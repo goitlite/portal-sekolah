@@ -15,6 +15,7 @@ import {
   getRekapSemua, // ⬅️ TAMBAHKAN
   getGuru, // ⬅️ TAMBAHKAN
   getMapelByGuru,
+  getPresensiMapelGrid,
   getWaliKelasByGuru,
   getPresensiWaliGrid,
   getBiodataSiswa,
@@ -307,6 +308,9 @@ function DashboardGuruContent() {
   const [searchMapel, setSearchMapel] = useState("");
   const [cetakMapelCardLoadingId, setCetakCardLoadingId] = useState(null);
   const [mapelPresensiAktif, setMapelPresensiAktif] = useState(null);
+  const [statsPresensiMapel, setStatsPresensiMapel] = useState({});
+  const [loadingStatsMapel, setLoadingStatsMapel] = useState({});
+  const [selectedPertemuanMapel, setSelectedPertemuanMapel] = useState({});
 
   // --- STATE KHUSUS TAB GURU WALI KELAS ---
   const [daftarWaliKelas, setDaftarWaliKelas] = useState([]);
@@ -933,6 +937,138 @@ function DashboardGuruContent() {
     [user?.id],
   );
 
+  // Helper format tanggal pertemuan mapel
+  const formatTanggalMapelIndo = (tanggalStr) => {
+    if (!tanggalStr) return "";
+    try {
+      const d = new Date(tanggalStr);
+      if (isNaN(d.getTime())) return String(tanggalStr);
+      return d.toLocaleDateString("id-ID", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(tanggalStr);
+    }
+  };
+
+  // --- AMBIL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA MAPEL ---
+  const loadStatsMapel = useCallback(
+    async (idMapel) => {
+      if (!user?.id || !idMapel) return;
+      setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: true }));
+
+      try {
+        const res = await getPresensiMapelGrid(user.id, idMapel);
+        if (res && res.success && res.data) {
+          const siswaList = res.data.siswa || [];
+          const presensiList = res.data.presensi || [];
+
+          const siswaMap = {};
+          siswaList.forEach((s) => {
+            siswaMap[String(s.idSiswa || s.id)] = s.nama || s.namaSiswa || "";
+          });
+
+          const meetingsMap = {};
+          presensiList.forEach((p) => {
+            if (!p.pertemuanKe) return;
+            const pKe = Number(p.pertemuanKe);
+            if (!meetingsMap[pKe]) {
+              meetingsMap[pKe] = { tanggal: p.tanggal || "", records: [] };
+            }
+            if (p.tanggal && !meetingsMap[pKe].tanggal) {
+              meetingsMap[pKe].tanggal = p.tanggal;
+            }
+            if (p.status) {
+              meetingsMap[pKe].records.push(p);
+            }
+          });
+
+          const validMeetings = Object.keys(meetingsMap)
+            .map(Number)
+            .filter((p) => meetingsMap[p].records.length > 0)
+            .sort((a, b) => a - b);
+
+          const latestP =
+            validMeetings.length > 0 ? Math.max(...validMeetings) : null;
+
+          const perPertemuan = {};
+          Object.keys(meetingsMap).forEach((pStr) => {
+            const pKe = Number(pStr);
+            const mData = meetingsMap[pKe];
+            let hadir = 0,
+              sakit = 0,
+              izin = 0,
+              alfa = 0,
+              cabut = 0;
+            const absenList = [];
+            let totalNilai = 0;
+            let countNilai = 0;
+
+            mData.records.forEach((rec) => {
+              const st = String(rec.status || "").trim();
+              const sid = String(rec.idSiswa).trim();
+              const nama = siswaMap[sid] || rec.namaSiswa || `Siswa ${sid}`;
+
+              if (st === "Hadir") {
+                hadir++;
+                const n = Number(rec.nilai);
+                if (Number.isFinite(n) && n > 0) {
+                  totalNilai += n;
+                  countNilai++;
+                }
+              } else if (st === "Sakit") {
+                sakit++;
+                absenList.push({ idSiswa: sid, nama, status: "Sakit" });
+              } else if (st === "Izin") {
+                izin++;
+                absenList.push({ idSiswa: sid, nama, status: "Izin" });
+              } else if (st === "Alfa") {
+                alfa++;
+                absenList.push({ idSiswa: sid, nama, status: "Alfa" });
+              } else if (st === "Cabut") {
+                cabut++;
+                absenList.push({ idSiswa: sid, nama, status: "Cabut" });
+              }
+            });
+
+            const rataRataNilai =
+              countNilai > 0 ? (totalNilai / countNilai).toFixed(1) : null;
+
+            perPertemuan[pKe] = {
+              tanggal: mData.tanggal,
+              hadir,
+              sakit,
+              izin,
+              alfa,
+              cabut,
+              sudahDiisi: mData.records.length > 0,
+              absenList,
+              rataRataNilai,
+            };
+          });
+
+          setStatsPresensiMapel((prev) => ({
+            ...prev,
+            [idMapel]: {
+              totalSiswa: siswaList.length,
+              validMeetings,
+              latestP,
+              perPertemuan,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn("Gagal memuat statistik presensi mapel:", err);
+      } finally {
+        setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: false }));
+      }
+    },
+    [user?.id],
+  );
+
   // --- AMBIL DAFTAR MAPEL (Lazy-load & Caching) ---
   const loadMapelData = useCallback(
     async (forceRefresh = false) => {
@@ -947,6 +1083,9 @@ function DashboardGuruContent() {
             if (Array.isArray(parsed) && parsed.length > 0) {
               setDaftarMapel(parsed);
               setMapelLoaded(true);
+              parsed.forEach((m) => {
+                if (m.idMapel) loadStatsMapel(m.idMapel);
+              });
               return parsed;
             }
           }
@@ -968,6 +1107,9 @@ function DashboardGuruContent() {
           const list = Array.isArray(res.data) ? res.data : [];
           setDaftarMapel(list);
           setMapelLoaded(true);
+          list.forEach((m) => {
+            if (m.idMapel) loadStatsMapel(m.idMapel);
+          });
           try {
             sessionStorage.setItem(cacheKey, JSON.stringify(list));
           } catch (e) {}
@@ -986,7 +1128,7 @@ function DashboardGuruContent() {
         setLoadingMapel(false);
       }
     },
-    [user?.id],
+    [user?.id, loadStatsMapel],
   );
 
   // --- AMBIL STATISTIK PRESENSI HARI INI KELAS WALI ---
@@ -2361,97 +2503,322 @@ function DashboardGuruContent() {
                       nama.includes(q) || kelas.includes(q) || ket.includes(q)
                     );
                   })
-                  .map((mapel) => (
-                    <div
-                      key={mapel.idMapel}
-                      className="rounded-[2rem] overflow-hidden shadow-lg border border-blue-800 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-5 sm:p-6 text-white transition-all hover:shadow-xl"
-                    >
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 drop-shadow-sm">
-                              {mapel.namaMapel}
-                            </h3>
-                          </div>
+                  .map((mapel) => {
+                    const stats = statsPresensiMapel[mapel.idMapel];
+                    const isLoadingStats = loadingStatsMapel[mapel.idMapel];
+                    const activeP =
+                      selectedPertemuanMapel[mapel.idMapel] ??
+                      stats?.latestP ??
+                      (stats?.validMeetings?.[0] || 1);
+                    const meetingData = stats?.perPertemuan?.[activeP];
+                    const totalSiswaDisplay =
+                      stats?.totalSiswa || mapel.jumlahSiswa || 0;
+                    const totalPertemuanDisplay =
+                      stats?.validMeetings?.length || 0;
 
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {mapel.kelas && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
-                                Kelas {mapel.kelas}
-                              </span>
-                            )}
-                          </div>
-
-                          {mapel.keterangan && (
-                            <p className="text-xs sm:text-sm text-blue-200 font-medium mt-3">
-                              {mapel.keterangan}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* TOMBOL AKSI KANAN */}
-                        <div className="flex gap-2 flex-wrap shrink-0 mt-2 md:mt-0">
-                          <button
-                            type="button"
-                            onClick={() => setMapelPresensiAktif(mapel)}
-                            title="Buka popup presensi & nilai mapel ini"
-                            className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-emerald-400/40 shadow-md transition-all flex items-center gap-1.5"
-                          >
-                            <span>📊</span>
-                            <span>Presensi & Nilai</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleCetakPdfMapelDirect(mapel)}
-                            disabled={cetakMapelCardLoadingId === mapel.idMapel}
-                            title="Cetak Laporan Presensi & Nilai PDF"
-                            className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-4 py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
-                          >
-                            {cetakMapelCardLoadingId === mapel.idMapel ? (
-                              <>
-                                <span className="inline-block animate-spin">
-                                  ⏳
-                                </span>
-                                <span>Mencetak...</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>🖨️</span>
-                                <span>Cetak PDF</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              localStorage.setItem(
-                                "mapelAktifId",
-                                mapel.idMapel,
-                              );
-                              router.push("/magang/guru/guru-mapel/kelola");
-                            }}
-                            title="Buka pengaturan lengkap mapel"
-                            className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
-                          >
-                            <span>⚙️</span>
-                            <span>Kelola Mapel</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* TOMBOL BUKA PRESENSI & NILAI (POPUP SEPERTI KELOLA MAPEL) */}
-                      <button
-                        type="button"
-                        onClick={() => setMapelPresensiAktif(mapel)}
-                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 active:scale-[0.98] px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-amber-950 shadow-md border border-amber-300 transition-all cursor-pointer"
+                    return (
+                      <div
+                        key={mapel.idMapel}
+                        className="rounded-[2rem] overflow-hidden shadow-lg border border-blue-800 bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4"
                       >
-                        <span>📊</span>
-                        <span>BUKA PRESENSI & NILAI</span>
-                      </button>
-                    </div>
-                  ))}
+                        {/* ============================================================ */}
+                        {/* BAGIAN ATAS: NAMA MAPEL, BADGES & TOMBOL AKSI CEPAT */}
+                        {/* ============================================================ */}
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-indigo-200 drop-shadow-sm">
+                                {mapel.namaMapel}
+                              </h3>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {mapel.kelas && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
+                                  Kelas {mapel.kelas}
+                                </span>
+                              )}
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800/60 border border-indigo-500/40 text-indigo-100">
+                                👥 {totalSiswaDisplay} Siswa
+                              </span>
+                              {totalPertemuanDisplay > 0 && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
+                                  🗓️ {totalPertemuanDisplay} Pertemuan
+                                </span>
+                              )}
+                            </div>
+
+                            {mapel.keterangan && (
+                              <p className="text-xs text-blue-200/90 font-medium italic pt-0.5">
+                                {mapel.keterangan}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* TOMBOL AKSI KANAN */}
+                          <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
+                            <button
+                              type="button"
+                              onClick={() => handleCetakPdfMapelDirect(mapel)}
+                              disabled={
+                                cetakMapelCardLoadingId === mapel.idMapel
+                              }
+                              title="Cetak Laporan Presensi & Nilai PDF"
+                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
+                            >
+                              {cetakMapelCardLoadingId === mapel.idMapel ? (
+                                <>
+                                  <span className="inline-block animate-spin">
+                                    ⏳
+                                  </span>
+                                  <span>Mencetak...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>🖨️</span>
+                                  <span>Cetak PDF</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                localStorage.setItem(
+                                  "mapelAktifId",
+                                  mapel.idMapel,
+                                );
+                                router.push("/magang/guru/guru-mapel/kelola");
+                              }}
+                              title="Buka pengaturan lengkap mapel"
+                              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-2 sm:py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
+                            >
+                              <span>⚙️</span>
+                              <span>Kelola Mapel</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ============================================================ */}
+                        {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA (PADAT & COMPACT) */}
+                        {/* ============================================================ */}
+                        <div className="rounded-2xl border border-blue-700/60 bg-blue-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
+                          {/* Header Bar Statistik */}
+                          <div className="flex items-center justify-between gap-2 border-b border-blue-800/60 pb-2.5 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📊</span>
+                              <div>
+                                <span className="text-xs font-black tracking-wide text-white block sm:inline">
+                                  Presensi Pertemuan Sebelumnya
+                                </span>
+                                {activeP && (
+                                  <span className="text-[11px] text-blue-200/80 font-medium sm:ml-2">
+                                    (P-{activeP}
+                                    {meetingData?.tanggal
+                                      ? ` • ${formatTanggalMapelIndo(meetingData.tanggal)}`
+                                      : ""}
+                                    )
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {isLoadingStats ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-800/70 text-blue-200 text-[10px] font-bold animate-pulse">
+                                  ⏳ Memeriksa...
+                                </span>
+                              ) : meetingData?.sudahDiisi ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                  ✅ P-{activeP} Terisi
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
+                                  ⚪ Belum Ada Pertemuan
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Selector Pertemuan (jika lebih dari 1 pertemuan yang sudah ada) */}
+                          {stats?.validMeetings &&
+                            stats.validMeetings.length > 1 && (
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <span className="text-[10px] text-blue-300 font-black uppercase tracking-wider">
+                                  Pilih Sesi:
+                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {stats.validMeetings.map((pNum) => {
+                                    const isSel = pNum === activeP;
+                                    return (
+                                      <button
+                                        key={pNum}
+                                        type="button"
+                                        onClick={() =>
+                                          setSelectedPertemuanMapel((prev) => ({
+                                            ...prev,
+                                            [mapel.idMapel]: pNum,
+                                          }))
+                                        }
+                                        className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                                          isSel
+                                            ? "bg-blue-500 text-white shadow-xs border border-blue-300 scale-105"
+                                            : "bg-blue-900/60 hover:bg-blue-800/70 text-blue-200 border border-blue-700/50"
+                                        }`}
+                                      >
+                                        P-{pNum}{" "}
+                                        {pNum === stats.latestP
+                                          ? "⭐ (Terakhir)"
+                                          : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Mini Counters Grid (Padat 5 Kolom) */}
+                          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
+                            <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
+                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
+                                Hadir
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-emerald-100">
+                                {meetingData?.hadir || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
+                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
+                                Sakit
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-blue-100">
+                                {meetingData?.sakit || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
+                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
+                                Izin
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-amber-100">
+                                {meetingData?.izin || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
+                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
+                                Alfa
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-rose-100">
+                                {meetingData?.alfa || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
+                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
+                                Cabut
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-violet-100">
+                                {meetingData?.cabut || 0}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Rata-Rata Nilai & Detail Absen Siswa */}
+                          <div className="pt-1 space-y-2">
+                            {meetingData?.rataRataNilai && (
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-900/60 border border-indigo-400/30 text-indigo-200 text-xs font-bold">
+                                <span>🎯</span>
+                                <span>
+                                  Rata-rata Nilai:{" "}
+                                  <b className="text-white">
+                                    {meetingData.rataRataNilai}
+                                  </b>
+                                </span>
+                              </div>
+                            )}
+
+                            {meetingData?.sudahDiisi ? (
+                              meetingData?.absenList?.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                                      <span>⚠️</span>
+                                      <span>
+                                        Siswa Tidak Hadir (
+                                        {meetingData.absenList.length}):
+                                      </span>
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                    {meetingData.absenList.map((item, i) => {
+                                      let colorStyle =
+                                        "bg-rose-500/20 text-rose-200 border-rose-500/40";
+                                      if (item.status === "Sakit") {
+                                        colorStyle =
+                                          "bg-blue-500/20 text-blue-200 border-blue-500/40";
+                                      } else if (item.status === "Izin") {
+                                        colorStyle =
+                                          "bg-amber-500/20 text-amber-200 border-amber-500/40";
+                                      } else if (item.status === "Cabut") {
+                                        colorStyle =
+                                          "bg-violet-500/20 text-violet-200 border-violet-500/40";
+                                      }
+
+                                      return (
+                                        <div
+                                          key={i}
+                                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
+                                        >
+                                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
+                                            {item.status}
+                                          </span>
+                                          <span className="truncate max-w-[150px] sm:max-w-[220px]">
+                                            {item.nama}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
+                                  <span>✨</span>
+                                  <span>
+                                    Semua siswa hadir pada pertemuan ini (
+                                    {totalSiswaDisplay} siswa) — Nihil Absen.
+                                  </span>
+                                </div>
+                              )
+                            ) : (
+                              <div className="text-[11px] text-blue-200/80 font-medium italic flex items-center gap-1.5 bg-blue-900/30 rounded-xl px-3 py-1.5">
+                                <span>💡</span>
+                                <span>
+                                  Belum ada presensi pertemuan yang dicatat.
+                                  Buka tabel presensi & nilai di bawah untuk
+                                  mulai mengisi.
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* ============================================================ */}
+                        {/* TOMBOL UTAMA: BUKA PRESENSI & NILAI */}
+                        {/* ============================================================ */}
+                        <button
+                          type="button"
+                          onClick={() => setMapelPresensiAktif(mapel)}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 active:scale-[0.99] px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-amber-950 shadow-md border border-amber-300 transition-all cursor-pointer"
+                        >
+                          <span>📊</span>
+                          <span>BUKA PRESENSI & NILAI</span>
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -4111,7 +4478,12 @@ function DashboardGuruContent() {
       {mapelPresensiAktif && (
         <ModalPresensiMapel
           isOpen={!!mapelPresensiAktif}
-          onClose={() => setMapelPresensiAktif(null)}
+          onClose={() => {
+            const targetId = mapelPresensiAktif?.idMapel;
+            setMapelPresensiAktif(null);
+            if (targetId) loadStatsMapel(targetId);
+            loadMapelData(true);
+          }}
           guru={user}
           mapel={mapelPresensiAktif}
         />
