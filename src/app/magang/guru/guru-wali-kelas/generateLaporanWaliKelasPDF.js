@@ -705,46 +705,49 @@ export async function generateLaporanWaliKelasPDF({
   daftarTanggal: daftarTanggalProp,
   jurnalList: jurnalListProp,
 }) {
-  // ... (kode penyiapan data siswa & grid tetap) ...
+  let siswaList = siswaListProp;
+  let grid = gridProp;
+  let daftarTanggal = daftarTanggalProp || [];
+  let jurnalList = jurnalListProp;
 
-  if (!jurnalListProp) {
+  if (!siswaList || !grid) {
     try {
-      const res = await getJurnalWaliKelas(guru.id, wali.idWali);
-      jurnalListProp = res.success ? res.data || [] : [];
-    } catch {
-      jurnalListProp = [];
+      const res = await getPresensiWaliGrid(guru.id, wali.idWali);
+      const data = res.success ? res.data : {};
+
+      siswaList = (data.siswa || [])
+        .slice()
+        .map((s) => ({ ...s, nama: s.namaSiswa || s.nama || "" }))
+        .sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
+
+      const gridBaru = {};
+      const tanggalSet = new Set();
+      (data.presensi || []).forEach((p) => {
+        if (!p.tanggal) return;
+        tanggalSet.add(p.tanggal);
+        gridBaru[`${p.idSiswa}_${p.tanggal}`] = {
+          status: p.status || "",
+          keterangan: p.keterangan || "",
+        };
+      });
+      grid = gridBaru;
+      daftarTanggal =
+        data.daftarTanggal && data.daftarTanggal.length > 0
+          ? [...data.daftarTanggal].sort()
+          : [...tanggalSet].sort();
+    } catch (err) {
+      console.error("Gagal mengambil data presensi wali kelas:", err);
+      throw new Error("Gagal mengambil data presensi untuk cetak laporan.");
     }
   }
-
-  // --- LOGIKA OTOMATIS: Penggabungan data jurnal jika ada entri dengan tanggal + topik + foto yang sama ---
-  const jurnalGroupMap = new Map();
-  (jurnalListProp || []).forEach((item) => {
-    const groupKey = `${item.tanggal}_${item.topik}_${item.formatPertemuan}_${item.fotoUrl || ""}`;
-    if (!jurnalGroupMap.has(groupKey)) {
-      jurnalGroupMap.set(groupKey, {
-        ...item,
-        namaSiswaList: item.namaSiswa ? [item.namaSiswa] : [],
-      });
-    } else {
-      const existing = jurnalGroupMap.get(groupKey);
-      if (item.namaSiswa && !existing.namaSiswaList.includes(item.namaSiswa)) {
-        existing.namaSiswaList.push(item.namaSiswa);
-      }
+  if (!jurnalList) {
+    try {
+      const res = await getJurnalWaliKelas(guru.id, wali.idWali);
+      jurnalList = res.success ? res.data || [] : [];
+    } catch {
+      jurnalList = [];
     }
-  });
-
-  const finalJurnalList = Array.from(jurnalGroupMap.values()).map((item) => {
-    let namaSiswaFormatted = item.namaSiswa;
-    if (item.namaSiswaList && item.namaSiswaList.length > 1) {
-      namaSiswaFormatted = item.namaSiswaList
-        .map((n, i) => `${i + 1}. ${n}`)
-        .join("\n");
-    }
-    return {
-      ...item,
-      namaSiswa: namaSiswaFormatted,
-    };
-  });
+  }
 
   const doc = new jsPDF({
     orientation: "landscape",
@@ -753,7 +756,7 @@ export async function generateLaporanWaliKelasPDF({
   });
 
   await lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal });
-  await lampiranB(doc, { guru, wali, jurnalList: finalJurnalList });
+  await lampiranB(doc, { guru, wali, jurnalList });
 
   doc.save(`Laporan_Wali_Kelas_${wali.namaKelas || "Kelas"}.pdf`);
 }
