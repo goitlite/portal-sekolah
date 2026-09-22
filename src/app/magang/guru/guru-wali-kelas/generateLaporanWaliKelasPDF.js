@@ -53,7 +53,7 @@ const getBase64Image = async (url) => {
   }
 };
 
-// QR Barcode dari fotoUrl (sama persis dengan generateLaporanGuruWaliPDF.js)
+// QR Barcode dari fotoUrl
 const buildBarcodeUrl = (fotoUrl) => {
   if (!fotoUrl) return null;
   return (
@@ -110,7 +110,7 @@ function footerFn(doc) {
   };
 }
 
-// Gambar kop surat (dipanggil berulang untuk halaman baru)
+// Gambar kop surat
 async function gambarKop(doc, judul) {
   const pw = doc.internal.pageSize.getWidth();
   const logo = await getBase64Image("/logo.png");
@@ -167,17 +167,13 @@ function gambarTTD(doc, guru) {
   doc.setLineWidth(0.25);
   doc.line(cx - tw / 2, y + 23, cx + tw / 2, y + 23);
   doc.setFont("helvetica", "normal");
-  doc.text(
-    `NIP. ${guru?.nip || "................................."}`,
-    cx,
-    y + 27,
-    { align: "center" },
-  );
+  doc.text(`NIP. ${guru?.nip || "..........................."}`, cx, y + 27, {
+    align: "center",
+  });
 }
 
 // === LAMPIRAN A — Rekap Presensi Harian ===
 async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
-  const pw = doc.internal.pageSize.getWidth();
   await gambarKop(doc, "LAPORAN PRESENSI HARIAN WALI KELAS");
 
   const ta = hitungTahunAjaran(daftarTanggal);
@@ -335,7 +331,7 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
             break;
         }
       });
-      // Hitung % dari seluruh daftarTanggal
+
       let hAll = 0,
         baseAll = 0;
       daftarTanggal.forEach((tgl) => {
@@ -350,7 +346,6 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
       return row;
     });
 
-    // Baris total hadir per tanggal
     const totalRow = ["", "Total Hadir"];
     chunkTgl.forEach((tgl) => {
       let cnt = 0;
@@ -445,6 +440,123 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
       didDrawPage: footerFn(doc),
     });
   }
+
+  // ============================================================
+  // === REKAP TOTAL PRESENSI SISWA (HALAMAN TERSENDIRI 1 LEMBAR) ===
+  // ============================================================
+  doc.addPage("a4", "landscape");
+  await gambarKop(doc, "REKAPITULASI TOTAL PRESENSI SISWA");
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.text("Kelas", 14, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${wali.namaKelas || "-"}`, 42, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tahun Ajaran", 14, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${ta}`, 42, 41);
+  doc.setFont("helvetica", "bold");
+  doc.text("Guru Wali Kelas", 160, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Total Hari Efektif", 160, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${daftarTanggal.length} Hari`, 195, 41);
+
+  const totalHeadCols = [
+    [
+      { content: "No", styles: { halign: "center" } },
+      { content: "Nama Siswa", styles: { halign: "left" } },
+      { content: "Hadir (H)", styles: { halign: "center" } },
+      { content: "Sakit (S)", styles: { halign: "center" } },
+      { content: "Izin (I)", styles: { halign: "center" } },
+      { content: "Alfa (A)", styles: { halign: "center" } },
+      { content: "Cabut (C)", styles: { halign: "center" } },
+      { content: "Total Kehadiran", styles: { halign: "center" } },
+      { content: "Persentase (%)", styles: { halign: "center" } },
+    ],
+  ];
+
+  const totalTableRows = siswaList.map((s, idx) => {
+    let h = 0,
+      sk = 0,
+      iz = 0,
+      a = 0,
+      c = 0,
+      tot = 0;
+    daftarTanggal.forEach((tgl) => {
+      const st = grid?.[`${s.idSiswa}_${tgl}`]?.status || "";
+      if (st) {
+        tot++;
+        if (st === "Hadir") h++;
+        else if (st === "Sakit") sk++;
+        else if (st === "Izin") iz++;
+        else if (st === "Alfa") a++;
+        else if (st === "Cabut") c++;
+      }
+    });
+    const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : "0%";
+    return [idx + 1, s.nama || "-", h, sk, iz, a, c, `${h} / ${tot}`, pct];
+  });
+
+  autoTable(doc, {
+    startY: 46,
+    head: totalHeadCols,
+    body: totalTableRows,
+    theme: "grid",
+    headStyles: {
+      fillColor: [37, 99, 235],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "center",
+      valign: "middle",
+      minCellHeight: 8,
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [30, 41, 59],
+      valign: "middle",
+      minCellHeight: 6,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: "auto", halign: "left" },
+      2: { cellWidth: 22, halign: "center" },
+      3: { cellWidth: 22, halign: "center" },
+      4: { cellWidth: 22, halign: "center" },
+      5: { cellWidth: 22, halign: "center" },
+      6: { cellWidth: 22, halign: "center" },
+      7: { cellWidth: 30, halign: "center" },
+      8: { cellWidth: 28, halign: "center", fontStyle: "bold" },
+    },
+    margin: { left: 14, right: 14, bottom: 18 },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      if (data.column.index === 8) {
+        const num = parseFloat(String(data.cell.raw).replace("%", ""));
+        if (!isNaN(num)) {
+          if (num < 75) {
+            data.cell.styles.fillColor = [254, 226, 226];
+            data.cell.styles.textColor = [220, 38, 38];
+          } else if (num < 85) {
+            data.cell.styles.fillColor = [254, 249, 195];
+            data.cell.styles.textColor = [161, 98, 7];
+          } else {
+            data.cell.styles.fillColor = [220, 252, 231];
+            data.cell.styles.textColor = [22, 163, 74];
+          }
+        }
+      }
+    },
+    didDrawPage: footerFn(doc),
+  });
+
+  // Gambar TTD di bawah tabel Rekap Total
   gambarTTD(doc, guru);
 }
 
@@ -483,7 +595,6 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
     return;
   }
 
-  // Generate barcode images (sama persis dengan generateLaporanGuruWaliPDF.js)
   const barcodeImages = await Promise.all(
     jurnalList.map((item) => {
       const url = buildBarcodeUrl(item.fotoUrl);
@@ -594,48 +705,55 @@ export async function generateLaporanWaliKelasPDF({
   daftarTanggal: daftarTanggalProp,
   jurnalList: jurnalListProp,
 }) {
-  let siswaList = siswaListProp;
-  let grid = gridProp;
-  let daftarTanggal = daftarTanggalProp || [];
-  let jurnalList = jurnalListProp;
+  // ... (kode penyiapan data siswa & grid tetap) ...
 
-  // Fetch data jika belum disediakan
-  if (!siswaList || !grid) {
-    try {
-      const res = await getPresensiWaliGrid(guru.id, wali.idWali);
-      const data = res.success ? res.data : {};
-      siswaList = (data.siswa || [])
-        .slice()
-        .sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
-      grid = data.grid || {};
-      daftarTanggal = (data.daftarTanggal || []).sort();
-    } catch (err) {
-      console.error("Gagal mengambil data presensi wali kelas:", err);
-      throw new Error("Gagal mengambil data presensi untuk cetak laporan.");
-    }
-  }
-  if (!jurnalList) {
+  if (!jurnalListProp) {
     try {
       const res = await getJurnalWaliKelas(guru.id, wali.idWali);
-      jurnalList = res.success ? res.data || [] : [];
+      jurnalListProp = res.success ? res.data || [] : [];
     } catch {
-      jurnalList = [];
+      jurnalListProp = [];
     }
   }
 
-  siswaList = siswaList || [];
-  daftarTanggal = daftarTanggal || [];
-  jurnalList = jurnalList || [];
+  // --- LOGIKA OTOMATIS: Penggabungan data jurnal jika ada entri dengan tanggal + topik + foto yang sama ---
+  const jurnalGroupMap = new Map();
+  (jurnalListProp || []).forEach((item) => {
+    const groupKey = `${item.tanggal}_${item.topik}_${item.formatPertemuan}_${item.fotoUrl || ""}`;
+    if (!jurnalGroupMap.has(groupKey)) {
+      jurnalGroupMap.set(groupKey, {
+        ...item,
+        namaSiswaList: item.namaSiswa ? [item.namaSiswa] : [],
+      });
+    } else {
+      const existing = jurnalGroupMap.get(groupKey);
+      if (item.namaSiswa && !existing.namaSiswaList.includes(item.namaSiswa)) {
+        existing.namaSiswaList.push(item.namaSiswa);
+      }
+    }
+  });
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const finalJurnalList = Array.from(jurnalGroupMap.values()).map((item) => {
+    let namaSiswaFormatted = item.namaSiswa;
+    if (item.namaSiswaList && item.namaSiswaList.length > 1) {
+      namaSiswaFormatted = item.namaSiswaList
+        .map((n, i) => `${i + 1}. ${n}`)
+        .join("\n");
+    }
+    return {
+      ...item,
+      namaSiswa: namaSiswaFormatted,
+    };
+  });
+
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
 
   await lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal });
-  await lampiranB(doc, { guru, wali, jurnalList });
+  await lampiranB(doc, { guru, wali, jurnalList: finalJurnalList });
 
-  const namaFile =
-    `Laporan_WaliKelas_${wali.namaKelas || "Kelas"}_${guru?.nama || "Guru"}`.replace(
-      /[^a-zA-Z0-9_-]/g,
-      "_",
-    );
-  doc.save(`${namaFile}.pdf`);
+  doc.save(`Laporan_Wali_Kelas_${wali.namaKelas || "Kelas"}.pdf`);
 }
