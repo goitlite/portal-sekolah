@@ -79,6 +79,32 @@ function formatTanggal(waktu) {
     }) + " WIB"
   );
 }
+function formatTanggalKolom(tanggalISO) {
+  if (!tanggalISO) return "";
+  try {
+    const d = new Date(tanggalISO);
+    if (isNaN(d.getTime())) return tanggalISO;
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  } catch {
+    return tanggalISO;
+  }
+}
+
+const formatTanggalWaliIndo = (tanggalStr) => {
+  if (!tanggalStr) return "";
+  try {
+    const d = new Date(tanggalStr);
+    if (isNaN(d.getTime())) return String(tanggalStr);
+    return d.toLocaleDateString("id-ID", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return String(tanggalStr);
+  }
+};
 
 // Format nomor WhatsApp (08xxx / 62xxx -> https://wa.me/62xxx)
 function getWhatsAppUrl(noHp) {
@@ -243,6 +269,8 @@ function DashboardGuruContent() {
   const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
 
   const [showPilihCetakPklModal, setShowPilihCetakPklModal] = useState(false);
+
+  const [selectedTanggalWali, setSelectedTanggalWali] = useState({});
 
   // --- STATE BARU JURNAL PKL ---
   const [showJurnalPklModal, setShowJurnalPklModal] = useState(false);
@@ -1132,13 +1160,13 @@ function DashboardGuruContent() {
   );
 
   // --- AMBIL STATISTIK PRESENSI HARI INI KELAS WALI ---
+  // --- AMBIL RIWAYAT STATISTIK PRESENSI KELAS WALI (SEMUA SESI/TANGGAL) ---
   const loadStatsHariIniWali = useCallback(
     async (idWali) => {
       if (!user?.id || !idWali) return;
       setLoadingStatsWali((prev) => ({ ...prev, [idWali]: true }));
 
       try {
-        const todayISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
         const res = await getPresensiWaliGrid(user.id, idWali);
 
         if (res && res.success && res.data) {
@@ -1150,59 +1178,79 @@ function DashboardGuruContent() {
             siswaMap[String(s.idSiswa || s.id)] = s.nama || s.namaSiswa || "";
           });
 
-          const todayRecords = presensiList.filter(
-            (p) => String(p.tanggal).trim() === todayISO,
-          );
-
-          let hadir = 0;
-          let sakit = 0;
-          let izin = 0;
-          let alfa = 0;
-          let cabut = 0;
-          const absenList = [];
-
-          todayRecords.forEach((p) => {
-            const st = String(p.status || "Hadir").trim();
-            const sid = String(p.idSiswa).trim();
-            const nama = siswaMap[sid] || p.namaSiswa || `Siswa ${sid}`;
-
-            if (st === "Hadir") {
-              hadir++;
-            } else {
-              if (st === "Sakit") sakit++;
-              else if (st === "Izin") izin++;
-              else if (st === "Alfa") alfa++;
-              else if (st === "Cabut") cabut++;
-
-              absenList.push({
-                idSiswa: sid,
-                nama,
-                status: st,
-                keterangan: p.keterangan || "",
-              });
-            }
+          const tanggalMap = {};
+          presensiList.forEach((p) => {
+            if (!p.tanggal) return;
+            const tgl = String(p.tanggal).trim();
+            if (!tanggalMap[tgl]) tanggalMap[tgl] = [];
+            if (p.status) tanggalMap[tgl].push(p);
           });
 
-          setStatsPresensiHariIniWali((prev) => ({
-            ...prev,
-            [idWali]: {
-              sudahDiisi: todayRecords.length > 0,
-              totalSiswa: siswaList.length,
+          const validTanggal = Object.keys(tanggalMap)
+            .filter((tgl) => tanggalMap[tgl].length > 0)
+            .sort();
+
+          const latestTanggal =
+            validTanggal.length > 0
+              ? validTanggal[validTanggal.length - 1]
+              : null;
+
+          const perTanggal = {};
+          validTanggal.forEach((tgl) => {
+            const records = tanggalMap[tgl];
+            let hadir = 0,
+              sakit = 0,
+              izin = 0,
+              alfa = 0,
+              cabut = 0;
+            const absenList = [];
+
+            records.forEach((p) => {
+              const st = String(p.status || "Hadir").trim();
+              const sid = String(p.idSiswa).trim();
+              const nama = siswaMap[sid] || p.namaSiswa || `Siswa ${sid}`;
+
+              if (st === "Hadir") {
+                hadir++;
+              } else {
+                if (st === "Sakit") sakit++;
+                else if (st === "Izin") izin++;
+                else if (st === "Alfa") alfa++;
+                else if (st === "Cabut") cabut++;
+
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: st,
+                  keterangan: p.keterangan || "",
+                });
+              }
+            });
+
+            perTanggal[tgl] = {
+              tanggal: tgl,
+              sudahDiisi: records.length > 0,
               hadir,
               sakit,
               izin,
               alfa,
               cabut,
               absenList,
-              tanggal: todayISO,
+            };
+          });
+
+          setStatsPresensiHariIniWali((prev) => ({
+            ...prev,
+            [idWali]: {
+              totalSiswa: siswaList.length,
+              validTanggal,
+              latestTanggal,
+              perTanggal,
             },
           }));
         }
       } catch (err) {
-        console.warn(
-          "Gagal memuat statistik presensi hari ini kelas wali:",
-          err,
-        );
+        console.warn("Gagal memuat statistik presensi kelas wali:", err);
       } finally {
         setLoadingStatsWali((prev) => ({ ...prev, [idWali]: false }));
       }
@@ -1435,6 +1483,18 @@ function DashboardGuruContent() {
       setSavingCatatan(false);
     }
   }
+
+  // --- FUNGSI UNTUK SCROLL HORIZONTAL TOMBOL SESI ---
+  const scrollHorizontal = (id, direction) => {
+    const container = document.getElementById(id);
+    if (container) {
+      const scrollAmount = 250; // Jarak scroll per klik
+      container.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
+      });
+    }
+  };
 
   // Status gagal total (tidak ada cache & fetch gagal setelah retry) —
   // tampilkan tombol refresh, jangan biarkan pengguna terjebak di spinner.
@@ -2973,25 +3033,25 @@ function DashboardGuruContent() {
                     );
                     const stats = statsPresensiHariIniWali[wali.idWali];
                     const isLoadingStats = loadingStatsWali[wali.idWali];
+
+                    // VARIABEL TANGGAL & SESI AKTIF
+                    const activeTgl =
+                      selectedTanggalWali[wali.idWali] ??
+                      stats?.latestTanggal ??
+                      (stats?.validTanggal?.[0] || null);
+                    const sesiData = activeTgl
+                      ? stats?.perTanggal?.[activeTgl]
+                      : null;
                     const totalSiswaDisplay =
                       stats?.totalSiswa || wali.jumlahSiswa || 0;
-
-                    // Format tanggal hari ini
-                    const todayStr = new Date().toLocaleDateString("id-ID", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    });
+                    const totalSesiDisplay = stats?.validTanggal?.length || 0;
 
                     return (
                       <div
                         key={wali.idWali}
                         className="rounded-[2rem] overflow-hidden shadow-lg border border-teal-800 bg-gradient-to-br from-teal-950 via-teal-900 to-slate-950 p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4"
                       >
-                        {/* ============================================================ */}
-                        {/* BAGIAN ATAS: NAMA KELAS, BADGES & TOMBOL AKSI CEPAT */}
-                        {/* ============================================================ */}
+                        {/* BAGIAN ATAS: NAMA KELAS & BADGES */}
                         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center gap-3 flex-wrap">
@@ -3009,6 +3069,11 @@ function DashboardGuruContent() {
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-100">
                                 👥 {totalSiswaDisplay} Siswa
                               </span>
+                              {totalSesiDisplay > 0 && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
+                                  🗓️ {totalSesiDisplay} Sesi
+                                </span>
+                              )}
                               {petugas?.namaSiswa && (
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/25 border border-amber-300/50 text-amber-200 shadow-xs">
                                   ⭐ Petugas: {petugas.namaSiswa}
@@ -3023,12 +3088,11 @@ function DashboardGuruContent() {
                             )}
                           </div>
 
-                          {/* TOMBOL AKSI KANAN (TIDAK ADA TOMBOL PRESENSI HARIAN DI SINI AGAR TIDAK DUPLIKAT) */}
+                          {/* TOMBOL AKSI KANAN */}
                           <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
                             <button
                               type="button"
                               onClick={() => setWaliPetugasTarget(wali)}
-                              title="Tunjuk siswa sebagai petugas presensi kelas ini"
                               className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-amber-950 border border-amber-300/60 shadow-md transition-all flex items-center gap-1.5"
                             >
                               <span>⭐</span>
@@ -3038,7 +3102,6 @@ function DashboardGuruContent() {
                             <button
                               type="button"
                               onClick={() => setWaliKelasJurnalAktif(wali)}
-                              title="Catat Jurnal Bimbingan Siswa"
                               className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-indigo-400/40 shadow-md transition-all flex items-center gap-1.5"
                             >
                               <span>📝</span>
@@ -3053,7 +3116,6 @@ function DashboardGuruContent() {
                               disabled={
                                 cetakWaliKelasCardLoadingId === wali.idWali
                               }
-                              title="Cetak Laporan Presensi PDF"
                               className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
                             >
                               {cetakWaliKelasCardLoadingId === wali.idWali ? (
@@ -3073,12 +3135,11 @@ function DashboardGuruContent() {
 
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={() =>
                                 router.push(
                                   "/magang/guru/guru-wali-kelas/kelola",
-                                );
-                              }}
-                              title="Buka pengaturan lengkap kelas wali"
+                                )
+                              }
                               className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-2 sm:py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
                             >
                               <span>⚙️</span>
@@ -3087,9 +3148,7 @@ function DashboardGuruContent() {
                           </div>
                         </div>
 
-                        {/* ============================================================ */}
-                        {/* PANEL STATISTIK PRESENSI HARI INI (PADAT & COMPACT) */}
-                        {/* ============================================================ */}
+                        {/* PANEL STATISTIK PRESENSI & SELECTOR SESI TANGGAL */}
                         <div className="rounded-2xl border border-teal-700/60 bg-teal-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
                           {/* Header Bar Statistik */}
                           <div className="flex items-center justify-between gap-2 border-b border-teal-800/60 pb-2.5 flex-wrap">
@@ -3097,11 +3156,13 @@ function DashboardGuruContent() {
                               <span className="text-base">📊</span>
                               <div>
                                 <span className="text-xs font-black tracking-wide text-white block sm:inline">
-                                  Presensi Hari Ini
+                                  Presensi Pertemuan Sebelumnya
                                 </span>
-                                <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
-                                  ({todayStr})
-                                </span>
+                                {activeTgl && (
+                                  <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
+                                    ({formatTanggalWaliIndo(activeTgl)})
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -3110,26 +3171,105 @@ function DashboardGuruContent() {
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-800/70 text-teal-200 text-[10px] font-bold animate-pulse">
                                   ⏳ Memeriksa...
                                 </span>
-                              ) : stats?.sudahDiisi ? (
+                              ) : sesiData?.sudahDiisi ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
                                   ✅ Sudah Diisi
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
-                                  ⚪ Belum Diisi
+                                  ⚪ Belum Ada Pertemuan
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Mini Counters Grid (Padat 5 Kolom) */}
+                          {/* BARIS PILIH SESI (TOMBOL TANGGAL) DENGAN SCROLL HORIZONTAL */}
+                          {stats?.validTanggal &&
+                            stats.validTanggal.length > 1 && (
+                              <div className="flex items-center gap-2 pt-1 w-full overflow-hidden">
+                                <span className="text-[10px] text-teal-300 font-black uppercase tracking-wider shrink-0">
+                                  Pilih Sesi:
+                                </span>
+
+                                {/* Tombol Panah Kiri */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    scrollHorizontal(
+                                      `scroll-sesi-wali-${wali.idWali}`,
+                                      "left",
+                                    )
+                                  }
+                                  className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-teal-800/80 hover:bg-teal-700 text-teal-200 border border-teal-600/50 transition-all active:scale-95"
+                                >
+                                  ◀
+                                </button>
+
+                                {/* Container Sesi (Scroll Horizontal) */}
+                                <div
+                                  id={`scroll-sesi-wali-${wali.idWali}`}
+                                  className="flex items-center gap-1.5 overflow-x-auto scroll-smooth flex-1 px-1"
+                                  style={{
+                                    scrollbarWidth: "none",
+                                    msOverflowStyle: "none",
+                                  }}
+                                >
+                                  {/* Sembunyikan scrollbar native agar terlihat bersih */}
+                                  <style>{`#scroll-sesi-wali-${wali.idWali}::-webkit-scrollbar { display: none; }`}</style>
+
+                                  {[...stats.validTanggal]
+                                    .reverse()
+                                    .map((tgl) => {
+                                      const isSel = tgl === activeTgl;
+                                      return (
+                                        <button
+                                          key={tgl}
+                                          type="button"
+                                          onClick={() =>
+                                            setSelectedTanggalWali((prev) => ({
+                                              ...prev,
+                                              [wali.idWali]: tgl,
+                                            }))
+                                          }
+                                          className={`shrink-0 px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                                            isSel
+                                              ? "bg-teal-500 text-white shadow-xs border border-teal-300 scale-105"
+                                              : "bg-teal-900/60 hover:bg-teal-800/70 text-teal-200 border border-teal-700/50"
+                                          }`}
+                                        >
+                                          {formatTanggalKolom(tgl)}{" "}
+                                          {tgl === stats.latestTanggal
+                                            ? "⭐"
+                                            : ""}
+                                        </button>
+                                      );
+                                    })}
+                                </div>
+
+                                {/* Tombol Panah Kanan */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    scrollHorizontal(
+                                      `scroll-sesi-wali-${wali.idWali}`,
+                                      "right",
+                                    )
+                                  }
+                                  className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-teal-800/80 hover:bg-teal-700 text-teal-200 border border-teal-600/50 transition-all active:scale-95"
+                                >
+                                  ▶
+                                </button>
+                              </div>
+                            )}
+
+                          {/* Mini Counters Grid */}
                           <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
                             <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
                               <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
                                 Hadir
                               </span>
                               <span className="text-xs sm:text-base font-black text-emerald-100">
-                                {stats?.hadir || 0}
+                                {sesiData?.hadir || 0}
                               </span>
                             </div>
 
@@ -3138,7 +3278,7 @@ function DashboardGuruContent() {
                                 Sakit
                               </span>
                               <span className="text-xs sm:text-base font-black text-blue-100">
-                                {stats?.sakit || 0}
+                                {sesiData?.sakit || 0}
                               </span>
                             </div>
 
@@ -3147,7 +3287,7 @@ function DashboardGuruContent() {
                                 Izin
                               </span>
                               <span className="text-xs sm:text-base font-black text-amber-100">
-                                {stats?.izin || 0}
+                                {sesiData?.izin || 0}
                               </span>
                             </div>
 
@@ -3156,7 +3296,7 @@ function DashboardGuruContent() {
                                 Alfa
                               </span>
                               <span className="text-xs sm:text-base font-black text-rose-100">
-                                {stats?.alfa || 0}
+                                {sesiData?.alfa || 0}
                               </span>
                             </div>
 
@@ -3165,28 +3305,26 @@ function DashboardGuruContent() {
                                 Cabut
                               </span>
                               <span className="text-xs sm:text-base font-black text-violet-100">
-                                {stats?.cabut || 0}
+                                {sesiData?.cabut || 0}
                               </span>
                             </div>
                           </div>
 
-                          {/* Daftar Siswa Sakit, Izin, Alfa, Cabut Hari Ini (Padat & Compact) */}
+                          {/* Detail Siswa Absen */}
                           <div className="pt-1">
-                            {stats?.sudahDiisi ? (
-                              stats?.absenList?.length > 0 ? (
+                            {sesiData?.sudahDiisi ? (
+                              sesiData?.absenList?.length > 0 ? (
                                 <div className="space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
-                                      <span>⚠️</span>
-                                      <span>
-                                        Siswa Tidak Hadir Hari Ini (
-                                        {stats.absenList.length}):
-                                      </span>
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                                    <span>⚠️</span>
+                                    <span>
+                                      Siswa Tidak Hadir (
+                                      {sesiData.absenList.length}):
                                     </span>
-                                  </div>
+                                  </span>
 
-                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-                                    {stats.absenList.map((item, i) => {
+                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                    {sesiData.absenList.map((item, i) => {
                                       let colorStyle =
                                         "bg-rose-500/20 text-rose-200 border-rose-500/40";
                                       if (item.status === "Sakit") {
@@ -3225,7 +3363,7 @@ function DashboardGuruContent() {
                                 <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
                                   <span>✨</span>
                                   <span>
-                                    Semua siswa hadir hari ini (
+                                    Semua siswa hadir pada pertemuan ini (
                                     {totalSiswaDisplay} siswa) — Nihil Absen.
                                   </span>
                                 </div>
@@ -3234,17 +3372,16 @@ function DashboardGuruContent() {
                               <div className="text-[11px] text-teal-200/80 font-medium italic flex items-center gap-1.5 bg-teal-900/30 rounded-xl px-3 py-1.5">
                                 <span>💡</span>
                                 <span>
-                                  Presensi hari ini belum diisi. Gunakan tombol
-                                  di bawah untuk membuka tabel presensi kelas.
+                                  Belum ada presensi yang dicatat. Gunakan
+                                  tombol di bawah untuk membuka tabel presensi
+                                  kelas.
                                 </span>
                               </div>
                             )}
                           </div>
                         </div>
 
-                        {/* ============================================================ */}
-                        {/* TOMBOL UTAMA: BUKA PRESENSI HARIAN KELAS */}
-                        {/* ============================================================ */}
+                        {/* TOMBOL UTAMA PRESENSI */}
                         <button
                           type="button"
                           onClick={() => setWaliKelasPresensiAktif(wali)}

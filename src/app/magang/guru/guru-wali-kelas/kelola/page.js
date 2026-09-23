@@ -207,16 +207,43 @@ export default function KelolaWaliKelasPage() {
   const [searchWali, setSearchWali] = useState("");
   const [statsPresensiHariIniWali, setStatsPresensiHariIniWali] = useState({});
   const [loadingStatsWali, setLoadingStatsWali] = useState({});
+  const [selectedTanggalWali, setSelectedTanggalWali] = useState({});
 
-  // --- AMBIL STATISTIK PRESENSI HARI INI KELAS WALI ---
+  // Helper format tanggal sesi (mis. "Rab, 24 Sep 2026") — dipakai di
+  // panel riwayat presensi, sama gayanya dengan formatTanggalMapelIndo
+  // pada halaman Mapel.
+  const formatTanggalWaliIndo = (tanggalStr) => {
+    if (!tanggalStr) return "";
+    try {
+      const d = new Date(tanggalStr);
+      if (isNaN(d.getTime())) return String(tanggalStr);
+      return d.toLocaleDateString("id-ID", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(tanggalStr);
+    }
+  };
+
+  // --- AMBIL RIWAYAT STATISTIK PRESENSI KELAS WALI (SEMUA SESI/TANGGAL) ---
   const loadStatsHariIniWali = useCallback(
-    async (idWali) => {
-      if (!guru?.id || !idWali) return;
+    async (idWali, idGuruOverride) => {
+      // PERBAIKAN: terima idGuru secara eksplisit (opsional).
+      // Sebelumnya fungsi ini HANYA membaca `guru?.id` dari closure useCallback.
+      // Saat halaman pertama kali dibuka, loadWali(session.id) dipanggil di
+      // effect yang SAMA dengan setGuru(session) — pada saat itu closure
+      // loadStatsHariIniWali masih "mengingat" guru = null (render sebelumnya),
+      // jadi guard di bawah selalu return lebih dulu dan data
+      // Hadir/Sakit/Izin/Alfa/Cabut tidak pernah ke-fetch di kartu wali kelas.
+      const idGuruAktif = idGuruOverride || guru?.id;
+      if (!idGuruAktif || !idWali) return;
       setLoadingStatsWali((prev) => ({ ...prev, [idWali]: true }));
 
       try {
-        const todayISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
-        const res = await getPresensiWaliGrid(guru.id, idWali);
+        const res = await getPresensiWaliGrid(idGuruAktif, idWali);
 
         if (res && res.success && res.data) {
           const siswaList = res.data.siswa || [];
@@ -227,51 +254,77 @@ export default function KelolaWaliKelasPage() {
             siswaMap[String(s.idSiswa || s.id)] = s.nama || s.namaSiswa || "";
           });
 
-          const todayRecords = presensiList.filter(
-            (p) => String(p.tanggal).trim() === todayISO,
-          );
-
-          let hadir = 0;
-          let sakit = 0;
-          let izin = 0;
-          let alfa = 0;
-          let cabut = 0;
-          const absenList = [];
-
-          todayRecords.forEach((p) => {
-            const st = String(p.status || "Hadir").trim();
-            const sid = String(p.idSiswa).trim();
-            const nama = siswaMap[sid] || p.namaSiswa || `Siswa ${sid}`;
-
-            if (st === "Hadir") {
-              hadir++;
-            } else {
-              if (st === "Sakit") sakit++;
-              else if (st === "Izin") izin++;
-              else if (st === "Alfa") alfa++;
-              else if (st === "Cabut") cabut++;
-
-              absenList.push({
-                idSiswa: sid,
-                nama,
-                status: st,
-                keterangan: p.keterangan || "",
-              });
-            }
+          // Kelompokkan presensi per tanggal, sama seperti "per pertemuan"
+          // di halaman Mapel — supaya bisa dipilih sesi mana yang ingin
+          // dilihat riwayatnya (bukan cuma hari ini).
+          const tanggalMap = {};
+          presensiList.forEach((p) => {
+            if (!p.tanggal) return;
+            const tgl = String(p.tanggal).trim();
+            if (!tanggalMap[tgl]) tanggalMap[tgl] = [];
+            if (p.status) tanggalMap[tgl].push(p);
           });
 
-          setStatsPresensiHariIniWali((prev) => ({
-            ...prev,
-            [idWali]: {
-              sudahDiisi: todayRecords.length > 0,
-              totalSiswa: siswaList.length,
+          const validTanggal = Object.keys(tanggalMap)
+            .filter((tgl) => tanggalMap[tgl].length > 0)
+            .sort(); // format YYYY-MM-DD → urut string = urut kronologis
+
+          const latestTanggal =
+            validTanggal.length > 0
+              ? validTanggal[validTanggal.length - 1]
+              : null;
+
+          const perTanggal = {};
+          validTanggal.forEach((tgl) => {
+            const records = tanggalMap[tgl];
+            let hadir = 0;
+            let sakit = 0;
+            let izin = 0;
+            let alfa = 0;
+            let cabut = 0;
+            const absenList = [];
+
+            records.forEach((p) => {
+              const st = String(p.status || "Hadir").trim();
+              const sid = String(p.idSiswa).trim();
+              const nama = siswaMap[sid] || p.namaSiswa || `Siswa ${sid}`;
+
+              if (st === "Hadir") {
+                hadir++;
+              } else {
+                if (st === "Sakit") sakit++;
+                else if (st === "Izin") izin++;
+                else if (st === "Alfa") alfa++;
+                else if (st === "Cabut") cabut++;
+
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: st,
+                  keterangan: p.keterangan || "",
+                });
+              }
+            });
+
+            perTanggal[tgl] = {
+              tanggal: tgl,
+              sudahDiisi: records.length > 0,
               hadir,
               sakit,
               izin,
               alfa,
               cabut,
               absenList,
-              tanggal: todayISO,
+            };
+          });
+
+          setStatsPresensiHariIniWali((prev) => ({
+            ...prev,
+            [idWali]: {
+              totalSiswa: siswaList.length,
+              validTanggal,
+              latestTanggal,
+              perTanggal,
             },
           }));
         }
@@ -381,7 +434,9 @@ export default function KelolaWaliKelasPage() {
         setDaftarWali(normalized);
         normalized.forEach((w) => {
           if (w.idWali) {
-            loadStatsHariIniWali(w.idWali);
+            // PERBAIKAN: kirim idGuru langsung (parameter fungsi ini),
+            // jangan andalkan state `guru` yang saat baru login masih null.
+            loadStatsHariIniWali(w.idWali, idGuru);
           }
         });
       } else {
@@ -785,16 +840,16 @@ export default function KelolaWaliKelasPage() {
                   );
                   const stats = statsPresensiHariIniWali[wali.idWali];
                   const isLoadingStats = loadingStatsWali[wali.idWali];
+                  const activeTgl =
+                    selectedTanggalWali[wali.idWali] ??
+                    stats?.latestTanggal ??
+                    (stats?.validTanggal?.[0] || null);
+                  const sesiData = activeTgl
+                    ? stats?.perTanggal?.[activeTgl]
+                    : null;
                   const totalSiswaDisplay =
                     stats?.totalSiswa || wali.jumlahSiswa || 0;
-
-                  // Format tanggal hari ini
-                  const todayStr = new Date().toLocaleDateString("id-ID", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  });
+                  const totalSesiDisplay = stats?.validTanggal?.length || 0;
 
                   return (
                     <div
@@ -854,6 +909,11 @@ export default function KelolaWaliKelasPage() {
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-100">
                                   👥 {totalSiswaDisplay} Siswa
                                 </span>
+                                {totalSesiDisplay > 0 && (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
+                                    🗓️ {totalSesiDisplay} Sesi
+                                  </span>
+                                )}
                                 {petugas?.namaSiswa && (
                                   <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/25 border border-amber-300/50 text-amber-200 shadow-xs">
                                     ⭐ Petugas: {petugas.namaSiswa}
@@ -945,7 +1005,7 @@ export default function KelolaWaliKelasPage() {
                           </div>
 
                           {/* ============================================================ */}
-                          {/* PANEL STATISTIK PRESENSI HARI INI (PADAT & COMPACT) */}
+                          {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA (PADAT & COMPACT) */}
                           {/* ============================================================ */}
                           <div className="rounded-2xl border border-teal-700/60 bg-teal-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
                             {/* Header Bar Statistik */}
@@ -954,11 +1014,13 @@ export default function KelolaWaliKelasPage() {
                                 <span className="text-base">📊</span>
                                 <div>
                                   <span className="text-xs font-black tracking-wide text-white block sm:inline">
-                                    Presensi Hari Ini
+                                    Presensi Pertemuan Sebelumnya
                                   </span>
-                                  <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
-                                    ({todayStr})
-                                  </span>
+                                  {activeTgl && (
+                                    <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
+                                      ({formatTanggalWaliIndo(activeTgl)})
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
@@ -967,17 +1029,58 @@ export default function KelolaWaliKelasPage() {
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-800/70 text-teal-200 text-[10px] font-bold animate-pulse">
                                     ⏳ Memeriksa...
                                   </span>
-                                ) : stats?.sudahDiisi ? (
+                                ) : sesiData?.sudahDiisi ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
                                     ✅ Sudah Diisi
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
-                                    ⚪ Belum Diisi
+                                    ⚪ Belum Ada Pertemuan
                                   </span>
                                 )}
                               </div>
                             </div>
+
+                            {/* Selector Sesi (jika lebih dari 1 tanggal presensi yang sudah ada) */}
+                            {stats?.validTanggal &&
+                              stats.validTanggal.length > 1 && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  <span className="text-[10px] text-teal-300 font-black uppercase tracking-wider">
+                                    Pilih Sesi:
+                                  </span>
+                                  <div className="flex items-center gap-1 flex-wrap max-h-16 overflow-y-auto pr-1 custom-scrollbar">
+                                    {[...stats.validTanggal]
+                                      .reverse()
+                                      .map((tgl) => {
+                                        const isSel = tgl === activeTgl;
+                                        return (
+                                          <button
+                                            key={tgl}
+                                            type="button"
+                                            onClick={() =>
+                                              setSelectedTanggalWali(
+                                                (prev) => ({
+                                                  ...prev,
+                                                  [wali.idWali]: tgl,
+                                                }),
+                                              )
+                                            }
+                                            className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                                              isSel
+                                                ? "bg-teal-500 text-white shadow-xs border border-teal-300 scale-105"
+                                                : "bg-teal-900/60 hover:bg-teal-800/70 text-teal-200 border border-teal-700/50"
+                                            }`}
+                                          >
+                                            {formatTanggalKolom(tgl)}{" "}
+                                            {tgl === stats.latestTanggal
+                                              ? "⭐"
+                                              : ""}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
 
                             {/* Mini Counters Grid (Padat 5 Kolom) */}
                             <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
@@ -986,7 +1089,7 @@ export default function KelolaWaliKelasPage() {
                                   Hadir
                                 </span>
                                 <span className="text-xs sm:text-base font-black text-emerald-100">
-                                  {stats?.hadir || 0}
+                                  {sesiData?.hadir || 0}
                                 </span>
                               </div>
 
@@ -995,7 +1098,7 @@ export default function KelolaWaliKelasPage() {
                                   Sakit
                                 </span>
                                 <span className="text-xs sm:text-base font-black text-blue-100">
-                                  {stats?.sakit || 0}
+                                  {sesiData?.sakit || 0}
                                 </span>
                               </div>
 
@@ -1004,7 +1107,7 @@ export default function KelolaWaliKelasPage() {
                                   Izin
                                 </span>
                                 <span className="text-xs sm:text-base font-black text-amber-100">
-                                  {stats?.izin || 0}
+                                  {sesiData?.izin || 0}
                                 </span>
                               </div>
 
@@ -1013,7 +1116,7 @@ export default function KelolaWaliKelasPage() {
                                   Alfa
                                 </span>
                                 <span className="text-xs sm:text-base font-black text-rose-100">
-                                  {stats?.alfa || 0}
+                                  {sesiData?.alfa || 0}
                                 </span>
                               </div>
 
@@ -1022,28 +1125,28 @@ export default function KelolaWaliKelasPage() {
                                   Cabut
                                 </span>
                                 <span className="text-xs sm:text-base font-black text-violet-100">
-                                  {stats?.cabut || 0}
+                                  {sesiData?.cabut || 0}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Daftar Siswa Sakit, Izin, Alfa, Cabut Hari Ini (Padat & Compact) */}
+                            {/* Daftar Siswa Sakit, Izin, Alfa, Cabut pada sesi terpilih (Padat & Compact) */}
                             <div className="pt-1">
-                              {stats?.sudahDiisi ? (
-                                stats?.absenList?.length > 0 ? (
+                              {sesiData?.sudahDiisi ? (
+                                sesiData?.absenList?.length > 0 ? (
                                   <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
                                       <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
                                         <span>⚠️</span>
                                         <span>
-                                          Siswa Tidak Hadir Hari Ini (
-                                          {stats.absenList.length}):
+                                          Siswa Tidak Hadir (
+                                          {sesiData.absenList.length}):
                                         </span>
                                       </span>
                                     </div>
 
                                     <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
-                                      {stats.absenList.map((item, i) => {
+                                      {sesiData.absenList.map((item, i) => {
                                         let colorStyle =
                                           "bg-rose-500/20 text-rose-200 border-rose-500/40";
                                         if (item.status === "Sakit") {
@@ -1082,7 +1185,7 @@ export default function KelolaWaliKelasPage() {
                                   <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
                                     <span>✨</span>
                                     <span>
-                                      Semua siswa hadir hari ini (
+                                      Semua siswa hadir pada pertemuan ini (
                                       {totalSiswaDisplay} siswa) — Nihil Absen.
                                     </span>
                                   </div>
@@ -1091,7 +1194,7 @@ export default function KelolaWaliKelasPage() {
                                 <div className="text-[11px] text-teal-200/80 font-medium italic flex items-center gap-1.5 bg-teal-900/30 rounded-xl px-3 py-1.5">
                                   <span>💡</span>
                                   <span>
-                                    Presensi hari ini belum diisi. Gunakan
+                                    Belum ada presensi yang dicatat. Gunakan
                                     tombol di bawah untuk membuka tabel presensi
                                     kelas.
                                   </span>
