@@ -39,6 +39,9 @@ import {
 import IsiJurnalPklModal from "./IsiJurnalPklModal";
 import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
+import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
+import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
+
 // --- OPTIMASI FOTO: paksa Google mengirim versi kecil, bukan resolusi asli ---
 // Foto asli dari kamera HP bisa 3-8MB / 4000x3000px. Ditampilkan di thumbnail kecil
 // tetap saja didekode browser di resolusi aslinya -> bisa habiskan ratusan MB RAM
@@ -311,6 +314,10 @@ function DashboardGuruContent() {
 
   const [loadingCetakWali, setLoadingCetakWali] = useState(false);
   const [showLaporanWaliModal, setShowLaporanWaliModal] = useState(false);
+
+  const [showJurnalGuruWaliModal, setShowJurnalGuruWaliModal] = useState(false);
+  const [showLihatJurnalGuruWaliModal, setShowLihatJurnalGuruWaliModal] =
+    useState(false);
   const [showCetakMapelModal, setShowCetakMapelModal] = useState(false);
 
   // --- STATE KHUSUS TAB GURU WALI ---
@@ -1780,7 +1787,14 @@ function DashboardGuruContent() {
                 desc="Catat agenda jurnal harian"
                 icon="📝"
                 bgGrad="from-rose-500 to-pink-600"
-                onClick={() => router.push("/magang/guru/guru-wali/jurnal")}
+                onClick={() => setShowJurnalGuruWaliModal(true)}
+              />
+              <SolidCompactCard
+                title="Lihat Jurnal Guru Wali"
+                desc="Riwayat jurnal & hapus data"
+                icon="📖"
+                bgGrad="from-blue-600 to-indigo-700"
+                onClick={() => setShowLihatJurnalGuruWaliModal(true)}
               />
               <SolidCompactCard
                 title="Cetak Laporan Guru Wali"
@@ -4673,6 +4687,23 @@ function DashboardGuruContent() {
           }}
         />
       )}
+
+      {/* MODAL: ISI JURNAL GURU WALI */}
+      <ModalJurnalGuruWali
+        isOpen={showJurnalGuruWaliModal}
+        onClose={() => setShowJurnalGuruWaliModal(false)}
+        guru={{ id: user?.id, nama: user?.nama }}
+        onSaved={() => {
+          alert("✅ Jurnal guru wali berhasil disimpan.");
+        }}
+      />
+
+      {/* MODAL: LIHAT / HAPUS JURNAL GURU WALI */}
+      <ModalLihatJurnalGuruWali
+        isOpen={showLihatJurnalGuruWaliModal}
+        onClose={() => setShowLihatJurnalGuruWaliModal(false)}
+        guru={{ id: user?.id, nama: user?.nama }}
+      />
     </main>
   );
 }

@@ -426,6 +426,17 @@ export async function getJurnalSiswa(idGuru, idSiswa) {
   });
 }
 
+// ---------------------------------------------------------
+// HAPUS JURNAL GURU WALI (satu pertemuan / idJurnal)
+// ---------------------------------------------------------
+
+export async function deleteJurnalGuruWali({ idGuru, idJurnal }) {
+  return request("deleteJurnalGuruWali", {
+    idGuru,
+    idJurnal,
+  });
+}
+
 export async function saveJurnalPKL(data) {
   return request("saveJurnalPKL", {
     idGuru: data.idGuru,
