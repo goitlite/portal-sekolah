@@ -125,6 +125,47 @@ const getSesiKelompokKey = (item) => {
 };
 
 // ============================================================
+// HELPER: Gabungkan baris jurnal Kelompok jadi SATU baris tabel
+//
+// Backend menyimpan satu baris per SISWA (bahkan untuk pertemuan
+// Kelompok), tapi semua siswa dalam satu pertemuan yang sama
+// berbagi ID_JURNAL yang sama ("SATU PERTEMUAN = SATU ID_JURNAL").
+// Jadi cukup dikelompokkan berdasarkan idJurnal: pertemuan Individu
+// otomatis tetap 1 baris (karena idJurnal-nya unik per siswa),
+// sedangkan pertemuan Kelompok otomatis melebur jadi 1 baris berisi
+// daftar semua nama siswa yang ikut.
+// ============================================================
+const susunBarisLaporanC = (data) => {
+  const map = new Map();
+  const urutanKey = [];
+
+  data.forEach((item, idx) => {
+    const key = item.idJurnal || `row-${idx}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        tanggal: item.tanggal || "-",
+        formatPertemuan: item.formatPertemuan || "-",
+        topik: item.topik || "-",
+        tindakLanjut: item.tindakLanjut || "-",
+        keterangan: item.keterangan || "-",
+        fotoUrl: item.fotoUrl || "",
+        siswaList: [],
+      });
+      urutanKey.push(key);
+    }
+
+    const entry = map.get(key);
+    const namaLengkap = `${item.namaSiswa || "-"}${
+      item.kelas && item.kelas !== "-" ? " [" + item.kelas + "]" : ""
+    }`;
+    entry.siswaList.push(namaLengkap);
+  });
+
+  return urutanKey.map((key) => map.get(key));
+};
+
+// ============================================================
 // HELPER: Tentukan Semester & Tahun Ajaran otomatis
 // ============================================================
 const tentukanSemesterTahunAjaran = (data) => {
@@ -415,6 +456,11 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const teksNamaGuru = namaGuru || (data[0] && data[0].namaGuru) || "Guru Wali";
 
+  // Baris tabel yang sudah dikelompokkan: pertemuan Kelompok jadi
+  // satu baris berisi semua nama siswa, pertemuan Individu tetap
+  // satu baris per siswa seperti biasa.
+  const barisLaporan = susunBarisLaporanC(data);
+
   const tanggalCetak = new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "long",
@@ -437,25 +483,32 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
   doc.text(`Tanggal Cetak`, 14, 25);
   doc.text(`: ${tanggalCetak}`, 40, 25);
   doc.text(`Jumlah Pertemuan`, 200, 20);
-  doc.text(`: ${data.length}`, 235, 20);
+  doc.text(`: ${barisLaporan.length}`, 235, 20);
 
   const barcodeImages = await Promise.all(
-    data.map((item) => {
+    barisLaporan.map((item) => {
       const url = buildBarcodeUrl(item.fotoUrl);
       return url ? getBase64Image(url) : Promise.resolve(null);
     }),
   );
 
   const BARCODE_COL_INDEX = 6;
-  const body = data.map((item, idx) => [
-    idx + 1,
-    item.tanggal || "-",
-    `${item.namaSiswa || "-"}${item.kelas && item.kelas !== "-" ? " [" + item.kelas + "]" : ""}`,
-    item.topik || "-",
-    item.tindakLanjut || "-",
-    item.keterangan || "-",
-    "",
-  ]);
+  const body = barisLaporan.map((item, idx) => {
+    const isKelompok = item.siswaList.length > 1;
+    const namaMuridCell = isKelompok
+      ? `Format Kelompok:\n${item.siswaList.map((nama) => `•  ${nama}`).join("\n")}`
+      : item.siswaList[0] || "-";
+
+    return [
+      idx + 1,
+      item.tanggal || "-",
+      namaMuridCell,
+      item.topik || "-",
+      item.tindakLanjut || "-",
+      item.keterangan || "-",
+      "",
+    ];
+  });
 
   autoTable(doc, {
     startY: 30, // Tabel mulai lebih atas
@@ -475,23 +528,27 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
 
     styles: {
       fontSize: 7.5, // Diperkecil signifikan untuk memuat teks lebih banyak
-      cellPadding: 1.5, // Padding sangat tipis agar padat
-      textColor: [0, 0, 0],
-      lineColor: [0, 0, 0],
-      lineWidth: 0.15, // Garis lebih tipis
+      cellPadding: 1.8, // Padding sedikit dilonggarkan agar lebih nyaman dibaca
+      textColor: [30, 41, 59], // slate-800, lebih soft dari hitam pekat
+      lineColor: [203, 213, 225], // slate-300, garis antar sel lebih tipis/soft
+      lineWidth: 0.1,
       valign: "middle",
       minCellHeight: 14, // Minimum height dikurangi agar row lebih rapat
     },
 
     headStyles: {
       fontStyle: "bold",
-      fillColor: [240, 240, 240],
-      textColor: [0, 0, 0],
-      lineColor: [0, 0, 0],
-      lineWidth: 0.15,
+      fillColor: [37, 99, 235], // biru (blue-600) — senada dengan tabel Mapel
+      textColor: [255, 255, 255],
+      lineColor: [37, 99, 235],
+      lineWidth: 0.1,
       halign: "center",
       valign: "middle",
       fontSize: 8,
+    },
+
+    alternateRowStyles: {
+      fillColor: [239, 246, 255], // biru sangat muda (blue-50) — pembeda tipis antar baris
     },
 
     columnStyles: {
