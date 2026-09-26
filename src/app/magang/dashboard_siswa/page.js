@@ -11,6 +11,7 @@ import {
   getDataSiswaWali,
   getBiodataSiswa,
   getSiswaById,
+  getDashboardKepsekWaliKelas,
 } from "../lib/api";
 
 import { getSession, saveSession, isLoggedIn, logout } from "../lib/auth";
@@ -22,7 +23,11 @@ import RuangBelajarTKA from "./RuangBelajarTKA";
 import ModalKehadiranMapel from "./ModalKehadiranMapel";
 import ModalCatatanWali from "./ModalCatatanWali";
 import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
-import { findPetugasWaliKelasForSiswa } from "../lib/petugasPresensiHelper";
+import {
+  findPetugasWaliKelasForSiswa,
+  parseKeteranganWali,
+  cachePetugasLocal,
+} from "../lib/petugasPresensiHelper";
 
 // --- HELPER FORMAT WAKTU & TANGGAL ---
 function formatWaktu(timestamp) {
@@ -187,8 +192,123 @@ export default function DashboardSiswa() {
   const [showModalPresensiPetugas, setShowModalPresensiPetugas] =
     useState(false);
 
-  // Status Petugas Presensi Kelas
+  // Status Petugas Presensi Kelas & Statistik Kehadiran Kelas
   const [petugasWaliData, setPetugasWaliData] = useState(null);
+  const [statistikKelas, setStatistikKelas] = useState(null);
+  const [loadingStatistikKelas, setLoadingStatistikKelas] = useState(false);
+
+  // Ambil data Wali Kelas siswa dari backend & cek mandat petugas presensi
+  const loadDataKelasSiswa = useCallback(async (currentSession) => {
+    const sess = currentSession || getSession();
+    if (!sess || !sess.id) return;
+
+    setLoadingStatistikKelas(true);
+    try {
+      // 1. Coba baca cache lokal dulu untuk render instan
+      const pInfoLocal = findPetugasWaliKelasForSiswa(sess.id);
+      if (pInfoLocal) {
+        setPetugasWaliData(pInfoLocal);
+      }
+
+      // 2. Ambil data wali kelas (gunakan sessionStorage dulu agar tidak berulang kali fetch)
+      const cacheKey = "dashboard_siswa_cache_walikelas";
+      let cards = [];
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.cards)) {
+            cards = parsed.cards;
+          }
+        }
+      } catch (_) {}
+
+      if (cards.length === 0) {
+        const res = await getDashboardKepsekWaliKelas(false);
+        if (res && res.success && Array.isArray(res.data?.cards)) {
+          cards = res.data.cards;
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
+          } catch (_) {}
+        }
+      }
+
+      if (cards.length > 0) {
+        const sid = String(sess.id).trim();
+
+        // Cari kelas siswa di antara seluruh rombel
+        const myClass = cards.find((c) => {
+          // A. Cek di daftarSiswa
+          if (
+            Array.isArray(c.daftarSiswa) &&
+            c.daftarSiswa.some((s) => String(s.idSiswa).trim() === sid)
+          ) {
+            return true;
+          }
+          // B. Cek di keterangan ada tag [PETUGAS:idSiswa
+          const ket = String(c.keterangan || "");
+          if (
+            ket.includes(`[PETUGAS:${sid}:`) ||
+            ket.includes(`[PETUGAS:${sid}]`)
+          ) {
+            return true;
+          }
+          // C. Fallback pencocokan nama kelas
+          if (
+            sess.kelas &&
+            c.namaKelas &&
+            (c.namaKelas.toLowerCase().includes(sess.kelas.toLowerCase()) ||
+              sess.kelas.toLowerCase().includes(c.namaKelas.toLowerCase()))
+          ) {
+            return true;
+          }
+          return false;
+        });
+
+        if (myClass && isMountedRef.current) {
+          setStatistikKelas({
+            idWali: myClass.idWali,
+            idGuru: myClass.idGuru,
+            namaKelas: myClass.namaKelas,
+            namaGuru: myClass.namaGuru,
+            jumlahSiswa: myClass.jumlahSiswa,
+            presensiHariIni: myClass.presensiHariIni,
+            presensi: myClass.presensi,
+            daftarSiswa: myClass.daftarSiswa,
+            keterangan: myClass.keterangan,
+          });
+
+          // Cek apakah siswa ini adalah PETUGAS PRESENSI KELAS
+          const isPetugas =
+            String(myClass.keterangan || "").includes(`[PETUGAS:${sid}:`) ||
+            String(myClass.keterangan || "").includes(`[PETUGAS:${sid}]`);
+
+          if (isPetugas) {
+            const pInfo = {
+              idWali: myClass.idWali,
+              idGuru: myClass.idGuru,
+              namaKelas: myClass.namaKelas,
+              namaGuru: myClass.namaGuru,
+              kelas: myClass.namaKelas,
+              keterangan: myClass.keterangan,
+              petugas: {
+                idSiswa: sid,
+                namaSiswa: sess.nama,
+              },
+            };
+            setPetugasWaliData(pInfo);
+            cachePetugasLocal(myClass.idWali, pInfo);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Gagal memuat data kelas siswa:", err);
+    } finally {
+      if (isMountedRef.current) {
+        setLoadingStatistikKelas(false);
+      }
+    }
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     if (!isLoggedIn()) {
@@ -209,11 +329,8 @@ export default function DashboardSiswa() {
       setLoadFailedMessage("");
       setLoadProgress(8);
 
-      // Cek apakah siswa merupakan petugas presensi kelas
-      const pInfo = findPetugasWaliKelasForSiswa(session.id);
-      if (pInfo) {
-        setPetugasWaliData(pInfo);
-      }
+      // Cek apakah siswa merupakan petugas presensi kelas & ambil statistik kelas
+      loadDataKelasSiswa(session);
     }
 
     // Cek preference lokal tanggal presensi hari ini
@@ -433,11 +550,16 @@ export default function DashboardSiswa() {
         setLoading(false);
       }
     }
-  }, [router, CACHE_KEY]);
+  }, [router, CACHE_KEY, loadDataKelasSiswa]);
+
+  const hasLoadedDashboardRef = useRef(false);
 
   useEffect(() => {
     isMountedRef.current = true;
-    loadDashboard();
+    if (!hasLoadedDashboardRef.current) {
+      hasLoadedDashboardRef.current = true;
+      loadDashboard();
+    }
 
     return () => {
       isMountedRef.current = false;
@@ -446,19 +568,27 @@ export default function DashboardSiswa() {
 
   // Cek berkala / saat tab kembali aktif jika penunjukan baru saja dilakukan guru
   useEffect(() => {
-    if (!user?.id) return;
+    let lastCheck = 0;
     const checkPetugas = () => {
-      const pInfo = findPetugasWaliKelasForSiswa(user.id);
+      const now = Date.now();
+      // Throttle: hanya cek maksimal sekali per 30 detik saat tab focus
+      if (now - lastCheck < 30000) return;
+      lastCheck = now;
+
+      const sess = getSession();
+      if (!sess?.id) return;
+      const pInfo = findPetugasWaliKelasForSiswa(sess.id);
       if (pInfo) {
         setPetugasWaliData(pInfo);
       }
+      loadDataKelasSiswa(sess);
     };
-    checkPetugas();
+
     window.addEventListener("focus", checkPetugas);
     return () => {
       window.removeEventListener("focus", checkPetugas);
     };
-  }, [user?.id]);
+  }, [loadDataKelasSiswa]);
 
   function handleLogout() {
     if (!confirm("Keluar dari portal sekolah?")) return;
@@ -845,6 +975,109 @@ export default function DashboardSiswa() {
         </div>
 
         {/* ============================================================ */}
+        {/* STATISTIK KEHADIRAN KELAS (ROMBEL WALI KELAS) */}
+        {/* ============================================================ */}
+        <div className="rounded-[2rem] bg-gradient-to-br from-[#F0FDF4] via-[#ECFDF5] to-[#CCFBF1] border border-[#99F6E4] shadow-[0_10px_30px_rgba(20,184,166,0.12)] p-5 sm:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-teal-200/80 pb-4 gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
+                  <span>🏫 Statistik Kehadiran Kelas</span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-900 border border-teal-300 font-extrabold">
+                    {statistikKelas?.namaKelas || user?.kelas || "Rombel"}
+                  </span>
+                </h2>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-1">
+                Rekapitulasi kehadiran teman sekelas hari ini • Wali Kelas:{" "}
+                <strong>
+                  {statistikKelas?.namaGuru || guruWali || "Guru Wali Kelas"}
+                </strong>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {petugasWaliData ? (
+                <button
+                  onClick={() => setShowModalPresensiPetugas(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-xs font-black shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                >
+                  <span>📋</span>
+                  <span>Isi Presensi Kelas</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-teal-300 text-teal-800 text-xs font-bold shadow-xs">
+                  <span>👥</span>
+                  <span>{statistikKelas?.jumlahSiswa || 0} Siswa Rombel</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* 4 Cards Statistik Kelas dengan Warna Khusus */}
+          <div className="grid gap-3 sm:gap-5 grid-cols-2 lg:grid-cols-4">
+            <Card
+              title="Hadir Hari Ini"
+              value={statistikKelas?.presensiHariIni?.hadir ?? 0}
+              accentColor="border-emerald-500"
+              textColor="text-emerald-700"
+              icon="🟢"
+            />
+            <Card
+              title="Sakit"
+              value={statistikKelas?.presensiHariIni?.sakit ?? 0}
+              accentColor="border-sky-500"
+              textColor="text-sky-700"
+              icon="🤒"
+            />
+            <Card
+              title="Izin"
+              value={statistikKelas?.presensiHariIni?.izin ?? 0}
+              accentColor="border-amber-500"
+              textColor="text-amber-700"
+              icon="📝"
+            />
+            <Card
+              title="Kehadiran Kelas"
+              value={`${statistikKelas?.presensiHariIni?.persenHadir ?? 0}%`}
+              accentColor="border-teal-500"
+              textColor="text-teal-700"
+              icon="📊"
+            />
+          </div>
+
+          {/* Info Strip Bawah Kelas */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white/90 p-4 sm:p-5 rounded-2xl border border-teal-200/80 shadow-inner">
+            <Info
+              label="Nama Kelas"
+              value={statistikKelas?.namaKelas || user?.kelas || "-"}
+              textColor="text-teal-900"
+            />
+            <Info
+              label="Guru Wali Kelas"
+              value={statistikKelas?.namaGuru || guruWali || "-"}
+              textColor="text-teal-900"
+            />
+            <Info
+              label="Total Siswa Rombel"
+              value={`${statistikKelas?.jumlahSiswa || 0} Siswa`}
+              textColor="text-teal-900"
+            />
+            <Info
+              label="Petugas Presensi"
+              value={
+                petugasWaliData
+                  ? "⭐ Kamu (Ditunjuk)"
+                  : parseKeteranganWali(statistikKelas?.keterangan)
+                      .petugasNama || "Belum Ditunjuk"
+              }
+              textColor={petugasWaliData ? "text-amber-600" : "text-teal-900"}
+            />
+          </div>
+        </div>
+
+        {/* ============================================================ */}
         {/* COMPACT TIMELINE PRESENSI TERBARU */}
         {/* ============================================================ */}
         <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF7E5] to-[#F8E7A5] border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] overflow-hidden">
@@ -976,6 +1209,9 @@ export default function DashboardSiswa() {
           onClose={() => setShowModalPresensiPetugas(false)}
           petugasInfo={petugasWaliData}
           user={user}
+          onPresensiSubmitted={() => {
+            loadDataKelasSiswa();
+          }}
         />
       )}
     </main>

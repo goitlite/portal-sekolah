@@ -187,6 +187,8 @@ export default function LoginMagang() {
         }
       } else if (session?.role === "admin") {
         router.replace("/magang/admin");
+      } else if (session?.role === "kepsek") {
+        router.replace("/magang/kepsek");
       }
     } else {
       setIsChecking(false);
@@ -274,6 +276,10 @@ export default function LoginMagang() {
 
         case "guru":
           router.replace("/magang/guru");
+          return;
+
+        case "kepsek":
+          router.replace("/magang/kepsek");
           return;
 
         case "siswa":

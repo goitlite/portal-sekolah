@@ -12,28 +12,37 @@ export const API_URL =
 // ==========================================
 
 async function request(action, params = {}) {
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        action,
-        params,
-      }),
-    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({
+          action,
+          params,
+        }),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
+      return result;
+    } catch (err) {
+      if (attempt === 0) {
+        // Beri jeda 600ms sebelum retry satu kali
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        continue;
+      }
+      console.warn(
+        `[API Info] Request "${action}" tidak terhubung:`,
+        err?.message || err,
+      );
 
-    return result;
-  } catch (err) {
-    console.error("API ERROR :", err);
-
-    return {
-      success: false,
-      message: "Tidak dapat terhubung ke server.",
-    };
+      return {
+        success: false,
+        message: "Tidak dapat terhubung ke server.",
+      };
+    }
   }
 }
 
@@ -634,4 +643,28 @@ export async function saveJurnalWaliKelas(data) {
 // Ambil semua jurnal wali kelas per guru (idWali opsional)
 export async function getJurnalWaliKelas(idGuru, idWali) {
   return request("getJurnalWaliKelas", { idGuru, idWali: idWali || "" });
+}
+
+// ============================================================
+// DASHBOARD KEPALA SEKOLAH (Agregator Lintas Guru & Kelas)
+// ============================================================
+
+export async function getDashboardKepsekPkl(forceRefresh = false) {
+  return request("getDashboardKepsekPkl", { forceRefresh });
+}
+
+export async function getDashboardKepsekWali(forceRefresh = false) {
+  return request("getDashboardKepsekWali", { forceRefresh });
+}
+
+export async function getDashboardKepsekMapel(forceRefresh = false) {
+  return request("getDashboardKepsekMapel", { forceRefresh });
+}
+
+export async function getDashboardKepsekWaliKelas(forceRefresh = false) {
+  return request("getDashboardKepsekWaliKelas", { forceRefresh });
+}
+
+export async function getDashboardKepsekSemua(forceRefresh = false) {
+  return request("getDashboardKepsekSemua", { forceRefresh });
 }

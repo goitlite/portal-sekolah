@@ -855,6 +855,14 @@ function savePresensiWaliKelas(params) {
       }
     });
 
+    // Invalidate cache Kepsek agar data kehadiran langsung terupdate
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.remove("KEPSEK_V2_WALIKELAS_DATA_V3");
+      cache.remove("KEPSEK_V2_WALIKELAS_DATA_V2");
+      cache.remove("WALIKELAS_DATA_V3");
+    } catch (_) {}
+
     return successResponse("Presensi wali kelas berhasil disimpan", {
       tersimpan: cells.length,
     });

@@ -52,6 +52,7 @@ export default function ModalPresensiPetugasSiswa({
   onClose,
   petugasInfo, // { idWali, idGuru, namaKelas, kelas }
   user, // { id, nama }
+  onPresensiSubmitted,
 }) {
   const [loading, setLoading] = useState(true);
   const [siswaList, setSiswaList] = useState([]);
@@ -285,6 +286,10 @@ export default function ModalPresensiPetugasSiswa({
         `✅ ALHAMDULILLAH! Presensi kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
           `Data telah tercatat di sistem wali kelas. Terima kasih telah menjalankan tugas presensi hari ini.`,
       );
+
+      if (typeof onPresensiSubmitted === "function") {
+        onPresensiSubmitted();
+      }
     } catch (err) {
       console.error("Gagal mengirim presensi:", err);
       alert(
