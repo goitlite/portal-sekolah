@@ -360,9 +360,9 @@ function getDashboardKepsekPkl(params) {
       }
 
       if (targetGuru) {
-        targetGuru.siswaCount++;
-        targetGuru.siswaList.push(s);
-        if (s.tempatMagang) {
+        if (s.tempatMagang && s.tempatMagang !== "-") {
+          targetGuru.siswaCount++;
+          targetGuru.siswaList.push(s);
           targetGuru.tempatList[s.tempatMagang] = true;
         }
       }
@@ -434,28 +434,22 @@ function getDashboardKepsekPkl(params) {
           sudahIsiJurnal: g.jurnalList.length > 0,
         };
       })
+      .filter(function (g) {
+        return g.jumlahSiswa > 0;
+      })
       .sort(function (a, b) {
         return b.jumlahSiswa - a.jumlahSiswa;
       });
 
-    // Guru yang aktif pembimbing (punya siswa atau punya jurnal)
-    const guruAktifPkl = cardGuruPkl.filter(function (g) {
-      return g.jumlahSiswa > 0 || g.jumlahJurnal > 0;
-    });
-
     const statistik = {
-      totalGuruPembimbing:
-        guruAktifPkl.length > 0 ? guruAktifPkl.length : allGuru.length,
+      totalGuruPembimbing: cardGuruPkl.length,
       totalSiswaPkl: allSiswaPkl.filter(function (s) {
-        return !!s.tempatMagang;
+        return !!s.tempatMagang && s.tempatMagang !== "-";
       }).length,
       totalTempatPkl: Object.keys(tempatSet).length,
       totalJurnalPkl: jurnalRows.length,
       totalMonitoring: monitoringRows.length,
-      listGuruPembimbing: (guruAktifPkl.length > 0
-        ? guruAktifPkl
-        : cardGuruPkl
-      ).map(function (g) {
+      listGuruPembimbing: cardGuruPkl.map(function (g) {
         return {
           nama: g.namaGuru,
           info: g.jumlahSiswa + " siswa (" + g.jumlahTempat + " tempat)",

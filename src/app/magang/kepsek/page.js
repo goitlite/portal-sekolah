@@ -499,14 +499,16 @@ export default function DashboardKepalaSekolah() {
   }
 
   // --- KLIK CARD STATISTIK -> BUKA MODAL DAFTAR NAMA ---
-  function handleStatCardClick(title, listData, breakdownKelas) {
+  function handleStatCardClick(title, listData, breakdownKelas = null) {
     setStatModalSearch("");
-    setStatModalTab("statistik");
+    const hasBreakdown =
+      Array.isArray(breakdownKelas) && breakdownKelas.length > 0;
+    setStatModalTab(hasBreakdown ? "statistik" : "semua");
     setStatModalConfig({
       isOpen: true,
       title,
       data: listData || [],
-      breakdownKelas: breakdownKelas || [],
+      breakdownKelas: hasBreakdown ? breakdownKelas : null,
     });
   }
 
@@ -514,47 +516,63 @@ export default function DashboardKepalaSekolah() {
   const statsSiswa = useMemo(() => {
     const list = dataMasterSiswa || [];
 
-    const normalized = list.map((s) => {
-      const id = String(s.ID || s.id || s.ID_SISWA || s.idSiswa || "").trim();
-      const rawNama = String(s.NAMA || s.nama || s.NAMA_SISWA || "").trim();
+    const normalized = list.map((itemSiswa) => {
+      const id = String(
+        itemSiswa.ID ||
+          itemSiswa.id ||
+          itemSiswa.ID_SISWA ||
+          itemSiswa.idSiswa ||
+          "",
+      ).trim();
+      const rawNama = String(
+        itemSiswa.NAMA || itemSiswa.nama || itemSiswa.NAMA_SISWA || "",
+      ).trim();
       const tempat = String(
-        s.TEMPAT_MAGANG || s.tempatMagang || s.TEMPAT || s.tempat || "",
+        itemSiswa.TEMPAT_MAGANG ||
+          itemSiswa.tempatMagang ||
+          itemSiswa.TEMPAT ||
+          itemSiswa.tempat ||
+          "",
       ).trim();
       const match = rawNama.match(/(.+?)\s*\[(.*?)\]/);
       const nama = match ? match[1].trim() : rawNama;
       const kelas = match
         ? match[2].trim()
-        : String(s.KELAS || s.kelas || "").trim();
+        : String(itemSiswa.KELAS || itemSiswa.kelas || "").trim();
       return {
         id,
         nama,
         rawNama,
         kelas,
         tempatMagang: tempat,
-        status: String(s.STATUS || s.status || "").trim(),
-        idGuru: String(s.ID_GURU || s.idGuru || "").trim(),
-        namaGuru: String(s.NAMA_GURU || s.namaGuru || "").trim(),
+        status: String(itemSiswa.STATUS || itemSiswa.status || "").trim(),
+        idGuru: String(itemSiswa.ID_GURU || itemSiswa.idGuru || "").trim(),
+        namaGuru: String(
+          itemSiswa.NAMA_GURU || itemSiswa.namaGuru || "",
+        ).trim(),
       };
     });
 
     // 1. Seluruh siswa yang punya akun (memiliki ID)
-    const siswaPunyaAkun = normalized.filter((s) => s.id !== "");
+    const siswaPunyaAkun = normalized.filter(
+      (itemSiswa) => itemSiswa.id !== "",
+    );
 
     // 2. Siswa Kelas X: [X ...] atau kelas berawalan 'X ' / 'X-' / 'X' / '10'
-    const siswaKelasX = siswaPunyaAkun.filter((s) => {
-      const k = s.kelas.toUpperCase();
+    const siswaKelasX = siswaPunyaAkun.filter((itemSiswa) => {
+      const k = itemSiswa.kelas.toUpperCase();
       return /^X[\s\-_]/.test(k) || /^X$/.test(k) || /^10[\s\-_]/.test(k);
     });
 
     // 3. Siswa Kelas XI: [XI ...] atau kelas berawalan 'XI ' / 'XI-' / 'XI' / '11'
-    const siswaKelasXI = siswaPunyaAkun.filter((s) => {
-      const k = s.kelas.toUpperCase();
+    const siswaKelasXI = siswaPunyaAkun.filter((itemSiswa) => {
+      const k = itemSiswa.kelas.toUpperCase();
       return /^XI[\s\-_]/.test(k) || /^XI$/.test(k) || /^11[\s\-_]/.test(k);
     });
 
     // 4. Siswa Kelas XII: inputnya teks tanpa angka X dan XI (atau XII)
-    const siswaKelasXII = siswaPunyaAkun.filter((s) => {
-      const k = s.kelas.toUpperCase();
+    const siswaKelasXII = siswaPunyaAkun.filter((itemSiswa) => {
+      const k = itemSiswa.kelas.toUpperCase();
       const isX = /^X[\s\-_]/.test(k) || /^X$/.test(k) || /^10[\s\-_]/.test(k);
       const isXI =
         /^XI[\s\-_]/.test(k) || /^XI$/.test(k) || /^11[\s\-_]/.test(k);
@@ -563,50 +581,51 @@ export default function DashboardKepalaSekolah() {
 
     // 5. Total Siswa PKL: wajib memiliki data tempat magang terisi
     const siswaPkl = siswaPunyaAkun.filter(
-      (s) => s.tempatMagang !== "" && s.tempatMagang !== "-",
+      (itemSiswa) =>
+        itemSiswa.tempatMagang !== "" && itemSiswa.tempatMagang !== "-",
     );
 
     // Helper: buat breakdown jumlah siswa per kelas/jurusan dari sebuah list
     function buildBreakdown(siswaList) {
       const map = {};
-      siswaList.forEach((s) => {
-        const k = s.kelas || "—";
+      siswaList.forEach((itemSiswa) => {
+        const k = itemSiswa.kelas || "—";
         if (!map[k]) map[k] = { kelas: k, count: 0, siswaList: [] };
         map[k].count++;
-        map[k].siswaList.push(s);
+        map[k].siswaList.push(itemSiswa);
       });
       return Object.values(map).sort((a, b) => b.count - a.count);
     }
 
     return {
       totalAkun: siswaPunyaAkun.length,
-      listAkun: siswaPunyaAkun.map((s) => ({
-        nama: s.nama,
-        info: `ID: ${s.id} • Kelas: ${s.kelas || "XII"} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : "• Belum Magang"}`,
+      listAkun: siswaPunyaAkun.map((itemSiswa) => ({
+        nama: itemSiswa.nama,
+        info: `ID: ${itemSiswa.id} • Kelas: ${itemSiswa.kelas || "XII"} ${itemSiswa.tempatMagang ? `• 📍 ${itemSiswa.tempatMagang}` : "• Belum Magang"}`,
       })),
       breakdownAkun: buildBreakdown(siswaPunyaAkun),
       totalKelasX: siswaKelasX.length,
-      listKelasX: siswaKelasX.map((s) => ({
-        nama: s.nama,
-        info: `ID: ${s.id} • Kelas: ${s.kelas} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      listKelasX: siswaKelasX.map((itemSiswa) => ({
+        nama: itemSiswa.nama,
+        info: `ID: ${itemSiswa.id} • Kelas: ${itemSiswa.kelas} ${itemSiswa.tempatMagang ? `• 📍 ${itemSiswa.tempatMagang}` : ""}`,
       })),
       breakdownKelasX: buildBreakdown(siswaKelasX),
       totalKelasXI: siswaKelasXI.length,
-      listKelasXI: siswaKelasXI.map((s) => ({
-        nama: s.nama,
-        info: `ID: ${s.id} • Kelas: ${s.kelas} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      listKelasXI: siswaKelasXI.map((itemSiswa) => ({
+        nama: itemSiswa.nama,
+        info: `ID: ${itemSiswa.id} • Kelas: ${itemSiswa.kelas} ${itemSiswa.tempatMagang ? `• 📍 ${itemSiswa.tempatMagang}` : ""}`,
       })),
       breakdownKelasXI: buildBreakdown(siswaKelasXI),
       totalKelasXII: siswaKelasXII.length,
-      listKelasXII: siswaKelasXII.map((s) => ({
-        nama: s.nama,
-        info: `ID: ${s.id} • Jurusan/Kelas: ${s.kelas || "XII"} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      listKelasXII: siswaKelasXII.map((itemSiswa) => ({
+        nama: itemSiswa.nama,
+        info: `ID: ${itemSiswa.id} • Jurusan/Kelas: ${itemSiswa.kelas || "XII"} ${itemSiswa.tempatMagang ? `• 📍 ${itemSiswa.tempatMagang}` : ""}`,
       })),
       breakdownKelasXII: buildBreakdown(siswaKelasXII),
       totalSiswaPkl: siswaPkl.length,
-      listSiswaPkl: siswaPkl.map((s) => ({
-        nama: s.nama,
-        info: `ID: ${s.id} • ${s.kelas ? `${s.kelas} • ` : ""}📍 ${s.tempatMagang}`,
+      listSiswaPkl: siswaPkl.map((itemSiswa) => ({
+        nama: itemSiswa.nama,
+        info: `ID: ${itemSiswa.id} • ${itemSiswa.kelas ? `${itemSiswa.kelas} • ` : ""}📍 ${itemSiswa.tempatMagang}`,
       })),
     };
   }, [dataMasterSiswa]);
@@ -619,6 +638,10 @@ export default function DashboardKepalaSekolah() {
   const filteredCardsPkl = useMemo(() => {
     const list = dataPkl.cards || [];
     return list.filter((g) => {
+      // Guru yang 0 siswa seharusnya tidak ada card
+      const siswaList = getSiswaPklList(g);
+      if (!siswaList || siswaList.length === 0) return false;
+
       const matchSearch =
         !searchPkl ||
         (g.namaGuru || "").toLowerCase().includes(searchPkl.toLowerCase()) ||
@@ -626,7 +649,7 @@ export default function DashboardKepalaSekolah() {
         (g.daftarTempat || []).some((t) =>
           t.toLowerCase().includes(searchPkl.toLowerCase()),
         ) ||
-        (g.daftarSiswa || []).some((s) =>
+        siswaList.some((s) =>
           (s.nama || "").toLowerCase().includes(searchPkl.toLowerCase()),
         );
 
@@ -639,7 +662,7 @@ export default function DashboardKepalaSekolah() {
 
       return matchSearch && matchStatus;
     });
-  }, [dataPkl.cards, searchPkl, filterPklStatus]);
+  }, [dataPkl.cards, searchPkl, filterPklStatus, getSiswaPklList]);
 
   // 2. Filter Guru Wali
   const filteredCardsWali = useMemo(() => {
@@ -1094,8 +1117,9 @@ export default function DashboardKepalaSekolah() {
               icon="👥"
               onClick={() =>
                 handleStatCardClick(
-                  "Daftar Seluruh Siswa Memiliki Akun",
+                  "Statistik Akun Siswa — Semua Kelas",
                   statsSiswa.listAkun,
+                  statsSiswa.breakdownAkun,
                 )
               }
             />
@@ -1108,8 +1132,9 @@ export default function DashboardKepalaSekolah() {
               icon="🎒"
               onClick={() =>
                 handleStatCardClick(
-                  "Daftar Siswa Kelas X",
+                  "Statistik Siswa Kelas X",
                   statsSiswa.listKelasX,
+                  statsSiswa.breakdownKelasX,
                 )
               }
             />
@@ -1122,8 +1147,9 @@ export default function DashboardKepalaSekolah() {
               icon="📘"
               onClick={() =>
                 handleStatCardClick(
-                  "Daftar Siswa Kelas XI",
+                  "Statistik Siswa Kelas XI",
                   statsSiswa.listKelasXI,
+                  statsSiswa.breakdownKelasXI,
                 )
               }
             />
@@ -1136,8 +1162,9 @@ export default function DashboardKepalaSekolah() {
               icon="🎓"
               onClick={() =>
                 handleStatCardClick(
-                  "Daftar Siswa Kelas XII (Jurusan)",
+                  "Statistik Siswa Kelas XII (Jurusan PKL)",
                   statsSiswa.listKelasXII,
+                  statsSiswa.breakdownKelasXII,
                 )
               }
             />
@@ -1160,23 +1187,14 @@ export default function DashboardKepalaSekolah() {
             {/* Tab 1: Pembimbing PKL */}
             <button
               onClick={() => handleTabChange("pembimbing")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
                 activeMenuTab === "pembimbing"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
               }`}
             >
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
-                  activeMenuTab === "pembimbing" ? "opacity-15" : "opacity-20"
-                }`}
-              >
-                <span className="text-6xl sm:text-7xl scale-125 rotate-12">
-                  👔
-                </span>
-              </div>
-              <span className="relative z-10 text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span>👔</span>
+              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
+                <span className="text-base sm:text-lg">👔</span>
                 <span className="truncate">Pembimbing PKL</span>
               </span>
             </button>
@@ -1184,23 +1202,14 @@ export default function DashboardKepalaSekolah() {
             {/* Tab 2: Guru Wali */}
             <button
               onClick={() => handleTabChange("wali")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
                 activeMenuTab === "wali"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
               }`}
             >
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
-                  activeMenuTab === "wali" ? "opacity-15" : "opacity-20"
-                }`}
-              >
-                <span className="text-6xl sm:text-7xl scale-125 rotate-12">
-                  👨‍🏫
-                </span>
-              </div>
-              <span className="relative z-10 text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span>👨‍🏫</span>
+              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
+                <span className="text-base sm:text-lg">👨‍🏫</span>
                 <span className="truncate">Guru Wali</span>
               </span>
             </button>
@@ -1208,23 +1217,14 @@ export default function DashboardKepalaSekolah() {
             {/* Tab 3: Guru Mapel */}
             <button
               onClick={() => handleTabChange("mapel")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
                 activeMenuTab === "mapel"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
               }`}
             >
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
-                  activeMenuTab === "mapel" ? "opacity-15" : "opacity-20"
-                }`}
-              >
-                <span className="text-6xl sm:text-7xl scale-125 rotate-12">
-                  📚
-                </span>
-              </div>
-              <span className="relative z-10 text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span>📚</span>
+              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
+                <span className="text-base sm:text-lg">📚</span>
                 <span className="truncate">Guru Mapel</span>
               </span>
             </button>
@@ -1232,23 +1232,14 @@ export default function DashboardKepalaSekolah() {
             {/* Tab 4: Wali Kelas */}
             <button
               onClick={() => handleTabChange("walikelas")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
                 activeMenuTab === "walikelas"
                   ? "scale-[1.01] border border-teal-300 bg-gradient-to-r from-teal-700 via-teal-500 to-emerald-600 text-white shadow-md font-black"
                   : "border border-transparent text-amber-200/90 hover:bg-teal-400/15 hover:text-teal-100 font-bold"
               }`}
             >
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
-                  activeMenuTab === "walikelas" ? "opacity-15" : "opacity-20"
-                }`}
-              >
-                <span className="text-6xl sm:text-7xl scale-125 rotate-12">
-                  🏫
-                </span>
-              </div>
-              <span className="relative z-10 text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span>🏫</span>
+              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
+                <span className="text-base sm:text-lg">🏫</span>
                 <span className="truncate">Wali Kelas</span>
               </span>
             </button>
@@ -1264,39 +1255,39 @@ export default function DashboardKepalaSekolah() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard
                 title="Guru Pembimbing"
-                value={dataPkl.statistik?.totalGuruPembimbing ?? "--"}
+                value={
+                  dataPkl.statistik?.totalGuruPembimbing ??
+                  (dataPkl.cards?.length || "--")
+                }
                 accentColor="border-indigo-500"
                 icon="👔"
                 onClick={() =>
                   handleStatCardClick(
                     "Daftar Guru Pembimbing PKL",
-                    dataPkl.statistik?.listGuruPembimbing,
+                    dataPkl.statistik?.listGuruPembimbing ||
+                      (dataPkl.cards || []).map((g) => ({
+                        nama: g.namaGuru,
+                        info: `ID: ${g.idGuru} • ${g.jumlahSiswa || 0} siswa (${g.jumlahTempat || (g.daftarTempat || []).length} tempat)`,
+                      })),
                   )
                 }
               />
               <StatCard
                 title="Total Siswa PKL"
                 value={
-                  statsSiswa.totalSiswaPkl > 0
+                  dataPkl.statistik?.totalSiswaPkl ??
+                  (statsSiswa.totalSiswaPkl > 0
                     ? statsSiswa.totalSiswaPkl
-                    : (dataPkl.statistik?.totalSiswaPkl ?? "--")
+                    : "--")
                 }
                 accentColor="border-blue-500"
                 icon="👥"
                 onClick={() =>
                   handleStatCardClick(
-                    "Daftar Seluruh Siswa PKL (Memiliki Tempat Magang)",
-                    statsSiswa.listSiswaPkl.length > 0
-                      ? statsSiswa.listSiswaPkl
-                      : (dataPkl.statistik?.listSiswaPkl || []).filter(
-                          (s) =>
-                            (
-                              s.tempatMagang ||
-                              s.tempat ||
-                              s.info ||
-                              ""
-                            ).trim() !== "",
-                        ),
+                    "Daftar Siswa PKL (Memiliki Tempat Magang)",
+                    dataPkl.statistik?.listSiswaPkl?.length > 0
+                      ? dataPkl.statistik.listSiswaPkl
+                      : statsSiswa.listSiswaPkl,
                   )
                 }
               />
@@ -3762,37 +3753,211 @@ export default function DashboardKepalaSekolah() {
       {/* ======================================================= */}
       {statModalConfig.isOpen &&
         (() => {
-          const rawData = statModalConfig.data || [];
+          const allData = statModalConfig.data || [];
+          const breakdown = statModalConfig.breakdownKelas || [];
+          const hasBreakdown = Array.isArray(breakdown) && breakdown.length > 0;
           const q = statModalSearch.toLowerCase().trim();
-          const displayData = q
-            ? rawData.filter((item) => {
-                const nama = typeof item === "object" ? item.nama : item;
-                const info = typeof item === "object" ? item.info : "";
-                return (
-                  (nama || "").toLowerCase().includes(q) ||
-                  (info || "").toLowerCase().includes(q)
-                );
-              })
-            : rawData;
+
+          // -----------------------------------------------------------
+          // KASUS 1: CARD BIASA / MODUL MONITORING EKSEKUTIF (GURU, TEMPAT, JURNAL, DLL)
+          // -----------------------------------------------------------
+          if (!hasBreakdown) {
+            const displayData = q
+              ? allData.filter((item) => {
+                  const nama = typeof item === "object" ? item.nama : item;
+                  const info = typeof item === "object" ? item.info : "";
+                  return (
+                    (nama || "").toLowerCase().includes(q) ||
+                    (info || "").toLowerCase().includes(q)
+                  );
+                })
+              : allData;
+
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all flex flex-col max-h-[85vh]">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
+                    <div>
+                      <h3 className="text-base font-black tracking-tight">
+                        {statModalConfig.title}
+                      </h3>
+                      <p className="text-[11px] text-blue-200 mt-0.5">
+                        Total: {displayData.length}{" "}
+                        {allData.length !== displayData.length
+                          ? `dari ${allData.length} data`
+                          : "data"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setStatModalConfig({
+                          ...statModalConfig,
+                          isOpen: false,
+                        })
+                      }
+                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Input Pencarian */}
+                  {allData.length > 5 && (
+                    <div className="p-3 bg-slate-100 border-b border-slate-200 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                          🔍
+                        </span>
+                        <input
+                          type="text"
+                          value={statModalSearch}
+                          onChange={(e) => setStatModalSearch(e.target.value)}
+                          placeholder="Cari..."
+                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-blue-500 outline-none font-medium"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List Data */}
+                  <div className="p-5 overflow-y-auto flex-1">
+                    {displayData.length > 0 ? (
+                      <ul className="space-y-2.5">
+                        {displayData.map((item, index) => (
+                          <li
+                            key={index}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
+                                {index + 1}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-black text-slate-800 truncate">
+                                  {typeof item === "object" ? item.nama : item}
+                                </p>
+                                {typeof item === "object" && item.info && (
+                                  <p className="text-[11px] font-medium text-slate-500 truncate">
+                                    {item.info}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-center py-8 text-xs font-bold text-slate-400">
+                        {statModalSearch
+                          ? "Tidak ada data yang sesuai dengan pencarian."
+                          : "Belum ada data tersedia pada kategori ini."}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                    <button
+                      onClick={() =>
+                        setStatModalConfig({
+                          ...statModalConfig,
+                          isOpen: false,
+                        })
+                      }
+                      className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // -----------------------------------------------------------
+          // KASUS 2: CARD STATISTIK AKUN SISWA (SHEET SISWA - MEMILIKI BREAKDOWN KELAS)
+          // -----------------------------------------------------------
+          const listByTab = (() => {
+            if (statModalTab === "semua") return allData;
+            if (statModalTab === "X")
+              return allData.filter((item) =>
+                (item.info || "").toUpperCase().match(/KELAS:\s*X[\s\-_]/),
+              );
+            if (statModalTab === "XI")
+              return allData.filter((item) =>
+                (item.info || "").toUpperCase().match(/KELAS:\s*XI[\s\-_]/),
+              );
+            if (statModalTab === "XII")
+              return allData.filter(
+                (item) =>
+                  !(item.info || "")
+                    .toUpperCase()
+                    .match(/KELAS:\s*X[I]?[\s\-_]/) &&
+                  (item.info || "").toUpperCase().includes("KELAS:"),
+              );
+            return allData;
+          })();
+
+          const displayData =
+            statModalTab !== "statistik"
+              ? q
+                ? listByTab.filter((item) => {
+                    const nama = typeof item === "object" ? item.nama : item;
+                    const info = typeof item === "object" ? item.info : "";
+                    return (
+                      (nama || "").toLowerCase().includes(q) ||
+                      (info || "").toLowerCase().includes(q)
+                    );
+                  })
+                : listByTab
+              : [];
+
+          const maxCount =
+            breakdown.length > 0
+              ? Math.max(...breakdown.map((b) => b.count))
+              : 1;
+
+          const tabDefs = [
+            { key: "statistik", label: "📊 Statistik", icon: "📊" },
+            { key: "semua", label: "👥 Semua", icon: "👥" },
+            { key: "X", label: "🎒 Kelas X", icon: "🎒" },
+            { key: "XI", label: "📘 Kelas XI", icon: "📘" },
+            { key: "XII", label: "🎓 Kelas XII", icon: "🎓" },
+          ];
+
+          const barColors = [
+            "bg-blue-600",
+            "bg-sky-500",
+            "bg-indigo-500",
+            "bg-purple-600",
+            "bg-teal-500",
+            "bg-cyan-500",
+            "bg-violet-500",
+            "bg-rose-400",
+          ];
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all flex flex-col max-h-[85vh]">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+                {/* Header */}
                 <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
                   <div>
                     <h3 className="text-base font-black tracking-tight">
                       {statModalConfig.title}
                     </h3>
                     <p className="text-[11px] text-blue-200 mt-0.5">
-                      Total: {displayData.length}{" "}
-                      {rawData.length !== displayData.length
-                        ? `dari ${rawData.length} data`
-                        : "data"}
+                      {statModalTab === "statistik"
+                        ? `${breakdown.length} kelompok kelas/jurusan • ${allData.length} total siswa`
+                        : `${displayData.length}${q ? ` dari ${listByTab.length}` : ""} siswa`}
                     </p>
                   </div>
                   <button
                     onClick={() =>
-                      setStatModalConfig({ ...statModalConfig, isOpen: false })
+                      setStatModalConfig({
+                        ...statModalConfig,
+                        isOpen: false,
+                      })
                     }
                     className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors cursor-pointer"
                   >
@@ -3800,9 +3965,29 @@ export default function DashboardKepalaSekolah() {
                   </button>
                 </div>
 
-                {/* Input Pencarian di Modal */}
-                {rawData.length > 5 && (
-                  <div className="p-3 bg-slate-100 border-b border-slate-200 shrink-0">
+                {/* Tab Bar */}
+                <div className="flex overflow-x-auto bg-slate-100 border-b border-slate-200 shrink-0 gap-0.5 p-1.5">
+                  {tabDefs.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => {
+                        setStatModalTab(t.key);
+                        setStatModalSearch("");
+                      }}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer whitespace-nowrap ${
+                        statModalTab === t.key
+                          ? "bg-blue-900 text-white shadow"
+                          : "text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input Pencarian */}
+                {statModalTab !== "statistik" && allData.length > 5 && (
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 shrink-0">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
                         🔍
@@ -3818,45 +4003,116 @@ export default function DashboardKepalaSekolah() {
                   </div>
                 )}
 
-                <div className="p-5 overflow-y-auto flex-1">
-                  {displayData && displayData.length > 0 ? (
-                    <ul className="space-y-2.5">
-                      {displayData.map((item, index) => (
-                        <li
-                          key={index}
-                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
-                        >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
-                              {index + 1}
-                            </div>
-                            <div className="truncate">
-                              <p className="text-xs font-black text-slate-800 truncate">
-                                {typeof item === "object" ? item.nama : item}
-                              </p>
-                              {typeof item === "object" && item.info && (
-                                <p className="text-[11px] font-medium text-slate-500 truncate">
-                                  {item.info}
-                                </p>
-                              )}
-                            </div>
+                {/* Konten Utama */}
+                <div className="overflow-y-auto flex-1 p-5">
+                  {/* TAB: STATISTIK – BAR CHART */}
+                  {statModalTab === "statistik" && (
+                    <div className="space-y-3">
+                      {breakdown.length === 0 ? (
+                        <p className="text-center py-8 text-xs font-bold text-slate-400">
+                          Data belum tersedia.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-4 px-1">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                              Jumlah Siswa per Kelas / Jurusan
+                            </p>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 font-black px-2 py-0.5 rounded-full">
+                              Total: {allData.length}
+                            </span>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-center py-8 text-xs font-bold text-slate-400">
-                      {statModalSearch
-                        ? "Tidak ada data yang sesuai dengan pencarian."
-                        : "Belum ada data tersedia pada kategori ini."}
-                    </p>
+
+                          {breakdown.map((item, i) => {
+                            const pct =
+                              maxCount > 0
+                                ? Math.max(
+                                    4,
+                                    Math.round((item.count / maxCount) * 100),
+                                  )
+                                : 4;
+                            const color = barColors[i % barColors.length];
+                            return (
+                              <div key={item.kelas} className="group">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[11px] font-black text-slate-700 truncate max-w-[60%]">
+                                    {item.kelas}
+                                  </span>
+                                  <span className="text-[11px] font-black text-slate-500 ml-2 shrink-0">
+                                    {item.count} siswa
+                                    <span className="ml-1 text-slate-300 font-medium">
+                                      (
+                                      {Math.round(
+                                        (item.count / allData.length) * 100,
+                                      )}
+                                      %)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                  <div
+                                    className={`h-full ${color} rounded-full transition-all duration-700 flex items-center justify-end pr-2`}
+                                    style={{ width: `${pct}%` }}
+                                  >
+                                    {pct > 20 && (
+                                      <span className="text-[9px] font-black text-white">
+                                        {item.count}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
                   )}
+
+                  {/* TAB: LIST SISWA */}
+                  {statModalTab !== "statistik" &&
+                    (displayData.length > 0 ? (
+                      <ul className="space-y-2.5">
+                        {displayData.map((item, index) => (
+                          <li
+                            key={index}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
+                                {index + 1}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-black text-slate-800 truncate">
+                                  {typeof item === "object" ? item.nama : item}
+                                </p>
+                                {typeof item === "object" && item.info && (
+                                  <p className="text-[11px] font-medium text-slate-500 truncate">
+                                    {item.info}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-center py-8 text-xs font-bold text-slate-400">
+                        {statModalSearch
+                          ? "Tidak ada data yang sesuai dengan pencarian."
+                          : "Belum ada data tersedia pada kategori ini."}
+                      </p>
+                    ))}
                 </div>
 
+                {/* Footer */}
                 <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
                   <button
                     onClick={() =>
-                      setStatModalConfig({ ...statModalConfig, isOpen: false })
+                      setStatModalConfig({
+                        ...statModalConfig,
+                        isOpen: false,
+                      })
                     }
                     className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all cursor-pointer"
                   >
