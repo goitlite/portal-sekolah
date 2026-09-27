@@ -1096,11 +1096,12 @@ export default function DashboardKepalaSekolah() {
               <span className="text-xl">📊</span>
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Statistik Akun Siswa (Sheet Siswa)
+                  Statistik Akun Siswa
                 </h3>
                 <p className="text-[11px] font-medium text-slate-500">
-                  Data real-time seluruh siswa yang terdaftar di spreadsheet
-                  magang
+                  Data real-time seluruh Akun siswa yang terdaftar, Akun Siswa
+                  dibuat Oleh Guru Pembimbing PKL/Guru Wali/Guru Mapel/Guru
+                  Walas
                 </p>
               </div>
             </div>
@@ -1184,63 +1185,97 @@ export default function DashboardKepalaSekolah() {
           </div>
 
           <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/80 p-1 shadow-inner">
+            <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-12 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent sm:w-16"></div>
+
             {/* Tab 1: Pembimbing PKL */}
             <button
               onClick={() => handleTabChange("pembimbing")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "pembimbing"
-                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
-                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
               }`}
             >
-              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span className="text-base sm:text-lg">👔</span>
-                <span className="truncate">Pembimbing PKL</span>
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "pembimbing" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  👔
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+                Pembimbing PKL
               </span>
             </button>
 
             {/* Tab 2: Guru Wali */}
             <button
               onClick={() => handleTabChange("wali")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "wali"
-                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
-                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
               }`}
             >
-              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span className="text-base sm:text-lg">👨‍🏫</span>
-                <span className="truncate">Guru Wali</span>
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "wali" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  👨‍🏫
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+                Guru Wali
               </span>
             </button>
 
             {/* Tab 3: Guru Mapel */}
             <button
               onClick={() => handleTabChange("mapel")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "mapel"
-                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md font-black"
-                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100 font-bold"
+                  ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
               }`}
             >
-              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span className="text-base sm:text-lg">📚</span>
-                <span className="truncate">Guru Mapel</span>
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "mapel" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  📚
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+                Guru Mapel
               </span>
             </button>
 
             {/* Tab 4: Wali Kelas */}
             <button
               onClick={() => handleTabChange("walikelas")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "walikelas"
-                  ? "scale-[1.01] border border-teal-300 bg-gradient-to-r from-teal-700 via-teal-500 to-emerald-600 text-white shadow-md font-black"
-                  : "border border-transparent text-amber-200/90 hover:bg-teal-400/15 hover:text-teal-100 font-bold"
+                  ? "scale-[1.01] border border-teal-300 bg-gradient-to-r from-teal-700 via-teal-500 to-emerald-600 text-white shadow-md"
+                  : "border border-transparent text-amber-200/90 hover:bg-teal-400/15 hover:text-teal-100"
               }`}
             >
-              <span className="text-[11px] sm:text-sm uppercase leading-tight tracking-wide drop-shadow-sm flex items-center gap-1.5">
-                <span className="text-base sm:text-lg">🏫</span>
-                <span className="truncate">Wali Kelas</span>
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none z-0 ${
+                  activeMenuTab === "walikelas" ? "opacity-10" : "opacity-20"
+                }`}
+              >
+                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                  🏫
+                </span>
+              </div>
+              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+                Wali Kelas
               </span>
             </button>
           </div>
