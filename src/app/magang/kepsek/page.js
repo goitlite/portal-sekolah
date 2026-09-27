@@ -16,6 +16,8 @@ import {
   getDashboardKepsekMapel,
   getDashboardKepsekWaliKelas,
   getPresensiWaliGrid,
+  getSiswa,
+  getMonitoringGuru,
 } from "../lib/api";
 import { generateLaporanWaliKelasPDF } from "../guru/guru-wali-kelas/generateLaporanWaliKelasPDF";
 
@@ -112,6 +114,22 @@ export default function DashboardKepalaSekolah() {
   // --- STATE PREVIEW FOTO / LIGHTBOX ---
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
+  // --- STATE DATA MASTER SISWA SPREADSHEET (SEMUA KELAS) ---
+  const [dataMasterSiswa, setDataMasterSiswa] = useState([]);
+  const [loadingMasterSiswa, setLoadingMasterSiswa] = useState(false);
+
+  // --- STATE MODAL MONITORING GURU PEMBIMBING ---
+  const [selectedMonitoringGuru, setSelectedMonitoringGuru] = useState(null);
+  const [monitoringList, setMonitoringList] = useState([]);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [errorMonitoring, setErrorMonitoring] = useState("");
+  const monitoringCacheRef = useRef({});
+
+  // --- STATE PENCARIAN DI DALAM MODAL STATISTIK SISWA ---
+  const [statModalSearch, setStatModalSearch] = useState("");
+  // --- STATE TAB AKTIF DI MODAL STATISTIK: "statistik" | "semua" | "X" | "XI" | "XII" ---
+  const [statModalTab, setStatModalTab] = useState("statistik");
+
   // =========================================================
   // 1. STATE & DATA TAB: PEMBIMBING PKL
   // =========================================================
@@ -191,6 +209,82 @@ export default function DashboardKepalaSekolah() {
   // =========================================================
   // FETCH HANDLERS PER TAB (DENGAN CACHING SESSIONSTORAGE)
   // =========================================================
+
+  // 0. Load Data Master Siswa Spreadsheet (Sheet SISWA)
+  const loadMasterSiswa = useCallback(async (forceRefresh = false) => {
+    const cacheKey = "kepsek_cache_master_siswa";
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDataMasterSiswa(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Gagal membaca cache master siswa:", e);
+      }
+    }
+
+    setLoadingMasterSiswa(true);
+    try {
+      const res = await getSiswa();
+      if (res && res.success && Array.isArray(res.data)) {
+        setDataMasterSiswa(res.data);
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error("Error load master siswa Kepsek:", err);
+    } finally {
+      setLoadingMasterSiswa(false);
+    }
+  }, []);
+
+  // Handler Buka Modal Monitoring Guru Pembimbing
+  const handleOpenMonitoring = useCallback(async (guru) => {
+    if (!guru) return;
+    setSelectedMonitoringGuru(guru);
+    setErrorMonitoring("");
+
+    const idGuru = String(guru.idGuru || guru.id || "").trim();
+    if (monitoringCacheRef.current[idGuru]) {
+      setMonitoringList(monitoringCacheRef.current[idGuru]);
+      setLoadingMonitoring(false);
+      return;
+    }
+
+    setLoadingMonitoring(true);
+    setMonitoringList([]);
+    try {
+      const res = await getMonitoringGuru(idGuru, 50);
+      if (res && res.success && Array.isArray(res.data)) {
+        setMonitoringList(res.data);
+        monitoringCacheRef.current[idGuru] = res.data;
+      } else {
+        setMonitoringList([]);
+        if (res?.message && !res.message.includes("tidak ditemukan")) {
+          setErrorMonitoring(res.message);
+        }
+      }
+    } catch (err) {
+      console.error("Gagal memuat monitoring guru:", err);
+      setErrorMonitoring("Gagal menghubungi server untuk data monitoring.");
+    } finally {
+      setLoadingMonitoring(false);
+    }
+  }, []);
+
+  // Helper filter daftar siswa PKL valid (punya kolom tempat magang terisi)
+  const getSiswaPklList = useCallback((guru) => {
+    return (guru?.daftarSiswa || []).filter((s) => {
+      const t = String(s.tempatMagang || s.tempat || "").trim();
+      return t !== "" && t !== "-";
+    });
+  }, []);
 
   // 1. Load Data PKL
   const loadPklData = useCallback(async (forceRefresh = false) => {
@@ -385,12 +479,13 @@ export default function DashboardKepalaSekolah() {
   useEffect(() => {
     if (!isReady) return;
     const timer = setTimeout(() => {
+      loadMasterSiswa(false);
       if (!loadedPkl) {
         loadPklData(false);
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [isReady, loadedPkl, loadPklData]);
+  }, [isReady, loadedPkl, loadPklData, loadMasterSiswa]);
 
   function handleLogout() {
     if (!confirm("Keluar dari Portal Kepala Sekolah?")) return;
@@ -398,18 +493,123 @@ export default function DashboardKepalaSekolah() {
     sessionStorage.removeItem("kepsek_cache_wali");
     sessionStorage.removeItem("kepsek_cache_mapel");
     sessionStorage.removeItem("kepsek_cache_walikelas");
+    sessionStorage.removeItem("kepsek_cache_master_siswa");
     logout();
     router.replace("/magang/login");
   }
 
   // --- KLIK CARD STATISTIK -> BUKA MODAL DAFTAR NAMA ---
-  function handleStatCardClick(title, listData) {
+  function handleStatCardClick(title, listData, breakdownKelas) {
+    setStatModalSearch("");
+    setStatModalTab("statistik");
     setStatModalConfig({
       isOpen: true,
       title,
       data: listData || [],
+      breakdownKelas: breakdownKelas || [],
     });
   }
+
+  // --- STATISTIK DATA SISWA MASTER SPREADSHEET (SHEET SISWA) ---
+  const statsSiswa = useMemo(() => {
+    const list = dataMasterSiswa || [];
+
+    const normalized = list.map((s) => {
+      const id = String(s.ID || s.id || s.ID_SISWA || s.idSiswa || "").trim();
+      const rawNama = String(s.NAMA || s.nama || s.NAMA_SISWA || "").trim();
+      const tempat = String(
+        s.TEMPAT_MAGANG || s.tempatMagang || s.TEMPAT || s.tempat || "",
+      ).trim();
+      const match = rawNama.match(/(.+?)\s*\[(.*?)\]/);
+      const nama = match ? match[1].trim() : rawNama;
+      const kelas = match
+        ? match[2].trim()
+        : String(s.KELAS || s.kelas || "").trim();
+      return {
+        id,
+        nama,
+        rawNama,
+        kelas,
+        tempatMagang: tempat,
+        status: String(s.STATUS || s.status || "").trim(),
+        idGuru: String(s.ID_GURU || s.idGuru || "").trim(),
+        namaGuru: String(s.NAMA_GURU || s.namaGuru || "").trim(),
+      };
+    });
+
+    // 1. Seluruh siswa yang punya akun (memiliki ID)
+    const siswaPunyaAkun = normalized.filter((s) => s.id !== "");
+
+    // 2. Siswa Kelas X: [X ...] atau kelas berawalan 'X ' / 'X-' / 'X' / '10'
+    const siswaKelasX = siswaPunyaAkun.filter((s) => {
+      const k = s.kelas.toUpperCase();
+      return /^X[\s\-_]/.test(k) || /^X$/.test(k) || /^10[\s\-_]/.test(k);
+    });
+
+    // 3. Siswa Kelas XI: [XI ...] atau kelas berawalan 'XI ' / 'XI-' / 'XI' / '11'
+    const siswaKelasXI = siswaPunyaAkun.filter((s) => {
+      const k = s.kelas.toUpperCase();
+      return /^XI[\s\-_]/.test(k) || /^XI$/.test(k) || /^11[\s\-_]/.test(k);
+    });
+
+    // 4. Siswa Kelas XII: inputnya teks tanpa angka X dan XI (atau XII)
+    const siswaKelasXII = siswaPunyaAkun.filter((s) => {
+      const k = s.kelas.toUpperCase();
+      const isX = /^X[\s\-_]/.test(k) || /^X$/.test(k) || /^10[\s\-_]/.test(k);
+      const isXI =
+        /^XI[\s\-_]/.test(k) || /^XI$/.test(k) || /^11[\s\-_]/.test(k);
+      return !isX && !isXI;
+    });
+
+    // 5. Total Siswa PKL: wajib memiliki data tempat magang terisi
+    const siswaPkl = siswaPunyaAkun.filter(
+      (s) => s.tempatMagang !== "" && s.tempatMagang !== "-",
+    );
+
+    // Helper: buat breakdown jumlah siswa per kelas/jurusan dari sebuah list
+    function buildBreakdown(siswaList) {
+      const map = {};
+      siswaList.forEach((s) => {
+        const k = s.kelas || "—";
+        if (!map[k]) map[k] = { kelas: k, count: 0, siswaList: [] };
+        map[k].count++;
+        map[k].siswaList.push(s);
+      });
+      return Object.values(map).sort((a, b) => b.count - a.count);
+    }
+
+    return {
+      totalAkun: siswaPunyaAkun.length,
+      listAkun: siswaPunyaAkun.map((s) => ({
+        nama: s.nama,
+        info: `ID: ${s.id} • Kelas: ${s.kelas || "XII"} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : "• Belum Magang"}`,
+      })),
+      breakdownAkun: buildBreakdown(siswaPunyaAkun),
+      totalKelasX: siswaKelasX.length,
+      listKelasX: siswaKelasX.map((s) => ({
+        nama: s.nama,
+        info: `ID: ${s.id} • Kelas: ${s.kelas} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasX: buildBreakdown(siswaKelasX),
+      totalKelasXI: siswaKelasXI.length,
+      listKelasXI: siswaKelasXI.map((s) => ({
+        nama: s.nama,
+        info: `ID: ${s.id} • Kelas: ${s.kelas} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasXI: buildBreakdown(siswaKelasXI),
+      totalKelasXII: siswaKelasXII.length,
+      listKelasXII: siswaKelasXII.map((s) => ({
+        nama: s.nama,
+        info: `ID: ${s.id} • Jurusan/Kelas: ${s.kelas || "XII"} ${s.tempatMagang ? `• 📍 ${s.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasXII: buildBreakdown(siswaKelasXII),
+      totalSiswaPkl: siswaPkl.length,
+      listSiswaPkl: siswaPkl.map((s) => ({
+        nama: s.nama,
+        info: `ID: ${s.id} • ${s.kelas ? `${s.kelas} • ` : ""}📍 ${s.tempatMagang}`,
+      })),
+    };
+  }, [dataMasterSiswa]);
 
   // =========================================================
   // FILTER DATA PER TAB
@@ -850,6 +1050,7 @@ export default function DashboardKepalaSekolah() {
               </span>
               <button
                 onClick={() => {
+                  loadMasterSiswa(true);
                   if (activeMenuTab === "pembimbing") loadPklData(true);
                   if (activeMenuTab === "wali") loadWaliData(true);
                   if (activeMenuTab === "mapel") loadMapelData(true);
@@ -860,6 +1061,86 @@ export default function DashboardKepalaSekolah() {
                 <span>🔄</span> Segarkan Data
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* ======================================================= */}
+        {/* 2.5 STATISTIK AKUN SISWA SPREADSHEET (SEMUA KELAS) */}
+        {/* ======================================================= */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                  Statistik Akun Siswa (Sheet Siswa)
+                </h3>
+                <p className="text-[11px] font-medium text-slate-500">
+                  Data real-time seluruh siswa yang terdaftar di spreadsheet
+                  magang
+                </p>
+              </div>
+            </div>
+            <span className="hidden sm:inline-block text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
+              💡 Klik kartu untuk melihat daftar siswa
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard
+              title="Seluruh Siswa (Akun)"
+              value={loadingMasterSiswa ? "..." : statsSiswa.totalAkun || "--"}
+              accentColor="border-blue-600"
+              icon="👥"
+              onClick={() =>
+                handleStatCardClick(
+                  "Daftar Seluruh Siswa Memiliki Akun",
+                  statsSiswa.listAkun,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas X"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasX ?? "--")
+              }
+              accentColor="border-sky-500"
+              icon="🎒"
+              onClick={() =>
+                handleStatCardClick(
+                  "Daftar Siswa Kelas X",
+                  statsSiswa.listKelasX,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas XI"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasXI ?? "--")
+              }
+              accentColor="border-indigo-500"
+              icon="📘"
+              onClick={() =>
+                handleStatCardClick(
+                  "Daftar Siswa Kelas XI",
+                  statsSiswa.listKelasXI,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas XII"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasXII ?? "--")
+              }
+              accentColor="border-purple-600"
+              icon="🎓"
+              onClick={() =>
+                handleStatCardClick(
+                  "Daftar Siswa Kelas XII (Jurusan)",
+                  statsSiswa.listKelasXII,
+                )
+              }
+            />
           </div>
         </div>
 
@@ -995,13 +1276,27 @@ export default function DashboardKepalaSekolah() {
               />
               <StatCard
                 title="Total Siswa PKL"
-                value={dataPkl.statistik?.totalSiswaPkl ?? "--"}
+                value={
+                  statsSiswa.totalSiswaPkl > 0
+                    ? statsSiswa.totalSiswaPkl
+                    : (dataPkl.statistik?.totalSiswaPkl ?? "--")
+                }
                 accentColor="border-blue-500"
                 icon="👥"
                 onClick={() =>
                   handleStatCardClick(
-                    "Daftar Seluruh Siswa PKL",
-                    dataPkl.statistik?.listSiswaPkl,
+                    "Daftar Seluruh Siswa PKL (Memiliki Tempat Magang)",
+                    statsSiswa.listSiswaPkl.length > 0
+                      ? statsSiswa.listSiswaPkl
+                      : (dataPkl.statistik?.listSiswaPkl || []).filter(
+                          (s) =>
+                            (
+                              s.tempatMagang ||
+                              s.tempat ||
+                              s.info ||
+                              ""
+                            ).trim() !== "",
+                        ),
                   )
                 }
               />
@@ -1097,84 +1392,117 @@ export default function DashboardKepalaSekolah() {
 
             {!loadingPkl && filteredCardsPkl.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCardsPkl.map((guru) => (
-                  <div
-                    key={guru.idGuru}
-                    onClick={() => setSelectedGuruPkl(guru)}
-                    className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center font-black text-sm shadow">
-                            {guru.namaGuru.substring(0, 2).toUpperCase()}
+                {filteredCardsPkl.map((guru) => {
+                  const siswaPklCount = getSiswaPklList(guru).length;
+                  return (
+                    <div
+                      key={guru.idGuru}
+                      onClick={() => setSelectedGuruPkl(guru)}
+                      className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center font-black text-sm shadow">
+                              {guru.namaGuru.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
+                                {guru.namaGuru}
+                              </h4>
+                              <p className="text-[11px] font-medium text-slate-400">
+                                ID: {guru.idGuru}
+                              </p>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
+                              guru.sudahIsiJurnal
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}
+                          >
+                            {guru.sudahIsiJurnal
+                              ? "Aktif Jurnal"
+                              : "Belum Jurnal"}
+                          </span>
+                        </div>
+
+                        {/* Info Siswa & Tempat & Monitoring */}
+                        <div className="mt-4 grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                              Siswa PKL
+                            </p>
+                            <p className="text-xs font-black text-slate-800">
+                              {siswaPklCount} Siswa
+                            </p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
-                              {guru.namaGuru}
-                            </h4>
-                            <p className="text-[11px] font-medium text-slate-400">
-                              ID: {guru.idGuru}
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                              DUDI / Tempat
+                            </p>
+                            <p className="text-xs font-black text-slate-800">
+                              {guru.jumlahTempat} Lokasi
+                            </p>
+                          </div>
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenMonitoring(guru);
+                            }}
+                            className="cursor-pointer hover:bg-emerald-50 rounded-lg p-0.5 transition-colors group/mon"
+                            title="Klik untuk melihat foto dan keterangan monitoring"
+                          >
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-0.5">
+                              <span>📷</span> Monitoring
+                            </p>
+                            <p className="text-xs font-black text-emerald-700 underline decoration-dotted group-hover/mon:text-emerald-800">
+                              {guru.totalMonitoring || 0}x Laporan
                             </p>
                           </div>
                         </div>
 
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
-                            guru.sudahIsiJurnal
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}
+                        {/* Jurnal Terakhir */}
+                        <div className="mt-3">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                            Jurnal Terakhir:
+                          </p>
+                          <p className="text-xs font-semibold text-slate-700 line-clamp-1">
+                            {guru.jurnalTerakhir?.materi ||
+                              "Belum ada materi tercatat"}
+                          </p>
+                          {guru.jurnalTerakhir?.tanggal && (
+                            <p className="text-[10px] text-slate-400">
+                              📅{" "}
+                              {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenMonitoring(guru);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 transition-colors shadow-xs active:scale-95"
                         >
-                          {guru.sudahIsiJurnal
-                            ? "Aktif Jurnal"
-                            : "Belum Jurnal"}
-                        </span>
-                      </div>
+                          <span>📷</span>
+                          <span>Monitoring ({guru.totalMonitoring || 0})</span>
+                        </button>
 
-                      {/* Info Siswa & Tempat */}
-                      <div className="mt-4 grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
-                            Bimbingan
-                          </p>
-                          <p className="text-xs font-black text-slate-800">
-                            {guru.jumlahSiswa} Siswa
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
-                            DUDI / Tempat
-                          </p>
-                          <p className="text-xs font-black text-slate-800">
-                            {guru.jumlahTempat} Lokasi
-                          </p>
+                        <div className="flex items-center gap-1 font-black text-blue-600 group-hover:translate-x-1 transition-transform">
+                          <span>Rincian</span>
+                          <span>→</span>
                         </div>
                       </div>
-
-                      {/* Jurnal Terakhir */}
-                      <div className="mt-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
-                          Jurnal Terakhir:
-                        </p>
-                        <p className="text-xs font-semibold text-slate-700 line-clamp-1">
-                          {guru.jurnalTerakhir?.materi ||
-                            "Belum ada materi tercatat"}
-                        </p>
-                        {guru.jurnalTerakhir?.tanggal && (
-                          <p className="text-[10px] text-slate-400">
-                            📅 {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
-                          </p>
-                        )}
-                      </div>
                     </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-black text-blue-600 group-hover:translate-x-1 transition-transform">
-                      <span>Lihat Rincian & Siswa</span>
-                      <span>→</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1930,27 +2258,45 @@ export default function DashboardKepalaSekolah() {
                   {selectedGuruPkl.namaGuru}
                 </h4>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Membimbing {selectedGuruPkl.jumlahSiswa} siswa di{" "}
-                  {selectedGuruPkl.jumlahTempat} tempat PKL
+                  Membimbing {getSiswaPklList(selectedGuruPkl).length} siswa PKL
+                  di {selectedGuruPkl.jumlahTempat} tempat PKL
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 rounded-xl bg-blue-100 text-blue-800 text-xs font-black">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 text-xs font-black">
                   📝 {selectedGuruPkl.jumlahJurnal} Jurnal PKL
                 </span>
-                <span className="px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-black">
-                  📷 {selectedGuruPkl.totalMonitoring}x Monitoring
-                </span>
+                <button
+                  type="button"
+                  onClick={() => handleOpenMonitoring(selectedGuruPkl)}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-600/20"
+                >
+                  <span>📷</span>
+                  <span>
+                    {selectedGuruPkl.totalMonitoring || 0}x Monitoring (Lihat
+                    Foto & Keterangan)
+                  </span>
+                </button>
               </div>
             </div>
 
             {/* TABEL / DAFTAR SISWA BIMBINGAN */}
             <div>
-              <h5 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
-                <span>👥</span> Daftar Siswa Bimbingan (
-                {selectedGuruPkl.daftarSiswa?.length || 0})
-              </h5>
+              <div className="flex items-center justify-between mb-2">
+                <h5 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <span>👥</span> Daftar Siswa Bimbingan (
+                  {getSiswaPklList(selectedGuruPkl).length} Siswa PKL)
+                </h5>
+                <button
+                  type="button"
+                  onClick={() => handleOpenMonitoring(selectedGuruPkl)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <span>📷</span>
+                  <span>Buka Foto & Keterangan</span>
+                </button>
+              </div>
               <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0">
@@ -1974,7 +2320,15 @@ export default function DashboardKepalaSekolah() {
                           {s.kelas || "-"}
                         </td>
                         <td className="p-2.5 text-slate-600">
-                          📍 {s.tempat || "Belum ditentukan"}
+                          {s.tempat || s.tempatMagang ? (
+                            <span className="font-semibold text-slate-800">
+                              📍 {s.tempat || s.tempatMagang}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                              Belum Ditentukan
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -2049,9 +2403,9 @@ export default function DashboardKepalaSekolah() {
                       <div className="pt-1">
                         <button
                           onClick={() => setLightboxUrl(j.fotoUrl)}
-                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
                         >
-                          📷 Lihat Foto Dokumentasi
+                          📷 Lihat Foto Dokumentasi Jurnal
                         </button>
                       </div>
                     )}
@@ -2059,6 +2413,235 @@ export default function DashboardKepalaSekolah() {
                 ))}
               </div>
             </div>
+          </div>
+        </ModalWrapper>
+      )}
+
+      {/* ======================================================= */}
+      {/* MODAL MONITORING GURU PEMBIMBING (FOTO & KETERANGAN) */}
+      {/* ======================================================= */}
+      {selectedMonitoringGuru && (
+        <ModalWrapper
+          title={`Laporan Monitoring PKL: ${selectedMonitoringGuru.namaGuru}`}
+          onClose={() => setSelectedMonitoringGuru(null)}
+        >
+          <div className="space-y-6">
+            {/* Header Guru */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">
+                  ID Guru: {selectedMonitoringGuru.idGuru}
+                </p>
+                <h4 className="text-lg font-black text-slate-800">
+                  {selectedMonitoringGuru.namaGuru}
+                </h4>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Membimbing {getSiswaPklList(selectedMonitoringGuru).length}{" "}
+                  siswa PKL di {selectedMonitoringGuru.jumlahTempat} tempat PKL
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-black shadow-xs flex items-center gap-1.5">
+                  <span>📷</span>
+                  <span>{monitoringList.length} Laporan Monitoring</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idGuru = String(
+                      selectedMonitoringGuru.idGuru ||
+                        selectedMonitoringGuru.id ||
+                        "",
+                    ).trim();
+                    delete monitoringCacheRef.current[idGuru];
+                    handleOpenMonitoring(selectedMonitoringGuru);
+                  }}
+                  title="Segarkan data monitoring guru ini"
+                  className="p-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors text-xs font-bold cursor-pointer"
+                >
+                  🔄
+                </button>
+              </div>
+            </div>
+
+            {/* Loading State */}
+            {loadingMonitoring && (
+              <div className="text-center py-12 space-y-3">
+                <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-xs font-bold text-slate-500">
+                  Mengambil foto & keterangan monitoring guru dari
+                  spreadsheet...
+                </p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {!loadingMonitoring && errorMonitoring && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-between">
+                <p className="text-xs font-bold">⚠️ {errorMonitoring}</p>
+                <button
+                  onClick={() => handleOpenMonitoring(selectedMonitoringGuru)}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loadingMonitoring &&
+              !errorMonitoring &&
+              monitoringList.length === 0 && (
+                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 space-y-2">
+                  <span className="text-4xl">📷</span>
+                  <h5 className="text-sm font-black text-slate-700">
+                    Belum Ada Data Monitoring
+                  </h5>
+                  <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
+                    Guru pembimbing ini belum mengunggah foto maupun keterangan
+                    kunjungan monitoring ke tempat magang.
+                  </p>
+                </div>
+              )}
+
+            {/* Daftar Laporan Monitoring (Foto & Keterangan) */}
+            {!loadingMonitoring &&
+              !errorMonitoring &&
+              monitoringList.length > 0 && (
+                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+                  {monitoringList.map((m, idx) => {
+                    const fotoUrl = m.FOTO || m.fotoUrl || m.foto || "";
+                    const optimizedUrl = optimizeFotoUrl(fotoUrl, 700);
+                    const tanggalStr =
+                      m.TIMESTAMP ||
+                      m.timestamp ||
+                      m.TANGGAL ||
+                      m.tanggal ||
+                      "";
+                    const tempatMagang =
+                      m.TEMPAT_MAGANG || m.tempatMagang || m.tempat || "-";
+                    const keteranganStr = m.KETERANGAN || m.keterangan || "";
+                    const statusStr = m.STATUS || m.status || "BERSAMA SISWA";
+                    const mapUrl =
+                      m.MAP ||
+                      m.mapUrl ||
+                      (m.LATITUDE && m.LONGITUDE
+                        ? `https://www.google.com/maps?q=${m.LATITUDE},${m.LONGITUDE}`
+                        : null);
+
+                    return (
+                      <div
+                        key={idx}
+                        className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-5 space-y-4 hover:border-emerald-300 transition-colors"
+                      >
+                        {/* Bar Info Kunjungan */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <span className="text-xs font-black text-slate-800 block">
+                                📍 {tempatMagang}
+                              </span>
+                              <span className="text-[11px] font-medium text-slate-400">
+                                📅 {formatTanggalIndo(tanggalStr)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase tracking-wide">
+                              {statusStr}
+                            </span>
+                            {mapUrl && (
+                              <a
+                                href={mapUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold inline-flex items-center gap-1 transition-colors"
+                              >
+                                <span>🗺️</span> Peta GPS
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Konten Grid: Foto & Keterangan */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                          {/* Foto Monitoring */}
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                              <span>📷</span> Foto Monitoring Lapangan:
+                            </p>
+                            {fotoUrl ? (
+                              <div
+                                onClick={() => setLightboxUrl(fotoUrl)}
+                                className="group/img relative w-full h-56 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 shadow-inner cursor-pointer"
+                              >
+                                <img
+                                  src={optimizedUrl}
+                                  alt={`Monitoring ${tempatMagang}`}
+                                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-end justify-between p-3 text-white">
+                                  <span className="text-xs font-bold">
+                                    🔍 Klik Perbesar
+                                  </span>
+                                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded backdrop-blur-xs font-medium">
+                                    Buka Lightbox
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-40 rounded-xl bg-slate-100 border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs">
+                                <span className="text-2xl mb-1">📷</span>
+                                <span>Tidak ada foto terlampir</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Keterangan Monitoring */}
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                              <span>📝</span> Keterangan / Laporan Pembimbing:
+                            </p>
+                            <div className="bg-amber-50/50 border border-amber-200/80 rounded-xl p-4 min-h-[140px] flex flex-col justify-between">
+                              <p className="text-xs sm:text-sm font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                {keteranganStr ? (
+                                  `"${keteranganStr}"`
+                                ) : (
+                                  <span className="italic text-slate-400">
+                                    (Tidak ada keterangan tertulis pada saat
+                                    monitoring)
+                                  </span>
+                                )}
+                              </p>
+                              <div className="pt-3 border-t border-amber-100 text-[10px] text-amber-800/80 font-bold flex items-center justify-between">
+                                <span>SMKN 1 Teluk Kuantan</span>
+                                <span>Laporan Resmi Monitoring</span>
+                              </div>
+                            </div>
+
+                            {m.LATITUDE && m.LONGITUDE && (
+                              <div className="text-[11px] font-medium text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                                <span className="font-bold text-slate-600">
+                                  Koordinat GPS:
+                                </span>
+                                <span className="font-mono text-[10px] text-slate-700">
+                                  {m.LATITUDE}, {m.LONGITUDE}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
           </div>
         </ModalWrapper>
       )}
@@ -3177,69 +3760,113 @@ export default function DashboardKepalaSekolah() {
       {/* ======================================================= */}
       {/* POP-UP MODAL STATISTIK (KLIK DARI STAT CARD) */}
       {/* ======================================================= */}
-      {statModalConfig.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all">
-            <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800">
-              <h3 className="text-base font-black tracking-tight">
-                {statModalConfig.title}
-              </h3>
-              <button
-                onClick={() =>
-                  setStatModalConfig({ ...statModalConfig, isOpen: false })
-                }
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
+      {statModalConfig.isOpen &&
+        (() => {
+          const rawData = statModalConfig.data || [];
+          const q = statModalSearch.toLowerCase().trim();
+          const displayData = q
+            ? rawData.filter((item) => {
+                const nama = typeof item === "object" ? item.nama : item;
+                const info = typeof item === "object" ? item.info : "";
+                return (
+                  (nama || "").toLowerCase().includes(q) ||
+                  (info || "").toLowerCase().includes(q)
+                );
+              })
+            : rawData;
 
-            <div className="p-5 max-h-[65vh] overflow-y-auto">
-              {statModalConfig.data && statModalConfig.data.length > 0 ? (
-                <ul className="space-y-2.5">
-                  {statModalConfig.data.map((item, index) => (
-                    <li
-                      key={index}
-                      className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
-                          {index + 1}
-                        </div>
-                        <div className="truncate">
-                          <p className="text-xs font-black text-slate-800 truncate">
-                            {typeof item === "object" ? item.nama : item}
-                          </p>
-                          {typeof item === "object" && item.info && (
-                            <p className="text-[11px] font-medium text-slate-500 truncate">
-                              {item.info}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-center py-8 text-xs font-bold text-slate-400">
-                  Belum ada data tersedia pada kategori ini.
-                </p>
-              )}
-            </div>
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all flex flex-col max-h-[85vh]">
+                <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
+                  <div>
+                    <h3 className="text-base font-black tracking-tight">
+                      {statModalConfig.title}
+                    </h3>
+                    <p className="text-[11px] text-blue-200 mt-0.5">
+                      Total: {displayData.length}{" "}
+                      {rawData.length !== displayData.length
+                        ? `dari ${rawData.length} data`
+                        : "data"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setStatModalConfig({ ...statModalConfig, isOpen: false })
+                    }
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() =>
-                  setStatModalConfig({ ...statModalConfig, isOpen: false })
-                }
-                className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all"
-              >
-                Tutup
-              </button>
+                {/* Input Pencarian di Modal */}
+                {rawData.length > 5 && (
+                  <div className="p-3 bg-slate-100 border-b border-slate-200 shrink-0">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                        🔍
+                      </span>
+                      <input
+                        type="text"
+                        value={statModalSearch}
+                        onChange={(e) => setStatModalSearch(e.target.value)}
+                        placeholder="Cari nama, ID, kelas, atau tempat..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-blue-500 outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-5 overflow-y-auto flex-1">
+                  {displayData && displayData.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {displayData.map((item, index) => (
+                        <li
+                          key={index}
+                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
+                              {index + 1}
+                            </div>
+                            <div className="truncate">
+                              <p className="text-xs font-black text-slate-800 truncate">
+                                {typeof item === "object" ? item.nama : item}
+                              </p>
+                              {typeof item === "object" && item.info && (
+                                <p className="text-[11px] font-medium text-slate-500 truncate">
+                                  {item.info}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-center py-8 text-xs font-bold text-slate-400">
+                      {statModalSearch
+                        ? "Tidak ada data yang sesuai dengan pencarian."
+                        : "Belum ada data tersedia pada kategori ini."}
+                    </p>
+                  )}
+                </div>
+
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                  <button
+                    onClick={() =>
+                      setStatModalConfig({ ...statModalConfig, isOpen: false })
+                    }
+                    className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* ======================================================= */}
       {/* LIGHTBOX FOTO */}
@@ -3278,6 +3905,9 @@ function StatCard({ title, value, accentColor, icon, onClick }) {
     "border-blue-500": "from-blue-600 via-sky-700 to-indigo-800",
     "border-amber-500": "from-amber-500 via-orange-500 to-amber-700",
     "border-teal-500": "from-teal-600 via-teal-700 to-emerald-800",
+    "border-blue-600": "from-blue-700 via-blue-800 to-indigo-950",
+    "border-sky-500": "from-sky-500 via-cyan-600 to-blue-700",
+    "border-purple-600": "from-purple-600 via-violet-700 to-indigo-900",
   };
 
   const bg = bgMap[accentColor] || "from-slate-700 to-slate-800";

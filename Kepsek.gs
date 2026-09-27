@@ -446,10 +446,9 @@ function getDashboardKepsekPkl(params) {
     const statistik = {
       totalGuruPembimbing:
         guruAktifPkl.length > 0 ? guruAktifPkl.length : allGuru.length,
-      totalSiswaPkl:
-        allSiswaPkl.filter(function (s) {
-          return !!s.tempatMagang;
-        }).length || allSiswaPkl.length,
+      totalSiswaPkl: allSiswaPkl.filter(function (s) {
+        return !!s.tempatMagang;
+      }).length,
       totalTempatPkl: Object.keys(tempatSet).length,
       totalJurnalPkl: jurnalRows.length,
       totalMonitoring: monitoringRows.length,
@@ -462,12 +461,16 @@ function getDashboardKepsekPkl(params) {
           info: g.jumlahSiswa + " siswa (" + g.jumlahTempat + " tempat)",
         };
       }),
-      listSiswaPkl: allSiswaPkl.map(function (s) {
-        return {
-          nama: s.nama,
-          info: (s.kelas ? s.kelas + " • " : "") + (s.tempatMagang || "Magang"),
-        };
-      }),
+      listSiswaPkl: allSiswaPkl
+        .filter(function (s) {
+          return !!s.tempatMagang;
+        })
+        .map(function (s) {
+          return {
+            nama: s.nama,
+            info: (s.kelas ? s.kelas + " • " : "") + "📍 " + s.tempatMagang,
+          };
+        }),
       listTempatPkl: Object.keys(tempatSet).map(function (t) {
         return { nama: t, info: tempatSet[t] + " siswa" };
       }),
