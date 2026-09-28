@@ -1460,19 +1460,22 @@ export default function DashboardKepalaSekolah() {
                     <div
                       key={guru.idGuru}
                       onClick={() => setSelectedGuruPkl(guru)}
-                      className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between"
+                      className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
                     >
-                      <div>
+                      {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
+                      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                      <div className="relative z-10">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center font-black text-sm shadow">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
                               {guru.namaGuru.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
+                              <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
                                 {guru.namaGuru}
                               </h4>
-                              <p className="text-[11px] font-medium text-slate-400">
+                              <p className="text-[11px] font-medium text-blue-300">
                                 ID: {guru.idGuru}
                               </p>
                             </div>
@@ -1481,8 +1484,8 @@ export default function DashboardKepalaSekolah() {
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
                               guru.sudahIsiJurnal
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                : "bg-rose-500/20 text-rose-300 border-rose-400/30"
                             }`}
                           >
                             {guru.sudahIsiJurnal
@@ -1492,20 +1495,20 @@ export default function DashboardKepalaSekolah() {
                         </div>
 
                         {/* Info Siswa & Tempat & Monitoring */}
-                        <div className="mt-4 grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <div className="mt-4 grid grid-cols-3 gap-2 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
                           <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
                               Siswa PKL
                             </p>
-                            <p className="text-xs font-black text-slate-800">
+                            <p className="text-xs font-black text-white">
                               {siswaPklCount} Siswa
                             </p>
                           </div>
                           <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
                               DUDI / Tempat
                             </p>
-                            <p className="text-xs font-black text-slate-800">
+                            <p className="text-xs font-black text-white">
                               {guru.jumlahTempat} Lokasi
                             </p>
                           </div>
@@ -1514,13 +1517,13 @@ export default function DashboardKepalaSekolah() {
                               e.stopPropagation();
                               handleOpenMonitoring(guru);
                             }}
-                            className="cursor-pointer hover:bg-emerald-50 rounded-lg p-0.5 transition-colors group/mon"
+                            className="cursor-pointer hover:bg-emerald-500/20 rounded-lg p-0.5 transition-colors group/mon"
                             title="Klik untuk melihat foto dan keterangan monitoring"
                           >
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-0.5">
+                            <p className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-0.5">
                               <span>📷</span> Monitoring
                             </p>
-                            <p className="text-xs font-black text-emerald-700 underline decoration-dotted group-hover/mon:text-emerald-800">
+                            <p className="text-xs font-black text-emerald-300 underline decoration-dotted group-hover/mon:text-emerald-200">
                               {guru.totalMonitoring || 0}x Laporan
                             </p>
                           </div>
@@ -1528,15 +1531,15 @@ export default function DashboardKepalaSekolah() {
 
                         {/* Jurnal Terakhir */}
                         <div className="mt-3">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                          <p className="text-[10px] font-bold text-amber-300/80 uppercase">
                             Jurnal Terakhir:
                           </p>
-                          <p className="text-xs font-semibold text-slate-700 line-clamp-1">
+                          <p className="text-xs font-semibold text-blue-50 line-clamp-1">
                             {guru.jurnalTerakhir?.materi ||
                               "Belum ada materi tercatat"}
                           </p>
                           {guru.jurnalTerakhir?.tanggal && (
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] text-blue-300/70">
                               📅{" "}
                               {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
                             </p>
@@ -1544,7 +1547,7 @@ export default function DashboardKepalaSekolah() {
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
@@ -1552,7 +1555,7 @@ export default function DashboardKepalaSekolah() {
                               e.stopPropagation();
                               handleOpenMonitoring(guru);
                             }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 transition-colors shadow-xs active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
                           >
                             <span>📷</span>
                             <span>
@@ -1567,14 +1570,14 @@ export default function DashboardKepalaSekolah() {
                               handleLihatPresensiSiswa(guru);
                             }}
                             title="Buka halaman Rekap Presensi untuk guru pembimbing ini"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors shadow-xs active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
                           >
                             <span>📋</span>
-                            <span>Lihat Presensi Siswa</span>
+                            <span>Presensi Siswa</span>
                           </button>
                         </div>
 
-                        <div className="flex items-center gap-1 font-black text-blue-600 group-hover:translate-x-1 transition-transform">
+                        <div className="flex items-center gap-1 font-black text-amber-400 group-hover:translate-x-1 transition-transform">
                           <span>Rincian</span>
                           <span>→</span>
                         </div>
@@ -1701,19 +1704,21 @@ export default function DashboardKepalaSekolah() {
                   <div
                     key={guru.idGuru}
                     onClick={() => setSelectedGuruWali(guru)}
-                    className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between"
+                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
-                    <div>
+                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                    <div className="relative z-10">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-700 to-purple-800 text-white flex items-center justify-center font-black text-sm shadow">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
                             {guru.namaGuru.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
+                            <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
                               {guru.namaGuru}
                             </h4>
-                            <p className="text-[11px] font-medium text-slate-400">
+                            <p className="text-[11px] font-medium text-blue-300">
                               ID: {guru.idGuru}
                             </p>
                           </div>
@@ -1722,8 +1727,8 @@ export default function DashboardKepalaSekolah() {
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${
                             guru.totalPertemuan > 0
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-slate-100 text-slate-500 border-slate-200"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                              : "bg-white/10 text-slate-300 border-white/20"
                           }`}
                         >
                           {guru.totalPertemuan} Pertemuan
@@ -1731,20 +1736,20 @@ export default function DashboardKepalaSekolah() {
                       </div>
 
                       {/* Info Anak Wali */}
-                      <div className="mt-4 bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between">
+                      <div className="mt-4 bg-blue-950/60 p-3 rounded-xl border border-blue-800/50 flex items-center justify-between">
                         <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
                             Jumlah Anak Wali
                           </p>
-                          <p className="text-sm font-black text-slate-800">
+                          <p className="text-sm font-black text-white">
                             {guru.jumlahSiswa} Siswa
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
                             Rasio Bimbingan
                           </p>
-                          <p className="text-sm font-black text-indigo-600">
+                          <p className="text-sm font-black text-amber-400">
                             {guru.jumlahSiswa > 0
                               ? `${(guru.totalPertemuan / guru.jumlahSiswa).toFixed(1)}x / siswa`
                               : "-"}
@@ -1754,22 +1759,22 @@ export default function DashboardKepalaSekolah() {
 
                       {/* Topik Jurnal Terakhir */}
                       <div className="mt-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
+                        <p className="text-[10px] font-bold text-amber-300/80 uppercase">
                           Topik Terakhir:
                         </p>
-                        <p className="text-xs font-semibold text-slate-700 line-clamp-1">
+                        <p className="text-xs font-semibold text-blue-50 line-clamp-1">
                           {guru.jurnalTerakhir?.topik ||
                             "Belum ada catatan pertemuan"}
                         </p>
                         {guru.jurnalTerakhir?.tanggal && (
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-[10px] text-blue-300/70">
                             📅 {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-black text-blue-600 group-hover:translate-x-1 transition-transform">
+                    <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between text-xs font-black text-amber-400 group-hover:translate-x-1 transition-transform">
                       <span>Detail Jurnal & Murid</span>
                       <span>→</span>
                     </div>
@@ -1882,45 +1887,47 @@ export default function DashboardKepalaSekolah() {
                   <div
                     key={guru.idGuru}
                     onClick={() => setSelectedGuruMapel(guru)}
-                    className="group bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between"
+                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
-                    <div>
+                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                    <div className="relative z-10">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center font-black text-sm shadow">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
                             {guru.namaGuru.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
+                            <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
                               {guru.namaGuru}
                             </h4>
-                            <p className="text-[11px] font-medium text-slate-400">
+                            <p className="text-[11px] font-medium text-blue-300">
                               ID: {guru.idGuru}
                             </p>
                           </div>
                         </div>
 
-                        <span className="px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black">
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-800/60 border border-blue-600 text-amber-200 text-[10px] font-black">
                           {guru.jumlahMapel} Mapel
                         </span>
                       </div>
 
                       {/* Daftar Mata Pelajaran Diampu */}
                       <div className="mt-4 space-y-1.5">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
+                        <p className="text-[10px] font-bold text-blue-300/80 uppercase">
                           Mata Pelajaran & Kelas:
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {guru.daftarMapel.slice(0, 3).map((m, idx) => (
                             <span
                               key={idx}
-                              className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200"
+                              className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[11px] font-semibold border border-white/20"
                             >
                               {m.namaMapel} ({m.kelas})
                             </span>
                           ))}
                           {guru.daftarMapel.length > 3 && (
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[11px] font-bold">
+                            <span className="px-2 py-0.5 rounded-md bg-white/5 text-blue-200 text-[11px] font-bold">
                               +{guru.daftarMapel.length - 3} lainnya
                             </span>
                           )}
@@ -1928,23 +1935,23 @@ export default function DashboardKepalaSekolah() {
                       </div>
 
                       {/* Jurnal Terakhir */}
-                      <div className="mt-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
+                      <div className="mt-3 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
+                        <p className="text-[10px] font-bold text-amber-300/80 uppercase">
                           Jurnal Terakhir:
                         </p>
-                        <p className="text-xs font-semibold text-slate-700 line-clamp-1">
+                        <p className="text-xs font-semibold text-blue-50 line-clamp-1">
                           {guru.jurnalTerakhir?.topik ||
                             "Belum ada catatan jurnal"}
                         </p>
                         {guru.jurnalTerakhir?.tanggal && (
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-[10px] text-blue-300/70">
                             📅 {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-black text-blue-600 group-hover:translate-x-1 transition-transform">
+                    <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between text-xs font-black text-amber-400 group-hover:translate-x-1 transition-transform">
                       <span>Rincian Kelas & Jurnal</span>
                       <span>→</span>
                     </div>
@@ -2121,43 +2128,46 @@ export default function DashboardKepalaSekolah() {
                 {filteredCardsWaliKelas.map((wali) => (
                   <div
                     key={wali.idWali}
-                    className="group bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl hover:border-teal-400 transition-all duration-300 flex flex-col justify-between overflow-hidden"
+                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-3xl border border-blue-700/50 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 flex flex-col justify-between"
                   >
-                    {/* Top Gradient Accent Bar */}
-                    <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-500" />
+                    {/* Top Gradient Accent Bar (Diganti jadi kuning emas) */}
+                    <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 absolute top-0 left-0 z-20" />
 
-                    <div className="p-5">
+                    {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
+                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                    <div className="p-5 relative z-10 mt-1">
                       {/* Class Badge & Total Siswa */}
                       <div className="flex items-start justify-between gap-3">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs font-black shadow-2xs">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-800/60 border border-blue-600/50 text-amber-300 text-xs font-black shadow-2xs">
                           <span>🏫</span>
                           <span>{wali.namaKelas}</span>
                         </span>
-                        <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-black border border-slate-200">
+                        <span className="px-2.5 py-1 rounded-xl bg-white/10 text-white text-xs font-black border border-white/20">
                           {wali.jumlahSiswa} Siswa
                         </span>
                       </div>
 
                       {/* Wali Info */}
                       <div className="mt-3 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-black text-sm shrink-0 border border-teal-200">
+                        <div className="w-9 h-9 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm shrink-0 shadow-md">
                           👨‍🏫
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-sm font-black text-slate-800 group-hover:text-teal-700 transition-colors truncate">
+                          <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors truncate">
                             {wali.namaGuru}
                           </h4>
-                          <p className="text-[11px] font-medium text-slate-400 truncate">
+                          <p className="text-[11px] font-medium text-blue-300 truncate">
                             {wali.keterangan || "Wali Kelas Reguler"}
                           </p>
                         </div>
                       </div>
 
                       {/* WIDGET PRESENSI HARI INI / SESI AKTIF */}
-                      <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50/70 via-teal-50/40 to-slate-50 border border-emerald-100/80">
+                      <div className="mt-4 p-3.5 rounded-2xl bg-blue-950/60 border border-blue-800/70">
                         <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-900">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-200">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                             <span>
                               {wali.presensiHariIni?.isToday === false &&
                               wali.presensiHariIni?.tanggal
@@ -2165,15 +2175,15 @@ export default function DashboardKepalaSekolah() {
                                 : "PRESENSI HARI INI"}
                             </span>
                           </span>
-                          <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-emerald-600 text-white shadow-2xs">
+                          <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-emerald-500/30 border border-emerald-400/30 text-emerald-300 shadow-2xs">
                             {wali.presensiHariIni?.persenHadir ?? 0}% Hadir
                           </span>
                         </div>
 
                         {/* Progress Bar Kehadiran */}
-                        <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden mt-2">
+                        <div className="w-full bg-blue-900/50 h-2 rounded-full overflow-hidden mt-2 border border-blue-800/50">
                           <div
-                            className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-500"
+                            className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${Math.min(100, Math.max(0, wali.presensiHariIni?.persenHadir ?? 0))}%`,
                             }}
@@ -2182,42 +2192,42 @@ export default function DashboardKepalaSekolah() {
 
                         {/* 4 Status Hari Ini */}
                         <div className="grid grid-cols-4 gap-1.5 mt-2.5 text-center">
-                          <div className="bg-white p-1.5 rounded-xl border border-emerald-100 shadow-2xs">
-                            <p className="text-[9px] font-bold text-slate-400">
+                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                            <p className="text-[9px] font-bold text-blue-300">
                               HADIR
                             </p>
-                            <p className="text-xs font-black text-emerald-600">
+                            <p className="text-xs font-black text-emerald-400">
                               {wali.presensiHariIni?.hadir || 0}
                             </p>
                           </div>
-                          <div className="bg-white p-1.5 rounded-xl border border-blue-100 shadow-2xs">
-                            <p className="text-[9px] font-bold text-slate-400">
+                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                            <p className="text-[9px] font-bold text-blue-300">
                               SAKIT
                             </p>
-                            <p className="text-xs font-black text-blue-600">
+                            <p className="text-xs font-black text-sky-400">
                               {wali.presensiHariIni?.sakit || 0}
                             </p>
                           </div>
-                          <div className="bg-white p-1.5 rounded-xl border border-amber-100 shadow-2xs">
-                            <p className="text-[9px] font-bold text-slate-400">
+                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                            <p className="text-[9px] font-bold text-blue-300">
                               IZIN
                             </p>
-                            <p className="text-xs font-black text-amber-600">
+                            <p className="text-xs font-black text-amber-400">
                               {wali.presensiHariIni?.izin || 0}
                             </p>
                           </div>
-                          <div className="bg-white p-1.5 rounded-xl border border-rose-100 shadow-2xs">
-                            <p className="text-[9px] font-bold text-slate-400">
+                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                            <p className="text-[9px] font-bold text-blue-300">
                               ALFA
                             </p>
-                            <p className="text-xs font-black text-rose-600">
+                            <p className="text-xs font-black text-rose-400">
                               {wali.presensiHariIni?.alfa || 0}
                             </p>
                           </div>
                         </div>
 
                         {/* Siswa Hadir Hari Ini Dropdown / List */}
-                        <div className="mt-3 pt-2.5 border-t border-emerald-100/70">
+                        <div className="mt-3 pt-2.5 border-t border-blue-800/60">
                           <button
                             type="button"
                             onClick={() =>
@@ -2227,7 +2237,7 @@ export default function DashboardKepalaSekolah() {
                                   : wali.idWali,
                               )
                             }
-                            className="w-full flex items-center justify-between text-[11px] font-bold text-emerald-800 hover:text-emerald-950 transition-colors cursor-pointer"
+                            className="w-full flex items-center justify-between text-[11px] font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
                           >
                             <span className="flex items-center gap-1.5">
                               <span>👥</span>
@@ -2238,7 +2248,7 @@ export default function DashboardKepalaSekolah() {
                                 )
                               </span>
                             </span>
-                            <span className="text-[10px] bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs">
+                            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-md border border-white/20 shadow-2xs text-white">
                               {expandedHadirWaliId === wali.idWali
                                 ? "Tutup ▲"
                                 : "Lihat ▼"}
@@ -2250,7 +2260,7 @@ export default function DashboardKepalaSekolah() {
                               {!wali.presensiHariIni?.siswaHadirList ||
                               wali.presensiHariIni.siswaHadirList.length ===
                                 0 ? (
-                                <p className="text-[10px] text-slate-400 italic text-center py-2 bg-white rounded-lg border border-slate-100">
+                                <p className="text-[10px] text-blue-300 italic text-center py-2 bg-blue-900/30 rounded-lg border border-blue-800/50">
                                   Belum ada siswa yang presensi hadir hari ini.
                                 </p>
                               ) : (
@@ -2258,12 +2268,12 @@ export default function DashboardKepalaSekolah() {
                                   (s, sIdx) => (
                                     <div
                                       key={sIdx}
-                                      className="flex items-center justify-between text-[10px] bg-white p-1.5 rounded-lg border border-emerald-100 shadow-2xs"
+                                      className="flex items-center justify-between text-[10px] bg-blue-900/50 p-1.5 rounded-lg border border-blue-800/50 shadow-2xs"
                                     >
-                                      <span className="font-bold text-slate-700 truncate max-w-[150px] sm:max-w-[180px]">
+                                      <span className="font-bold text-white truncate max-w-[150px] sm:max-w-[180px]">
                                         {s.nama || s.namaSiswa}
                                       </span>
-                                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-black text-[9px] shrink-0 border border-emerald-200">
+                                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-black text-[9px] shrink-0 border border-emerald-500/30">
                                         Hadir
                                       </span>
                                     </div>
@@ -2276,16 +2286,16 @@ export default function DashboardKepalaSekolah() {
                       </div>
 
                       {/* Rekap Kumulatif & Bimbingan */}
-                      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                      <div className="mt-3 flex items-center justify-between text-[11px] text-blue-200 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
                         <span className="font-semibold">
                           Log Presensi:{" "}
-                          <strong className="text-slate-700">
+                          <strong className="text-white">
                             {wali.presensi?.totalEntries || 0}
                           </strong>
                         </span>
                         <span className="font-semibold">
                           Bimbingan:{" "}
-                          <strong className="text-teal-700">
+                          <strong className="text-amber-300">
                             {wali.jumlahJurnal || 0} Pertemuan
                           </strong>
                         </span>
@@ -2293,11 +2303,11 @@ export default function DashboardKepalaSekolah() {
                     </div>
 
                     {/* Tombol Aksi Bawah */}
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                    <div className="p-4 bg-blue-950/80 border-t border-blue-800/50 flex items-center gap-2 relative z-10">
                       <button
                         type="button"
                         onClick={() => setSelectedPresensiKelasModal(wali)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-900 text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                       >
                         <span>📅</span>
                         <span>Rekap Presensi</span>
@@ -2305,7 +2315,7 @@ export default function DashboardKepalaSekolah() {
                       <button
                         type="button"
                         onClick={() => setSelectedWaliKelas(wali)}
-                        className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                        className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
                       >
                         <span>🔍 Detail</span>
                       </button>
