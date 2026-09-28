@@ -462,12 +462,13 @@ export default function DashboardKepalaSekolah() {
       if (tab === "pembimbing" && !loadedPkl) loadPklData(false);
       else if (tab === "wali" && !loadedWali) loadWaliData(false);
       else if (tab === "mapel" && !loadedMapel) loadMapelData(false);
-      else if (tab === "walikelas") loadWaliKelasData(true); // Selalu ambil presensi terbaru saat klik tab Wali Kelas
+      else if (tab === "walikelas") loadWaliKelasData(false); // Selalu ambil presensi terbaru saat klik tab Wali Kelas
     },
     [
       loadedPkl,
       loadedWali,
       loadedMapel,
+      loadedWaliKelas,
       loadPklData,
       loadWaliData,
       loadMapelData,
