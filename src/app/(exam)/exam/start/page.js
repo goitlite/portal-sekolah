@@ -37,9 +37,11 @@ export default function StartExamPage() {
   const [browserBlocked, setBrowserBlocked] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
 
-  const [penaltyTime, setPenaltyTime] = useState(2 * 60);
+  const [penaltyTime, setPenaltyTime] = useState(3 * 60);
 
   const [penaltyDone, setPenaltyDone] = useState(false);
+
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const [showPanduanModal, setShowPanduanModal] = useState(false);
 
@@ -243,6 +245,7 @@ export default function StartExamPage() {
           localStorage.removeItem("violations");
           localStorage.removeItem("violationStartTime");
           localStorage.removeItem("penaltyPassed");
+          localStorage.removeItem("lastPenaltyServedAtViolation");
           savedViolation = 0;
           catatPelanggaran(savedNama, savedKelas || "", savedId, 0);
         }
@@ -270,23 +273,27 @@ export default function StartExamPage() {
         console.error("Gagal sinkron pelanggaran dari database:", err);
       }
 
-      const penaltyPassed = localStorage.getItem("penaltyPassed");
+      // ==============================================================
+      // HUKUMAN: SETIAP SETELAH 3 KALI PELANGGARAN -> HUKUMAN 3 MENIT
+      // Kelipatan 3: 3, 6, 9, 12, ...
+      // ==============================================================
+      const lastPenaltyServed = parseInt(
+        localStorage.getItem("lastPenaltyServedAtViolation") || "0",
+      );
+      const targetTier = Math.floor(savedViolation / 3) * 3;
+      const mustServePenalty =
+        targetTier >= 3 && lastPenaltyServed < targetTier;
 
-      // jika tidak sedang hukuman
-      if (!(savedViolation >= 5 && !penaltyPassed)) {
+      if (mustServePenalty) {
+        setPenaltyTime(3 * 60);
+        setPenaltyDone(false);
+        setPenaltyOpen(true);
+        setShowPanduanModal(false);
+        document.body.style.overflow = "hidden";
+      } else {
         setShowPanduanModal(true);
       }
 
-      // =========================
-      // HUKUMAN SETELAH 4 PELANGGARAN
-      // =========================
-      if (savedViolation >= 5 && !penaltyPassed) {
-        setPenaltyOpen(true);
-
-        setShowPanduanModal(false);
-
-        document.body.style.overflow = "hidden";
-      }
       setViolations(savedViolation);
 
       const savedDraft = localStorage.getItem("draftAnswers");
@@ -306,7 +313,7 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
-  // TIMER HUKUMAN
+  // TIMER HUKUMAN (3 MENIT)
   // =========================
   useEffect(() => {
     if (!penaltyOpen) return;
@@ -321,12 +328,19 @@ export default function StartExamPage() {
           setPenaltyDone(true);
 
           localStorage.setItem("penaltyPassed", "true");
+          const curTier = Math.floor(violations / 3) * 3;
+          localStorage.setItem(
+            "lastPenaltyServedAtViolation",
+            String(curTier > 0 ? curTier : 3),
+          );
 
           document.body.style.overflow = "auto";
 
           setPenaltyOpen(false);
 
-          showModal("Waktu hukuman selesai.\n\nKlik OK untuk melanjutkan.");
+          showModal(
+            "Waktu hukuman 3 menit selesai.\n\nKlik OK untuk melanjutkan ujian.",
+          );
 
           return 0;
         }
@@ -336,7 +350,7 @@ export default function StartExamPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [penaltyOpen, penaltyDone]);
+  }, [penaltyOpen, penaltyDone, violations]);
 
   function showModal(message) {
     setIgnoreFullscreen(true);
@@ -369,8 +383,8 @@ export default function StartExamPage() {
     if (!localStorage.getItem("violationStartTime")) {
       localStorage.setItem("violationStartTime", Date.now().toString());
     }
-    // reset hukuman agar muncul lagi
-    if (totalViolation >= 5) {
+    // Setiap kelipatan 3 pelanggaran (3, 6, 9, 12, ...), hapus penanda agar hukuman 3 menit aktif
+    if (totalViolation >= 3 && totalViolation % 3 === 0) {
       localStorage.removeItem("penaltyPassed");
     }
 
@@ -405,6 +419,7 @@ export default function StartExamPage() {
         localStorage.removeItem("violations");
         localStorage.removeItem("violationStartTime");
         localStorage.removeItem("penaltyPassed");
+        localStorage.removeItem("lastPenaltyServedAtViolation");
 
         setViolations(0);
         setPenaltyOpen(false);
@@ -495,6 +510,23 @@ export default function StartExamPage() {
     }
   }
 
+  // =========================
+  // RESET SCROLL FORM KE PALING ATAS SETIAP HALAMAN BERPINDAH / SUBMIT
+  // =========================
+  function handleIframeLoad() {
+    const scrollToTop = () => {
+      if (iframeContainerRef.current) {
+        iframeContainerRef.current.scrollTop = 0;
+      }
+      window.scrollTo(0, 0);
+    };
+
+    scrollToTop();
+    setTimeout(scrollToTop, 100);
+    setTimeout(scrollToTop, 300);
+    setTimeout(scrollToTop, 600);
+  }
+
   function handleKeluar() {
     if (timeLeft > 0) {
       showModal(
@@ -507,6 +539,7 @@ export default function StartExamPage() {
     localStorage.removeItem("violations");
     localStorage.removeItem("violationStartTime");
     localStorage.removeItem("penaltyPassed");
+    localStorage.removeItem("lastPenaltyServedAtViolation");
     localStorage.removeItem("draftAnswers");
     localStorage.removeItem("draftMode");
 
@@ -1388,9 +1421,9 @@ export default function StartExamPage() {
             <div className="p-6 text-center">
               <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5">
                 <p className="text-gray-700 text-sm leading-relaxed">
-                  Karena jumlah pelanggaran telah melewati batas aman, Anda
-                  diwajibkan menunggu selama 8 menit sebelum dapat kembali
-                  memulai asesmen.
+                  Karena Anda telah melakukan pelanggaran ({violations}x), Anda
+                  diwajibkan menunggu selama 3 menit sebelum dapat kembali
+                  melanjutkan asesmen.
                 </p>
               </div>
 
@@ -1867,6 +1900,10 @@ export default function StartExamPage() {
       {/* IFRAME CONTAINER - SCROLL BERFUNGSI NORMAL */}
       <div
         ref={iframeContainerRef}
+        onScroll={(e) => {
+          const st = e.currentTarget.scrollTop;
+          setShowScrollTop(st > 350);
+        }}
         className="
     absolute
     top-[110px]
@@ -1885,6 +1922,7 @@ export default function StartExamPage() {
           <iframe
             ref={iframeRef}
             src={examLink}
+            onLoad={handleIframeLoad}
             className="w-full border-none"
             allowFullScreen
             style={{
@@ -1896,6 +1934,27 @@ export default function StartExamPage() {
 
         {/* OVERLAY BLOCKER - BLOK CLICK TAPI IZINKAN SCROLL */}
       </div>
+
+      {/* TOMBOL CEPAT SCROLL KE PALING ATAS FORM */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => {
+            if (iframeContainerRef.current) {
+              iframeContainerRef.current.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
+            }
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="fixed bottom-[95px] left-4 z-[999] bg-slate-900/90 hover:bg-slate-800 text-white font-extrabold text-xs px-3.5 py-2.5 rounded-2xl shadow-xl border border-white/20 flex items-center gap-1.5 transition-all active:scale-95 backdrop-blur-md cursor-pointer"
+          title="Kembali ke bagian paling atas form"
+        >
+          <span>⬆️</span>
+          <span className="hidden sm:inline">Paling Atas</span>
+        </button>
+      )}
 
       {/* FLOATING DRAFT */}
       <div
