@@ -498,6 +498,42 @@ export default function DashboardKepalaSekolah() {
     router.replace("/magang/login");
   }
 
+  // --- LIHAT PRESENSI SISWA -> BUKA HALAMAN REKAP DENGAN GURU PEMBIMBING TERPILIH ---
+  // Memakai mekanisme auto-select yang sama dengan Dashboard Guru
+  // (localStorage target*Rekap dibaca & dibersihkan oleh halaman /magang/rekap).
+  function handleLihatPresensiSiswa(guru) {
+    const idGuru = String(guru?.idGuru || guru?.id || "").trim();
+    if (!idGuru) {
+      alert("ID Guru Pembimbing tidak ditemukan.");
+      return;
+    }
+    const namaBulan = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    const date = new Date();
+    const bulanTerbaru = `${namaBulan[date.getMonth()]} ${date.getFullYear()}`;
+
+    try {
+      localStorage.setItem("targetGuruRekap", idGuru);
+      localStorage.setItem("targetTempatRekap", "Semua");
+      localStorage.setItem("targetBulanRekap", bulanTerbaru);
+    } catch (e) {
+      console.warn("Gagal menyimpan target rekap:", e);
+    }
+    router.push("/magang/rekap");
+  }
+
   // --- KLIK CARD STATISTIK -> BUKA MODAL DAFTAR NAMA ---
   function handleStatCardClick(title, listData, breakdownKelas = null) {
     setStatModalSearch("");
@@ -1508,18 +1544,35 @@ export default function DashboardKepalaSekolah() {
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenMonitoring(guru);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 transition-colors shadow-xs active:scale-95"
-                        >
-                          <span>📷</span>
-                          <span>Monitoring ({guru.totalMonitoring || 0})</span>
-                        </button>
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenMonitoring(guru);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 transition-colors shadow-xs active:scale-95"
+                          >
+                            <span>📷</span>
+                            <span>
+                              Monitoring ({guru.totalMonitoring || 0})
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLihatPresensiSiswa(guru);
+                            }}
+                            title="Buka halaman Rekap Presensi untuk guru pembimbing ini"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors shadow-xs active:scale-95"
+                          >
+                            <span>📋</span>
+                            <span>Lihat Presensi Siswa</span>
+                          </button>
+                        </div>
 
                         <div className="flex items-center gap-1 font-black text-blue-600 group-hover:translate-x-1 transition-transform">
                           <span>Rincian</span>
