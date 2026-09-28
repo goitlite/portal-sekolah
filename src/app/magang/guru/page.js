@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSession, isLoggedIn, logout } from "../lib/auth";
@@ -20,6 +26,7 @@ import {
   getPresensiWaliGrid,
   getBiodataSiswa,
   updateBiodataSiswa,
+  getSiswa, // ⬅️ Statistik Akun Siswa
 } from "../lib/api";
 import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
 import { generateLaporanGuruWaliPDF } from "./guru-wali/generateLaporanGuruWaliPDF";
@@ -306,6 +313,19 @@ function DashboardGuruContent() {
     title: "",
     data: [],
   });
+
+  // --- STATE STATISTIK AKUN SISWA (SHEET SISWA - SEMUA KELAS) ---
+  const [dataMasterSiswa, setDataMasterSiswa] = useState([]);
+  const [loadingMasterSiswa, setLoadingMasterSiswa] = useState(false);
+  const [statModalConfig, setStatModalConfig] = useState({
+    isOpen: false,
+    title: "",
+    data: [],
+    breakdownKelas: null,
+  });
+  const [statModalSearch, setStatModalSearch] = useState("");
+  // Tab aktif di modal: "statistik" | "semua" | "X" | "XI" | "XII"
+  const [statModalTab, setStatModalTab] = useState("statistik");
 
   // --- STATE UNTUK GALERI AKTIVITAS & FULLSCREEN ---
   const [showGallery, setShowGallery] = useState(false);
@@ -689,6 +709,7 @@ function DashboardGuruContent() {
     if (!confirm("Keluar dari aplikasi?")) return;
     localStorage.removeItem(CACHE_KEY); // Menghapus cache guru
     localStorage.removeItem("dashboardSiswaCache"); // Menghapus cache siswa
+    sessionStorage.removeItem("guru_cache_master_siswa"); // Cache statistik akun siswa
     logout();
     router.replace("/magang/login");
   }
@@ -1491,6 +1512,148 @@ function DashboardGuruContent() {
     }
   }
 
+  // =========================================================
+  // STATISTIK AKUN SISWA (SHEET SISWA - SEMUA KELAS)
+  // =========================================================
+  const loadMasterSiswa = useCallback(async (forceRefresh = false) => {
+    const cacheKey = "guru_cache_master_siswa";
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDataMasterSiswa(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Gagal membaca cache master siswa:", e);
+      }
+    }
+
+    setLoadingMasterSiswa(true);
+    try {
+      const res = await getSiswa();
+      if (res && res.success && Array.isArray(res.data)) {
+        setDataMasterSiswa(res.data);
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error("Error load master siswa Guru:", err);
+    } finally {
+      setLoadingMasterSiswa(false);
+    }
+  }, []);
+
+  // Muat statistik siswa di latar belakang setelah user siap
+  useEffect(() => {
+    if (!user?.id) return;
+    loadMasterSiswa(false);
+  }, [user?.id, loadMasterSiswa]);
+
+  function handleStatCardClick(title, listData, breakdownKelas = null) {
+    setStatModalSearch("");
+    const hasBreakdown =
+      Array.isArray(breakdownKelas) && breakdownKelas.length > 0;
+    setStatModalTab(hasBreakdown ? "statistik" : "semua");
+    setStatModalConfig({
+      isOpen: true,
+      title,
+      data: listData || [],
+      breakdownKelas: hasBreakdown ? breakdownKelas : null,
+    });
+  }
+
+  const statsSiswa = useMemo(() => {
+    const list = dataMasterSiswa || [];
+
+    const normalized = list.map((itemSiswa) => {
+      const id = String(
+        itemSiswa.ID ||
+          itemSiswa.id ||
+          itemSiswa.ID_SISWA ||
+          itemSiswa.idSiswa ||
+          "",
+      ).trim();
+      const rawNama = String(
+        itemSiswa.NAMA || itemSiswa.nama || itemSiswa.NAMA_SISWA || "",
+      ).trim();
+      const tempat = String(
+        itemSiswa.TEMPAT_MAGANG ||
+          itemSiswa.tempatMagang ||
+          itemSiswa.TEMPAT ||
+          itemSiswa.tempat ||
+          "",
+      ).trim();
+      const match = rawNama.match(/(.+?)\s*\[(.*?)\]/);
+      const nama = match ? match[1].trim() : rawNama;
+      const kelas = match
+        ? match[2].trim()
+        : String(itemSiswa.KELAS || itemSiswa.kelas || "").trim();
+      return { id, nama, kelas, tempatMagang: tempat };
+    });
+
+    // Seluruh siswa yang punya akun (memiliki ID)
+    const siswaPunyaAkun = normalized.filter((it) => it.id !== "");
+
+    const isKelasX = (k) =>
+      /^X[\s\-_]/.test(k) || /^X$/.test(k) || /^10[\s\-_]/.test(k);
+    const isKelasXI = (k) =>
+      /^XI[\s\-_]/.test(k) || /^XI$/.test(k) || /^11[\s\-_]/.test(k);
+
+    const siswaKelasX = siswaPunyaAkun.filter((it) =>
+      isKelasX(it.kelas.toUpperCase()),
+    );
+    const siswaKelasXI = siswaPunyaAkun.filter((it) =>
+      isKelasXI(it.kelas.toUpperCase()),
+    );
+    const siswaKelasXII = siswaPunyaAkun.filter((it) => {
+      const k = it.kelas.toUpperCase();
+      return !isKelasX(k) && !isKelasXI(k);
+    });
+
+    function buildBreakdown(siswaList) {
+      const map = {};
+      siswaList.forEach((it) => {
+        const k = it.kelas || "—";
+        if (!map[k]) map[k] = { kelas: k, count: 0, siswaList: [] };
+        map[k].count++;
+        map[k].siswaList.push(it);
+      });
+      return Object.values(map).sort((a, b) => b.count - a.count);
+    }
+
+    return {
+      totalAkun: siswaPunyaAkun.length,
+      listAkun: siswaPunyaAkun.map((it) => ({
+        nama: it.nama,
+        info: `ID: ${it.id} • Kelas: ${it.kelas || "XII"} ${it.tempatMagang ? `• 📍 ${it.tempatMagang}` : "• Belum Magang"}`,
+      })),
+      breakdownAkun: buildBreakdown(siswaPunyaAkun),
+      totalKelasX: siswaKelasX.length,
+      listKelasX: siswaKelasX.map((it) => ({
+        nama: it.nama,
+        info: `ID: ${it.id} • Kelas: ${it.kelas} ${it.tempatMagang ? `• 📍 ${it.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasX: buildBreakdown(siswaKelasX),
+      totalKelasXI: siswaKelasXI.length,
+      listKelasXI: siswaKelasXI.map((it) => ({
+        nama: it.nama,
+        info: `ID: ${it.id} • Kelas: ${it.kelas} ${it.tempatMagang ? `• 📍 ${it.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasXI: buildBreakdown(siswaKelasXI),
+      totalKelasXII: siswaKelasXII.length,
+      listKelasXII: siswaKelasXII.map((it) => ({
+        nama: it.nama,
+        info: `ID: ${it.id} • Jurusan/Kelas: ${it.kelas || "XII"} ${it.tempatMagang ? `• 📍 ${it.tempatMagang}` : ""}`,
+      })),
+      breakdownKelasXII: buildBreakdown(siswaKelasXII),
+    };
+  }, [dataMasterSiswa]);
+
   // --- FUNGSI UNTUK SCROLL HORIZONTAL TOMBOL SESI ---
   const scrollHorizontal = (id, direction) => {
     const container = document.getElementById(id);
@@ -1604,6 +1767,108 @@ function DashboardGuruContent() {
               Sistem kendali monitoring, verifikasi, dan rekapitulasi data
               aktivitas Murid
             </p>
+          </div>
+        </div>
+
+        {/* ======================================================= */}
+        {/* STATISTIK AKUN SISWA (SEMUA KELAS) - DI ATAS PILIH JENIS PEMBIMBING */}
+        {/* ======================================================= */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1 gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                  Statistik Akun Siswa
+                </h3>
+                <p className="text-[11px] font-medium text-slate-500">
+                  Data real-time seluruh Akun siswa yang terdaftar, Akun Siswa
+                  dibuat Oleh Guru Pembimbing PKL/Guru Wali/Guru Mapel/Guru
+                  Walas
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="hidden sm:inline-block text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
+                💡 Klik kartu untuk melihat daftar siswa
+              </span>
+              <button
+                type="button"
+                onClick={() => loadMasterSiswa(true)}
+                disabled={loadingMasterSiswa}
+                title="Segarkan statistik akun siswa"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+              >
+                <span
+                  className={
+                    loadingMasterSiswa ? "animate-spin inline-block" : ""
+                  }
+                >
+                  🔄
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard
+              title="Seluruh Siswa (Akun)"
+              value={loadingMasterSiswa ? "..." : statsSiswa.totalAkun || "--"}
+              accentColor="border-blue-600"
+              icon="👥"
+              onClick={() =>
+                handleStatCardClick(
+                  "Statistik Akun Siswa — Semua Kelas",
+                  statsSiswa.listAkun,
+                  statsSiswa.breakdownAkun,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas X"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasX ?? "--")
+              }
+              accentColor="border-sky-500"
+              icon="🎒"
+              onClick={() =>
+                handleStatCardClick(
+                  "Statistik Siswa Kelas X",
+                  statsSiswa.listKelasX,
+                  statsSiswa.breakdownKelasX,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas XI"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasXI ?? "--")
+              }
+              accentColor="border-indigo-500"
+              icon="📘"
+              onClick={() =>
+                handleStatCardClick(
+                  "Statistik Siswa Kelas XI",
+                  statsSiswa.listKelasXI,
+                  statsSiswa.breakdownKelasXI,
+                )
+              }
+            />
+            <StatCard
+              title="Siswa Kelas XII"
+              value={
+                loadingMasterSiswa ? "..." : (statsSiswa.totalKelasXII ?? "--")
+              }
+              accentColor="border-purple-600"
+              icon="🎓"
+              onClick={() =>
+                handleStatCardClick(
+                  "Statistik Siswa Kelas XII (Jurusan PKL)",
+                  statsSiswa.listKelasXII,
+                  statsSiswa.breakdownKelasXII,
+                )
+              }
+            />
           </div>
         </div>
 
@@ -3413,6 +3678,382 @@ function DashboardGuruContent() {
         )}
       </div>
 
+      {/* ======================================================= */}
+      {/* POP-UP MODAL STATISTIK AKUN SISWA */}
+      {/* ======================================================= */}
+      {statModalConfig.isOpen &&
+        (() => {
+          const allData = statModalConfig.data || [];
+          const breakdown = statModalConfig.breakdownKelas || [];
+          const hasBreakdown = Array.isArray(breakdown) && breakdown.length > 0;
+          const q = statModalSearch.toLowerCase().trim();
+
+          // -----------------------------------------------------------
+          // KASUS 1: CARD BIASA / MODUL MONITORING EKSEKUTIF (GURU, TEMPAT, JURNAL, DLL)
+          // -----------------------------------------------------------
+          if (!hasBreakdown) {
+            const displayData = q
+              ? allData.filter((item) => {
+                  const nama = typeof item === "object" ? item.nama : item;
+                  const info = typeof item === "object" ? item.info : "";
+                  return (
+                    (nama || "").toLowerCase().includes(q) ||
+                    (info || "").toLowerCase().includes(q)
+                  );
+                })
+              : allData;
+
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all flex flex-col max-h-[85vh]">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
+                    <div>
+                      <h3 className="text-base font-black tracking-tight">
+                        {statModalConfig.title}
+                      </h3>
+                      <p className="text-[11px] text-blue-200 mt-0.5">
+                        Total: {displayData.length}{" "}
+                        {allData.length !== displayData.length
+                          ? `dari ${allData.length} data`
+                          : "data"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setStatModalConfig({
+                          ...statModalConfig,
+                          isOpen: false,
+                        })
+                      }
+                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Input Pencarian */}
+                  {allData.length > 5 && (
+                    <div className="p-3 bg-slate-100 border-b border-slate-200 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                          🔍
+                        </span>
+                        <input
+                          type="text"
+                          value={statModalSearch}
+                          onChange={(e) => setStatModalSearch(e.target.value)}
+                          placeholder="Cari..."
+                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-blue-500 outline-none font-medium"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List Data */}
+                  <div className="p-5 overflow-y-auto flex-1">
+                    {displayData.length > 0 ? (
+                      <ul className="space-y-2.5">
+                        {displayData.map((item, index) => (
+                          <li
+                            key={index}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
+                                {index + 1}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-black text-slate-800 truncate">
+                                  {typeof item === "object" ? item.nama : item}
+                                </p>
+                                {typeof item === "object" && item.info && (
+                                  <p className="text-[11px] font-medium text-slate-500 truncate">
+                                    {item.info}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-center py-8 text-xs font-bold text-slate-400">
+                        {statModalSearch
+                          ? "Tidak ada data yang sesuai dengan pencarian."
+                          : "Belum ada data tersedia pada kategori ini."}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                    <button
+                      onClick={() =>
+                        setStatModalConfig({
+                          ...statModalConfig,
+                          isOpen: false,
+                        })
+                      }
+                      className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // -----------------------------------------------------------
+          // KASUS 2: CARD STATISTIK AKUN SISWA (SHEET SISWA - MEMILIKI BREAKDOWN KELAS)
+          // -----------------------------------------------------------
+          const listByTab = (() => {
+            if (statModalTab === "semua") return allData;
+            if (statModalTab === "X")
+              return allData.filter((item) =>
+                (item.info || "").toUpperCase().match(/KELAS:\s*X[\s\-_]/),
+              );
+            if (statModalTab === "XI")
+              return allData.filter((item) =>
+                (item.info || "").toUpperCase().match(/KELAS:\s*XI[\s\-_]/),
+              );
+            if (statModalTab === "XII")
+              return allData.filter(
+                (item) =>
+                  !(item.info || "")
+                    .toUpperCase()
+                    .match(/KELAS:\s*X[I]?[\s\-_]/) &&
+                  (item.info || "").toUpperCase().includes("KELAS:"),
+              );
+            return allData;
+          })();
+
+          const displayData =
+            statModalTab !== "statistik"
+              ? q
+                ? listByTab.filter((item) => {
+                    const nama = typeof item === "object" ? item.nama : item;
+                    const info = typeof item === "object" ? item.info : "";
+                    return (
+                      (nama || "").toLowerCase().includes(q) ||
+                      (info || "").toLowerCase().includes(q)
+                    );
+                  })
+                : listByTab
+              : [];
+
+          const maxCount =
+            breakdown.length > 0
+              ? Math.max(...breakdown.map((b) => b.count))
+              : 1;
+
+          const tabDefs = [
+            { key: "statistik", label: "📊 Statistik", icon: "📊" },
+            { key: "semua", label: "👥 Semua", icon: "👥" },
+            { key: "X", label: "🎒 Kelas X", icon: "🎒" },
+            { key: "XI", label: "📘 Kelas XI", icon: "📘" },
+            { key: "XII", label: "🎓 Kelas XII", icon: "🎓" },
+          ];
+
+          const barColors = [
+            "bg-blue-600",
+            "bg-sky-500",
+            "bg-indigo-500",
+            "bg-purple-600",
+            "bg-teal-500",
+            "bg-cyan-500",
+            "bg-violet-500",
+            "bg-rose-400",
+          ];
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
+                  <div>
+                    <h3 className="text-base font-black tracking-tight">
+                      {statModalConfig.title}
+                    </h3>
+                    <p className="text-[11px] text-blue-200 mt-0.5">
+                      {statModalTab === "statistik"
+                        ? `${breakdown.length} kelompok kelas/jurusan • ${allData.length} total siswa`
+                        : `${displayData.length}${q ? ` dari ${listByTab.length}` : ""} siswa`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setStatModalConfig({
+                        ...statModalConfig,
+                        isOpen: false,
+                      })
+                    }
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Tab Bar */}
+                <div className="flex overflow-x-auto bg-slate-100 border-b border-slate-200 shrink-0 gap-0.5 p-1.5">
+                  {tabDefs.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => {
+                        setStatModalTab(t.key);
+                        setStatModalSearch("");
+                      }}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer whitespace-nowrap ${
+                        statModalTab === t.key
+                          ? "bg-blue-900 text-white shadow"
+                          : "text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input Pencarian */}
+                {statModalTab !== "statistik" && allData.length > 5 && (
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 shrink-0">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                        🔍
+                      </span>
+                      <input
+                        type="text"
+                        value={statModalSearch}
+                        onChange={(e) => setStatModalSearch(e.target.value)}
+                        placeholder="Cari nama, ID, kelas, atau tempat..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-blue-500 outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Konten Utama */}
+                <div className="overflow-y-auto flex-1 p-5">
+                  {/* TAB: STATISTIK – BAR CHART */}
+                  {statModalTab === "statistik" && (
+                    <div className="space-y-3">
+                      {breakdown.length === 0 ? (
+                        <p className="text-center py-8 text-xs font-bold text-slate-400">
+                          Data belum tersedia.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-4 px-1">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                              Jumlah Siswa per Kelas / Jurusan
+                            </p>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 font-black px-2 py-0.5 rounded-full">
+                              Total: {allData.length}
+                            </span>
+                          </div>
+
+                          {breakdown.map((item, i) => {
+                            const pct =
+                              maxCount > 0
+                                ? Math.max(
+                                    4,
+                                    Math.round((item.count / maxCount) * 100),
+                                  )
+                                : 4;
+                            const color = barColors[i % barColors.length];
+                            return (
+                              <div key={item.kelas} className="group">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[11px] font-black text-slate-700 truncate max-w-[60%]">
+                                    {item.kelas}
+                                  </span>
+                                  <span className="text-[11px] font-black text-slate-500 ml-2 shrink-0">
+                                    {item.count} siswa
+                                    <span className="ml-1 text-slate-300 font-medium">
+                                      (
+                                      {Math.round(
+                                        (item.count / allData.length) * 100,
+                                      )}
+                                      %)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                  <div
+                                    className={`h-full ${color} rounded-full transition-all duration-700 flex items-center justify-end pr-2`}
+                                    style={{ width: `${pct}%` }}
+                                  >
+                                    {pct > 20 && (
+                                      <span className="text-[9px] font-black text-white">
+                                        {item.count}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB: LIST SISWA */}
+                  {statModalTab !== "statistik" &&
+                    (displayData.length > 0 ? (
+                      <ul className="space-y-2.5">
+                        {displayData.map((item, index) => (
+                          <li
+                            key={index}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-800 text-white font-black flex items-center justify-center text-xs shrink-0">
+                                {index + 1}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-black text-slate-800 truncate">
+                                  {typeof item === "object" ? item.nama : item}
+                                </p>
+                                {typeof item === "object" && item.info && (
+                                  <p className="text-[11px] font-medium text-slate-500 truncate">
+                                    {item.info}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-center py-8 text-xs font-bold text-slate-400">
+                        {statModalSearch
+                          ? "Tidak ada data yang sesuai dengan pencarian."
+                          : "Belum ada data tersedia pada kategori ini."}
+                      </p>
+                    ))}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                  <button
+                    onClick={() =>
+                      setStatModalConfig({
+                        ...statModalConfig,
+                        isOpen: false,
+                      })
+                    }
+                    className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black transition-all cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
       {/* MODAL POP-UP NAMA SISWA */}
       {modalConfig.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
@@ -4824,6 +5465,67 @@ function Card({ title, value, accentColor, textColor, icon, onClick }) {
       </div>
 
       {/* Garis */}
+      <div className="relative mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
+        <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
+      </div>
+    </button>
+  );
+}
+
+// StatCard (persis struktur & desain Card() di js_guru)
+function StatCard({ title, value, accentColor, icon, onClick }) {
+  const bgMap = {
+    "border-indigo-500": "from-indigo-600 via-indigo-700 to-blue-800",
+    "border-emerald-500": "from-emerald-500 via-green-600 to-teal-700",
+    "border-blue-500": "from-blue-600 via-sky-700 to-indigo-800",
+    "border-amber-500": "from-amber-500 via-orange-500 to-amber-700",
+    "border-teal-500": "from-teal-600 via-teal-700 to-emerald-800",
+    "border-blue-600": "from-blue-700 via-blue-800 to-indigo-950",
+    "border-sky-500": "from-sky-500 via-cyan-600 to-blue-700",
+    "border-purple-600": "from-purple-600 via-violet-700 to-indigo-900",
+  };
+
+  const bg = bgMap[accentColor] || "from-slate-700 to-slate-800";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        group relative overflow-hidden
+        rounded-3xl
+        bg-gradient-to-br ${bg}
+        text-white
+        p-4 sm:p-5
+        w-full
+        shadow-lg
+        active:scale-95
+        hover:brightness-105
+        transition-all duration-300
+        text-left
+      `}
+    >
+      <div className="relative flex items-start justify-between">
+        <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-xl shadow">
+          {icon}
+        </div>
+
+        <div className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold border border-white/20 flex items-center gap-1">
+          Detail
+          <span className="group-hover:translate-x-1 transition-transform">
+            →
+          </span>
+        </div>
+      </div>
+
+      <div className="relative mt-5">
+        <p className="text-[10px] sm:text-xs uppercase tracking-[2px] text-white/80 font-bold">
+          {title}
+        </p>
+        <h2 className="mt-1 text-3xl sm:text-4xl font-black leading-none drop-shadow-sm">
+          {value}
+        </h2>
+      </div>
+
       <div className="relative mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
         <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
       </div>
