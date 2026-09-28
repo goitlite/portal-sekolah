@@ -27,6 +27,7 @@ export default function ExamPage() {
   // =========================
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("");
+  const [idSiswa, setIdSiswa] = useState("");
   const [pesan, setPesan] = useState("");
 
   // =========================
@@ -54,33 +55,63 @@ export default function ExamPage() {
   // LOAD SESSION
   // =========================
   useEffect(() => {
-    const savedNama = localStorage.getItem("nama");
-    const savedKelas = localStorage.getItem("kelas");
-    const savedExamLink = localStorage.getItem("examLink");
+    async function initSession() {
+      let savedNama = localStorage.getItem("nama");
+      let savedKelas = localStorage.getItem("kelas");
+      let savedId = localStorage.getItem("id_siswa");
 
-    // =========================
-    // VALIDASI KEYBOARD
-    // =========================
-    const keyboardSafe = sessionStorage.getItem("keyboardSafe");
+      // Jika belum ada di localStorage, ambil otomatis dari session login magang
+      if (!savedNama) {
+        try {
+          const sessStr = localStorage.getItem("magang_session");
+          if (sessStr) {
+            const sess = JSON.parse(sessStr);
+            if (sess && sess.nama) {
+              const match = sess.nama.match(/(.+?)\s*\[(.*?)\]/);
+              savedNama = match ? match[1].trim() : sess.nama.trim();
+              if (!savedKelas) {
+                savedKelas = (
+                  match ? match[2].trim() : sess.kelas || ""
+                ).trim();
+              }
+              savedId = sess.id ? String(sess.id).trim() : "";
 
-    // PERBAIKAN: Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no")
-    if (keyboardSafe === "no") {
-      alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
-      router.push("/"); // Diarahkan kembali ke login/awal, bukan /exam
-      return;
+              localStorage.setItem("nama", savedNama);
+              if (savedKelas) localStorage.setItem("kelas", savedKelas);
+              if (savedId) localStorage.setItem("id_siswa", savedId);
+            }
+          }
+        } catch (e) {
+          console.error("Gagal membaca session magang:", e);
+        }
+      }
+
+      // =========================
+      // VALIDASI KEYBOARD
+      // =========================
+      const keyboardSafe = sessionStorage.getItem("keyboardSafe");
+
+      // Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no")
+      if (keyboardSafe === "no") {
+        alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
+        router.push("/magang/dashboard_siswa");
+        return;
+      }
+
+      // =========================
+      // VALIDASI SESSION
+      // =========================
+      if (!savedNama) {
+        router.push("/magang/login");
+        return;
+      }
+
+      setNama(savedNama);
+      if (savedKelas) setKelas(savedKelas);
+      if (savedId) setIdSiswa(savedId);
     }
 
-    // =========================
-    // VALIDASI SESSION
-    // =========================
-    if (!savedNama || !savedKelas) {
-      localStorage.clear();
-      router.push("/");
-      return;
-    }
-
-    setNama(savedNama);
-    setKelas(savedKelas);
+    initSession();
   }, [router]);
 
   // =========================
@@ -128,6 +159,29 @@ export default function ExamPage() {
         // VALIDASI ARRAY
         if (Array.isArray(data)) {
           setExamData(data);
+
+          // Auto select jenjang & kelas jika ada data kelas siswa
+          const savedKelas = (localStorage.getItem("kelas") || "")
+            .toUpperCase()
+            .trim();
+          if (savedKelas) {
+            let detectedJenjang = "";
+            if (savedKelas.startsWith("XII")) detectedJenjang = "XII";
+            else if (savedKelas.startsWith("XI")) detectedJenjang = "XI";
+            else if (savedKelas.startsWith("X")) detectedJenjang = "X";
+            if (detectedJenjang) setJenjang(detectedJenjang);
+
+            const match = data.find((item) => {
+              if (!item?.kls) return false;
+              const sheetKls = item.kls.toUpperCase().trim();
+              return (
+                sheetKls === savedKelas ||
+                savedKelas.startsWith(sheetKls) ||
+                sheetKls.startsWith(savedKelas)
+              );
+            });
+            if (match) setSelectedKelas(match.kls);
+          }
         } else {
           setExamData([]);
         }
@@ -212,8 +266,14 @@ export default function ExamPage() {
       if (result.status === "success") {
         setExamLink(result.link);
 
-        // SIMPAN LINK
+        // SIMPAN LINK, KODE KIRIM, MAPEL & KELAS KE LOCALSTORAGE
         localStorage.setItem("examLink", result.link);
+        localStorage.setItem("kodeKirim", result.kodeKirim || "");
+        localStorage.setItem("selectedMapel", selectedMapel);
+        localStorage.setItem("selectedKelas", selectedKelas);
+        if (selectedKelas) {
+          localStorage.setItem("kelas", selectedKelas);
+        }
 
         // AUTO START JIKA DARI ENTER
         if (autoStart) {
@@ -320,12 +380,23 @@ export default function ExamPage() {
                 </p>
               </div>
 
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 rounded-2xl shadow-lg">
-                <p className="text-xs uppercase tracking-widest text-cyan-100">
-                  Status
-                </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push("/magang/dashboard_siswa")}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold transition flex items-center gap-2"
+                >
+                  <span>←</span>
+                  <span>Dashboard Siswa</span>
+                </button>
 
-                <p className="font-bold text-lg">Siap Ujian</p>
+                <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 rounded-2xl shadow-lg">
+                  <p className="text-xs uppercase tracking-widest text-cyan-100">
+                    Status
+                  </p>
+
+                  <p className="font-bold text-lg">Siap Ujian</p>
+                </div>
               </div>
             </div>
           </div>
@@ -358,9 +429,17 @@ export default function ExamPage() {
                   </div>
 
                   <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <p className="text-slate-400 text-sm">ID Siswa</p>
+
+                    <p className="font-bold text-lg">{idSiswa || "-"}</p>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                     <p className="text-slate-400 text-sm">Kelas</p>
 
-                    <p className="font-bold text-lg">{kelas}</p>
+                    <p className="font-bold text-lg">
+                      {selectedKelas || kelas || "-"}
+                    </p>
                   </div>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 const BASE_URL =
-  "https://script.google.com/macros/s/AKfycbwfetob0Q_j8KTVQI-7YVzrgy0ce6RpkslF4o5_u9kTlGSVQN7lmZkDVMtlVxHPaVRm/exec";
+  "https://script.google.com/macros/s/AKfycbw9dkz277yVbLu8WWSDFdZwUqMbERbnyBOIxuBDalQshowNYIk78ygGC4Nvyk870FVT/exec";
 
 // ===================================================
 // REGISTER SISWA
@@ -11,8 +11,8 @@ export async function registerStudent(data) {
     formData.append("action", "register");
     formData.append("nama", data.nama);
     formData.append("kelas", data.kelas);
-    formData.append("wa_siswa", data.wa_siswa);
-    formData.append("wa_ortu", data.wa_ortu);
+    formData.append("wa_siswa", data.wa_siswa || data.id_siswa || "");
+    formData.append("wa_ortu", data.wa_ortu || "-");
 
     const response = await fetch(BASE_URL, {
       method: "POST",
@@ -53,33 +53,52 @@ export async function cekPesan(nama, kelas) {
   }
 }
 
+// ===================================================
+// PENGADUAN SISWA
+// ===================================================
 export async function kirimPengaduan(nama, kelas, isiPengaduan) {
   try {
-    const response = await fetch(
-      "https://script.google.com/macros/s/AKfycbwfetob0Q_j8KTVQI-7YVzrgy0ce6RpkslF4o5_u9kTlGSVQN7lmZkDVMtlVxHPaVRm/exec",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-
-        body: new URLSearchParams({
-          action: "pengaduan",
-
-          nama,
-          kelas,
-
-          isi_pengaduan: isiPengaduan,
-        }),
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: new URLSearchParams({
+        action: "pengaduan",
+        nama,
+        kelas,
+        isi_pengaduan: isiPengaduan,
+      }),
+    });
 
     return await response.json();
   } catch (error) {
     return {
       status: "error",
       message: "Gagal kirim pengaduan",
+    };
+  }
+}
+
+// ===================================================
+// HAPUS AKUN SISWA
+// ===================================================
+export async function hapusAkun(idSiswa) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("action", "hapus_akun");
+    formData.append("id_siswa", idSiswa);
+
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    return await response.json();
+  } catch (error) {
+    return {
+      status: "error",
+      message: "Gagal hapus akun",
     };
   }
 }

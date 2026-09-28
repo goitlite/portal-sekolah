@@ -1,5 +1,5 @@
 const BASE_URL =
-  "https://script.google.com/macros/s/AKfycbwCSoPrJnmrYxB-MqLufBeDnHFXeWjehMtIAceiwUxpcA00FJQrhp5CCLGDxSouo43v/exec";
+  "https://script.google.com/macros/s/AKfycbyNGdlYFNDpOET7BcJL6jwsJVFiLsYLt57_-B66YIHxa2Il75aPeFFMNEovgauKwnLM/exec";
 
 // ========================================
 // AMBIL DATA UJIAN

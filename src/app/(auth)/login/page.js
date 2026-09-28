@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { registerStudent } from "@/services/authService";
 
@@ -18,6 +19,27 @@ export default function LoginPage() {
   const [waOrtu, setWaOrtu] = useState("");
 
   const [loading, setLoading] = useState(false);
+
+  // Jika siswa sudah login di portal magang, langsung arahkan ke /exam
+  useEffect(() => {
+    try {
+      const sessStr = localStorage.getItem("magang_session");
+      if (sessStr) {
+        const sess = JSON.parse(sessStr);
+        if (sess && sess.nama) {
+          const match = sess.nama.match(/(.+?)\s*\[(.*?)\]/);
+          const cleanNama = match ? match[1].trim() : sess.nama.trim();
+          const userKelas = match ? match[2].trim() : (sess.kelas || "").trim();
+
+          localStorage.setItem("nama", cleanNama);
+          localStorage.setItem("id_siswa", String(sess.id || "").trim());
+          if (userKelas) localStorage.setItem("kelas", userKelas);
+
+          router.replace("/exam");
+        }
+      }
+    } catch (e) {}
+  }, [router]);
 
   // =========================
   // HANDLE LOGIN
@@ -48,6 +70,7 @@ export default function LoginPage() {
       // SIMPAN SESSION
       localStorage.setItem("nama", nama);
       localStorage.setItem("kelas", kelas);
+      localStorage.setItem("id_siswa", waSiswa);
 
       // PINDAH KE HALAMAN EXAM
       router.push("/exam");
@@ -293,6 +316,20 @@ export default function LoginPage() {
               {loading ? "Memproses..." : "🚀 Masuk Sekarang"}
             </button>
           </form>
+
+          {/* LINK PORTAL SISWA */}
+          <div className="mt-4 pt-4 border-t border-white/10 text-center">
+            <p className="text-gray-300 text-xs mb-2">
+              Sudah memiliki akun Siswa / Magang?
+            </p>
+            <Link
+              href="/magang/login"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-cyan-300 text-xs font-bold transition-all"
+            >
+              <span>🎓</span>
+              <span>Masuk via Portal Siswa (ID Siswa)</span>
+            </Link>
+          </div>
 
           {/* FOOTER */}
           <div className="mt-6 text-center">

@@ -82,11 +82,19 @@ export default function StartExamPage() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
   // =========================
-  // EMERGENCY CODE
+  // EMERGENCY CODE / BUKA KUNCI WAKTU (KODE KIRIM)
   // =========================
   function handleEmergencySubmit() {
-    // KODE BENAR
-    if (emergencyCode === "67676767") {
+    const savedKodeKirim = (localStorage.getItem("kodeKirim") || "").trim();
+    const inputCode = emergencyCode.trim();
+
+    // KODE BENAR: Bisa kodeKirim dari spreadsheet asesmen atau kode darurat 67676767
+    const isCodeValid =
+      (savedKodeKirim !== "" &&
+        inputCode.toLowerCase() === savedKodeKirim.toLowerCase()) ||
+      inputCode === "67676767";
+
+    if (isCodeValid) {
       // timer langsung habis
       setTimeLeft(0);
 
@@ -94,9 +102,9 @@ export default function StartExamPage() {
       setSoalLocked(false);
 
       showModal(
-        "✅ MODE DARURAT AKTIF\n\n" +
-          "Waktu ujian diakhiri.\n" +
-          "Iframe tetap aktif.",
+        "✅ KUNCI WAKTU DIBUKA\n\n" +
+          "Kode buka kunci waktu berhasil diverifikasi.\n" +
+          "Soal dan formulir dapat dikerjakan dan dikirimkan.",
       );
 
       setShowEmergencyInput(false);
@@ -111,7 +119,7 @@ export default function StartExamPage() {
 
     setEmergencyCode("");
 
-    forceLogout("Kode darurat salah");
+    forceLogout("Kode buka kunci salah");
   }
 
   const fullscreenTimeout = useRef(null);
@@ -171,12 +179,33 @@ export default function StartExamPage() {
         }
       } catch (err) {}
 
-      const savedLink = localStorage.getItem("examLink");
-      const savedNama = localStorage.getItem("nama");
-      const savedKelas = localStorage.getItem("kelas");
+      let savedLink = localStorage.getItem("examLink");
+      let savedNama = localStorage.getItem("nama");
+      let savedKelas = localStorage.getItem("kelas");
 
-      if (!savedNama || !savedKelas) {
-        router.push("/login");
+      // Coba pulihkan dari session magang jika belum ada
+      if (!savedNama) {
+        try {
+          const sessStr = localStorage.getItem("magang_session");
+          if (sessStr) {
+            const sess = JSON.parse(sessStr);
+            if (sess && sess.nama) {
+              const match = sess.nama.match(/(.+?)\s*\[(.*?)\]/);
+              savedNama = match ? match[1].trim() : sess.nama.trim();
+              if (!savedKelas) {
+                savedKelas = (
+                  match ? match[2].trim() : sess.kelas || ""
+                ).trim();
+              }
+              localStorage.setItem("nama", savedNama);
+              if (savedKelas) localStorage.setItem("kelas", savedKelas);
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!savedNama) {
+        router.push("/magang/login");
         return;
       }
 
@@ -187,7 +216,7 @@ export default function StartExamPage() {
 
       setExamLink(savedLink);
       setNama(savedNama);
-      setKelas(savedKelas);
+      setKelas(savedKelas || "");
 
       // 🔥 UBAH BAGIAN INI: Cek apakah masa pemulihan 80 menit sudah habis
       let savedViolation = parseInt(localStorage.getItem("violations") || "0");
@@ -229,13 +258,13 @@ export default function StartExamPage() {
       if (savedDraft) {
         setDraftAnswers(JSON.parse(savedDraft));
       }
+
+      const savedDraftMode = localStorage.getItem("draftMode");
+      if (savedDraftMode) {
+        setDraftMode(JSON.parse(savedDraftMode));
+      }
+
       startSafeAction(2000);
-    }
-
-    const savedDraftMode = localStorage.getItem("draftMode");
-
-    if (savedDraftMode) {
-      setDraftMode(JSON.parse(savedDraftMode));
     }
 
     init();
@@ -1323,20 +1352,20 @@ export default function StartExamPage() {
           </div>
         </div>
       )}
-      {/* MODAL DARURAT */}
+      {/* MODAL BUKA KUNCI WAKTU / DARURAT */}
       {showEmergencyInput && (
         <div className="fixed inset-0 z-[999999] bg-black/70 flex items-center justify-center p-5">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
-            <h2 className="text-2xl font-black text-red-600 mb-4">
-              MODE DARURAT
+            <h2 className="text-2xl font-black text-amber-600 mb-2">
+              BUKA KUNCI WAKTU
             </h2>
 
             <p className="text-gray-600 text-sm mb-4">
-              Masukkan kode akses darurat
+              Masukkan kode buka kunci waktu (kode kirim) dari pengawas ujian.
             </p>
 
             <input
-              type="password"
+              type="text"
               value={emergencyCode}
               onChange={(e) => setEmergencyCode(e.target.value)}
               className="
@@ -1346,9 +1375,14 @@ export default function StartExamPage() {
           rounded-2xl
           p-4
           outline-none
-          focus:border-red-500
+          focus:border-amber-500
+          text-center
+          font-bold
+          text-lg
+          tracking-wider
         "
-              placeholder="Masukkan kode"
+              placeholder="Masukkan kode kirim"
+              autoFocus
             />
 
             <div className="grid grid-cols-2 gap-3 mt-5">
@@ -1365,6 +1399,7 @@ export default function StartExamPage() {
             rounded-2xl
             bg-gray-200
             font-bold
+            text-gray-700
           "
               >
                 Batal
@@ -1375,12 +1410,13 @@ export default function StartExamPage() {
                 className="
             py-3
             rounded-2xl
-            bg-red-600
+            bg-amber-600
+            hover:bg-amber-700
             text-white
             font-bold
           "
               >
-                Aktifkan
+                Buka Kunci
               </button>
             </div>
           </div>

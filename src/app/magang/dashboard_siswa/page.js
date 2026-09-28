@@ -774,6 +774,36 @@ export default function DashboardSiswa() {
               />
             )}
 
+            {/* 📝 ASESMEN DIGITAL / UJIAN SEKOLAH */}
+            <MenuCard
+              title="Asesmen Sekolah"
+              subtitle="CBT ujian & penilaian online"
+              icon="📝"
+              bgGrad="from-cyan-600 via-blue-700 to-indigo-800 shadow-cyan-500/25 border-cyan-300/40"
+              badge="Ujian"
+              onClick={() => {
+                if (user) {
+                  const match = (user.nama || "").match(/(.+?)\s*\[(.*?)\]/);
+                  const cleanNama = match
+                    ? match[1].trim()
+                    : (user.nama || "").trim();
+                  const userKelas = match
+                    ? match[2].trim()
+                    : (user.kelas || statistikKelas?.namaKelas || "").trim();
+
+                  localStorage.setItem("nama", cleanNama);
+                  localStorage.setItem(
+                    "id_siswa",
+                    String(user.id || "").trim(),
+                  );
+                  if (userKelas) {
+                    localStorage.setItem("kelas", userKelas);
+                  }
+                }
+                router.push("/exam");
+              }}
+            />
+
             {/* 2. KEHADIRAN MAPEL (FITUR BARU) */}
             <MenuCard
               title="Kehadiran Mapel"
