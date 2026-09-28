@@ -102,3 +102,59 @@ export async function hapusAkun(idSiswa) {
     };
   }
 }
+
+// ===================================================
+// CATAT PELANGGARAN KE SPREADSHEET DATABASE (KOLOM H)
+// ===================================================
+export async function catatPelanggaran(
+  nama,
+  kelas,
+  idSiswa,
+  jumlahPelanggaran,
+) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("action", "catat_pelanggaran");
+    formData.append("nama", nama);
+    formData.append("kelas", kelas);
+    formData.append("id_siswa", idSiswa || "");
+    formData.append("pelanggaran", String(jumlahPelanggaran));
+
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    return await response.json();
+  } catch (error) {
+    return {
+      status: "error",
+      message: "Gagal mencatat pelanggaran",
+    };
+  }
+}
+
+// ===================================================
+// AMBIL JUMLAH PELANGGARAN DARI DATABASE SPREADSHEET
+// ===================================================
+export async function getPelanggaran(nama, kelas, idSiswa) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("action", "get_pelanggaran");
+    formData.append("nama", nama);
+    formData.append("kelas", kelas);
+    formData.append("id_siswa", idSiswa || "");
+
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    return await response.json();
+  } catch (error) {
+    return {
+      status: "error",
+      pelanggaran: 0,
+    };
+  }
+}

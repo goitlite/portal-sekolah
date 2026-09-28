@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cekPesan, kirimPengaduan } from "@/services/authService";
+import {
+  cekPesan,
+  kirimPengaduan,
+  catatPelanggaran,
+  getPelanggaran,
+} from "@/services/authService";
 
 export default function StartExamPage() {
   const router = useRouter();
@@ -10,8 +15,9 @@ export default function StartExamPage() {
   const [examLink, setExamLink] = useState("");
   const [nama, setNama] = useState("");
   const [kelas, setKelas] = useState("");
+  const [idSiswa, setIdSiswa] = useState("");
   const [pesan, setPesan] = useState("");
-  const [timeLeft, setTimeLeft] = useState(40 * 60);
+  const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -31,7 +37,7 @@ export default function StartExamPage() {
   const [browserBlocked, setBrowserBlocked] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
 
-  const [penaltyTime, setPenaltyTime] = useState(8 * 60);
+  const [penaltyTime, setPenaltyTime] = useState(2 * 60);
 
   const [penaltyDone, setPenaltyDone] = useState(false);
 
@@ -182,6 +188,7 @@ export default function StartExamPage() {
       let savedLink = localStorage.getItem("examLink");
       let savedNama = localStorage.getItem("nama");
       let savedKelas = localStorage.getItem("kelas");
+      let savedId = localStorage.getItem("id_siswa") || "";
 
       // Coba pulihkan dari session magang jika belum ada
       if (!savedNama) {
@@ -196,6 +203,10 @@ export default function StartExamPage() {
                 savedKelas = (
                   match ? match[2].trim() : sess.kelas || ""
                 ).trim();
+              }
+              if (!savedId && (sess.id || sess.id_siswa)) {
+                savedId = String(sess.id || sess.id_siswa).trim();
+                localStorage.setItem("id_siswa", savedId);
               }
               localStorage.setItem("nama", savedNama);
               if (savedKelas) localStorage.setItem("kelas", savedKelas);
@@ -217,8 +228,9 @@ export default function StartExamPage() {
       setExamLink(savedLink);
       setNama(savedNama);
       setKelas(savedKelas || "");
+      if (savedId) setIdSiswa(savedId);
 
-      // 🔥 UBAH BAGIAN INI: Cek apakah masa pemulihan 80 menit sudah habis
+      // Cek apakah masa pemulihan 80 menit sudah habis
       let savedViolation = parseInt(localStorage.getItem("violations") || "0");
       const violationStartTime = localStorage.getItem("violationStartTime");
 
@@ -231,8 +243,31 @@ export default function StartExamPage() {
           localStorage.removeItem("violations");
           localStorage.removeItem("violationStartTime");
           localStorage.removeItem("penaltyPassed");
-          savedViolation = 0; // Set menjadi normal kembali
+          savedViolation = 0;
+          catatPelanggaran(savedNama, savedKelas || "", savedId, 0);
         }
+      }
+
+      // Ambil data pelanggaran tersimpan dari spreadsheet database (agar konsisten lintas perangkat)
+      try {
+        const remoteRes = await getPelanggaran(
+          savedNama,
+          savedKelas || "",
+          savedId,
+        );
+        if (
+          remoteRes &&
+          remoteRes.status === "success" &&
+          remoteRes.pelanggaran !== undefined
+        ) {
+          const remoteCount = parseInt(remoteRes.pelanggaran) || 0;
+          if (remoteCount > savedViolation) {
+            savedViolation = remoteCount;
+            localStorage.setItem("violations", String(savedViolation));
+          }
+        }
+      } catch (err) {
+        console.error("Gagal sinkron pelanggaran dari database:", err);
       }
 
       const penaltyPassed = localStorage.getItem("penaltyPassed");
@@ -330,13 +365,21 @@ export default function StartExamPage() {
     localStorage.setItem("violations", totalViolation.toString());
     setViolations(totalViolation);
 
-    // 🔥 TAMBAHKAN INI: Simpan waktu pelanggaran pertama kali jika belum ada
+    // Simpan waktu pelanggaran pertama kali jika belum ada
     if (!localStorage.getItem("violationStartTime")) {
       localStorage.setItem("violationStartTime", Date.now().toString());
     }
     // reset hukuman agar muncul lagi
     if (totalViolation >= 5) {
       localStorage.removeItem("penaltyPassed");
+    }
+
+    // Catat ke spreadsheet database secara otomatis
+    try {
+      const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+      catatPelanggaran(nama, kelas, currentId, totalViolation);
+    } catch (e) {
+      console.error("Gagal catat pelanggaran:", e);
     }
 
     showModal(reason + "\nTotal pelanggaran: " + totalViolation);
@@ -367,6 +410,9 @@ export default function StartExamPage() {
         setPenaltyOpen(false);
         document.body.style.overflow = "auto";
 
+        const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+        catatPelanggaran(nama, kelas, currentId, 0);
+
         showModal(
           "⏱️ Masa pemulihan 80 menit telah selesai.\n\nSemua catatan pelanggaran Anda telah di-reset menjadi 0. Anda dapat mengikuti ujian kembali dengan normal.",
         );
@@ -376,7 +422,7 @@ export default function StartExamPage() {
     // Jalankan pengecekan otomatis setiap 10 detik
     const interval = setInterval(checkAutoResetLive, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [nama, kelas, idSiswa]);
 
   // =========================
   // CEK PESAN REALTIME
@@ -390,6 +436,18 @@ export default function StartExamPage() {
       if (result.status === "success") {
         const isiPesan = result.pesan || "";
         setPesan(isiPesan);
+
+        // Jika backend mengirimkan info pelanggaran terbaru (misal admin mengubah di sheet)
+        if (result.pelanggaran !== undefined && result.pelanggaran !== null) {
+          const remoteCount = parseInt(result.pelanggaran) || 0;
+          setViolations((prev) => {
+            if (remoteCount > prev) {
+              localStorage.setItem("violations", String(remoteCount));
+              return remoteCount;
+            }
+            return prev;
+          });
+        }
 
         if (isiPesan.toUpperCase() === "UJIAN DI RESET") {
           showModal("Ujian telah direset oleh admin");
@@ -445,14 +503,16 @@ export default function StartExamPage() {
       return;
     }
 
-    // 🔥 RESET SEMUA DATA SAAT KELUAR RESMI
+    // RESET SEMUA DATA SAAT KELUAR RESMI
     localStorage.removeItem("violations");
-    localStorage.removeItem("violationStartTime"); // Tembahkan baris ini
+    localStorage.removeItem("violationStartTime");
     localStorage.removeItem("penaltyPassed");
     localStorage.removeItem("draftAnswers");
     localStorage.removeItem("draftMode");
 
     setViolations(0);
+    const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+    catatPelanggaran(nama, kelas, currentId, 0);
 
     localStorage.removeItem("examLink");
     router.push("/exam");
@@ -1743,30 +1803,33 @@ export default function StartExamPage() {
             <div
               className="
           mt-2
-
+          max-w-xl
+          relative
           rounded-xl
-
           bg-gradient-to-r
           from-red-600
           to-rose-500
-
           px-3
           py-2
-
+          pr-8
           text-white
-
           shadow-md
         "
             >
+              <button
+                type="button"
+                onClick={() => setPesan("")}
+                className="absolute top-2 right-2 text-white/80 hover:text-white bg-black/20 hover:bg-black/40 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold leading-none transition"
+                title="Tutup Pesan"
+              >
+                ✕
+              </button>
               <p
                 className="
             text-[9px]
             md:text-[10px]
-
             font-black
-
             uppercase
-
             tracking-wide
           "
               >
@@ -1776,12 +1839,9 @@ export default function StartExamPage() {
               <p
                 className="
             mt-1
-
             text-[11px]
             md:text-xs
-
             text-red-50
-
             leading-relaxed
           "
               >
@@ -1840,104 +1900,121 @@ export default function StartExamPage() {
       {/* FLOATING DRAFT */}
       <div
         className={`
-    fixed
-    top-1/2
-    -translate-y-1/2
-    z-[999]
-    transition-all
-    duration-300
-    ease-in-out
-    ${
-      draftMinimized
-        ? "right-0 w-[42px]"
-        : "right-2 md:right-4 w-[78px] md:w-[110px]"
-    }
-  `}
+          fixed
+          top-[115px]
+          bottom-[85px]
+          z-[9999]
+          flex
+          flex-col
+          justify-center
+          pointer-events-none
+          transition-all
+          duration-300
+          ease-in-out
+          ${
+            draftMinimized
+              ? "right-0 w-[42px]"
+              : "right-1.5 sm:right-3 md:right-4 w-[145px] sm:w-[165px] md:w-[195px]"
+          }
+        `}
       >
         {/* TOMBOL MINIMIZE / EXPAND */}
         <button
+          type="button"
           onClick={() => setDraftMinimized(!draftMinimized)}
           className={`
-    absolute
-    top-1/2
-    -translate-y-1/2
-    -left-9
-
-    bg-blue-700
-    hover:bg-blue-800
-    text-white
-
-    rounded-l-xl
-    rounded-r-md
-
-    shadow-lg
-
-    px-2
-    py-3
-
-    text-xs
-    font-bold
-
-    transition-all
-  `}
+            pointer-events-auto
+            absolute
+            top-1/2
+            -translate-y-1/2
+            ${
+              draftMinimized
+                ? "right-0 rounded-l-xl px-2 py-3"
+                : "-left-9 rounded-l-xl rounded-r-md px-2 py-3"
+            }
+            bg-blue-700
+            hover:bg-blue-800
+            text-white
+            shadow-lg
+            text-xs
+            font-bold
+            transition-all
+            z-20
+          `}
+          title={draftMinimized ? "Buka Draft Jawaban" : "Sembunyikan Draft"}
         >
-          {draftMinimized ? "▶" : "◀"}
+          {draftMinimized ? "◀" : "▶"}
         </button>
 
         {/* KONTAINER DRAFT */}
         {!draftMinimized && (
           <div
             className="
-        bg-white/95
-        backdrop-blur-md
-        border
-        border-gray-300
-        shadow-2xl
-        rounded-2xl
-        p-2
-        max-h-[65vh]
-        overflow-y-auto
-      "
+              pointer-events-auto
+              flex
+              flex-col
+              w-full
+              max-h-full
+              bg-white/95
+              backdrop-blur-md
+              border
+              border-gray-300
+              shadow-2xl
+              rounded-2xl
+              p-2 sm:p-2.5
+              overflow-hidden
+            "
           >
-            <div className="text-center mb-2">
-              <h3 className="font-bold text-[10px] md:text-xs text-blue-700">
-                DRAFT
-              </h3>
+            {/* HEADER DRAFT (TETAP DI ATAS / TIDAK IKUT TER-SCROLL) */}
+            <div className="shrink-0 flex items-center justify-between pb-1.5 mb-1.5 border-b border-gray-200">
+              <div>
+                <h3 className="font-extrabold text-[11px] md:text-xs text-blue-700 leading-tight">
+                  DRAFT
+                </h3>
+                <p className="text-[8px] md:text-[9px] text-gray-500 leading-none mt-0.5">
+                  1x Hijau • 2x Kuning
+                </p>
+              </div>
 
-              {/* Tombol Hapus Data Baru */}
+              {/* Tombol Hapus Data */}
               <button
+                type="button"
                 onClick={() => {
-                  setIgnoreFullscreen(true); // Pastikan ini true agar tidak logout
+                  setIgnoreFullscreen(true);
                   setIsConfirmHapusOpen(true);
                 }}
-                className="mt-1 mb-2 bg-red-100 hover:bg-red-200 text-red-600 text-[8px] md:text-[9px] font-bold py-1 px-2 rounded-lg border border-red-200"
+                className="bg-red-100 hover:bg-red-200 text-red-600 text-[8px] md:text-[9px] font-bold py-1 px-2 rounded-lg border border-red-200 transition"
               >
                 🗑️ HAPUS
               </button>
-
-              <p className="text-[8px] md:text-[10px] text-gray-500">
-                1x Hijau
-              </p>
-
-              <p className="text-[8px] md:text-[10px] text-gray-500">
-                2x Kuning
-              </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-1">
+            {/* DAFTAR SOAL YANG BISA DI-SCROLL */}
+            <div
+              className="
+                flex-1
+                overflow-y-auto
+                overscroll-contain
+                pr-1
+                space-y-1.5
+                scrollbar-thin
+                scrollbar-thumb-blue-400
+                scrollbar-track-gray-100
+              "
+              style={{
+                WebkitOverflowScrolling: "touch",
+                touchAction: "pan-y",
+              }}
+            >
               {Array.from({ length: 50 }).map((_, index) => {
                 const soalNo = index + 1;
-
                 const answer = draftAnswers[soalNo];
-
                 const mode = draftMode[soalNo];
 
-                let bgColor = "bg-gray-200";
-
+                let bgColor = "bg-gray-100/90";
                 if (mode === "yakin") {
                   bgColor = "bg-green-500 text-white";
                 }
-
                 if (mode === "ragu") {
                   bgColor = "bg-yellow-400 text-black";
                 }
@@ -1946,37 +2023,42 @@ export default function StartExamPage() {
                   <div
                     key={soalNo}
                     className={`
-                rounded-xl
-                p-1
-                border
-                border-gray-300
-                ${bgColor}
-              `}
+                      rounded-xl
+                      p-1.5
+                      border
+                      border-gray-200
+                      shadow-sm
+                      transition-all
+                      ${bgColor}
+                    `}
                   >
-                    <div className="text-center text-[10px] md:text-xs font-bold mb-1">
-                      {soalNo}
+                    <div className="text-center text-[10px] md:text-xs font-black mb-1">
+                      Soal {soalNo}
                     </div>
 
                     <div className="grid grid-cols-5 gap-1">
                       {["A", "B", "C", "D", "E"].map((option) => (
                         <button
                           key={option}
+                          type="button"
                           onClick={() => handleDraftChange(soalNo, option)}
                           className={`
-                      text-[9px]
-                      md:text-[10px]
-                      rounded
-                      py-1
-                      font-bold
-                      transition
-                      ${
-                        answer === option
-                          ? mode === "ragu"
-                            ? "bg-yellow-600 text-white"
-                            : "bg-green-700 text-white"
-                          : "bg-white text-gray-700"
-                      }
-                    `}
+                            h-7 sm:h-8
+                            text-[10px] sm:text-xs
+                            rounded-lg
+                            font-bold
+                            transition-all
+                            active:scale-90
+                            flex items-center justify-center
+                            shadow-sm
+                            ${
+                              answer === option
+                                ? mode === "ragu"
+                                  ? "bg-amber-600 text-white shadow-amber-300 ring-2 ring-amber-700"
+                                  : "bg-emerald-700 text-white shadow-emerald-400 ring-2 ring-emerald-800"
+                                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300"
+                            }
+                          `}
                         >
                           {option}
                         </button>
@@ -1992,14 +2074,14 @@ export default function StartExamPage() {
 
       {/* TIMER LOCK */}
       {isTimeRunningOut && (
-        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-3 md:gap-4">
+        <div className="fixed bottom-0 left-0 right-0 h-[80px] bg-slate-900/95 backdrop-blur-md z-[999] border-t-4 border-red-600 flex items-center justify-between px-3 sm:px-4 md:px-6 shadow-[0_-15px_30px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
             <div className="relative shrink-0">
               <div className="absolute inset-0 animate-ping bg-red-500 rounded-full opacity-25"></div>
-              <div className="bg-red-600 p-2 rounded-lg relative shadow-lg">
+              <div className="bg-red-600 p-1.5 sm:p-2 rounded-lg relative shadow-lg">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 md:h-6 md:w-6 text-white"
+                  className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -2015,22 +2097,53 @@ export default function StartExamPage() {
             </div>
 
             <div className="overflow-hidden">
-              <h4 className="text-white font-bold text-xs md:text-base leading-none truncate uppercase">
+              <h4 className="text-white font-bold text-[11px] sm:text-xs md:text-base leading-none truncate uppercase">
                 🔒 Soal Dikunci
               </h4>
-              <p className="text-gray-400 text-[9px] md:text-xs mt-1 uppercase tracking-tight font-medium truncate">
+              <p className="text-gray-400 text-[8px] sm:text-[9px] md:text-xs mt-1 uppercase tracking-tight font-medium truncate">
                 Jawab di draft hingga waktu selesai
               </p>
             </div>
           </div>
 
-          <div className="text-right shrink-0 bg-black/40 px-3 py-1.5 rounded-xl border border-white/10 shadow-inner">
-            <span className="text-[9px] md:text-[10px] text-gray-400 block mb-0.5 font-bold tracking-widest">
-              SISA WAKTU
-            </span>
-            <span className="text-xl md:text-3xl font-mono font-black text-yellow-400 leading-none">
-              {formatTime(timeLeft)}
-            </span>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* TOMBOL BUKA KUNCI WAKTU (RESPONSIF) */}
+            <button
+              onClick={() => {
+                setIgnoreFullscreen(true);
+                setShowEmergencyInput(true);
+              }}
+              className="
+                flex items-center gap-1 sm:gap-1.5
+                px-2.5 sm:px-3.5 py-1.5 sm:py-2
+                rounded-xl
+                bg-gradient-to-r from-amber-500 to-yellow-500
+                hover:from-amber-600 hover:to-yellow-600
+                text-slate-950 font-black
+                text-[10px] sm:text-xs md:text-sm
+                shadow-lg hover:shadow-yellow-500/30
+                border border-yellow-300/50
+                transition-all active:scale-95
+              "
+              title="Buka Kunci Waktu / Masukkan Kode Kirim"
+            >
+              <span className="text-xs sm:text-sm">🔓</span>
+              <span className="hidden sm:inline whitespace-nowrap">
+                Buka Kunci Waktu
+              </span>
+              <span className="inline sm:hidden whitespace-nowrap">
+                Buka Kunci
+              </span>
+            </button>
+
+            <div className="text-right shrink-0 bg-black/40 px-2.5 sm:px-3 py-1.5 rounded-xl border border-white/10 shadow-inner">
+              <span className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-400 block mb-0.5 font-bold tracking-widest leading-none">
+                SISA WAKTU
+              </span>
+              <span className="text-lg sm:text-xl md:text-3xl font-mono font-black text-yellow-400 leading-none">
+                {formatTime(timeLeft)}
+              </span>
+            </div>
           </div>
         </div>
       )}

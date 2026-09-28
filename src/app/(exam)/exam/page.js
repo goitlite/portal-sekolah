@@ -33,7 +33,18 @@ export default function ExamPage() {
   // =========================
   // STATE DATA UJIAN
   // =========================
-  const [examData, setExamData] = useState([]);
+  const [examData, setExamData] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("cached_exam_data");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (_) {}
+    }
+    return [];
+  });
 
   const [jenjang, setJenjang] = useState("");
   const [selectedKelas, setSelectedKelas] = useState("");
@@ -44,6 +55,7 @@ export default function ExamPage() {
   const [examLink, setExamLink] = useState("");
 
   const [loadingToken, setLoadingToken] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [tokenModal, setTokenModal] = useState(false);
   const [tokenMessage, setTokenMessage] = useState("");
 
@@ -147,20 +159,76 @@ export default function ExamPage() {
   }, [nama, kelas, router]);
 
   // =========================
-  // LOAD DATA UJIAN
+  // LOAD DATA UJIAN DARI SPREADSHEET
+  // =========================
+  // =========================
+  // LOAD DATA UJIAN DARI SPREADSHEET (MANUAL REFRESH)
+  // =========================
+  async function refreshExamData() {
+    try {
+      setRefreshing(true);
+      const data = await getExamData();
+
+      console.log("DATA UJIAN:", data);
+
+      if (Array.isArray(data) && data.length > 0) {
+        setExamData(data);
+        localStorage.setItem("cached_exam_data", JSON.stringify(data));
+        localStorage.setItem("cached_exam_data_time", Date.now().toString());
+
+        const savedKelas = (localStorage.getItem("kelas") || "")
+          .toUpperCase()
+          .trim();
+        if (savedKelas) {
+          let detectedJenjang = "";
+          if (savedKelas.startsWith("XII")) detectedJenjang = "XII";
+          else if (savedKelas.startsWith("XI")) detectedJenjang = "XI";
+          else if (savedKelas.startsWith("X")) detectedJenjang = "X";
+          if (detectedJenjang) setJenjang(detectedJenjang);
+
+          const match = data.find((item) => {
+            if (!item?.kls) return false;
+            const sheetKls = item.kls.toUpperCase().trim();
+            return (
+              sheetKls === savedKelas ||
+              savedKelas.startsWith(sheetKls) ||
+              sheetKls.startsWith(savedKelas)
+            );
+          });
+          if (match) setSelectedKelas(match.kls);
+        }
+
+        setTokenMessage(
+          "✅ Token & data ujian berhasil disegarkan dari spreadsheet!",
+        );
+        setTokenModal(true);
+      } else {
+        setTokenMessage("Gagal menyegarkan data. Periksa jaringan internet.");
+        setTokenModal(true);
+      }
+    } catch (error) {
+      console.log("Gagal load ujian:", error);
+      setTokenMessage("Terjadi kendala saat membaca data ujian dari server.");
+      setTokenModal(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  // =========================
+  // AUTO LOAD DATA UJIAN REALTIME
   // =========================
   useEffect(() => {
-    async function loadExam() {
+    let isMounted = true;
+    const fetchExam = async () => {
       try {
         const data = await getExamData();
-
-        console.log("DATA UJIAN:", data);
-
-        // VALIDASI ARRAY
-        if (Array.isArray(data)) {
+        if (!isMounted) return;
+        if (Array.isArray(data) && data.length > 0) {
           setExamData(data);
+          localStorage.setItem("cached_exam_data", JSON.stringify(data));
+          localStorage.setItem("cached_exam_data_time", Date.now().toString());
 
-          // Auto select jenjang & kelas jika ada data kelas siswa
           const savedKelas = (localStorage.getItem("kelas") || "")
             .toUpperCase()
             .trim();
@@ -182,17 +250,17 @@ export default function ExamPage() {
             });
             if (match) setSelectedKelas(match.kls);
           }
-        } else {
-          setExamData([]);
         }
-      } catch (error) {
-        console.log("Gagal load ujian:", error);
-
-        setExamData([]);
+      } catch (err) {
+        console.error("Gagal auto load ujian:", err);
       }
-    }
+    };
 
-    loadExam();
+    fetchExam();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // ======================================
@@ -245,7 +313,7 @@ export default function ExamPage() {
   async function handleCheckToken(autoStart = false) {
     // VALIDASI
     if (!selectedKelas || !selectedMapel || !token) {
-      setTokenMessage("Lengkapi data ujian");
+      setTokenMessage("Lengkapi data ujian (Kelas, Mapel, dan Token)");
       setTokenModal(true);
 
       setTimeout(() => {
@@ -258,7 +326,34 @@ export default function ExamPage() {
     try {
       setLoadingToken(true);
 
-      const result = await checkToken(selectedKelas, selectedMapel, token);
+      const cleanInputToken = token.trim().toUpperCase();
+
+      // 1. Cek kecocokan token langsung dari data spreadsheet yang sudah terbaca
+      const localMatch = examData.find((item) => {
+        if (!item?.kls || !item?.mpl) return false;
+        const kSheet = item.kls.toString().toUpperCase().trim();
+        const mSheet = item.mpl.toString().toUpperCase().trim();
+        return (
+          kSheet === selectedKelas.toUpperCase().trim() &&
+          mSheet === selectedMapel.toUpperCase().trim()
+        );
+      });
+
+      let result = null;
+
+      if (
+        localMatch &&
+        localMatch.token &&
+        localMatch.token.toString().trim().toUpperCase() === cleanInputToken
+      ) {
+        result = {
+          status: "success",
+          link: localMatch.link || "",
+          kodeKirim: localMatch.kodeKirim || "",
+        };
+      } else {
+        result = await checkToken(selectedKelas, selectedMapel, token);
+      }
 
       setLoadingToken(false);
 
@@ -275,32 +370,20 @@ export default function ExamPage() {
           localStorage.setItem("kelas", selectedKelas);
         }
 
-        // AUTO START JIKA DARI ENTER
-        if (autoStart) {
-          try {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        // Langsung menuju ujian
+        try {
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+          if (!isIOS) {
+            await enterFullscreen();
+          }
+        } catch (err) {}
 
-            // FULLSCREEN selain iPhone
-            if (!isIOS) {
-              await enterFullscreen();
-            }
-          } catch (err) {}
-
-          router.push("/exam/start");
-
-          return;
-        }
-
-        setTokenMessage("Token benar");
-        setTokenModal(true);
-
-        setTimeout(() => {
-          enterFullscreen();
-        }, 300);
+        router.push("/exam/start");
+        return;
       } else {
         setExamLink("");
 
-        setTokenMessage(result.message || "Token salah");
+        setTokenMessage(result.message || "Token salah!");
         setTokenModal(true);
 
         setTimeout(() => {
@@ -471,14 +554,27 @@ export default function ExamPage() {
             {/* KANAN */}
             <div className="lg:col-span-2">
               <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8">
-                <div className="mb-8">
-                  <h2 className="text-2xl md:text-3xl font-black mb-2">
-                    Pilih Ujian
-                  </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-black mb-1">
+                      Pilih Ujian
+                    </h2>
 
-                  <p className="text-slate-300">
-                    Pilih jenjang, kelas, mapel, lalu masukkan token ujian
-                  </p>
+                    <p className="text-slate-300 text-sm">
+                      Pilih jenjang, kelas, mapel, lalu masukkan token ujian
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => refreshExamData()}
+                    disabled={refreshing}
+                    className="px-4 py-2.5 rounded-2xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 text-xs md:text-sm font-bold transition flex items-center gap-2 active:scale-95 cursor-pointer disabled:opacity-50 shrink-0 self-start sm:self-auto shadow-sm"
+                    title="Membaca ulang token dari spreadsheet"
+                  >
+                    <span className={refreshing ? "animate-spin" : ""}>🔄</span>
+                    <span>{refreshing ? "Membaca..." : "Segarkan Token"}</span>
+                  </button>
                 </div>
 
                 <div className="grid gap-5">
@@ -557,76 +653,107 @@ export default function ExamPage() {
                     </select>
                   </div>
 
-                  {/* CONTAINER INPUT TOKEN */}
-                  <div className="mt-4 relative w-full">
-                    <input
-                      type="text"
-                      value={token}
-                      onChange={(e) => setToken(e.target.value.toUpperCase())}
-                      disabled={loadingToken} // Mencegah input ganda saat loading
-                      onKeyDown={async (e) => {
-                        if (e.key !== "Enter") return;
-                        e.preventDefault();
-                        if (loadingToken) return;
+                  {/* CONTAINER INPUT TOKEN & TOMBOL MULAI UJIAN */}
+                  <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value.toUpperCase())}
+                        disabled={loadingToken} // Mencegah input ganda saat loading
+                        onKeyDown={async (e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          if (loadingToken) return;
 
-                        // =========================
-                        // DETEKSI FLOATING KEYBOARD
-                        // =========================
-                        const isDesktop =
-                          window.innerWidth > 900 &&
-                          !/Android|iPhone|iPad|iPod/i.test(
-                            navigator.userAgent,
-                          );
-                        let keyboardSafe = true;
+                          // =========================
+                          // DETEKSI FLOATING KEYBOARD
+                          // =========================
+                          const isDesktop =
+                            window.innerWidth > 900 &&
+                            !/Android|iPhone|iPad|iPod/i.test(
+                              navigator.userAgent,
+                            );
+                          let keyboardSafe = true;
 
-                        if (!isDesktop && window.visualViewport) {
-                          const viewport = window.visualViewport;
-                          const diff = window.innerHeight - viewport.height;
-                          const widthShrink =
-                            viewport.width < window.innerWidth * 0.9;
+                          if (!isDesktop && window.visualViewport) {
+                            const viewport = window.visualViewport;
+                            const diff = window.innerHeight - viewport.height;
+                            const widthShrink =
+                              viewport.width < window.innerWidth * 0.9;
 
-                          // Menggunakan logika deteksi < 180 atau penyusutan lebar
-                          const floatingLike = diff < 180 || widthShrink;
+                            // Menggunakan logika deteksi < 180 atau penyusutan lebar
+                            const floatingLike = diff < 180 || widthShrink;
 
-                          if (floatingLike) {
-                            keyboardSafe = false;
+                            if (floatingLike) {
+                              keyboardSafe = false;
+                            }
                           }
-                        }
 
-                        // simpan status
-                        sessionStorage.setItem(
-                          "keyboardSafe",
-                          keyboardSafe ? "yes" : "no",
-                        );
-
-                        if (!keyboardSafe) {
-                          setTokenMessage(
-                            "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
+                          // simpan status
+                          sessionStorage.setItem(
+                            "keyboardSafe",
+                            keyboardSafe ? "yes" : "no",
                           );
-                          setTokenModal(true);
-                          return;
-                        }
 
-                        // LANJUT UJIAN
-                        handleCheckToken(true);
-                      }}
-                      autoCapitalize="characters"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="Masukkan Token Ujian"
-                      className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 pr-12 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500 disabled:opacity-50"
-                    />
+                          if (!keyboardSafe) {
+                            setTokenMessage(
+                              "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
+                            );
+                            setTokenModal(true);
+                            return;
+                          }
 
-                    {/* ANIMASI LOADING SPINNER */}
-                    {loadingToken && (
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-400 border-t-transparent"></div>
-                      </div>
-                    )}
+                          // LANJUT UJIAN
+                          handleCheckToken(true);
+                        }}
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        placeholder="Masukkan Token Ujian"
+                        className="w-full bg-slate-900/70 border border-white/10 rounded-2xl p-4 pr-12 outline-none focus:border-cyan-400 transition text-white placeholder:text-slate-500 disabled:opacity-50 text-base md:text-lg font-bold tracking-widest uppercase"
+                      />
+
+                      {/* ANIMASI LOADING SPINNER */}
+                      {loadingToken && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-400 border-t-transparent"></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* TOMBOL MULAI UJIAN DI UJUNG KANAN INPUT TEXT */}
+                    <button
+                      type="button"
+                      onClick={() => handleCheckToken(true)}
+                      disabled={loadingToken || !token.trim()}
+                      className="px-6 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white font-black text-sm md:text-base shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {loadingToken ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          <span>Memverifikasi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🚀 Mulai Ujian</span>
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2.5}
+                              d="M14 5l7 7m0 0l-7 7m7-7H3"
+                            />
+                          </svg>
+                        </>
+                      )}
+                    </button>
                   </div>
-
-                  {/* BUTTON */}
-                  <div className="grid sm:grid-cols-2 gap-4 pt-2"></div>
 
                   {/* INFO */}
                   <div className="bg-cyan-500/10 border border-cyan-400/20 rounded-2xl p-4 mt-2">

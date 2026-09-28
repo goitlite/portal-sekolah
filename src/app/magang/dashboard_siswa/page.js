@@ -15,6 +15,7 @@ import {
 } from "../lib/api";
 
 import { getSession, saveSession, isLoggedIn, logout } from "../lib/auth";
+import { getExamData } from "@/services/examService";
 
 // 🎓 MODUL RUANG BELAJAR
 import RuangBelajarTKA from "./RuangBelajarTKA";
@@ -560,6 +561,16 @@ export default function DashboardSiswa() {
       hasLoadedDashboardRef.current = true;
       loadDashboard();
     }
+
+    // Otomatis membaca token dan link asesmen dari spreadsheet saat dashboard dibuka
+    getExamData()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          localStorage.setItem("cached_exam_data", JSON.stringify(data));
+          localStorage.setItem("cached_exam_data_time", Date.now().toString());
+        }
+      })
+      .catch((err) => console.log("Gagal membaca token asesmen:", err));
 
     return () => {
       isMountedRef.current = false;
