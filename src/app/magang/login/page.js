@@ -78,6 +78,12 @@ export default function LoginMagang() {
   const captchaRequired =
     !isLocked && attemptsLeft <= MAX_ATTEMPTS - CAPTCHA_AFTER_ATTEMPTS;
 
+  // --- ID SUDAH PERNAH DIMASUKKAN? ---
+  // Jika ID yang sedang terisi ada di daftar ID tersimpan (pernah
+  // berhasil login), tampilkan sebagai teks biasa. Selain itu,
+  // tampilkan sebagai titik-titik (password).
+  const isSavedId = id !== "" && recentIds.includes(id);
+
   // Buat soal captcha baru setiap kali captcha jadi wajib
   // (pertama kali dibutuhkan, atau setelah percobaan gagal berikutnya)
   useEffect(() => {
@@ -197,8 +203,12 @@ export default function LoginMagang() {
 
   // Ambil data dari localStorage saat halaman dibuka
   useEffect(() => {
-    const ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
-    setRecentIds(ids);
+    try {
+      const ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
+      setRecentIds(Array.isArray(ids) ? ids : []);
+    } catch (err) {
+      setRecentIds([]);
+    }
   }, []);
 
   async function handleLogin(e) {
@@ -404,6 +414,7 @@ export default function LoginMagang() {
           <form
             onSubmit={handleLogin}
             className="px-6 pb-6 pt-4 sm:px-8 sm:pb-8"
+            autoComplete="off"
           >
             {/* --- BANNER PENGAMAN: TERKUNCI --- */}
             {isLocked && (
@@ -437,10 +448,21 @@ export default function LoginMagang() {
                 ID Pengguna Guru dan Siswa
               </label>
               <div className="relative group">
+                {/* Tampil titik-titik lewat CSS (text-security), sehingga
+                    datalist ID tersimpan tetap berfungsi seperti semula.
+                    Jika ID sudah pernah tersimpan -> tampil teks biasa. */}
                 <input
                   list="recentIds"
                   type="text"
+                  style={{
+                    WebkitTextSecurity: isSavedId ? "none" : "disc",
+                  }}
+                  name="magang-id-pengguna"
                   inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   maxLength={6}
                   value={id}
                   onChange={(e) => setId(e.target.value.replace(/\D/g, ""))}

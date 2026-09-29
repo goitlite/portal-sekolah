@@ -750,18 +750,6 @@ export default function DashboardSiswa() {
           </div>
 
           <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
-            {/* ⭐ PETUGAS PRESENSI KELAS (JIKA DITUNJUK OLEH WALI KELAS) */}
-            {petugasWaliData && (
-              <MenuCard
-                title="Presensi Kelas"
-                subtitle={`Petugas ${petugasWaliData.namaKelas || "Kelas"}`}
-                icon="⭐"
-                bgGrad="from-teal-600 via-emerald-600 to-teal-800 shadow-teal-500/25 border-amber-300/40"
-                badge="Petugas"
-                onClick={() => setShowModalPresensiPetugas(true)}
-              />
-            )}
-
             {/* 1. PRESENSI MAGANG HARI INI */}
             {!sudahMagang ? (
               <MenuCardDisabled
@@ -825,45 +813,43 @@ export default function DashboardSiswa() {
               onClick={() => setShowModalMapel(true)}
             />
 
-            {/* 3. CATATAN GURU WALI (FITUR BARU) */}
-            <MenuCard
-              title="Catatan Guru Wali"
-              subtitle="Evaluasi & bimbingan siswa"
-              icon="👨‍🏫"
-              bgGrad="from-amber-600 via-orange-600 to-amber-700 shadow-amber-500/25 border-amber-300/40"
-              badge="Wali"
-              onClick={() => setShowModalCatatan(true)}
-            />
-
             {/* 4. RIWAYAT PRESENSI MAGANG */}
-            <MenuCard
-              title="Riwayat Presensi"
-              subtitle="Lihat semua datamu"
-              icon="📋"
-              bgGrad="from-sky-500 to-blue-600 shadow-sky-500/25"
-              onClick={() => {
-                if (user) {
-                  localStorage.setItem(
-                    "targetGuruRekap",
-                    user.idGuru || user.namaGuru || "",
-                  );
-                  localStorage.setItem(
-                    "targetTempatRekap",
-                    user.tempatMagang || "Semua",
-                  );
-                  localStorage.setItem(
-                    "targetSiswaPopup",
-                    JSON.stringify({
-                      id: user.id,
-                      nama: user.nama,
-                      guru: user.namaGuru,
-                      tempat: user.tempatMagang,
-                    }),
-                  );
-                }
-                router.push("/magang/rekap");
-              }}
-            />
+            {!sudahMagang ? (
+              <MenuCardDisabled
+                title="Riwayat Terkunci"
+                subtitle="Belum memiliki tempat magang"
+                icon="🔒"
+              />
+            ) : (
+              <MenuCard
+                title="Riwayat Presensi"
+                subtitle="Lihat semua datamu"
+                icon="📋"
+                bgGrad="from-sky-500 to-blue-600 shadow-sky-500/25"
+                onClick={() => {
+                  if (user) {
+                    localStorage.setItem(
+                      "targetGuruRekap",
+                      user.idGuru || user.namaGuru || "",
+                    );
+                    localStorage.setItem(
+                      "targetTempatRekap",
+                      user.tempatMagang || "Semua",
+                    );
+                    localStorage.setItem(
+                      "targetSiswaPopup",
+                      JSON.stringify({
+                        id: user.id,
+                        nama: user.nama,
+                        guru: user.namaGuru,
+                        tempat: user.tempatMagang,
+                      }),
+                    );
+                  }
+                  router.push("/magang/rekap");
+                }}
+              />
+            )}
 
             {/* 5. BIODATA SAYA */}
             <MenuCard
@@ -948,70 +934,6 @@ export default function DashboardSiswa() {
                 <span>Buka Catatan Wali</span>
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* ============================================================ */}
-        {/* INFORMASI & STATISTIK SISWA */}
-        {/* ============================================================ */}
-        <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF7E5] to-[#F8E7A5] border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] p-5 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-amber-200/60 pb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-800">
-                Statistik Presensi Magang
-              </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Akumulasi kehadiran magang kamu selama kegiatan berlangsung
-              </p>
-            </div>
-            <button
-              onClick={() => setShowModalMapel(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-amber-300 text-slate-700 text-xs font-bold hover:bg-amber-100 transition-colors shadow-sm"
-            >
-              <span>📚</span>
-              <span>Lihat Presensi Mapel</span>
-            </button>
-          </div>
-
-          <div className="grid gap-3 sm:gap-5 grid-cols-2 lg:grid-cols-4">
-            <Card
-              title="Hadir"
-              value={statistik?.hadir ?? 0}
-              accentColor="border-emerald-500"
-              textColor="text-emerald-600"
-              icon="✅"
-            />
-            <Card
-              title="Izin"
-              value={statistik?.izin ?? 0}
-              accentColor="border-amber-500"
-              textColor="text-amber-600"
-              icon="📝"
-            />
-            <Card
-              title="Sakit"
-              value={statistik?.sakit ?? 0}
-              accentColor="border-blue-500"
-              textColor="text-blue-600"
-              icon="🤒"
-            />
-            <Card
-              title="Kehadiran"
-              value={`${statistik?.persentaseHadir ?? 0}%`}
-              accentColor="border-indigo-500"
-              textColor="text-indigo-600"
-              icon="📈"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white/90 p-4 sm:p-5 rounded-2xl border border-amber-200/70 shadow-inner">
-            <Info label="ID Siswa" value={user?.id} />
-            <Info label="Guru Pembimbing" value={user?.namaGuru || "-"} />
-            <Info label="Guru Wali" value={guruWali} />
-            <Info
-              label="Tempat Magang"
-              value={user?.tempatMagang || "Belum Terdaftar"}
-            />
           </div>
         </div>
 
@@ -1119,112 +1041,188 @@ export default function DashboardSiswa() {
         </div>
 
         {/* ============================================================ */}
-        {/* COMPACT TIMELINE PRESENSI TERBARU */}
-        {/* ============================================================ */}
-        <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF7E5] to-[#F8E7A5] border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] overflow-hidden">
-          <div className="border-b border-amber-200/60 p-4 sm:p-5 bg-gradient-to-r from-amber-50/60 to-white flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-2">
-                ⏳ Riwayat Presensi Terakhir
-              </h2>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                5 log presensi magang terakhir yang terekam
-              </p>
-            </div>
-
-            <div className="shrink-0">
-              {fotoTerbaru ? (
-                <a
-                  href={fotoTerbaru}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/25 hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
-                >
-                  📸 Lihat Foto Presensi
-                </a>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-200 text-slate-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-xl border border-slate-300">
-                  🚫 Tidak Ada Foto
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-6">
-            {riwayat.length === 0 ? (
-              <div className="text-center py-8 bg-white/70 rounded-2xl border border-dashed border-amber-200">
-                <p className="text-sm font-bold text-slate-400">
-                  Belum ada riwayat presensi magang tercatat.
-                </p>
-              </div>
-            ) : (
-              <div className="relative space-y-3">
-                <div className="absolute top-3 bottom-4 left-[11px] w-[2px] bg-amber-200 z-0" />
-
-                {riwayat.map((item, index) => {
-                  const { tanggal, jam } = formatWaktu(item.TIMESTAMP);
-
-                  let statusIcon = "🟢";
-                  let statusText = "HADIR";
-                  let dotColor = "border-emerald-500";
-                  let statusTextColor = "text-emerald-600";
-
-                  if (item.STATUS?.toLowerCase() === "izin") {
-                    statusIcon = "🟡";
-                    statusText = "IZIN";
-                    dotColor = "border-amber-500";
-                    statusTextColor = "text-amber-600";
-                  } else if (item.STATUS?.toLowerCase() === "sakit") {
-                    statusIcon = "🔵";
-                    statusText = "SAKIT";
-                    dotColor = "border-blue-500";
-                    statusTextColor = "text-blue-600";
-                  }
-
-                  return (
-                    <div
-                      key={index}
-                      className="relative z-10 flex items-start gap-3"
-                    >
-                      <div className="shrink-0 mt-3.5 flex justify-center w-[24px]">
-                        <div
-                          className={`h-4 w-4 rounded-full bg-white border-[3px] ${dotColor} shadow-sm`}
-                        />
-                      </div>
-
-                      <div className="flex-1 bg-white/95 backdrop-blur-sm p-3.5 sm:p-4 rounded-2xl border border-amber-200/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <div
-                            className={`font-black text-xs sm:text-sm tracking-wide mb-1 ${statusTextColor}`}
-                          >
-                            {statusIcon} {statusText}
-                          </div>
-                          <p className="text-[11px] sm:text-xs font-bold text-slate-600 truncate max-w-[220px] sm:max-w-sm">
-                            📍 {item.TEMPAT_MAGANG || "-"}
-                          </p>
-                        </div>
-
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 mt-1 sm:mt-0">
-                          <p className="text-[10px] sm:text-xs font-semibold text-slate-600">
-                            {tanggal}
-                          </p>
-                          <p className="text-[10px] sm:text-xs font-medium text-slate-400">
-                            {jam}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ============================================================ */}
         {/* 🎓 RUANG BELAJAR SISWA — HANYA TAMPIL JIKA STATUS SISWA SEDANG MAGANG */}
         {/* ============================================================ */}
         {isSedangMagang && <RuangBelajarTKA idSiswa={user?.id} />}
+        {/* ============================================================ */}
+        {/* STATISTIK & RIWAYAT PRESENSI MAGANG (PALING BAWAH) */}
+        {/* ============================================================ */}
+        {!sudahMagang ? (
+          <LockedSection
+            title="Statistik Presensi Magang"
+            subtitle="Terkunci — belum memiliki tempat magang"
+            icon="📊"
+          />
+        ) : (
+          <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF7E5] to-[#F8E7A5] border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] p-5 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-amber-200/60 pb-4">
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-slate-800">
+                  Statistik Presensi Magang
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Akumulasi kehadiran magang kamu selama kegiatan berlangsung
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModalMapel(true)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-amber-300 text-slate-700 text-xs font-bold hover:bg-amber-100 transition-colors shadow-sm"
+              >
+                <span>📚</span>
+                <span>Lihat Presensi Mapel</span>
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:gap-5 grid-cols-2 lg:grid-cols-4">
+              <Card
+                title="Hadir"
+                value={statistik?.hadir ?? 0}
+                accentColor="border-emerald-500"
+                textColor="text-emerald-600"
+                icon="✅"
+              />
+              <Card
+                title="Izin"
+                value={statistik?.izin ?? 0}
+                accentColor="border-amber-500"
+                textColor="text-amber-600"
+                icon="📝"
+              />
+              <Card
+                title="Sakit"
+                value={statistik?.sakit ?? 0}
+                accentColor="border-blue-500"
+                textColor="text-blue-600"
+                icon="🤒"
+              />
+              <Card
+                title="Kehadiran"
+                value={`${statistik?.persentaseHadir ?? 0}%`}
+                accentColor="border-indigo-500"
+                textColor="text-indigo-600"
+                icon="📈"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white/90 p-4 sm:p-5 rounded-2xl border border-amber-200/70 shadow-inner">
+              <Info label="ID Siswa" value={user?.id} />
+              <Info label="Guru Pembimbing" value={user?.namaGuru || "-"} />
+              <Info label="Guru Wali" value={guruWali} />
+              <Info
+                label="Tempat Magang"
+                value={user?.tempatMagang || "Belum Terdaftar"}
+              />
+            </div>
+          </div>
+        )}
+
+        {!sudahMagang ? (
+          <LockedSection
+            title="Riwayat Presensi Terakhir"
+            subtitle="Terkunci — belum memiliki tempat magang"
+            icon="⏳"
+          />
+        ) : (
+          <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FFF7E5] to-[#F8E7A5] border border-[#E8D28A] shadow-[0_10px_30px_rgba(214,178,63,0.12)] overflow-hidden">
+            <div className="border-b border-amber-200/60 p-4 sm:p-5 bg-gradient-to-r from-amber-50/60 to-white flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-2">
+                  ⏳ Riwayat Presensi Terakhir
+                </h2>
+                <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                  5 log presensi magang terakhir yang terekam
+                </p>
+              </div>
+
+              <div className="shrink-0">
+                {fotoTerbaru ? (
+                  <a
+                    href={fotoTerbaru}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/25 hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
+                  >
+                    📸 Lihat Foto Presensi
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-200 text-slate-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-xl border border-slate-300">
+                    🚫 Tidak Ada Foto
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              {riwayat.length === 0 ? (
+                <div className="text-center py-8 bg-white/70 rounded-2xl border border-dashed border-amber-200">
+                  <p className="text-sm font-bold text-slate-400">
+                    Belum ada riwayat presensi magang tercatat.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative space-y-3">
+                  <div className="absolute top-3 bottom-4 left-[11px] w-[2px] bg-amber-200 z-0" />
+
+                  {riwayat.map((item, index) => {
+                    const { tanggal, jam } = formatWaktu(item.TIMESTAMP);
+
+                    let statusIcon = "🟢";
+                    let statusText = "HADIR";
+                    let dotColor = "border-emerald-500";
+                    let statusTextColor = "text-emerald-600";
+
+                    if (item.STATUS?.toLowerCase() === "izin") {
+                      statusIcon = "🟡";
+                      statusText = "IZIN";
+                      dotColor = "border-amber-500";
+                      statusTextColor = "text-amber-600";
+                    } else if (item.STATUS?.toLowerCase() === "sakit") {
+                      statusIcon = "🔵";
+                      statusText = "SAKIT";
+                      dotColor = "border-blue-500";
+                      statusTextColor = "text-blue-600";
+                    }
+
+                    return (
+                      <div
+                        key={index}
+                        className="relative z-10 flex items-start gap-3"
+                      >
+                        <div className="shrink-0 mt-3.5 flex justify-center w-[24px]">
+                          <div
+                            className={`h-4 w-4 rounded-full bg-white border-[3px] ${dotColor} shadow-sm`}
+                          />
+                        </div>
+
+                        <div className="flex-1 bg-white/95 backdrop-blur-sm p-3.5 sm:p-4 rounded-2xl border border-amber-200/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <div
+                              className={`font-black text-xs sm:text-sm tracking-wide mb-1 ${statusTextColor}`}
+                            >
+                              {statusIcon} {statusText}
+                            </div>
+                            <p className="text-[11px] sm:text-xs font-bold text-slate-600 truncate max-w-[220px] sm:max-w-sm">
+                              📍 {item.TEMPAT_MAGANG || "-"}
+                            </p>
+                          </div>
+
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 mt-1 sm:mt-0">
+                            <p className="text-[10px] sm:text-xs font-semibold text-slate-600">
+                              {tanggal}
+                            </p>
+                            <p className="text-[10px] sm:text-xs font-medium text-slate-400">
+                              {jam}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -1338,5 +1336,24 @@ function MenuCardDisabled({ title, subtitle, icon }) {
         </p>
       </div>
     </button>
+  );
+}
+
+function LockedSection({ title, subtitle, icon }) {
+  return (
+    <div className="rounded-[2rem] bg-slate-100 border border-slate-300 p-5 sm:p-8 flex items-center gap-4 cursor-not-allowed select-none">
+      <div className="text-2xl sm:text-3xl bg-slate-300/50 w-12 h-12 sm:w-14 sm:h-14 shrink-0 flex items-center justify-center rounded-xl border border-slate-300 text-slate-400">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <h2 className="text-base sm:text-lg font-black text-slate-400 flex items-center gap-2">
+          <span>🔒</span>
+          <span>{title}</span>
+        </h2>
+        <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
+          {subtitle}
+        </p>
+      </div>
+    </div>
   );
 }
