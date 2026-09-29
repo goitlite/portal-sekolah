@@ -668,3 +668,31 @@ export async function getDashboardKepsekWaliKelas(forceRefresh = false) {
 export async function getDashboardKepsekSemua(forceRefresh = false) {
   return request("getDashboardKepsekSemua", { forceRefresh });
 }
+
+// =========================================================
+// PESAN KEPALA SEKOLAH <-> GURU (1 pesan terakhir)
+// =========================================================
+export async function pesanKirim(data) {
+  return request("pesanKirim", {
+    dari: data.dari, // "kepsek" | "guru"
+    idGuru: data.idGuru,
+    idPengirim: data.idPengirim,
+    isi: data.isi,
+  });
+}
+
+export async function pesanGet(idGuru) {
+  return request("pesanGet", { idGuru });
+}
+
+export async function pesanGetDaftar() {
+  return request("pesanGetDaftar");
+}
+
+export async function pesanTandaiDibaca(idGuru, oleh) {
+  return request("pesanTandaiDibaca", { idGuru, oleh }); // oleh: "guru" | "kepsek"
+}
+
+export async function pesanGetJumlahBaru(role, idGuru = "") {
+  return request("pesanGetJumlahBaru", { role, idGuru });
+}

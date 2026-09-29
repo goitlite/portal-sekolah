@@ -48,6 +48,7 @@ import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
 import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
 import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
+import { PesanGuruModal, useJumlahPesanBaru } from "../kepsek/PesanKepsekGuru";
 
 // --- OPTIMASI FOTO: paksa Google mengirim versi kecil, bukan resolusi asli ---
 // Foto asli dari kamera HP bisa 3-8MB / 4000x3000px. Ditampilkan di thumbnail kecil
@@ -293,6 +294,14 @@ function DashboardGuruContent() {
   const [loadFailedMessage, setLoadFailedMessage] = useState(""); // ⬅️ TAMBAHKAN
   const isMountedRef = useRef(true); // ⬅️ TAMBAHKAN: pengganti isMounted lokal agar bisa dipakai ulang oleh tombol refresh
   const [user, setUser] = useState(null);
+
+  // --- PESAN DARI / KE KEPALA SEKOLAH ---
+  const [showPesanKepsek, setShowPesanKepsek] = useState(false);
+  const [jumlahPesanBaru, refreshPesanBaru] = useJumlahPesanBaru({
+    role: "guru",
+    idGuru: user?.id ? String(user.id) : "",
+    enabled: !!user?.id,
+  });
   const [aktivitas, setAktivitas] = useState([]);
   const [tempatMagang, setTempatMagang] = useState([]);
   const [dashboard, setDashboard] = useState({
@@ -1741,12 +1750,26 @@ function DashboardGuruContent() {
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
-          >
-            ❌ LOGOUT
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPesanKepsek(true)}
+              className="relative rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-black text-white border border-sky-300/50 shadow-lg hover:brightness-110 active:scale-95 transition-all duration-300"
+            >
+              ✉️ PESAN
+              {jumlahPesanBaru > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border border-white shadow">
+                  {jumlahPesanBaru}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
+            >
+              ❌ LOGOUT
+            </button>
+          </div>
         </div>
       </header>
 
@@ -5328,6 +5351,17 @@ function DashboardGuruContent() {
           }}
         />
       )}
+
+      {/* MODAL: PESAN KEPALA SEKOLAH */}
+      <PesanGuruModal
+        isOpen={showPesanKepsek}
+        user={user}
+        onChanged={refreshPesanBaru}
+        onClose={() => {
+          setShowPesanKepsek(false);
+          refreshPesanBaru();
+        }}
+      />
 
       {/* MODAL: ISI JURNAL GURU WALI */}
       <ModalJurnalGuruWali

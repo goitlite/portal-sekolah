@@ -20,6 +20,10 @@ import {
   getMonitoringGuru,
 } from "../lib/api";
 import { generateLaporanWaliKelasPDF } from "../guru/guru-wali-kelas/generateLaporanWaliKelasPDF";
+import {
+  PesanKepsekModal,
+  useJumlahPesanBaru,
+} from "../kepsek/PesanKepsekGuru";
 
 // --- OPTIMASI FOTO GOOGLE DRIVE / USER CONTENT ---
 function optimizeFotoUrl(url, size = 300) {
@@ -103,6 +107,47 @@ export default function DashboardKepalaSekolah() {
   const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
   const [user, setUser] = useState(null);
   const [isReady, setIsReady] = useState(false);
+
+  // --- PESAN KEPALA SEKOLAH <-> GURU ---
+  const [showPesan, setShowPesan] = useState(false);
+  const [pesanTarget, setPesanTarget] = useState(null);
+  const [jumlahPesanBaru, refreshPesanBaru] = useJumlahPesanBaru({
+    role: "kepsek",
+    idGuru: "",
+    enabled: isReady,
+  });
+
+  // --- MODE TAMPILAN DAFTAR: "list" | "card" ---
+  const [viewMode, setViewMode] = useState("list");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const v = localStorage.getItem("kepsek_view_mode");
+        if (v === "list" || v === "card") setViewMode(v);
+      } catch (e) {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  function ubahViewMode(mode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("kepsek_view_mode", mode);
+    } catch (e) {}
+  }
+
+  // guru: objek berisi idGuru & namaGuru (atau null = buka kotak pesan)
+  function bukaPesan(guru) {
+    if (guru) {
+      setPesanTarget({
+        idGuru: String(guru.idGuru || guru.id || "").trim(),
+        namaGuru: String(guru.namaGuru || guru.nama || "").trim(),
+      });
+    } else {
+      setPesanTarget(null);
+    }
+    setShowPesan(true);
+  }
 
   // --- STATE MODAL STATISTIK (POP-UP DAFTAR NAMA) ---
   const [statModalConfig, setStatModalConfig] = useState({
@@ -1068,6 +1113,18 @@ export default function DashboardKepalaSekolah() {
 
           <div className="flex items-center gap-2.5">
             <button
+              type="button"
+              onClick={() => bukaPesan(null)}
+              className="relative rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 px-3.5 py-2 text-xs font-black text-white border border-sky-300/50 shadow-md hover:brightness-110 active:scale-95 transition-all"
+            >
+              ✉️ PESAN
+              {jumlahPesanBaru > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border border-white shadow">
+                  {jumlahPesanBaru}
+                </span>
+              )}
+            </button>
+            <button
               onClick={handleLogout}
               className="rounded-xl bg-gradient-to-r from-rose-700 to-red-800 px-4 py-2 text-xs font-black text-white border border-rose-400/50 shadow-md hover:brightness-110 active:scale-95 transition-all"
             >
@@ -1321,6 +1378,37 @@ export default function DashboardKepalaSekolah() {
         {/* ======================================================= */}
         {/* KONTEN TAB 1: PEMBIMBING PKL */}
         {/* ======================================================= */}
+
+        {/* TOGGLE TAMPILAN: LIST / KARTU (berlaku untuk semua tab) */}
+        <div className="flex items-center justify-between gap-3 -mb-2">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Tampilan Daftar
+          </p>
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => ubahViewMode("list")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                viewMode === "list"
+                  ? "bg-blue-900 text-white shadow"
+                  : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              ☰ List
+            </button>
+            <button
+              type="button"
+              onClick={() => ubahViewMode("card")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                viewMode === "card"
+                  ? "bg-blue-900 text-white shadow"
+                  : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              ▦ Kartu
+            </button>
+          </div>
+        </div>
         {activeMenuTab === "pembimbing" && (
           <div className="space-y-6">
             {/* STATISTIK GRID MODUL PKL */}
@@ -1453,141 +1541,213 @@ export default function DashboardKepalaSekolah() {
               </div>
             )}
 
-            {!loadingPkl && filteredCardsPkl.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCardsPkl.map((guru) => {
-                  const siswaPklCount = getSiswaPklList(guru).length;
-                  return (
-                    <div
-                      key={guru.idGuru}
-                      onClick={() => setSelectedGuruPkl(guru)}
-                      className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
-                    >
-                      {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
-                      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+            {!loadingPkl &&
+              filteredCardsPkl.length > 0 &&
+              viewMode === "list" && (
+                <div className="space-y-3">
+                  {filteredCardsPkl.map((guru, idx) => {
+                    const siswaPklCount = getSiswaPklList(guru).length;
+                    return (
+                      <GuruListRow
+                        key={guru.idGuru}
+                        no={idx + 1}
+                        initials={String(guru.namaGuru || "?")
+                          .substring(0, 2)
+                          .toUpperCase()}
+                        title={guru.namaGuru}
+                        subtitle={`ID: ${guru.idGuru}`}
+                        badge={{
+                          text: guru.sudahIsiJurnal
+                            ? "Aktif Jurnal"
+                            : "Belum Jurnal",
+                          tone: guru.sudahIsiJurnal ? "ok" : "warn",
+                        }}
+                        metas={[
+                          {
+                            label: "Siswa PKL",
+                            value: `${siswaPklCount} Siswa`,
+                          },
+                          {
+                            label: "DUDI / Tempat",
+                            value: `${guru.jumlahTempat || 0} Lokasi`,
+                          },
+                          {
+                            label: "Monitoring",
+                            value: `${guru.totalMonitoring || 0}x Laporan`,
+                            tone: "text-emerald-300",
+                          },
+                          {
+                            label: "Jurnal Terakhir",
+                            value:
+                              guru.jurnalTerakhir?.materi || "Belum ada materi",
+                          },
+                        ]}
+                        actions={[
+                          {
+                            icon: "📷",
+                            label: `Monitoring (${guru.totalMonitoring || 0})`,
+                            tone: "emerald",
+                            onClick: () => handleOpenMonitoring(guru),
+                          },
+                          {
+                            icon: "📋",
+                            label: "Presensi",
+                            tone: "amber",
+                            onClick: () => handleLihatPresensiSiswa(guru),
+                          },
+                          {
+                            icon: "✉️",
+                            label: "Pesan",
+                            tone: "sky",
+                            onClick: () => bukaPesan(guru),
+                          },
+                        ]}
+                        onClick={() => setSelectedGuruPkl(guru)}
+                      />
+                    );
+                  })}
+                </div>
+              )}
 
-                      <div className="relative z-10">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
-                              {guru.namaGuru.substring(0, 2).toUpperCase()}
+            {!loadingPkl &&
+              filteredCardsPkl.length > 0 &&
+              viewMode === "card" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCardsPkl.map((guru) => {
+                    const siswaPklCount = getSiswaPklList(guru).length;
+                    return (
+                      <div
+                        key={guru.idGuru}
+                        onClick={() => setSelectedGuruPkl(guru)}
+                        className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                      >
+                        {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
+                        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
+                                {guru.namaGuru.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
+                                  {guru.namaGuru}
+                                </h4>
+                                <p className="text-[11px] font-medium text-blue-300">
+                                  ID: {guru.idGuru}
+                                </p>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
+                                guru.sudahIsiJurnal
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                  : "bg-rose-500/20 text-rose-300 border-rose-400/30"
+                              }`}
+                            >
+                              {guru.sudahIsiJurnal
+                                ? "Aktif Jurnal"
+                                : "Belum Jurnal"}
+                            </span>
+                          </div>
+
+                          {/* Info Siswa & Tempat & Monitoring */}
+                          <div className="mt-4 grid grid-cols-3 gap-2 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
+                            <div>
+                              <p className="text-[10px] font-bold text-blue-300/80 uppercase">
+                                Siswa PKL
+                              </p>
+                              <p className="text-xs font-black text-white">
+                                {siswaPklCount} Siswa
+                              </p>
                             </div>
                             <div>
-                              <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
-                                {guru.namaGuru}
-                              </h4>
-                              <p className="text-[11px] font-medium text-blue-300">
-                                ID: {guru.idGuru}
+                              <p className="text-[10px] font-bold text-blue-300/80 uppercase">
+                                DUDI / Tempat
+                              </p>
+                              <p className="text-xs font-black text-white">
+                                {guru.jumlahTempat} Lokasi
+                              </p>
+                            </div>
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenMonitoring(guru);
+                              }}
+                              className="cursor-pointer hover:bg-emerald-500/20 rounded-lg p-0.5 transition-colors group/mon"
+                              title="Klik untuk melihat foto dan keterangan monitoring"
+                            >
+                              <p className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-0.5">
+                                <span>📷</span> Monitoring
+                              </p>
+                              <p className="text-xs font-black text-emerald-300 underline decoration-dotted group-hover/mon:text-emerald-200">
+                                {guru.totalMonitoring || 0}x Laporan
                               </p>
                             </div>
                           </div>
 
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
-                              guru.sudahIsiJurnal
-                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
-                                : "bg-rose-500/20 text-rose-300 border-rose-400/30"
-                            }`}
-                          >
-                            {guru.sudahIsiJurnal
-                              ? "Aktif Jurnal"
-                              : "Belum Jurnal"}
-                          </span>
-                        </div>
-
-                        {/* Info Siswa & Tempat & Monitoring */}
-                        <div className="mt-4 grid grid-cols-3 gap-2 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
-                          <div>
-                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                              Siswa PKL
+                          {/* Jurnal Terakhir */}
+                          <div className="mt-3">
+                            <p className="text-[10px] font-bold text-amber-300/80 uppercase">
+                              Jurnal Terakhir:
                             </p>
-                            <p className="text-xs font-black text-white">
-                              {siswaPklCount} Siswa
+                            <p className="text-xs font-semibold text-blue-50 line-clamp-1">
+                              {guru.jurnalTerakhir?.materi ||
+                                "Belum ada materi tercatat"}
                             </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                              DUDI / Tempat
-                            </p>
-                            <p className="text-xs font-black text-white">
-                              {guru.jumlahTempat} Lokasi
-                            </p>
-                          </div>
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenMonitoring(guru);
-                            }}
-                            className="cursor-pointer hover:bg-emerald-500/20 rounded-lg p-0.5 transition-colors group/mon"
-                            title="Klik untuk melihat foto dan keterangan monitoring"
-                          >
-                            <p className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-0.5">
-                              <span>📷</span> Monitoring
-                            </p>
-                            <p className="text-xs font-black text-emerald-300 underline decoration-dotted group-hover/mon:text-emerald-200">
-                              {guru.totalMonitoring || 0}x Laporan
-                            </p>
+                            {guru.jurnalTerakhir?.tanggal && (
+                              <p className="text-[10px] text-blue-300/70">
+                                📅{" "}
+                                {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        {/* Jurnal Terakhir */}
-                        <div className="mt-3">
-                          <p className="text-[10px] font-bold text-amber-300/80 uppercase">
-                            Jurnal Terakhir:
-                          </p>
-                          <p className="text-xs font-semibold text-blue-50 line-clamp-1">
-                            {guru.jurnalTerakhir?.materi ||
-                              "Belum ada materi tercatat"}
-                          </p>
-                          {guru.jurnalTerakhir?.tanggal && (
-                            <p className="text-[10px] text-blue-300/70">
-                              📅{" "}
-                              {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
-                            </p>
-                          )}
+                        <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenMonitoring(guru);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
+                            >
+                              <span>📷</span>
+                              <span>
+                                Monitoring ({guru.totalMonitoring || 0})
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLihatPresensiSiswa(guru);
+                              }}
+                              title="Buka halaman Rekap Presensi untuk guru pembimbing ini"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
+                            >
+                              <span>📋</span>
+                              <span>Presensi Siswa</span>
+                            </button>
+
+                            <PesanButton onClick={() => bukaPesan(guru)} />
+                          </div>
+
+                          <div className="flex items-center gap-1 font-black text-amber-400 group-hover:translate-x-1 transition-transform">
+                            <span>Rincian</span>
+                            <span>→</span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenMonitoring(guru);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
-                          >
-                            <span>📷</span>
-                            <span>
-                              Monitoring ({guru.totalMonitoring || 0})
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleLihatPresensiSiswa(guru);
-                            }}
-                            title="Buka halaman Rekap Presensi untuk guru pembimbing ini"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 font-bold border border-white/10 transition-colors shadow-xs active:scale-95"
-                          >
-                            <span>📋</span>
-                            <span>Presensi Siswa</span>
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1 font-black text-amber-400 group-hover:translate-x-1 transition-transform">
-                          <span>Rincian</span>
-                          <span>→</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
           </div>
         )}
 
@@ -1699,90 +1859,147 @@ export default function DashboardKepalaSekolah() {
               </div>
             )}
 
-            {!loadingWali && filteredCardsWali.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCardsWali.map((guru) => (
-                  <div
-                    key={guru.idGuru}
-                    onClick={() => setSelectedGuruWali(guru)}
-                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
-                  >
-                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+            {!loadingWali &&
+              filteredCardsWali.length > 0 &&
+              viewMode === "list" && (
+                <div className="space-y-3">
+                  {filteredCardsWali.map((guru, idx) => (
+                    <GuruListRow
+                      key={guru.idGuru}
+                      no={idx + 1}
+                      initials={String(guru.namaGuru || "?")
+                        .substring(0, 2)
+                        .toUpperCase()}
+                      title={guru.namaGuru}
+                      subtitle={`ID: ${guru.idGuru}`}
+                      badge={{
+                        text: `${guru.totalPertemuan} Pertemuan`,
+                        tone: guru.totalPertemuan > 0 ? "ok" : "neutral",
+                      }}
+                      metas={[
+                        {
+                          label: "Anak Wali",
+                          value: `${guru.jumlahSiswa} Siswa`,
+                        },
+                        {
+                          label: "Rasio Bimbingan",
+                          value:
+                            guru.jumlahSiswa > 0
+                              ? `${(guru.totalPertemuan / guru.jumlahSiswa).toFixed(1)}x / siswa`
+                              : "-",
+                          tone: "text-amber-300",
+                        },
+                        {
+                          label: "Topik Terakhir",
+                          value:
+                            guru.jurnalTerakhir?.topik || "Belum ada catatan",
+                          wide: true,
+                        },
+                      ]}
+                      actions={[
+                        {
+                          icon: "✉️",
+                          label: "Pesan",
+                          tone: "sky",
+                          onClick: () => bukaPesan(guru),
+                        },
+                      ]}
+                      onClick={() => setSelectedGuruWali(guru)}
+                    />
+                  ))}
+                </div>
+              )}
 
-                    <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
-                            {guru.namaGuru.substring(0, 2).toUpperCase()}
+            {!loadingWali &&
+              filteredCardsWali.length > 0 &&
+              viewMode === "card" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCardsWali.map((guru) => (
+                    <div
+                      key={guru.idGuru}
+                      onClick={() => setSelectedGuruWali(guru)}
+                      className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                    >
+                      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
+                              {guru.namaGuru.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
+                                {guru.namaGuru}
+                              </h4>
+                              <p className="text-[11px] font-medium text-blue-300">
+                                ID: {guru.idGuru}
+                              </p>
+                            </div>
                           </div>
+
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${
+                              guru.totalPertemuan > 0
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                : "bg-white/10 text-slate-300 border-white/20"
+                            }`}
+                          >
+                            {guru.totalPertemuan} Pertemuan
+                          </span>
+                        </div>
+
+                        {/* Info Anak Wali */}
+                        <div className="mt-4 bg-blue-950/60 p-3 rounded-xl border border-blue-800/50 flex items-center justify-between">
                           <div>
-                            <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
-                              {guru.namaGuru}
-                            </h4>
-                            <p className="text-[11px] font-medium text-blue-300">
-                              ID: {guru.idGuru}
+                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
+                              Jumlah Anak Wali
+                            </p>
+                            <p className="text-sm font-black text-white">
+                              {guru.jumlahSiswa} Siswa
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-blue-300/80 uppercase">
+                              Rasio Bimbingan
+                            </p>
+                            <p className="text-sm font-black text-amber-400">
+                              {guru.jumlahSiswa > 0
+                                ? `${(guru.totalPertemuan / guru.jumlahSiswa).toFixed(1)}x / siswa`
+                                : "-"}
                             </p>
                           </div>
                         </div>
 
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${
-                            guru.totalPertemuan > 0
-                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
-                              : "bg-white/10 text-slate-300 border-white/20"
-                          }`}
-                        >
-                          {guru.totalPertemuan} Pertemuan
+                        {/* Topik Jurnal Terakhir */}
+                        <div className="mt-3">
+                          <p className="text-[10px] font-bold text-amber-300/80 uppercase">
+                            Topik Terakhir:
+                          </p>
+                          <p className="text-xs font-semibold text-blue-50 line-clamp-1">
+                            {guru.jurnalTerakhir?.topik ||
+                              "Belum ada catatan pertemuan"}
+                          </p>
+                          {guru.jurnalTerakhir?.tanggal && (
+                            <p className="text-[10px] text-blue-300/70">
+                              📅{" "}
+                              {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between gap-2 text-xs font-black text-amber-400">
+                        <PesanButton onClick={() => bukaPesan(guru)} />
+                        <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                          <span>Detail Jurnal & Murid</span>
+                          <span>→</span>
                         </span>
                       </div>
-
-                      {/* Info Anak Wali */}
-                      <div className="mt-4 bg-blue-950/60 p-3 rounded-xl border border-blue-800/50 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                            Jumlah Anak Wali
-                          </p>
-                          <p className="text-sm font-black text-white">
-                            {guru.jumlahSiswa} Siswa
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                            Rasio Bimbingan
-                          </p>
-                          <p className="text-sm font-black text-amber-400">
-                            {guru.jumlahSiswa > 0
-                              ? `${(guru.totalPertemuan / guru.jumlahSiswa).toFixed(1)}x / siswa`
-                              : "-"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Topik Jurnal Terakhir */}
-                      <div className="mt-3">
-                        <p className="text-[10px] font-bold text-amber-300/80 uppercase">
-                          Topik Terakhir:
-                        </p>
-                        <p className="text-xs font-semibold text-blue-50 line-clamp-1">
-                          {guru.jurnalTerakhir?.topik ||
-                            "Belum ada catatan pertemuan"}
-                        </p>
-                        {guru.jurnalTerakhir?.tanggal && (
-                          <p className="text-[10px] text-blue-300/70">
-                            📅 {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
-                          </p>
-                        )}
-                      </div>
                     </div>
-
-                    <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between text-xs font-black text-amber-400 group-hover:translate-x-1 transition-transform">
-                      <span>Detail Jurnal & Murid</span>
-                      <span>→</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
           </div>
         )}
 
@@ -1882,84 +2099,147 @@ export default function DashboardKepalaSekolah() {
               </div>
             )}
 
-            {!loadingMapel && filteredCardsMapel.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCardsMapel.map((guru) => (
-                  <div
-                    key={guru.idGuru}
-                    onClick={() => setSelectedGuruMapel(guru)}
-                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
-                  >
-                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
-
-                    <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
-                            {guru.namaGuru.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
-                              {guru.namaGuru}
-                            </h4>
-                            <p className="text-[11px] font-medium text-blue-300">
-                              ID: {guru.idGuru}
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className="px-2.5 py-0.5 rounded-full bg-blue-800/60 border border-blue-600 text-amber-200 text-[10px] font-black">
-                          {guru.jumlahMapel} Mapel
-                        </span>
-                      </div>
-
-                      {/* Daftar Mata Pelajaran Diampu */}
-                      <div className="mt-4 space-y-1.5">
-                        <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                          Mata Pelajaran & Kelas:
-                        </p>
+            {!loadingMapel &&
+              filteredCardsMapel.length > 0 &&
+              viewMode === "list" && (
+                <div className="space-y-3">
+                  {filteredCardsMapel.map((guru, idx) => (
+                    <GuruListRow
+                      key={guru.idGuru}
+                      no={idx + 1}
+                      initials={String(guru.namaGuru || "?")
+                        .substring(0, 2)
+                        .toUpperCase()}
+                      title={guru.namaGuru}
+                      subtitle={`ID: ${guru.idGuru}`}
+                      badge={{
+                        text: `${guru.jumlahMapel} Mapel`,
+                        tone: "info",
+                      }}
+                      metas={[
+                        {
+                          label: "Jurnal Terakhir",
+                          value:
+                            guru.jurnalTerakhir?.topik ||
+                            "Belum ada catatan jurnal",
+                          wide: true,
+                        },
+                      ]}
+                      extra={
                         <div className="flex flex-wrap gap-1.5">
-                          {guru.daftarMapel.slice(0, 3).map((m, idx) => (
+                          {(guru.daftarMapel || []).slice(0, 3).map((m, i) => (
                             <span
-                              key={idx}
+                              key={i}
                               className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[11px] font-semibold border border-white/20"
                             >
                               {m.namaMapel} ({m.kelas})
                             </span>
                           ))}
-                          {guru.daftarMapel.length > 3 && (
+                          {(guru.daftarMapel || []).length > 3 && (
                             <span className="px-2 py-0.5 rounded-md bg-white/5 text-blue-200 text-[11px] font-bold">
                               +{guru.daftarMapel.length - 3} lainnya
                             </span>
                           )}
                         </div>
-                      </div>
+                      }
+                      actions={[
+                        {
+                          icon: "✉️",
+                          label: "Pesan",
+                          tone: "sky",
+                          onClick: () => bukaPesan(guru),
+                        },
+                      ]}
+                      onClick={() => setSelectedGuruMapel(guru)}
+                    />
+                  ))}
+                </div>
+              )}
 
-                      {/* Jurnal Terakhir */}
-                      <div className="mt-3 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
-                        <p className="text-[10px] font-bold text-amber-300/80 uppercase">
-                          Jurnal Terakhir:
-                        </p>
-                        <p className="text-xs font-semibold text-blue-50 line-clamp-1">
-                          {guru.jurnalTerakhir?.topik ||
-                            "Belum ada catatan jurnal"}
-                        </p>
-                        {guru.jurnalTerakhir?.tanggal && (
-                          <p className="text-[10px] text-blue-300/70">
-                            📅 {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
+            {!loadingMapel &&
+              filteredCardsMapel.length > 0 &&
+              viewMode === "card" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCardsMapel.map((guru) => (
+                    <div
+                      key={guru.idGuru}
+                      onClick={() => setSelectedGuruMapel(guru)}
+                      className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-5 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                    >
+                      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md">
+                              {guru.namaGuru.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
+                                {guru.namaGuru}
+                              </h4>
+                              <p className="text-[11px] font-medium text-blue-300">
+                                ID: {guru.idGuru}
+                              </p>
+                            </div>
+                          </div>
+
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-800/60 border border-blue-600 text-amber-200 text-[10px] font-black">
+                            {guru.jumlahMapel} Mapel
+                          </span>
+                        </div>
+
+                        {/* Daftar Mata Pelajaran Diampu */}
+                        <div className="mt-4 space-y-1.5">
+                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
+                            Mata Pelajaran & Kelas:
                           </p>
-                        )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {guru.daftarMapel.slice(0, 3).map((m, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[11px] font-semibold border border-white/20"
+                              >
+                                {m.namaMapel} ({m.kelas})
+                              </span>
+                            ))}
+                            {guru.daftarMapel.length > 3 && (
+                              <span className="px-2 py-0.5 rounded-md bg-white/5 text-blue-200 text-[11px] font-bold">
+                                +{guru.daftarMapel.length - 3} lainnya
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Jurnal Terakhir */}
+                        <div className="mt-3 bg-blue-950/60 p-2.5 rounded-xl border border-blue-800/50">
+                          <p className="text-[10px] font-bold text-amber-300/80 uppercase">
+                            Jurnal Terakhir:
+                          </p>
+                          <p className="text-xs font-semibold text-blue-50 line-clamp-1">
+                            {guru.jurnalTerakhir?.topik ||
+                              "Belum ada catatan jurnal"}
+                          </p>
+                          {guru.jurnalTerakhir?.tanggal && (
+                            <p className="text-[10px] text-blue-300/70">
+                              📅{" "}
+                              {formatTanggalIndo(guru.jurnalTerakhir.tanggal)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between gap-2 text-xs font-black text-amber-400">
+                        <PesanButton onClick={() => bukaPesan(guru)} />
+                        <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                          <span>Rincian Kelas & Jurnal</span>
+                          <span>→</span>
+                        </span>
                       </div>
                     </div>
-
-                    <div className="relative z-10 mt-4 pt-3 border-t border-blue-800/50 flex items-center justify-between text-xs font-black text-amber-400 group-hover:translate-x-1 transition-transform">
-                      <span>Rincian Kelas & Jurnal</span>
-                      <span>→</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
           </div>
         )}
 
@@ -2124,207 +2404,275 @@ export default function DashboardKepalaSekolah() {
               </div>
             )}
 
-            {!loadingWaliKelas && filteredCardsWaliKelas.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredCardsWaliKelas.map((wali) => (
-                  <div
-                    key={wali.idWali}
-                    className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-3xl border border-blue-700/50 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 flex flex-col justify-between"
-                  >
-                    {/* Top Gradient Accent Bar (Diganti jadi kuning emas) */}
-                    <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 absolute top-0 left-0 z-20" />
+            {!loadingWaliKelas &&
+              filteredCardsWaliKelas.length > 0 &&
+              viewMode === "list" && (
+                <div className="space-y-3">
+                  {filteredCardsWaliKelas.map((wali, idx) => (
+                    <GuruListRow
+                      key={wali.idWali}
+                      no={idx + 1}
+                      initials={String(wali.namaGuru || "?")
+                        .substring(0, 2)
+                        .toUpperCase()}
+                      title={wali.namaGuru}
+                      subtitle={`🏫 ${wali.namaKelas}${wali.keterangan ? ` • ${wali.keterangan}` : ""}`}
+                      badge={{
+                        text: `${wali.presensiHariIni?.persenHadir ?? 0}% Hadir`,
+                        tone:
+                          (wali.presensiHariIni?.persenHadir ?? 0) >= 75
+                            ? "ok"
+                            : "warn",
+                      }}
+                      metas={[
+                        { label: "Siswa", value: `${wali.jumlahSiswa} Siswa` },
+                        {
+                          label:
+                            wali.presensiHariIni?.isToday === false &&
+                            wali.presensiHariIni?.tanggal
+                              ? `Hadir (${formatTanggalKolom(wali.presensiHariIni.tanggal)})`
+                              : "Hadir Hari Ini",
+                          value: `${wali.presensiHariIni?.hadir || 0} siswa`,
+                          tone: "text-emerald-300",
+                        },
+                        {
+                          label: "S / I / A",
+                          value: `${wali.presensiHariIni?.sakit || 0} / ${wali.presensiHariIni?.izin || 0} / ${wali.presensiHariIni?.alfa || 0}`,
+                        },
+                        {
+                          label: "Bimbingan",
+                          value: `${wali.jumlahJurnal || 0} Pertemuan`,
+                          tone: "text-amber-300",
+                        },
+                      ]}
+                      actions={[
+                        {
+                          icon: "📅",
+                          label: "Rekap Presensi",
+                          tone: "amber",
+                          onClick: () => setSelectedPresensiKelasModal(wali),
+                        },
+                        {
+                          icon: "✉️",
+                          label: "Pesan",
+                          tone: "sky",
+                          onClick: () => bukaPesan(wali),
+                        },
+                      ]}
+                      onClick={() => setSelectedWaliKelas(wali)}
+                    />
+                  ))}
+                </div>
+              )}
 
-                    {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
-                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
+            {!loadingWaliKelas &&
+              filteredCardsWaliKelas.length > 0 &&
+              viewMode === "card" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredCardsWaliKelas.map((wali) => (
+                    <div
+                      key={wali.idWali}
+                      className="group relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 rounded-3xl border border-blue-700/50 shadow-lg hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 flex flex-col justify-between"
+                    >
+                      {/* Top Gradient Accent Bar (Diganti jadi kuning emas) */}
+                      <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 absolute top-0 left-0 z-20" />
 
-                    <div className="p-5 relative z-10 mt-1">
-                      {/* Class Badge & Total Siswa */}
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-800/60 border border-blue-600/50 text-amber-300 text-xs font-black shadow-2xs">
-                          <span>🏫</span>
-                          <span>{wali.namaKelas}</span>
-                        </span>
-                        <span className="px-2.5 py-1 rounded-xl bg-white/10 text-white text-xs font-black border border-white/20">
-                          {wali.jumlahSiswa} Siswa
-                        </span>
-                      </div>
+                      {/* Efek Sedikit Gradien Kuning di Sudut Kanan Atas */}
+                      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/5 blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500"></div>
 
-                      {/* Wali Info */}
-                      <div className="mt-3 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm shrink-0 shadow-md">
-                          👨‍🏫
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors truncate">
-                            {wali.namaGuru}
-                          </h4>
-                          <p className="text-[11px] font-medium text-blue-300 truncate">
-                            {wali.keterangan || "Wali Kelas Reguler"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* WIDGET PRESENSI HARI INI / SESI AKTIF */}
-                      <div className="mt-4 p-3.5 rounded-2xl bg-blue-950/60 border border-blue-800/70">
-                        <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-200">
-                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                            <span>
-                              {wali.presensiHariIni?.isToday === false &&
-                              wali.presensiHariIni?.tanggal
-                                ? `PRESENSI (${formatTanggalIndo(wali.presensiHariIni.tanggal)})`
-                                : "PRESENSI HARI INI"}
-                            </span>
+                      <div className="p-5 relative z-10 mt-1">
+                        {/* Class Badge & Total Siswa */}
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-800/60 border border-blue-600/50 text-amber-300 text-xs font-black shadow-2xs">
+                            <span>🏫</span>
+                            <span>{wali.namaKelas}</span>
                           </span>
-                          <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-emerald-500/30 border border-emerald-400/30 text-emerald-300 shadow-2xs">
-                            {wali.presensiHariIni?.persenHadir ?? 0}% Hadir
+                          <span className="px-2.5 py-1 rounded-xl bg-white/10 text-white text-xs font-black border border-white/20">
+                            {wali.jumlahSiswa} Siswa
                           </span>
                         </div>
 
-                        {/* Progress Bar Kehadiran */}
-                        <div className="w-full bg-blue-900/50 h-2 rounded-full overflow-hidden mt-2 border border-blue-800/50">
-                          <div
-                            className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${Math.min(100, Math.max(0, wali.presensiHariIni?.persenHadir ?? 0))}%`,
-                            }}
-                          />
-                        </div>
-
-                        {/* 4 Status Hari Ini */}
-                        <div className="grid grid-cols-4 gap-1.5 mt-2.5 text-center">
-                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
-                            <p className="text-[9px] font-bold text-blue-300">
-                              HADIR
-                            </p>
-                            <p className="text-xs font-black text-emerald-400">
-                              {wali.presensiHariIni?.hadir || 0}
-                            </p>
+                        {/* Wali Info */}
+                        <div className="mt-3 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm shrink-0 shadow-md">
+                            👨‍🏫
                           </div>
-                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
-                            <p className="text-[9px] font-bold text-blue-300">
-                              SAKIT
-                            </p>
-                            <p className="text-xs font-black text-sky-400">
-                              {wali.presensiHariIni?.sakit || 0}
-                            </p>
-                          </div>
-                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
-                            <p className="text-[9px] font-bold text-blue-300">
-                              IZIN
-                            </p>
-                            <p className="text-xs font-black text-amber-400">
-                              {wali.presensiHariIni?.izin || 0}
-                            </p>
-                          </div>
-                          <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
-                            <p className="text-[9px] font-bold text-blue-300">
-                              ALFA
-                            </p>
-                            <p className="text-xs font-black text-rose-400">
-                              {wali.presensiHariIni?.alfa || 0}
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors truncate">
+                              {wali.namaGuru}
+                            </h4>
+                            <p className="text-[11px] font-medium text-blue-300 truncate">
+                              {wali.keterangan || "Wali Kelas Reguler"}
                             </p>
                           </div>
                         </div>
 
-                        {/* Siswa Hadir Hari Ini Dropdown / List */}
-                        <div className="mt-3 pt-2.5 border-t border-blue-800/60">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedHadirWaliId(
-                                expandedHadirWaliId === wali.idWali
-                                  ? null
-                                  : wali.idWali,
-                              )
-                            }
-                            className="w-full flex items-center justify-between text-[11px] font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <span>👥</span>
+                        {/* WIDGET PRESENSI HARI INI / SESI AKTIF */}
+                        <div className="mt-4 p-3.5 rounded-2xl bg-blue-950/60 border border-blue-800/70">
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-200">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                               <span>
-                                Siswa Hadir Hari Ini (
-                                {wali.presensiHariIni?.siswaHadirList?.length ||
-                                  0}
-                                )
+                                {wali.presensiHariIni?.isToday === false &&
+                                wali.presensiHariIni?.tanggal
+                                  ? `PRESENSI (${formatTanggalIndo(wali.presensiHariIni.tanggal)})`
+                                  : "PRESENSI HARI INI"}
                               </span>
                             </span>
-                            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-md border border-white/20 shadow-2xs text-white">
-                              {expandedHadirWaliId === wali.idWali
-                                ? "Tutup ▲"
-                                : "Lihat ▼"}
+                            <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-emerald-500/30 border border-emerald-400/30 text-emerald-300 shadow-2xs">
+                              {wali.presensiHariIni?.persenHadir ?? 0}% Hadir
                             </span>
-                          </button>
+                          </div>
 
-                          {expandedHadirWaliId === wali.idWali && (
-                            <div className="mt-2 space-y-1 max-h-36 overflow-y-auto pr-1">
-                              {!wali.presensiHariIni?.siswaHadirList ||
-                              wali.presensiHariIni.siswaHadirList.length ===
-                                0 ? (
-                                <p className="text-[10px] text-blue-300 italic text-center py-2 bg-blue-900/30 rounded-lg border border-blue-800/50">
-                                  Belum ada siswa yang presensi hadir hari ini.
-                                </p>
-                              ) : (
-                                wali.presensiHariIni.siswaHadirList.map(
-                                  (s, sIdx) => (
-                                    <div
-                                      key={sIdx}
-                                      className="flex items-center justify-between text-[10px] bg-blue-900/50 p-1.5 rounded-lg border border-blue-800/50 shadow-2xs"
-                                    >
-                                      <span className="font-bold text-white truncate max-w-[150px] sm:max-w-[180px]">
-                                        {s.nama || s.namaSiswa}
-                                      </span>
-                                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-black text-[9px] shrink-0 border border-emerald-500/30">
-                                        Hadir
-                                      </span>
-                                    </div>
-                                  ),
-                                )
-                              )}
+                          {/* Progress Bar Kehadiran */}
+                          <div className="w-full bg-blue-900/50 h-2 rounded-full overflow-hidden mt-2 border border-blue-800/50">
+                            <div
+                              className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, wali.presensiHariIni?.persenHadir ?? 0))}%`,
+                              }}
+                            />
+                          </div>
+
+                          {/* 4 Status Hari Ini */}
+                          <div className="grid grid-cols-4 gap-1.5 mt-2.5 text-center">
+                            <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                              <p className="text-[9px] font-bold text-blue-300">
+                                HADIR
+                              </p>
+                              <p className="text-xs font-black text-emerald-400">
+                                {wali.presensiHariIni?.hadir || 0}
+                              </p>
                             </div>
-                          )}
+                            <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                              <p className="text-[9px] font-bold text-blue-300">
+                                SAKIT
+                              </p>
+                              <p className="text-xs font-black text-sky-400">
+                                {wali.presensiHariIni?.sakit || 0}
+                              </p>
+                            </div>
+                            <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                              <p className="text-[9px] font-bold text-blue-300">
+                                IZIN
+                              </p>
+                              <p className="text-xs font-black text-amber-400">
+                                {wali.presensiHariIni?.izin || 0}
+                              </p>
+                            </div>
+                            <div className="bg-blue-900/40 p-1.5 rounded-xl border border-blue-800/50 shadow-2xs">
+                              <p className="text-[9px] font-bold text-blue-300">
+                                ALFA
+                              </p>
+                              <p className="text-xs font-black text-rose-400">
+                                {wali.presensiHariIni?.alfa || 0}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Siswa Hadir Hari Ini Dropdown / List */}
+                          <div className="mt-3 pt-2.5 border-t border-blue-800/60">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedHadirWaliId(
+                                  expandedHadirWaliId === wali.idWali
+                                    ? null
+                                    : wali.idWali,
+                                )
+                              }
+                              className="w-full flex items-center justify-between text-[11px] font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <span>👥</span>
+                                <span>
+                                  Siswa Hadir Hari Ini (
+                                  {wali.presensiHariIni?.siswaHadirList
+                                    ?.length || 0}
+                                  )
+                                </span>
+                              </span>
+                              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-md border border-white/20 shadow-2xs text-white">
+                                {expandedHadirWaliId === wali.idWali
+                                  ? "Tutup ▲"
+                                  : "Lihat ▼"}
+                              </span>
+                            </button>
+
+                            {expandedHadirWaliId === wali.idWali && (
+                              <div className="mt-2 space-y-1 max-h-36 overflow-y-auto pr-1">
+                                {!wali.presensiHariIni?.siswaHadirList ||
+                                wali.presensiHariIni.siswaHadirList.length ===
+                                  0 ? (
+                                  <p className="text-[10px] text-blue-300 italic text-center py-2 bg-blue-900/30 rounded-lg border border-blue-800/50">
+                                    Belum ada siswa yang presensi hadir hari
+                                    ini.
+                                  </p>
+                                ) : (
+                                  wali.presensiHariIni.siswaHadirList.map(
+                                    (s, sIdx) => (
+                                      <div
+                                        key={sIdx}
+                                        className="flex items-center justify-between text-[10px] bg-blue-900/50 p-1.5 rounded-lg border border-blue-800/50 shadow-2xs"
+                                      >
+                                        <span className="font-bold text-white truncate max-w-[150px] sm:max-w-[180px]">
+                                          {s.nama || s.namaSiswa}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-black text-[9px] shrink-0 border border-emerald-500/30">
+                                          Hadir
+                                        </span>
+                                      </div>
+                                    ),
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Rekap Kumulatif & Bimbingan */}
+                        <div className="mt-3 flex items-center justify-between text-[11px] text-blue-200 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
+                          <span className="font-semibold">
+                            Log Presensi:{" "}
+                            <strong className="text-white">
+                              {wali.presensi?.totalEntries || 0}
+                            </strong>
+                          </span>
+                          <span className="font-semibold">
+                            Bimbingan:{" "}
+                            <strong className="text-amber-300">
+                              {wali.jumlahJurnal || 0} Pertemuan
+                            </strong>
+                          </span>
                         </div>
                       </div>
 
-                      {/* Rekap Kumulatif & Bimbingan */}
-                      <div className="mt-3 flex items-center justify-between text-[11px] text-blue-200 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
-                        <span className="font-semibold">
-                          Log Presensi:{" "}
-                          <strong className="text-white">
-                            {wali.presensi?.totalEntries || 0}
-                          </strong>
-                        </span>
-                        <span className="font-semibold">
-                          Bimbingan:{" "}
-                          <strong className="text-amber-300">
-                            {wali.jumlahJurnal || 0} Pertemuan
-                          </strong>
-                        </span>
+                      {/* Tombol Aksi Bawah */}
+                      <div className="p-4 bg-blue-950/80 border-t border-blue-800/50 flex items-center gap-2 relative z-10">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPresensiKelasModal(wali)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-900 text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <span>📅</span>
+                          <span>Rekap Presensi</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWaliKelas(wali)}
+                          className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <span>🔍 Detail</span>
+                        </button>
+                        <PesanButton
+                          onClick={() => bukaPesan(wali)}
+                          className="!py-2 !rounded-xl border-white/20"
+                        />
                       </div>
                     </div>
-
-                    {/* Tombol Aksi Bawah */}
-                    <div className="p-4 bg-blue-950/80 border-t border-blue-800/50 flex items-center gap-2 relative z-10">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPresensiKelasModal(wali)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-900 text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                      >
-                        <span>📅</span>
-                        <span>Rekap Presensi</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWaliKelas(wali)}
-                        className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-                      >
-                        <span>🔍 Detail</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
           </div>
         )}
       </div>
@@ -4224,6 +4572,21 @@ export default function DashboardKepalaSekolah() {
         })()}
 
       {/* ======================================================= */}
+      {/* MODAL PESAN KEPALA SEKOLAH <-> GURU */}
+      {/* ======================================================= */}
+      <PesanKepsekModal
+        isOpen={showPesan}
+        initialGuru={pesanTarget}
+        user={user}
+        onChanged={refreshPesanBaru}
+        onClose={() => {
+          setShowPesan(false);
+          setPesanTarget(null);
+          refreshPesanBaru();
+        }}
+      />
+
+      {/* ======================================================= */}
       {/* LIGHTBOX FOTO */}
       {/* ======================================================= */}
       {lightboxUrl && (
@@ -4367,6 +4730,142 @@ function LoadingGrid({ count = 6 }) {
           <div className="h-3 bg-slate-200 rounded w-2/3"></div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Tombol kecil "Pesan" untuk footer kartu
+function PesanButton({ onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-sky-300 font-bold text-xs border border-white/10 transition-colors shadow-xs active:scale-95 cursor-pointer ${className}`}
+    >
+      <span>✉️</span>
+      <span>Pesan</span>
+    </button>
+  );
+}
+
+// Baris daftar responsif (mode "List")
+// - HP     : identitas -> info (2 kolom) -> tombol, tersusun ke bawah
+// - Tablet : info 3 kolom
+// - Desktop: satu baris (identitas | info | tombol)
+function GuruListRow({
+  no,
+  initials,
+  title,
+  subtitle,
+  badge,
+  metas = [],
+  extra = null,
+  actions = [],
+  onClick,
+}) {
+  const badgeTone = {
+    ok: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
+    warn: "bg-rose-500/20 text-rose-300 border-rose-400/30",
+    info: "bg-blue-500/20 text-blue-200 border-blue-400/30",
+    neutral: "bg-white/10 text-slate-200 border-white/20",
+  };
+  const actionTone = {
+    emerald: "text-emerald-300",
+    amber: "text-amber-300",
+    sky: "text-sky-300",
+    slate: "text-white",
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className="group relative overflow-hidden bg-gradient-to-r from-blue-950 via-blue-900 to-slate-900 rounded-2xl border border-blue-700/50 p-3 sm:p-4 shadow-md hover:shadow-amber-500/20 hover:border-amber-400/60 transition-all duration-300 cursor-pointer flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4"
+    >
+      <div className="pointer-events-none absolute top-0 right-0 -mr-8 -mt-8 w-28 h-28 rounded-full bg-gradient-to-br from-amber-400/15 to-yellow-600/5 blur-2xl"></div>
+
+      {/* Identitas */}
+      <div className="relative z-10 flex items-center gap-3 lg:w-72 xl:w-80 shrink-0 min-w-0">
+        {no != null && (
+          <span className="hidden sm:block w-5 shrink-0 text-center text-[11px] font-black text-blue-300/70">
+            {no}
+          </span>
+        )}
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-sm shadow-md shrink-0">
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors truncate">
+            {title}
+          </h4>
+          <p className="text-[11px] font-medium text-blue-300 truncate">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      {/* Info ringkas */}
+      <div className="relative z-10 flex-1 min-w-0 space-y-2">
+        {metas.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+            {metas.map((m, i) => (
+              <div
+                key={i}
+                className={`bg-blue-950/60 rounded-xl border border-blue-800/50 px-2.5 py-1.5 min-w-0 ${
+                  m.wide ? "col-span-2" : ""
+                }`}
+              >
+                <p className="text-[9px] font-bold text-blue-300/80 uppercase truncate">
+                  {m.label}
+                </p>
+                <p
+                  className={`text-xs font-black truncate ${
+                    m.tone || "text-white"
+                  }`}
+                  title={String(m.value ?? "")}
+                >
+                  {m.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {extra}
+      </div>
+
+      {/* Status + aksi */}
+      <div className="relative z-10 flex flex-wrap items-center gap-2 lg:justify-end lg:max-w-sm shrink-0">
+        {badge && (
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
+              badgeTone[badge.tone] || badgeTone.neutral
+            }`}
+          >
+            {badge.text}
+          </span>
+        )}
+        {actions.map((a, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              a.onClick?.();
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 font-bold text-xs border border-white/10 transition-colors shadow-xs active:scale-95 cursor-pointer ${
+              actionTone[a.tone] || actionTone.slate
+            }`}
+          >
+            <span>{a.icon}</span>
+            <span>{a.label}</span>
+          </button>
+        ))}
+        <span className="hidden lg:inline text-amber-400 font-black text-sm group-hover:translate-x-1 transition-transform">
+          →
+        </span>
+      </div>
     </div>
   );
 }
