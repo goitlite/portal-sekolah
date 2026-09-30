@@ -1,11 +1,17 @@
 // src/lib/webpush.js
-// Inisialisasi web-push dengan dukungan fallback pembacaan .env.local
+// Inisialisasi web-push dengan dukungan Vercel Production & Fallback Keys
 
 import webpush from "web-push";
 import fs from "fs";
 import path from "path";
 
 let initialized = false;
+
+// Kunci VAPID resmi proyek Portal Sekolah SMKN 1 Teluk Kuantan
+const HARDCODED_PUB =
+  "BD68J66JpkZS7Xe6-03zP6rlSRQ6f0WN00t4ycbyLIDNVmI9DfpqM-paeYaNoj14ujRNcgQojx2fTtZ-PzpWBTE";
+const HARDCODED_PRIV = "-cnrETM-_M1VI8xqXte4OAASZf364aTr4xLNKaT-LwU";
+const HARDCODED_MAILTO = "mailto:admin@smkn1teluk.sch.id";
 
 function loadEnvFallback() {
   const env = {
@@ -28,10 +34,14 @@ function loadEnvFallback() {
           }
         });
       }
-    } catch (e) {
-      console.warn("[webpush] Gagal membaca fallback .env.local:", e);
-    }
+    } catch (e) {}
   }
+
+  // Gunakan kunci bawaan jika di Vercel belum diset di dashboard
+  env.NEXT_PUBLIC_VAPID_PUBLIC_KEY =
+    env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || HARDCODED_PUB;
+  env.VAPID_PRIVATE_KEY = env.VAPID_PRIVATE_KEY || HARDCODED_PRIV;
+  env.VAPID_MAILTO = env.VAPID_MAILTO || HARDCODED_MAILTO;
 
   return env;
 }
@@ -39,17 +49,11 @@ function loadEnvFallback() {
 export function getWebPush() {
   if (!initialized) {
     const env = loadEnvFallback();
-    const mailto = env.VAPID_MAILTO || "mailto:admin@smkn1teluk.sch.id";
-    const pubKey = env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    const privKey = env.VAPID_PRIVATE_KEY;
-
-    if (!pubKey || !privKey) {
-      throw new Error(
-        "VAPID Keys tidak ditemukan di environment variables ataupun .env.local",
-      );
-    }
-
-    webpush.setVapidDetails(mailto, pubKey, privKey);
+    webpush.setVapidDetails(
+      env.VAPID_MAILTO,
+      env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY,
+    );
     initialized = true;
   }
   return webpush;

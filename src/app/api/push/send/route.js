@@ -1,32 +1,42 @@
 // src/app/api/push/send/route.js
-// Kirim Web Push ke guru atau kepsek
+// Kirim Web Push ke guru atau kepsek (kompatibel Vercel Serverless & Local)
 
 import { NextResponse } from "next/server";
 import { getWebPush } from "@/lib/webpush";
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
 
-const FILE = path.join(process.cwd(), "push_subscriptions.json");
+const TMP_FILE = path.join(os.tmpdir(), "push_subscriptions.json");
+const LOCAL_FILE = path.join(process.cwd(), "push_subscriptions.json");
 
 async function readSubs() {
-  try {
-    const raw = await fs.readFile(FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
+  for (const filePath of [LOCAL_FILE, TMP_FILE]) {
+    try {
+      const raw = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {}
   }
+  return [];
 }
 
 async function writeSubs(subs) {
-  await fs.writeFile(FILE, JSON.stringify(subs, null, 2), "utf-8");
+  const content = JSON.stringify(subs, null, 2);
+  try {
+    await fs.writeFile(LOCAL_FILE, content, "utf-8");
+  } catch {}
+  try {
+    await fs.writeFile(TMP_FILE, content, "utf-8");
+  } catch {}
 }
 
 /**
  * POST /api/push/send
  * Body: {
  *   title, body, url?,
- *   targetUserId?,    // kirim ke 1 user spesifik
- *   targetRole?,      // kirim ke semua user dengan role ini ("guru"/"kepsek")
+ *   targetUserId?,    // kirim ke user spesifik
+ *   targetRole?,      // kirim ke role ("guru"/"kepsek")
  * }
  */
 export async function POST(request) {
@@ -125,6 +135,9 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, sent, failed });
   } catch (err) {
     console.error("[Push Send] Error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Server error saat mengirim push" },
+      { status: 500 },
+    );
   }
 }
