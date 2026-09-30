@@ -46,7 +46,6 @@ export async function POST(request) {
       body: notifBody,
       url = "/magang/login",
       targetUserId,
-      targetUserIds, // <- BARU: daftar banyak guru tertentu
       targetRole,
     } = await request.json();
 
@@ -62,13 +61,6 @@ export async function POST(request) {
     const cleanTargetId = targetUserId
       ? String(targetUserId).trim().toLowerCase()
       : "";
-    const cleanTargetIds = new Set(
-      Array.isArray(targetUserIds)
-        ? targetUserIds
-            .map((x) => String(x).trim().toLowerCase())
-            .filter(Boolean)
-        : [],
-    );
     const cleanTargetRole = targetRole
       ? String(targetRole).trim().toLowerCase()
       : "";
@@ -85,7 +77,6 @@ export async function POST(request) {
         .toLowerCase();
 
       if (cleanTargetId && sId === cleanTargetId) return true;
-      if (cleanTargetIds.size > 0 && cleanTargetIds.has(sId)) return true;
       if (cleanTargetRole && sRole === cleanTargetRole) return true;
       return false;
     });
