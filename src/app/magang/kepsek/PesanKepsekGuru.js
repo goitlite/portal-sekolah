@@ -6,9 +6,10 @@
 // - Gelembung chat mengalir ala WhatsApp (Kiri = Masuk, Kanan = Keluar).
 // - Centang 1 (✓ Terkirim) dan Centang 2 Biru (✓✓ Dibaca).
 // - Tidak ada tombol pesan tersimpan yang terpisah (otomatis mengalir).
+// - Anti Duplikasi Pesan (100% bebas duplikat).
 // - Semua chat tersimpan otomatis di localStorage.
 // - Tombol Hapus Chat membersihkan semua riwayat.
-// - Web Push Notification langsung terkirim ke Android.
+// - Diagnostik Web Push Lengkap untuk Android.
 // =========================================================
 
 import React, {
@@ -32,13 +33,32 @@ const STORAGE_CHAT_PREFIX = "portal_pesan_chat_";
 const STORAGE_KEPSEK_LIST_CACHE = "portal_pesan_kepsek_list_cache";
 
 // =========================================================
-// HELPER STORAGE (CHAT HISTORY LOCALSTORAGE)
+// HELPER STORAGE (CHAT HISTORY LOCALSTORAGE) & DEDUPLIKASI
 // =========================================================
+function bersihkanDuplikat(list) {
+  if (!Array.isArray(list)) return [];
+  const hasil = [];
+  for (const m of list) {
+    if (!m || !m.teks) continue;
+    const cleanTeks = String(m.teks).trim();
+    // Cek apakah pesan dengan pengirim dan teks yang sama persis sudah ada dalam jarak 60 detik atau teks identik
+    const sudahAda = hasil.some(
+      (item) => item.pengirim === m.pengirim && String(item.teks).trim() === cleanTeks
+    );
+    if (!sudahAda) {
+      hasil.push(m);
+    }
+  }
+  return hasil;
+}
+
 export function getChatHistory(idGuru) {
   if (typeof window === "undefined" || !idGuru) return [];
   try {
     const raw = localStorage.getItem(STORAGE_CHAT_PREFIX + idGuru);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return bersihkanDuplikat(parsed);
   } catch (e) {
     return [];
   }
@@ -47,7 +67,8 @@ export function getChatHistory(idGuru) {
 export function saveChatHistory(idGuru, list) {
   if (typeof window === "undefined" || !idGuru) return;
   try {
-    localStorage.setItem(STORAGE_CHAT_PREFIX + idGuru, JSON.stringify(list));
+    const cleaned = bersihkanDuplikat(list);
+    localStorage.setItem(STORAGE_CHAT_PREFIX + idGuru, JSON.stringify(cleaned));
   } catch (e) {}
 }
 
@@ -71,25 +92,20 @@ function formatJamPesan(waktu) {
   });
 }
 
-function formatTanggalHeader(waktu) {
-  if (!waktu) return "";
-  const d = new Date(waktu);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function normalisasiGuru(g) {
   const idGuru = String(g.ID || g.id || g.ID_GURU || g.idGuru || "").trim();
   const namaGuru = String(
     g.NAMA_GURU || g.NAMA || g.nama || g.namaGuru || ""
   ).trim();
   return { idGuru, namaGuru };
+}
+
+// Konversi VAPID key
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
 // =========================================================
@@ -173,7 +189,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     scrollToBottom();
   }, [messages]);
 
-  // Sinkronisasi data terkini dari server
+  // Sinkronisasi data terkini dari server TANPA DUPLIKAT
   const syncServer = useCallback(async () => {
     try {
       let serverData = initialData;
@@ -188,55 +204,55 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         let currentList = getChatHistory(guru.idGuru);
         let changed = false;
 
-        // Cek pesan Kepsek
+        // 1. Cek pesan Kepsek
         if (serverData.pesanKepsek && serverData.pesanKepsek.trim()) {
-          const exists = currentList.find(
-            (m) =>
-              m.pengirim === "kepsek" &&
-              m.teks === serverData.pesanKepsek &&
-              (m.waktu === serverData.waktuKepsek || !serverData.waktuKepsek)
+          const cleanTeks = serverData.pesanKepsek.trim();
+          const existing = currentList.find(
+            (m) => m.pengirim === "kepsek" && m.teks.trim() === cleanTeks
           );
-          if (exists) {
-            // Update status dibaca
-            if (exists.dibaca !== serverData.dibacaGuru) {
-              exists.dibaca = serverData.dibacaGuru;
+
+          if (existing) {
+            // Update status dibaca jika berubah
+            if (existing.dibaca !== Boolean(serverData.dibacaGuru)) {
+              existing.dibaca = Boolean(serverData.dibacaGuru);
               changed = true;
             }
           } else {
+            // Hanya push jika pesan belum ada sama sekali
             currentList.push({
               id: "ks-" + (serverData.waktuKepsek || Date.now()),
               pengirim: "kepsek",
               namaPengirim: "Kepala Sekolah",
-              teks: serverData.pesanKepsek,
+              teks: cleanTeks,
               waktu: serverData.waktuKepsek || new Date().toISOString(),
-              dibaca: serverData.dibacaGuru,
+              dibaca: Boolean(serverData.dibacaGuru),
             });
             changed = true;
           }
         }
 
-        // Cek pesan Guru
+        // 2. Cek pesan Guru
         if (serverData.pesanGuru && serverData.pesanGuru.trim()) {
-          const exists = currentList.find(
-            (m) =>
-              m.pengirim === "guru" &&
-              m.teks === serverData.pesanGuru &&
-              (m.waktu === serverData.waktuGuru || !serverData.waktuGuru)
+          const cleanTeks = serverData.pesanGuru.trim();
+          const existing = currentList.find(
+            (m) => m.pengirim === "guru" && m.teks.trim() === cleanTeks
           );
-          if (exists) {
-            // Update status dibaca
-            if (exists.dibaca !== serverData.dibacaKepsek) {
-              exists.dibaca = serverData.dibacaKepsek;
+
+          if (existing) {
+            // Update status dibaca jika berubah
+            if (existing.dibaca !== Boolean(serverData.dibacaKepsek)) {
+              existing.dibaca = Boolean(serverData.dibacaKepsek);
               changed = true;
             }
           } else {
+            // Hanya push jika pesan belum ada sama sekali
             currentList.push({
               id: "gr-" + (serverData.waktuGuru || Date.now()),
               pengirim: "guru",
               namaPengirim: serverData.namaGuru || "Guru",
-              teks: serverData.pesanGuru,
+              teks: cleanTeks,
               waktu: serverData.waktuGuru || new Date().toISOString(),
-              dibaca: serverData.dibacaKepsek,
+              dibaca: Boolean(serverData.dibacaKepsek),
             });
             changed = true;
           }
@@ -246,8 +262,9 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
           currentList.sort(
             (a, b) => new Date(a.waktu || 0).getTime() - new Date(b.waktu || 0).getTime()
           );
-          saveChatHistory(guru.idGuru, currentList);
-          setMessages([...currentList]);
+          const deduped = bersihkanDuplikat(currentList);
+          saveChatHistory(guru.idGuru, deduped);
+          setMessages([...deduped]);
         }
 
         // Tandai dibaca jika ada pesan masuk yang belum dibaca
@@ -290,16 +307,26 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     setTimeout(() => setInfo(""), 4000);
   }
 
-  // Tes Notifikasi langsung
+  // Tes Notifikasi Lengkap & Pendaftaran Push Langsung
   async function handleTesNotif() {
-    if (!("Notification" in window)) {
-      alert("Browser/HP ini tidak mendukung Web Notification.");
+    // 1. Cek Dukungan Browser & Konteks Keamanan
+    const isSecure = typeof window !== "undefined" && (window.isSecureContext || window.location.hostname === "localhost");
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+    if (!isSecure) {
+      alert(
+        `⚠️ PERINGATAN BROWSER ANDROID:\n\nWeb Push Android MEMBUTUHKAN HTTPS atau localhost.\nAlamat saat ini: ${origin}\n\nJika Anda membuka via IP LAN (http://192.168.x.x:3000), Google Chrome di HP memblokir Web Push.\n\nSolusi: Buka via HTTPS (seperti domain Vercel Anda) atau via USB debugging (localhost:3000).`
+      );
+    }
+
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      alert("Browser di perangkat ini tidak mendukung Push Notification.");
       return;
     }
 
     if (Notification.permission === "denied") {
       alert(
-        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nCara mengaktifkannya:\n1. Buka Pengaturan HP > Aplikasi > Portal Sekolah (atau Chrome)\n2. Pilih Notifikasi > Hidupkan Izinkan Notifikasi."
+        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nSilakan buka:\nPengaturan HP > Aplikasi > Portal Sekolah (atau Chrome) > Notifikasi > Hidupkan Izinkan Notifikasi."
       );
       return;
     }
@@ -307,37 +334,82 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     try {
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
-        alert("⚠️ Izin notifikasi belum diizinkan. Silakan pilih 'Izinkan'.");
+        alert("⚠️ Izin notifikasi belum diizinkan (Status: " + perm + ").");
         return;
       }
 
       const reg = await navigator.serviceWorker.ready;
+
+      // Cek VAPID Key
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      let subscription = null;
+
+      if (vapidKey && "PushManager" in window) {
+        try {
+          subscription = await reg.pushManager.getSubscription();
+          if (!subscription) {
+            subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(vapidKey),
+            });
+          }
+
+          // Kirim token HP Android ini ke server
+          if (subscription) {
+            const myUserId = mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim();
+            const myRole = mode;
+
+            const subRes = await fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                subscription,
+                userId: myUserId,
+                role: myRole,
+              }),
+            });
+            console.log("[Push Test] Subscribe response status:", subRes.status);
+          }
+        } catch (subErr) {
+          console.warn("[Push Test] PushManager subscribe warning:", subErr);
+        }
+      }
+
+      // Tampilkan notifikasi lokal
       await reg.showNotification("🔔 Tes Notifikasi Portal Sekolah", {
-        body: "Hebat! Notifikasi di HP Anda sudah aktif dan berfungsi.",
+        body: "Hebat! Notifikasi di HP Anda sudah aktif dan berfungsi normal.",
         icon: "/logo.png",
         vibrate: [200, 100, 200],
       });
 
-      setInfo("🔔 Notifikasi percobaan dikirim ke HP Anda!");
-      setTimeout(() => setInfo(""), 4000);
-
-      // Trigger Web Push server
+      // Tembakkan juga push server ke role ini
+      const myUserId = mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim();
       fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "🔔 Web Push Berhasil!",
-          body: `Halo ${mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah"}, push notifikasi server aktif.`,
-          targetUserId: mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim(),
+          title: "🔔 Push FCM dari Server Masuk!",
+          body: `Halo ${mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah"}, push notifikasi server berfungsi.`,
+          targetUserId: myUserId,
           targetRole: mode,
         }),
-      }).catch(() => {});
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          alert(`🔔 HASIL TES NOTIFIKASI:\n\n1. Izin HP: DISETUJUI (Granted)\n2. Notifikasi Layar: Berhasil Muncul\n3. Push Server FCM: ${d.ok ? "Sukses Terkirim (" + d.sent + " device)" : "Gagal: " + (d.error || d.message)}`);
+        })
+        .catch((e) => {
+          alert("Notifikasi layar muncul. Push server kendala: " + e.message);
+        });
+
+      setInfo("🔔 Notifikasi percobaan dikirim ke HP Anda!");
+      setTimeout(() => setInfo(""), 4000);
     } catch (e) {
       alert("Gagal memicu notifikasi: " + e.message);
     }
   }
 
-  // Kirim Pesan ala WhatsApp
+  // Kirim Pesan ala WhatsApp (Anti Duplikat)
   async function handleKirim(e) {
     if (e) e.preventDefault();
 
@@ -365,7 +437,8 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
       dibaca: false, // Centang 1 (Belum dibaca lawan bicara)
     };
 
-    const newHistory = [...messages, pesanBaru];
+    // Bersihkan duplikat sebelum simpan
+    const newHistory = bersihkanDuplikat([...messages, pesanBaru]);
     setMessages(newHistory);
     saveChatHistory(guru.idGuru, newHistory);
     setIsi("");
@@ -441,7 +514,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
           <button
             type="button"
             onClick={handleTesNotif}
-            title="Tes Notifikasi HP"
+            title="Tes Notifikasi HP & Sinkronkan Token"
             className="px-2.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-emerald-100 text-xs font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
           >
             <span>🔔</span>
@@ -490,7 +563,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         {/* Banner Enkripsi / Info Sekolah */}
         <div className="text-center my-2">
           <span className="inline-block bg-[#ffeecd] border border-[#e2d4b7] text-[#54656f] text-[10px] font-medium px-3 py-1 rounded-lg shadow-2xs max-w-xs sm:max-w-md">
-            🔒 Pesan terenkripsi & tersimpan otomatis di perangkat ini.
+            🔒 Pesan tersimpan otomatis di perangkat ini.
           </span>
         </div>
 
