@@ -25,7 +25,6 @@ import {
   pesanGet,
   pesanGetDaftar,
   pesanTandaiDibaca,
-  pesanGetJumlahBaru,
   pesanKirimMassal,
 } from "../lib/api";
 
@@ -36,6 +35,47 @@ const STORAGE_KEPSEK_LIST_CACHE = "portal_pesan_kepsek_list_cache";
 // Interval cek pesan baru saat halaman pesan sedang terbuka (milidetik)
 const CHAT_POLL_MS = 5000; // chat yang sedang dibuka
 const INBOX_POLL_MS = 10000; // daftar guru di sisi Kepala Sekolah
+
+// ---------------------------------------------------------
+// CACHE PESAN (memori + localStorage)
+// Diisi lebih awal oleh badge (polling di dashboard), oleh push, dan oleh
+// chat yang sedang terbuka. Saat halaman pesan dibuka, datanya SUDAH ADA
+// sehingga pesan baru tampil seketika, lalu disegarkan dari server.
+// ---------------------------------------------------------
+const STORAGE_PESAN_CACHE = "portal_pesan_cache_v2";
+let pesanCacheMem = null; // { role, byGuru: { [idGuru]: row } }
+
+function bacaCachePesan(role) {
+  if (typeof window === "undefined") return { role, byGuru: {} };
+  if (!pesanCacheMem) {
+    try {
+      const raw = localStorage.getItem(STORAGE_PESAN_CACHE);
+      if (raw) pesanCacheMem = JSON.parse(raw);
+    } catch (e) {}
+  }
+  if (
+    !pesanCacheMem ||
+    pesanCacheMem.role !== role ||
+    !pesanCacheMem.byGuru ||
+    typeof pesanCacheMem.byGuru !== "object"
+  ) {
+    return { role, byGuru: {} };
+  }
+  return pesanCacheMem;
+}
+
+function tulisCachePesan(role, byGuru) {
+  pesanCacheMem = { role, byGuru };
+  try {
+    localStorage.setItem(STORAGE_PESAN_CACHE, JSON.stringify(pesanCacheMem));
+  } catch (e) {}
+}
+
+function updateCacheSatu(role, idGuru, row) {
+  if (!row) return;
+  const cur = bacaCachePesan(role);
+  tulisCachePesan(role, { ...cur.byGuru, [String(idGuru)]: row });
+}
 
 // =========================================================
 // HELPER STORAGE (CHAT HISTORY LOCALSTORAGE) & DEDUPLIKASI
@@ -155,9 +195,24 @@ export function useJumlahPesanBaru({
     if (!enabled) return;
     if (role === "guru" && !idGuru) return;
     try {
-      const res = await pesanGetJumlahBaru(role, idGuru);
-      if (res && res.success) {
-        setJumlah(Number(res.data?.jumlah ?? res.data) || 0);
+      if (role === "guru") {
+        const res = await pesanGet(idGuru);
+        if (res?.success && res.data) {
+          updateCacheSatu("guru", idGuru, res.data);
+          setJumlah(res.data.pesanKepsek && !res.data.dibacaGuru ? 1 : 0);
+        }
+      } else {
+        const res = await pesanGetDaftar();
+        if (res?.success && Array.isArray(res.data)) {
+          const map = {};
+          res.data.forEach((row) => {
+            map[String(row.idGuru)] = row;
+          });
+          tulisCachePesan("kepsek", map);
+          setJumlah(
+            res.data.filter((row) => row.pesanGuru && !row.dibacaKepsek).length,
+          );
+        }
       }
     } catch (e) {}
   }, [role, idGuru, enabled]);
@@ -174,10 +229,16 @@ export function useJumlahPesanBaru({
     const timer = setInterval(() => {
       if (alive && document.visibilityState === "visible") refresh();
     }, intervalMs);
+    // Saat aplikasi dibuka kembali / tab aktif -> segarkan segera
+    const saatAktif = () => {
+      if (alive && document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", saatAktif);
     return () => {
       alive = false;
       clearTimeout(first);
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", saatAktif);
     };
   }, [refresh, enabled, intervalMs]);
 
@@ -243,6 +304,11 @@ function ChatPanel({
           const res = await pesanGet(guru.idGuru);
           if (res?.success && res.data) {
             serverData = res.data;
+            updateCacheSatu(
+              mode === "guru" ? "guru" : "kepsek",
+              guru.idGuru,
+              res.data,
+            );
           }
         }
 
@@ -373,6 +439,8 @@ function ChatPanel({
   }, []);
 
   useEffect(() => {
+    // Data cache langsung ditampilkan; di sini langsung minta versi terbaru
+    ambilTerbaru(false);
     const timer = setInterval(() => ambilTerbaru(true), CHAT_POLL_MS);
     const saatAktif = () => ambilTerbaru(true);
     document.addEventListener("visibilitychange", saatAktif);
@@ -815,6 +883,7 @@ export function PesanGuruModal({ isOpen, onClose, user, onChanged }) {
         key={String(user.id)}
         mode="guru"
         guru={{ idGuru: String(user.id), namaGuru: user.nama || "" }}
+        initialData={bacaCachePesan("guru").byGuru[String(user.id)] || null}
         idPengirim={String(user.id)}
         onChanged={onChanged}
         onClose={onClose}
@@ -1135,7 +1204,9 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
     return [];
   });
 
-  const [daftar, setDaftar] = useState({});
+  const [daftar, setDaftar] = useState(() => ({
+    ...bacaCachePesan("kepsek").byGuru,
+  }));
   const [loading, setLoading] = useState(() => guruList.length === 0);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -1149,10 +1220,7 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
       if (!quiet && guruList.length === 0) setLoading(true);
       setError("");
       try {
-        const [resGuru, resPesan] = await Promise.all([
-          getGuru(),
-          pesanGetDaftar(),
-        ]);
+        const resGuru = await getGuru();
 
         if (resGuru?.success && Array.isArray(resGuru.data)) {
           const list = resGuru.data
@@ -1165,14 +1233,6 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
               JSON.stringify(list),
             );
           } catch (e) {}
-        }
-
-        if (resPesan?.success && Array.isArray(resPesan.data)) {
-          const map = {};
-          resPesan.data.forEach((row) => {
-            map[String(row.idGuru)] = row;
-          });
-          setDaftar(map);
         }
 
         if (!resGuru?.success) {
@@ -1192,11 +1252,6 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
     return () => clearTimeout(t);
   }, [loadAll]);
 
-  const handleChanged = useCallback(() => {
-    loadAll(true);
-    onChanged?.();
-  }, [loadAll, onChanged]);
-
   // Segarkan hanya daftar pesan (ringan, tanpa memuat ulang daftar guru)
   const refreshDaftar = useCallback(async () => {
     try {
@@ -1207,9 +1262,22 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
           map[String(row.idGuru)] = row;
         });
         setDaftar(map);
+        tulisCachePesan("kepsek", map);
       }
     } catch (e) {}
   }, []);
+
+  const handleChanged = useCallback(() => {
+    refreshDaftar();
+    onChanged?.();
+  }, [refreshDaftar, onChanged]);
+
+  // Ambil daftar pesan SEGERA saat kotak pesan dibuka
+  // (tidak menunggu daftar guru selesai dimuat)
+  useEffect(() => {
+    const t = setTimeout(refreshDaftar, 0);
+    return () => clearTimeout(t);
+  }, [refreshDaftar]);
 
   useEffect(() => {
     const timer = setInterval(() => {
