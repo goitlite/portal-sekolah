@@ -48,19 +48,46 @@ export async function POST(request) {
 
     const allSubs = await readSubs();
 
-    // Filter penerima
+    // Filter penerima (dukung trim, case-insensitive, dan fallback role)
     let targets = allSubs;
     if (targetUserId) {
-      targets = allSubs.filter((s) => s.userId === String(targetUserId));
+      const cleanId = String(targetUserId).trim().toLowerCase();
+      targets = allSubs.filter(
+        (s) =>
+          String(s.userId || "")
+            .trim()
+            .toLowerCase() === cleanId,
+      );
+
+      // Jika ID spesifik tidak ditemukan tetapi targetRole disediakan, gunakan fallback role
+      if (targets.length === 0 && targetRole) {
+        const cleanRole = String(targetRole).trim().toLowerCase();
+        targets = allSubs.filter(
+          (s) =>
+            String(s.role || "")
+              .trim()
+              .toLowerCase() === cleanRole,
+        );
+      }
     } else if (targetRole) {
-      targets = allSubs.filter((s) => s.role === String(targetRole));
+      const cleanRole = String(targetRole).trim().toLowerCase();
+      targets = allSubs.filter(
+        (s) =>
+          String(s.role || "")
+            .trim()
+            .toLowerCase() === cleanRole,
+      );
     }
+
+    console.log(
+      `[Push Send] Target filter -> targetUserId: "${targetUserId || ""}", targetRole: "${targetRole || ""}". Ditemukan ${targets.length} subscriber dari total ${allSubs.length}.`,
+    );
 
     if (targets.length === 0) {
       return NextResponse.json({
         ok: true,
         sent: 0,
-        message: "Tidak ada subscriber",
+        message: "Tidak ada subscriber yang cocok.",
       });
     }
 
