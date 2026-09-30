@@ -71,7 +71,7 @@ function mergePesanServerKeHistori(idGuru, serverData) {
       (m) =>
         m.pengirim === "kepsek" &&
         m.teks === serverData.pesanKepsek &&
-        (m.waktu === serverData.waktuKepsek || !serverData.waktuKepsek)
+        (m.waktu === serverData.waktuKepsek || !serverData.waktuKepsek),
     );
     if (!exists) {
       list.push({
@@ -92,7 +92,7 @@ function mergePesanServerKeHistori(idGuru, serverData) {
       (m) =>
         m.pengirim === "guru" &&
         m.teks === serverData.pesanGuru &&
-        (m.waktu === serverData.waktuGuru || !serverData.waktuGuru)
+        (m.waktu === serverData.waktuGuru || !serverData.waktuGuru),
     );
     if (!exists) {
       list.push({
@@ -139,7 +139,7 @@ function formatWaktuPesan(waktu) {
 function normalisasiGuru(g) {
   const idGuru = String(g.ID || g.id || g.ID_GURU || g.idGuru || "").trim();
   const namaGuru = String(
-    g.NAMA_GURU || g.NAMA || g.nama || g.namaGuru || ""
+    g.NAMA_GURU || g.NAMA || g.nama || g.namaGuru || "",
   ).trim();
   return { idGuru, namaGuru };
 }
@@ -228,12 +228,21 @@ function PesanShell({
 // =========================================================
 // PANEL CHAT (Riwayat Pesan Storage + Input Pesan)
 // =========================================================
-function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBack }) {
+function ChatPanel({
+  mode,
+  guru,
+  idPengirim,
+  initialData = null,
+  onChanged,
+  onBack,
+}) {
   const lawan = mode === "guru" ? "Kepala Sekolah" : guru.namaGuru || "Guru";
 
   // Baca langsung dari storage lokal -> TAMPIL 0 DETIK!
   const [histori, setHistori] = useState(() => getPesanHistori(guru.idGuru));
-  const [loading, setLoading] = useState(() => histori.length === 0 && !initialData);
+  const [loading, setLoading] = useState(
+    () => histori.length === 0 && !initialData,
+  );
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [isi, setIsi] = useState("");
@@ -270,9 +279,11 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
             : serverData.pesanGuru && !serverData.dibacaKepsek;
 
         if (adaMasukBelumDibaca) {
-          pesanTandaiDibaca(guru.idGuru, mode).then((r) => {
-            if (r?.success) onChanged?.();
-          }).catch(() => {});
+          pesanTandaiDibaca(guru.idGuru, mode)
+            .then((r) => {
+              if (r?.success) onChanged?.();
+            })
+            .catch(() => {});
         }
       }
     } catch (e) {
@@ -294,7 +305,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
       return;
     }
     const yakin = window.confirm(
-      `Hapus semua riwayat pesan dengan ${lawan} dari penyimpanan perangkat ini?\n\nPesan lama yang tersimpan di storage HP/browser ini akan dibersihkan.`
+      `Hapus semua riwayat pesan dengan ${lawan} dari penyimpanan perangkat ini?\n\nPesan lama yang tersimpan di storage HP/browser ini akan dibersihkan.`,
     );
     if (!yakin) return;
 
@@ -302,6 +313,57 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     setHistori([]);
     setInfo("🗑️ Semua riwayat pesan di storage berhasil dihapus.");
     setTimeout(() => setInfo(""), 4000);
+  }
+
+  // Tes Notifikasi langsung di HP ini
+  async function handleTesNotif() {
+    if (!("Notification" in window)) {
+      alert("Browser/HP ini tidak mendukung Web Notification.");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      alert(
+        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nCara mengaktifkannya:\n1. Buka Pengaturan HP (Settings)\n2. Pilih 'Aplikasi' (Apps) > 'Portal Sekolah' (atau Chrome)\n3. Pilih 'Notifikasi' > Hidupkan 'Izinkan Notifikasi'.",
+      );
+      return;
+    }
+
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        alert(
+          "⚠️ Izin notifikasi belum diizinkan (Status: " +
+            perm +
+            "). Silakan pilih 'Izinkan' saat muncul pop-up.",
+        );
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification("🔔 Tes Notifikasi Portal Sekolah", {
+        body: "Hebat! Notifikasi di HP Anda sudah aktif dan berfungsi normal.",
+        icon: "/logo.png",
+        badge: "/logo.png",
+        vibrate: [200, 100, 200],
+      });
+
+      setInfo("🔔 Notifikasi percobaan dikirim ke HP Anda!");
+      setTimeout(() => setInfo(""), 5000);
+
+      // Trigger juga kirim push via FCM server untuk role saat ini
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "🔔 Web Push FCM Berhasil!",
+          body: `Halo ${mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah"}, push notifikasi server aktif.`,
+          targetUserId: mode === "guru" ? guru.idGuru : idPengirim,
+        }),
+      }).catch(() => {});
+    } catch (e) {
+      alert("Gagal memicu notifikasi: " + e.message);
+    }
   }
 
   async function kirim() {
@@ -323,7 +385,8 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     const pesanBaru = {
       id: "msg-" + Date.now(),
       pengirim: mode,
-      namaPengirim: mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah",
+      namaPengirim:
+        mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah",
       teks,
       waktu: new Date().toISOString(),
       dibaca: false,
@@ -348,7 +411,8 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
         // Kirim Web Push Notification ke HP Android / Device penerima
         try {
-          const namaPengirim = mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah";
+          const namaPengirim =
+            mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah";
           if (mode === "guru") {
             await fetch("/api/push/send", {
               method: "POST",
@@ -379,7 +443,9 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         setError(res?.message || "Pesan gagal tersimpan di server Google.");
       }
     } catch (e) {
-      setError("Pesan tersimpan di storage lokal, tetapi koneksi ke server gagal.");
+      setError(
+        "Pesan tersimpan di storage lokal, tetapi koneksi ke server gagal.",
+      );
     } finally {
       setSending(false);
       setTimeout(() => setInfo(""), 4000);
@@ -401,26 +467,45 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
             </button>
           )}
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black text-xs shadow-md shrink-0">
-            {mode === "guru" ? "KS" : String(lawan).substring(0, 2).toUpperCase()}
+            {mode === "guru"
+              ? "KS"
+              : String(lawan).substring(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-black text-slate-800 truncate">{lawan}</p>
+            <p className="text-sm font-black text-slate-800 truncate">
+              {lawan}
+            </p>
             <p className="text-[11px] text-slate-400 font-medium">
-              {mode === "guru" ? "Kepala Sekolah SMKN 1 Teluk Kuantan" : `ID Guru: ${guru.idGuru}`}
+              {mode === "guru"
+                ? "Kepala Sekolah SMKN 1 Teluk Kuantan"
+                : `ID Guru: ${guru.idGuru}`}
             </p>
           </div>
         </div>
 
-        {/* Tombol Hapus Semua Pesan di Storage */}
-        <button
-          type="button"
-          onClick={handleHapusSemua}
-          title="Hapus riwayat pesan di penyimpanan perangkat ini"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold transition-all shrink-0 active:scale-95 cursor-pointer"
-        >
-          <span>🗑️</span>
-          <span className="hidden sm:inline">Hapus Semua Pesan</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Tombol Tes Notifikasi */}
+          <button
+            type="button"
+            onClick={handleTesNotif}
+            title="Tes apakah notifikasi bisa muncul di HP ini"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
+          >
+            <span>🔔</span>
+            <span className="hidden sm:inline">Tes Notif HP</span>
+          </button>
+
+          {/* Tombol Hapus Semua Pesan di Storage */}
+          <button
+            type="button"
+            onClick={handleHapusSemua}
+            title="Hapus riwayat pesan di penyimpanan perangkat ini"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
+          >
+            <span>🗑️</span>
+            <span className="hidden sm:inline">Hapus Semua Pesan</span>
+          </button>
+        </div>
       </div>
 
       {/* Area Chat / Riwayat Pesan dari Storage */}
@@ -428,16 +513,21 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         {loading && histori.length === 0 ? (
           <div className="text-center py-12 space-y-2">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-xs font-bold text-slate-400">Menghubungkan pesan...</p>
+            <p className="text-xs font-bold text-slate-400">
+              Menghubungkan pesan...
+            </p>
           </div>
         ) : histori.length === 0 ? (
           <div className="text-center py-16 space-y-2 max-w-sm mx-auto">
             <div className="w-14 h-14 bg-white rounded-3xl shadow-sm border border-slate-200 flex items-center justify-center text-2xl mx-auto">
               💬
             </div>
-            <p className="text-xs font-black text-slate-700">Belum ada percakapan</p>
+            <p className="text-xs font-black text-slate-700">
+              Belum ada percakapan
+            </p>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Tulis pesan pertama Anda di bawah. Riwayat pesan akan tersimpan rapi di perangkat ini.
+              Tulis pesan pertama Anda di bawah. Riwayat pesan akan tersimpan
+              rapi di perangkat ini.
             </p>
           </div>
         ) : (
@@ -480,7 +570,12 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         {error && (
           <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between">
             <span>⚠️ {error}</span>
-            <button onClick={() => setError("")} className="text-rose-500 font-bold ml-2">✕</button>
+            <button
+              onClick={() => setError("")}
+              className="text-rose-500 font-bold ml-2"
+            >
+              ✕
+            </button>
           </p>
         )}
         {info && (
@@ -511,7 +606,10 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] text-slate-400">
-            Tersimpan di storage • <span className="font-bold text-slate-500">{isi.length}/{PESAN_MAX_LENGTH}</span>
+            Tersimpan di storage •{" "}
+            <span className="font-bold text-slate-500">
+              {isi.length}/{PESAN_MAX_LENGTH}
+            </span>
           </p>
           <button
             type="button"
@@ -571,43 +669,51 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(
-    initialGuru?.idGuru ? initialGuru : null
+    initialGuru?.idGuru ? initialGuru : null,
   );
 
-  const loadAll = useCallback(async (quiet = false) => {
-    if (!quiet && guruList.length === 0) setLoading(true);
-    setError("");
-    try {
-      const [resGuru, resPesan] = await Promise.all([
-        getGuru(),
-        pesanGetDaftar(),
-      ]);
+  const loadAll = useCallback(
+    async (quiet = false) => {
+      if (!quiet && guruList.length === 0) setLoading(true);
+      setError("");
+      try {
+        const [resGuru, resPesan] = await Promise.all([
+          getGuru(),
+          pesanGetDaftar(),
+        ]);
 
-      if (resGuru?.success && Array.isArray(resGuru.data)) {
-        const list = resGuru.data.map(normalisasiGuru).filter((g) => g.idGuru);
-        setGuruList(list);
-        try {
-          sessionStorage.setItem(STORAGE_KEPSEK_LIST_CACHE, JSON.stringify(list));
-        } catch (e) {}
-      }
+        if (resGuru?.success && Array.isArray(resGuru.data)) {
+          const list = resGuru.data
+            .map(normalisasiGuru)
+            .filter((g) => g.idGuru);
+          setGuruList(list);
+          try {
+            sessionStorage.setItem(
+              STORAGE_KEPSEK_LIST_CACHE,
+              JSON.stringify(list),
+            );
+          } catch (e) {}
+        }
 
-      if (resPesan?.success && Array.isArray(resPesan.data)) {
-        const map = {};
-        resPesan.data.forEach((row) => {
-          map[String(row.idGuru)] = row;
-          // Otomatis sinkronkan juga ke histori storage lokal per guru
-          mergePesanServerKeHistori(String(row.idGuru), row);
-        });
-        setDaftar(map);
+        if (resPesan?.success && Array.isArray(resPesan.data)) {
+          const map = {};
+          resPesan.data.forEach((row) => {
+            map[String(row.idGuru)] = row;
+            // Otomatis sinkronkan juga ke histori storage lokal per guru
+            mergePesanServerKeHistori(String(row.idGuru), row);
+          });
+          setDaftar(map);
+        }
+      } catch (e) {
+        if (guruList.length === 0) {
+          setError("Gagal terhubung ke server Google.");
+        }
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      if (guruList.length === 0) {
-        setError("Gagal terhubung ke server Google.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [guruList.length]);
+    },
+    [guruList.length],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => loadAll(false), 0);
@@ -643,13 +749,15 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
       ? base.filter(
           (g) =>
             g.namaGuru.toLowerCase().includes(q) ||
-            g.idGuru.toLowerCase().includes(q)
+            g.idGuru.toLowerCase().includes(q),
         )
       : base;
 
     const unread = (g) => (g.row?.pesanGuru && !g.row?.dibacaKepsek ? 1 : 0);
     const lastTime = (g) => {
-      const serverTime = [g.row?.waktuGuru, g.row?.waktuKepsek].filter(Boolean).sort().pop() || "";
+      const serverTime =
+        [g.row?.waktuGuru, g.row?.waktuKepsek].filter(Boolean).sort().pop() ||
+        "";
       const lastMsg = g.histori[g.histori.length - 1];
       const localTime = lastMsg?.waktu || "";
       return serverTime > localTime ? serverTime : localTime;
@@ -724,7 +832,9 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
               if (lastLocal) {
                 preview = `${lastLocal.pengirim === "guru" ? "Guru: " : "Anda: "}${lastLocal.teks}`;
               } else if (g.row?.pesanGuru || g.row?.pesanKepsek) {
-                preview = g.row?.pesanGuru ? `Guru: ${g.row.pesanGuru}` : `Anda: ${g.row.pesanKepsek}`;
+                preview = g.row?.pesanGuru
+                  ? `Guru: ${g.row.pesanGuru}`
+                  : `Anda: ${g.row.pesanKepsek}`;
               }
 
               const aktif = selected?.idGuru === g.idGuru;
@@ -733,7 +843,11 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                   key={g.idGuru}
                   type="button"
                   onClick={() =>
-                    setSelected({ idGuru: g.idGuru, namaGuru: g.namaGuru, row: g.row })
+                    setSelected({
+                      idGuru: g.idGuru,
+                      namaGuru: g.namaGuru,
+                      row: g.row,
+                    })
                   }
                   className={`w-full text-left px-3 py-3 flex items-center gap-3 transition-colors cursor-pointer ${
                     aktif ? "bg-blue-50/80" : "hover:bg-slate-50"
@@ -792,7 +906,8 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                 Pilih guru untuk melihat dan membalas pesan
               </p>
               <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Riwayat pesan tersimpan di storage dan akan langsung terbuka tanpa menunggu loading.
+                Riwayat pesan tersimpan di storage dan akan langsung terbuka
+                tanpa menunggu loading.
               </p>
             </div>
           )}

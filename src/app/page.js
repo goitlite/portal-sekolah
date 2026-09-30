@@ -13,6 +13,28 @@ function HomeContent() {
   const [showApkModal, setShowApkModal] = useState(false);
   const [showPcWarningModal, setShowPcWarningModal] = useState(false);
 
+  // Jika dibuka dari PWA Standalone di HP dan sudah punya sesi guru/kepsek, langsung masuk ke dashboard
+  React.useEffect(() => {
+    try {
+      const sessStr = localStorage.getItem("magang_session");
+      if (sessStr) {
+        const sess = JSON.parse(sessStr);
+        const isStandalone =
+          typeof window !== "undefined" &&
+          (window.matchMedia("(display-mode: standalone)").matches ||
+            window.navigator.standalone === true);
+
+        if (sess && sess.role) {
+          if (sess.role === "guru") {
+            if (isStandalone) router.replace("/magang/guru");
+          } else if (sess.role === "kepsek") {
+            if (isStandalone) router.replace("/magang/kepsek");
+          }
+        }
+      }
+    } catch (e) {}
+  }, [router]);
+
   async function handleMasukAsesmen(e) {
     // Deteksi apakah perangkat menggunakan layar sentuh
     const isTouchDevice =
