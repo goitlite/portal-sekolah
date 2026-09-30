@@ -2,8 +2,9 @@
 
 // src/components/pwa/RegisterSW.js
 // Mendaftarkan Service Worker + subscribe Web Push setelah login
+// dengan dukungan auto-update SW dan tombol pemicu izin di Android.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Konversi base64url VAPID public key ke Uint8Array.
@@ -16,33 +17,10 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 /**
- * Subscribe ke Web Push dan kirim ke server.
- * @param {ServiceWorkerRegistration} registration
- * @param {{ userId: string, role: string }} userInfo
+ * Kirim subscription ke server API
  */
-async function subscribeToPush(registration, userInfo) {
-  // Sudah ada subscription aktif → tidak perlu subscribe ulang
-  const existing = await registration.pushManager.getSubscription();
-  if (existing) return;
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    console.warn("[Push] Izin notifikasi ditolak.");
-    return;
-  }
-
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!vapidKey) {
-    console.error("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY tidak ditemukan.");
-    return;
-  }
-
+async function kirimKeServer(subscription, userInfo) {
   try {
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
-    });
-
     await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,38 +30,94 @@ async function subscribeToPush(registration, userInfo) {
         role: userInfo.role,
       }),
     });
-
     console.log(
-      "[Push] Subscribe berhasil untuk",
+      "[Push] Subscription tersimpan di server untuk",
       userInfo.role,
       userInfo.userId,
     );
   } catch (err) {
-    console.error("[Push] Gagal subscribe:", err);
+    console.warn("[Push] Gagal mengirim subscription ke server:", err);
+  }
+}
+
+/**
+ * Subscribe ke Web Push.
+ * @param {ServiceWorkerRegistration} registration
+ * @param {{ userId: string, role: string }} userInfo
+ */
+export async function subscribeToPush(registration, userInfo) {
+  if (!userInfo?.userId || !userInfo?.role) return;
+
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidKey) {
+    console.warn("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY tidak ditemukan.");
+    return;
+  }
+
+  try {
+    // Periksa subscription yang sudah ada
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (subscription) {
+      // Pastikan tetap terdaftar di backend
+      await kirimKeServer(subscription, userInfo);
+      return subscription;
+    }
+
+    if (Notification.permission !== "granted") {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        console.warn("[Push] Izin notifikasi belum diberikan:", perm);
+        return null;
+      }
+    }
+
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+
+    await kirimKeServer(subscription, userInfo);
+    return subscription;
+  } catch (err) {
+    console.error("[Push] Gagal subscribe Web Push:", err);
+    return null;
   }
 }
 
 export default function RegisterSW() {
+  const [showPromptBanner, setShowPromptBanner] = useState(false);
+
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     navigator.serviceWorker
       .register("/sw.js")
       .then(async (registration) => {
-        console.log("[SW] Terdaftar.");
+        console.log("[SW] Terdaftar v3.");
+        // Paksa periksa dan unduh versi baru sw.js di background
+        registration.update().catch(() => {});
 
-        // Ambil session dari localStorage (format: magang_session)
+        // Cek apakah user sudah login
         try {
           const sessStr = localStorage.getItem("magang_session");
           if (!sessStr) return;
           const sess = JSON.parse(sessStr);
           const userId = String(sess?.id || "").trim();
           const role = String(sess?.role || "").trim();
+
           if (userId && role) {
-            await subscribeToPush(registration, { userId, role });
+            if ("Notification" in window) {
+              if (Notification.permission === "granted") {
+                await subscribeToPush(registration, { userId, role });
+              } else if (Notification.permission === "default") {
+                // Tampilkan banner ramah untuk meminta izin
+                setShowPromptBanner(true);
+              }
+            }
           }
         } catch (e) {
-          console.warn("[Push] Tidak bisa baca session:", e);
+          console.warn("[Push] Error sesi:", e);
         }
       })
       .catch((err) => {
@@ -91,18 +125,57 @@ export default function RegisterSW() {
       });
   }, []);
 
-  return null;
+  async function handleAktifkanNotif() {
+    setShowPromptBanner(false);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sessStr = localStorage.getItem("magang_session");
+      if (!sessStr) return;
+      const sess = JSON.parse(sessStr);
+      await subscribeToPush(reg, {
+        userId: String(sess?.id || "").trim(),
+        role: String(sess?.role || "").trim(),
+      });
+    } catch (e) {
+      console.warn("Gagal aktifkan notif banner:", e);
+    }
+  }
+
+  if (!showPromptBanner) return null;
+
+  return (
+    <div className="fixed bottom-4 left-4 right-4 z-[99999] max-w-md mx-auto bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl border border-amber-400/40 backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-300">
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+          <span>🔔</span> Notifikasi Pesan
+        </p>
+        <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+          Aktifkan notifikasi agar pesan baru dari Kepala Sekolah / Guru
+          langsung muncul di HP Anda.
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={handleAktifkanNotif}
+          className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs rounded-xl shadow-md active:scale-95 transition-transform"
+        >
+          Aktifkan
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowPromptBanner(false)}
+          className="w-7 h-7 text-xs text-slate-400 hover:text-white flex items-center justify-center rounded-full"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
  * Dipanggil dari halaman login setelah berhasil masuk.
- * Gunakan ini agar push langsung aktif tanpa refresh.
- *
- * @param {{ userId: string, role: string }} userInfo
- *
- * Contoh penggunaan di login/page.js setelah saveSession():
- *   import { initPushAfterLogin } from "@/components/pwa/RegisterSW";
- *   await initPushAfterLogin({ userId: result.data.id, role: result.data.role });
  */
 export async function initPushAfterLogin({ userId, role }) {
   if (!("serviceWorker" in navigator)) return;

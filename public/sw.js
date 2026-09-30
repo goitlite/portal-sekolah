@@ -1,92 +1,70 @@
-// v2: nama cache dinaikkan supaya perangkat yang sudah kena bug "cache HTML lama
-// permanen" otomatis dibersihkan saat Service Worker baru ini ter-install.
-const CACHE_NAME = "portal-sekolah-v2";
+// v3: Ditambahkan handler Web Push Notification lengkap untuk Android & Desktop,
+// serta mekanisme auto-update Service Worker.
+const CACHE_NAME = "portal-sekolah-v3";
 
-// "/" SENGAJA TIDAK di-precache di sini lagi. Alasan: dengan strategi navigasi
-// network-first di bawah, precache "/" saat install tidak diperlukan untuk
-// kasus online, dan malah berisiko menyimpan HTML basi kalau proses install
-// kebetulan terjadi saat server sedang bermasalah/deploy baru saja jalan.
 const STATIC_FILES = ["/logo.png", "/favicon.ico", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
-  console.log("Service Worker Installed");
-
+  console.log("[SW v3] Installed");
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_FILES);
-    }),
+      return cache.addAll(STATIC_FILES).catch((e) => {
+        console.warn("[SW] Cache addAll warning:", e);
+      });
+    })
   );
-
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  console.log("Service Worker Activated");
-
+  console.log("[SW v3] Activated");
   event.waitUntil(
     Promise.all([
-      clients.claim(),
-
-      // Hapus SEMUA cache dengan nama selain versi saat ini. Karena CACHE_NAME
-      // baru saja dinaikkan ke v2, ini akan membersihkan cache v1 yang mungkin
-      // berisi HTML/asset basi di perangkat yang sudah pernah gagal load.
+      self.clients.claim(),
       caches.keys().then((keys) =>
         Promise.all(
           keys.map((key) => {
             if (key !== CACHE_NAME) {
               return caches.delete(key);
             }
-          }),
-        ),
+          })
+        )
       ),
-    ]),
+    ])
   );
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // ============================================================
-  // HALAMAN HTML (navigasi): NETWORK-FIRST, bukan cache-first.
-  //
-  // Ini perbaikan akar masalah "sekali gagal load, seterusnya selalu gagal":
-  // versi lama selalu memakai HTML dari cache kalau ada, dan HANYA fetch ke
-  // server kalau cache kosong. Akibatnya kalau HTML yang tersimpan di cache
-  // pernah korup/menunjuk ke build lama (hash file JS/CSS Next.js yang sudah
-  // tidak ada lagi setelah redeploy), pengguna itu akan TERUS mendapat
-  // halaman rusak tersebut selamanya, walau server sudah baik-baik saja.
-  //
-  // Sekarang: selalu coba ambil dari server dulu (dapat HTML + referensi
-  // build TERBARU). Cache cuma dipakai sebagai fallback kalau benar-benar
-  // offline / server tidak terjangkau.
-  // ============================================================
+  // Jangan cache request API dan selain GET
+  if (url.pathname.startsWith("/api/") || event.request.method !== "GET") {
+    return;
+  }
+
+  // Navigasi HTML: Network-first
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone);
-          });
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+            });
+          }
           return response;
         })
         .catch(() => {
-          // Offline / server tidak terjangkau -> baru pakai cache sebagai cadangan
           return caches
             .match(event.request)
             .then((cached) => cached || caches.match("/"));
-        }),
+        })
     );
-
     return;
   }
 
-  // ============================================================
-  // ASSET NEXT.JS (/_next/static/...): aman tetap cache-first.
-  // Setiap file di sini punya nama unik berisi hash konten per build, jadi
-  // kalau isinya berubah, URL-nya PASTI ikut berubah. Tidak ada risiko
-  // menyajikan versi basi dengan nama file yang sama.
-  // ============================================================
+  // Asset statis Next.js & gambar
   if (
     url.pathname.startsWith("/_next/static/") ||
     STATIC_FILES.includes(url.pathname)
@@ -96,64 +74,79 @@ self.addEventListener("fetch", (event) => {
         return (
           cached ||
           fetch(event.request).then((response) => {
-            const clone = response.clone();
-
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, clone);
-            });
-
+            if (response && response.status === 200) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, clone);
+              });
+            }
             return response;
           })
         );
-      }),
+      })
     );
   }
 });
 
 // ============================================================
-// WEB PUSH — Event: "push"
-// Dipanggil oleh browser saat server mengirim notifikasi push.
-// Berjalan di background WALAU TAB / APLIKASI SUDAH TERTUTUP.
+// WEB PUSH - Event: "push"
+// Notifikasi latar belakang untuk HP Android & Browser
 // ============================================================
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  console.log("[SW] Push event diterima");
 
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
+  let payload = {};
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (e) {
+      payload = {
+        title: "Portal Sekolah",
+        body: event.data.text() || "Ada pesan masuk baru.",
+      };
+    }
+  } else {
     payload = {
       title: "Portal Sekolah",
-      body: event.data.text(),
-      icon: "/logo.png",
-      url: "/",
+      body: "Ada pesan masuk baru.",
     };
   }
 
   const title = payload.title || "Portal Sekolah";
+  const targetUrl = payload.url || "/magang/login";
+
   const options = {
-    body: payload.body || "",
+    body: payload.body || "Pesan baru telah diterima.",
     icon: payload.icon || "/logo.png",
     badge: "/logo.png",
+    vibrate: [200, 100, 200],
+    renotify: true,
+    tag: payload.tag || "pesan-" + Date.now(),
     data: {
-      url: payload.url || "/",
+      url: targetUrl,
+      timestamp: Date.now(),
       ...(payload.data || {}),
     },
-    vibrate: [200, 100, 200],
-    requireInteraction: false,
-    tag: payload.tag || "portal-sekolah-" + Date.now(),
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration
+      .showNotification(title, options)
+      .catch((err) => {
+        console.warn("[SW] Gagal showNotification dengan options lengkap, coba fallback:", err);
+        return self.registration.showNotification(title, {
+          body: options.body,
+          data: options.data,
+        });
+      })
+  );
 });
 
 // ============================================================
-// WEB PUSH — Event: "notificationclick"
-// Dipanggil saat pengguna mengklik notifikasi.
+// WEB PUSH - Event: "notificationclick"
 // ============================================================
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-
   const targetUrl = event.notification.data?.url || "/";
 
   event.waitUntil(
@@ -162,14 +155,15 @@ self.addEventListener("notificationclick", (event) => {
       .then((windowClients) => {
         for (const client of windowClients) {
           const clientUrl = new URL(client.url);
-          const origin = self.location.origin;
-          if (clientUrl.origin === origin) {
-            client.focus();
-            client.navigate(targetUrl);
+          if (clientUrl.origin === self.location.origin) {
+            if ("focus" in client) client.focus();
+            if ("navigate" in client) return client.navigate(targetUrl);
             return;
           }
         }
-        return clients.openWindow(targetUrl);
-      }),
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
   );
 });
