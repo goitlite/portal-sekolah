@@ -8,6 +8,7 @@ import { login } from "../lib/api";
 // 1. IMPORT DIPERBARUI: Menambahkan isLoggedIn dan getSession
 import { saveSession, isLoggedIn, getSession } from "../lib/auth";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import { initPushAfterLogin } from "@/components/pwa/RegisterSW";
 
 // =====================================================
 // KONFIGURASI PENGAMAN LOGIN (ANTI BRUTE-FORCE)
@@ -277,6 +278,12 @@ export default function LoginMagang() {
 
       // Simpan hanya data user
       saveSession(result.data);
+
+      // Aktifkan Web Push Notification langsung setelah login
+      initPushAfterLogin({
+        userId: String(result.data.id || ""),
+        role: String(result.data.role || ""),
+      });
 
       // Redirect sesuai role
       switch (result.data.role) {

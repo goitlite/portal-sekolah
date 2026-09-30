@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Web Push subscriptions (data runtime, jangan commit)
+push_subscriptions.json

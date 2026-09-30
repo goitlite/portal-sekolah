@@ -109,3 +109,67 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// ============================================================
+// WEB PUSH — Event: "push"
+// Dipanggil oleh browser saat server mengirim notifikasi push.
+// Berjalan di background WALAU TAB / APLIKASI SUDAH TERTUTUP.
+// ============================================================
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = {
+      title: "Portal Sekolah",
+      body: event.data.text(),
+      icon: "/logo.png",
+      url: "/",
+    };
+  }
+
+  const title = payload.title || "Portal Sekolah";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/logo.png",
+    badge: "/logo.png",
+    data: {
+      url: payload.url || "/",
+      ...(payload.data || {}),
+    },
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+    tag: payload.tag || "portal-sekolah-" + Date.now(),
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ============================================================
+// WEB PUSH — Event: "notificationclick"
+// Dipanggil saat pengguna mengklik notifikasi.
+// ============================================================
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        for (const client of windowClients) {
+          const clientUrl = new URL(client.url);
+          const origin = self.location.origin;
+          if (clientUrl.origin === origin) {
+            client.focus();
+            client.navigate(targetUrl);
+            return;
+          }
+        }
+        return clients.openWindow(targetUrl);
+      }),
+  );
+});

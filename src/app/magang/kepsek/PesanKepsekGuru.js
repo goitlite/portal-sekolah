@@ -246,6 +246,42 @@ function ChatPanel({ mode, guru, idPengirim, onChanged, onBack }) {
         setIsi("");
         setInfo("✅ Pesan terkirim.");
         onChangedRef.current?.();
+
+        // ── KIRIM WEB PUSH NOTIFICATION ke penerima ──────────────
+        // mode "guru"   → pengirim = guru   → penerima = kepsek
+        // mode "kepsek" → pengirim = kepsek → penerima = guru (idGuru)
+        try {
+          const namaGuru = guru.namaGuru || "Guru";
+          if (mode === "guru") {
+            // Guru kirim pesan → notif ke semua kepsek
+            await fetch("/api/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: `📩 Pesan dari ${namaGuru}`,
+                body: teks.length > 100 ? teks.slice(0, 97) + "..." : teks,
+                url: "/magang/kepsek",
+                targetRole: "kepsek",
+              }),
+            });
+          } else {
+            // Kepsek kirim pesan → notif ke guru tertentu
+            await fetch("/api/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "📩 Pesan dari Kepala Sekolah",
+                body: teks.length > 100 ? teks.slice(0, 97) + "..." : teks,
+                url: "/magang/guru",
+                targetUserId: guru.idGuru,
+              }),
+            });
+          }
+        } catch (pushErr) {
+          // Jangan ganggu pengalaman kirim pesan walau push gagal
+          console.warn("[Push] Gagal kirim notifikasi:", pushErr);
+        }
+        // ─────────────────────────────────────────────────────────
       } else {
         setError(res?.message || "Pesan gagal dikirim.");
       }
