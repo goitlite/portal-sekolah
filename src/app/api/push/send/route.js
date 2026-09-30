@@ -48,46 +48,42 @@ export async function POST(request) {
 
     const allSubs = await readSubs();
 
-    // Filter penerima (dukung trim, case-insensitive, dan fallback role)
-    let targets = allSubs;
-    if (targetUserId) {
-      const cleanId = String(targetUserId).trim().toLowerCase();
-      targets = allSubs.filter(
-        (s) =>
-          String(s.userId || "")
-            .trim()
-            .toLowerCase() === cleanId,
-      );
+    const cleanTargetId = targetUserId
+      ? String(targetUserId).trim().toLowerCase()
+      : "";
+    const cleanTargetRole = targetRole
+      ? String(targetRole).trim().toLowerCase()
+      : "";
 
-      // Jika ID spesifik tidak ditemukan tetapi targetRole disediakan, gunakan fallback role
-      if (targets.length === 0 && targetRole) {
-        const cleanRole = String(targetRole).trim().toLowerCase();
-        targets = allSubs.filter(
-          (s) =>
-            String(s.role || "")
-              .trim()
-              .toLowerCase() === cleanRole,
-        );
-      }
-    } else if (targetRole) {
-      const cleanRole = String(targetRole).trim().toLowerCase();
-      targets = allSubs.filter(
-        (s) =>
-          String(s.role || "")
-            .trim()
-            .toLowerCase() === cleanRole,
-      );
-    }
+    // Filter penerima:
+    // 1. Jika ada targetUserId, cocokkan userId
+    // 2. Jika ada targetRole, masukkan juga subscriber dengan role tersebut agar HP penerima PASTI kena
+    let targets = allSubs.filter((s) => {
+      const sId = String(s.userId || "")
+        .trim()
+        .toLowerCase();
+      const sRole = String(s.role || "")
+        .trim()
+        .toLowerCase();
+
+      if (cleanTargetId && sId === cleanTargetId) return true;
+      if (cleanTargetRole && sRole === cleanTargetRole) return true;
+      return false;
+    });
 
     console.log(
-      `[Push Send] Target filter -> targetUserId: "${targetUserId || ""}", targetRole: "${targetRole || ""}". Ditemukan ${targets.length} subscriber dari total ${allSubs.length}.`,
+      `[Push Send] Target filter -> Id: "${cleanTargetId}", Role: "${cleanTargetRole}". Cocok: ${targets.length} dari ${allSubs.length} subs. Subs di server:`,
+      allSubs.map((s) => `${s.role}:${s.userId}`),
     );
 
     if (targets.length === 0) {
+      const daftarDiServer = allSubs
+        .map((s) => `${s.role}:${s.userId}`)
+        .join(", ");
       return NextResponse.json({
-        ok: true,
+        ok: false,
         sent: 0,
-        message: "Tidak ada subscriber yang cocok.",
+        message: `Tidak ada subscriber yang cocok untuk ID "${cleanTargetId}" atau Role "${cleanTargetRole}". Di server ada ${allSubs.length} perangkat terdaftar: [${daftarDiServer || "Kosong"}]. Silakan tekan tombol Tes Notif di HP agar HP Anda terdaftar.`,
       });
     }
 

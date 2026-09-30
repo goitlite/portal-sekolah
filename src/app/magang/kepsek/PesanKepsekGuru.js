@@ -43,7 +43,8 @@ function bersihkanDuplikat(list) {
     const cleanTeks = String(m.teks).trim();
     // Cek apakah pesan dengan pengirim dan teks yang sama persis sudah ada dalam jarak 60 detik atau teks identik
     const sudahAda = hasil.some(
-      (item) => item.pengirim === m.pengirim && String(item.teks).trim() === cleanTeks
+      (item) =>
+        item.pengirim === m.pengirim && String(item.teks).trim() === cleanTeks,
     );
     if (!sudahAda) {
       hasil.push(m);
@@ -95,7 +96,7 @@ function formatJamPesan(waktu) {
 function normalisasiGuru(g) {
   const idGuru = String(g.ID || g.id || g.ID_GURU || g.idGuru || "").trim();
   const namaGuru = String(
-    g.NAMA_GURU || g.NAMA || g.nama || g.namaGuru || ""
+    g.NAMA_GURU || g.NAMA || g.nama || g.namaGuru || "",
   ).trim();
   return { idGuru, namaGuru };
 }
@@ -167,7 +168,15 @@ function PesanShell({ onClose, maxWidth = "max-w-3xl", children }) {
 // =========================================================
 // PANEL CHAT MODEL WHATSAPP
 // =========================================================
-function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBack, onClose }) {
+function ChatPanel({
+  mode,
+  guru,
+  idPengirim,
+  initialData = null,
+  onChanged,
+  onBack,
+  onClose,
+}) {
   const lawan = mode === "guru" ? "Kepala Sekolah" : guru.namaGuru || "Guru";
 
   // Baca histori chat langsung dari storage -> Langsung tampil dalam 0 detik!
@@ -181,7 +190,8 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
   };
 
@@ -208,7 +218,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         if (serverData.pesanKepsek && serverData.pesanKepsek.trim()) {
           const cleanTeks = serverData.pesanKepsek.trim();
           const existing = currentList.find(
-            (m) => m.pengirim === "kepsek" && m.teks.trim() === cleanTeks
+            (m) => m.pengirim === "kepsek" && m.teks.trim() === cleanTeks,
           );
 
           if (existing) {
@@ -235,7 +245,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         if (serverData.pesanGuru && serverData.pesanGuru.trim()) {
           const cleanTeks = serverData.pesanGuru.trim();
           const existing = currentList.find(
-            (m) => m.pengirim === "guru" && m.teks.trim() === cleanTeks
+            (m) => m.pengirim === "guru" && m.teks.trim() === cleanTeks,
           );
 
           if (existing) {
@@ -260,7 +270,9 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
         if (changed) {
           currentList.sort(
-            (a, b) => new Date(a.waktu || 0).getTime() - new Date(b.waktu || 0).getTime()
+            (a, b) =>
+              new Date(a.waktu || 0).getTime() -
+              new Date(b.waktu || 0).getTime(),
           );
           const deduped = bersihkanDuplikat(currentList);
           saveChatHistory(guru.idGuru, deduped);
@@ -274,9 +286,11 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
             : serverData.pesanGuru && !serverData.dibacaKepsek;
 
         if (adaMasukBelumDibaca) {
-          pesanTandaiDibaca(guru.idGuru, mode).then((r) => {
-            if (r?.success) onChanged?.();
-          }).catch(() => {});
+          pesanTandaiDibaca(guru.idGuru, mode)
+            .then((r) => {
+              if (r?.success) onChanged?.();
+            })
+            .catch(() => {});
         }
       }
     } catch (e) {
@@ -297,7 +311,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     }
 
     const yakin = window.confirm(
-      `Hapus semua pesan chat dengan ${lawan}?\n\nSemua riwayat percakapan di perangkat ini akan dibersihkan.`
+      `Hapus semua pesan chat dengan ${lawan}?\n\nSemua riwayat percakapan di perangkat ini akan dibersihkan.`,
     );
     if (!yakin) return;
 
@@ -310,12 +324,14 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
   // Tes Notifikasi Lengkap & Pendaftaran Push Langsung
   async function handleTesNotif() {
     // 1. Cek Dukungan Browser & Konteks Keamanan
-    const isSecure = typeof window !== "undefined" && (window.isSecureContext || window.location.hostname === "localhost");
+    const isSecure =
+      typeof window !== "undefined" &&
+      (window.isSecureContext || window.location.hostname === "localhost");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
 
     if (!isSecure) {
       alert(
-        `⚠️ PERINGATAN BROWSER ANDROID:\n\nWeb Push Android MEMBUTUHKAN HTTPS atau localhost.\nAlamat saat ini: ${origin}\n\nJika Anda membuka via IP LAN (http://192.168.x.x:3000), Google Chrome di HP memblokir Web Push.\n\nSolusi: Buka via HTTPS (seperti domain Vercel Anda) atau via USB debugging (localhost:3000).`
+        `⚠️ PERINGATAN BROWSER ANDROID:\n\nWeb Push Android MEMBUTUHKAN HTTPS atau localhost.\nAlamat saat ini: ${origin}\n\nJika Anda membuka via IP LAN (http://192.168.x.x:3000), Google Chrome di HP memblokir Web Push.\n\nSolusi: Buka via HTTPS (seperti domain Vercel Anda) atau via USB debugging (localhost:3000).`,
       );
     }
 
@@ -326,7 +342,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
     if (Notification.permission === "denied") {
       alert(
-        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nSilakan buka:\nPengaturan HP > Aplikasi > Portal Sekolah (atau Chrome) > Notifikasi > Hidupkan Izinkan Notifikasi."
+        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nSilakan buka:\nPengaturan HP > Aplikasi > Portal Sekolah (atau Chrome) > Notifikasi > Hidupkan Izinkan Notifikasi.",
       );
       return;
     }
@@ -340,11 +356,15 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
       const reg = await navigator.serviceWorker.ready;
 
-      // Cek VAPID Key
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      let subscription = null;
+      // Cek VAPID Key dengan Fallback Resmi
+      const vapidKey =
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+        "BD68J66JpkZS7Xe6-03zP6rlSRQ6f0WN00t4ycbyLIDNVmI9DfpqM-paeYaNoj14ujRNcgQojx2fTtZ-PzpWBTE";
 
-      if (vapidKey && "PushManager" in window) {
+      let subscription = null;
+      let subscribeStatus = "Belum Terdaftar";
+
+      if ("PushManager" in window) {
         try {
           subscription = await reg.pushManager.getSubscription();
           if (!subscription) {
@@ -356,7 +376,10 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
           // Kirim token HP Android ini ke server
           if (subscription) {
-            const myUserId = mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim();
+            const myUserId =
+              mode === "guru"
+                ? String(guru.idGuru || "888888").trim()
+                : String(idPengirim || "202026").trim();
             const myRole = mode;
 
             const subRes = await fetch("/api/push/subscribe", {
@@ -368,9 +391,15 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
                 role: myRole,
               }),
             });
-            console.log("[Push Test] Subscribe response status:", subRes.status);
+            const subData = await subRes.json();
+            if (subRes.ok && subData.ok) {
+              subscribeStatus = `Sukses Terdaftar di Server sebagai ${myRole} (${myUserId})`;
+            } else {
+              subscribeStatus = `Gagal Simpan: ${subData.error || subRes.statusText}`;
+            }
           }
         } catch (subErr) {
+          subscribeStatus = `Gagal PushManager: ${subErr.message}`;
           console.warn("[Push Test] PushManager subscribe warning:", subErr);
         }
       }
@@ -383,20 +412,30 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
       });
 
       // Tembakkan juga push server ke role ini
-      const myUserId = mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim();
+      const myUserId =
+        mode === "guru"
+          ? String(guru.idGuru || "888888").trim()
+          : String(idPengirim || "202026").trim();
+
       fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: "🔔 Push FCM dari Server Masuk!",
-          body: `Halo ${mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah"}, push notifikasi server berfungsi.`,
+          body: `Halo ${mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah"}, push notifikasi server berfungsi.`,
           targetUserId: myUserId,
           targetRole: mode,
         }),
       })
         .then((r) => r.json())
         .then((d) => {
-          alert(`🔔 HASIL TES NOTIFIKASI:\n\n1. Izin HP: DISETUJUI (Granted)\n2. Notifikasi Layar: Berhasil Muncul\n3. Push Server FCM: ${d.ok ? "Sukses Terkirim (" + d.sent + " device)" : "Gagal: " + (d.error || d.message)}`);
+          alert(
+            `🔔 HASIL TES NOTIFIKASI LENGKAP:\n\n1. Izin HP: DISETUJUI\n2. Token HP: ${subscribeStatus}\n3. Push FCM Server: ${
+              d.ok
+                ? "Sukses Terkirim (" + d.sent + " device)"
+                : d.message || "Gagal kirim"
+            }`,
+          );
         })
         .catch((e) => {
           alert("Notifikasi layar muncul. Push server kendala: " + e.message);
@@ -431,7 +470,8 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     const pesanBaru = {
       id: "msg-" + Date.now(),
       pengirim: mode,
-      namaPengirim: mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah",
+      namaPengirim:
+        mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah",
       teks,
       waktu: waktuSkrg,
       dibaca: false, // Centang 1 (Belum dibaca lawan bicara)
@@ -446,13 +486,17 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     // 2. Tembakkan Web Push Langsung ke HP lawan bicara tanpa menunggu
     const targetUserIdKirim = mode === "guru" ? "" : String(guru.idGuru).trim();
     const targetRoleKirim = mode === "guru" ? "kepsek" : "guru";
-    const namaPengirimNotif = mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah";
+    const namaPengirimNotif =
+      mode === "guru" ? guru.namaGuru || "Guru" : "Kepala Sekolah";
 
     fetch("/api/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: mode === "guru" ? `📩 Pesan dari ${namaPengirimNotif}` : "📩 Pesan dari Kepala Sekolah",
+        title:
+          mode === "guru"
+            ? `📩 Pesan dari ${namaPengirimNotif}`
+            : "📩 Pesan dari Kepala Sekolah",
         body: teks.length > 100 ? teks.slice(0, 97) + "..." : teks,
         url: mode === "guru" ? "/magang/kepsek" : "/magang/guru",
         targetUserId: targetUserIdKirim,
@@ -498,13 +542,19 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
           {/* Avatar */}
           <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-inner">
-            {mode === "guru" ? "KS" : String(lawan).substring(0, 2).toUpperCase()}
+            {mode === "guru"
+              ? "KS"
+              : String(lawan).substring(0, 2).toUpperCase()}
           </div>
 
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-white truncate leading-tight">{lawan}</h3>
+            <h3 className="text-sm font-bold text-white truncate leading-tight">
+              {lawan}
+            </h3>
             <p className="text-[11px] text-emerald-100/80 font-medium truncate">
-              {mode === "guru" ? "Kepala Sekolah SMKN 1 Teluk Kuantan" : `ID: ${guru.idGuru}`}
+              {mode === "guru"
+                ? "Kepala Sekolah SMKN 1 Teluk Kuantan"
+                : `ID: ${guru.idGuru}`}
             </p>
           </div>
         </div>
@@ -572,7 +622,9 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
             <div className="w-12 h-12 bg-white/70 rounded-full flex items-center justify-center text-2xl mx-auto shadow-xs border border-stone-200">
               💬
             </div>
-            <p className="text-xs font-bold text-stone-600">Belum ada percakapan</p>
+            <p className="text-xs font-bold text-stone-600">
+              Belum ada percakapan
+            </p>
             <p className="text-[11px] text-stone-500 leading-relaxed">
               Mulai kirim pesan pertama Anda ke {lawan} di bawah.
             </p>
@@ -631,7 +683,10 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
       {/* INPUT BAR ALA WHATSAPP */}
       <div className="p-2 sm:p-3 bg-[#f0f2f5] border-t border-slate-200/80 shrink-0">
-        <form onSubmit={handleKirim} className="flex items-center gap-2 max-w-4xl mx-auto">
+        <form
+          onSubmit={handleKirim}
+          className="flex items-center gap-2 max-w-4xl mx-auto"
+        >
           <div className="flex-1 bg-white rounded-full border border-slate-300 px-4 py-2 flex items-center shadow-xs focus-within:border-[#00a884] focus-within:ring-2 focus-within:ring-[#00a884]/20 transition-all">
             <textarea
               rows={1}
@@ -705,43 +760,51 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(
-    initialGuru?.idGuru ? initialGuru : null
+    initialGuru?.idGuru ? initialGuru : null,
   );
 
-  const loadAll = useCallback(async (quiet = false) => {
-    if (!quiet && guruList.length === 0) setLoading(true);
-    setError("");
-    try {
-      const [resGuru, resPesan] = await Promise.all([
-        getGuru(),
-        pesanGetDaftar(),
-      ]);
+  const loadAll = useCallback(
+    async (quiet = false) => {
+      if (!quiet && guruList.length === 0) setLoading(true);
+      setError("");
+      try {
+        const [resGuru, resPesan] = await Promise.all([
+          getGuru(),
+          pesanGetDaftar(),
+        ]);
 
-      if (resGuru?.success && Array.isArray(resGuru.data)) {
-        const list = resGuru.data.map(normalisasiGuru).filter((g) => g.idGuru);
-        setGuruList(list);
-        try {
-          sessionStorage.setItem(STORAGE_KEPSEK_LIST_CACHE, JSON.stringify(list));
-        } catch (e) {}
-      }
+        if (resGuru?.success && Array.isArray(resGuru.data)) {
+          const list = resGuru.data
+            .map(normalisasiGuru)
+            .filter((g) => g.idGuru);
+          setGuruList(list);
+          try {
+            sessionStorage.setItem(
+              STORAGE_KEPSEK_LIST_CACHE,
+              JSON.stringify(list),
+            );
+          } catch (e) {}
+        }
 
-      if (resPesan?.success && Array.isArray(resPesan.data)) {
-        const map = {};
-        resPesan.data.forEach((row) => {
-          map[String(row.idGuru)] = row;
-        });
-        setDaftar(map);
-      }
+        if (resPesan?.success && Array.isArray(resPesan.data)) {
+          const map = {};
+          resPesan.data.forEach((row) => {
+            map[String(row.idGuru)] = row;
+          });
+          setDaftar(map);
+        }
 
-      if (!resGuru?.success) {
-        setError(resGuru?.message || "Gagal memuat daftar guru.");
+        if (!resGuru?.success) {
+          setError(resGuru?.message || "Gagal memuat daftar guru.");
+        }
+      } catch (e) {
+        if (guruList.length === 0) setError("Tidak dapat terhubung ke server.");
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      if (guruList.length === 0) setError("Tidak dapat terhubung ke server.");
-    } finally {
-      setLoading(false);
-    }
-  }, [guruList.length]);
+    },
+    [guruList.length],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => loadAll(false), 0);
@@ -772,7 +835,7 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
       ? base.filter(
           (g) =>
             g.namaGuru.toLowerCase().includes(q) ||
-            g.idGuru.toLowerCase().includes(q)
+            g.idGuru.toLowerCase().includes(q),
         )
       : base;
 
@@ -866,7 +929,11 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                   key={g.idGuru}
                   type="button"
                   onClick={() =>
-                    setSelected({ idGuru: g.idGuru, namaGuru: g.namaGuru, row: g.row })
+                    setSelected({
+                      idGuru: g.idGuru,
+                      namaGuru: g.namaGuru,
+                      row: g.row,
+                    })
                   }
                   className={`w-full text-left px-3.5 py-3 flex items-center gap-3 transition-colors cursor-pointer ${
                     aktif ? "bg-[#f0f2f5]" : "hover:bg-slate-50"
@@ -926,7 +993,8 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                 Pilih guru untuk memulai obrolan
               </p>
               <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Pesan akan langsung terkirim dan memunculkan notifikasi di HP Guru.
+                Pesan akan langsung terkirim dan memunculkan notifikasi di HP
+                Guru.
               </p>
             </div>
           )}
