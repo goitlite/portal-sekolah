@@ -26,11 +26,16 @@ import {
   pesanGetDaftar,
   pesanTandaiDibaca,
   pesanGetJumlahBaru,
+  pesanKirimMassal,
 } from "../lib/api";
 
 export const PESAN_MAX_LENGTH = 500;
 const STORAGE_CHAT_PREFIX = "portal_pesan_chat_";
 const STORAGE_KEPSEK_LIST_CACHE = "portal_pesan_kepsek_list_cache";
+
+// Interval cek pesan baru saat halaman pesan sedang terbuka (milidetik)
+const CHAT_POLL_MS = 5000; // chat yang sedang dibuka
+const INBOX_POLL_MS = 10000; // daftar guru di sisi Kepala Sekolah
 
 // =========================================================
 // HELPER STORAGE (CHAT HISTORY LOCALSTORAGE) & DEDUPLIKASI
@@ -110,6 +115,32 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // =========================================================
+// HOOK: DENGARKAN PUSH MASUK DARI SERVICE WORKER
+// Service worker mengirim { type: "PUSH_PESAN" } ke semua jendela
+// aplikasi yang terbuka saat push tiba (lihat potongan sw.js).
+// Jika sw.js belum diubah, polling tetap membuat pesan muncul.
+// =========================================================
+function useEventPesanMasuk(callback) {
+  const ref = useRef(callback);
+  useEffect(() => {
+    ref.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+    const handler = (e) => {
+      if (e?.data?.type === "PUSH_PESAN") ref.current?.();
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handler);
+    };
+  }, []);
+}
+
+// =========================================================
 // HOOK: JUMLAH PESAN BELUM DIBACA (untuk badge tombol)
 // =========================================================
 export function useJumlahPesanBaru({
@@ -130,6 +161,9 @@ export function useJumlahPesanBaru({
       }
     } catch (e) {}
   }, [role, idGuru, enabled]);
+
+  // Badge langsung diperbarui saat push masuk
+  useEventPesanMasuk(refresh);
 
   useEffect(() => {
     if (!enabled) return;
@@ -200,108 +234,157 @@ function ChatPanel({
   }, [messages]);
 
   // Sinkronisasi data terkini dari server TANPA DUPLIKAT
-  const syncServer = useCallback(async () => {
-    try {
-      let serverData = initialData;
-      if (!serverData) {
-        const res = await pesanGet(guru.idGuru);
-        if (res?.success && res.data) {
-          serverData = res.data;
-        }
-      }
-
-      if (serverData) {
-        let currentList = getChatHistory(guru.idGuru);
-        let changed = false;
-
-        // 1. Cek pesan Kepsek
-        if (serverData.pesanKepsek && serverData.pesanKepsek.trim()) {
-          const cleanTeks = serverData.pesanKepsek.trim();
-          const existing = currentList.find(
-            (m) => m.pengirim === "kepsek" && m.teks.trim() === cleanTeks,
-          );
-
-          if (existing) {
-            // Update status dibaca jika berubah
-            if (existing.dibaca !== Boolean(serverData.dibacaGuru)) {
-              existing.dibaca = Boolean(serverData.dibacaGuru);
-              changed = true;
-            }
-          } else {
-            // Hanya push jika pesan belum ada sama sekali
-            currentList.push({
-              id: "ks-" + (serverData.waktuKepsek || Date.now()),
-              pengirim: "kepsek",
-              namaPengirim: "Kepala Sekolah",
-              teks: cleanTeks,
-              waktu: serverData.waktuKepsek || new Date().toISOString(),
-              dibaca: Boolean(serverData.dibacaGuru),
-            });
-            changed = true;
+  const syncServer = useCallback(
+    async (paksaAmbil = false) => {
+      try {
+        // paksaAmbil = true -> selalu tanya server (abaikan initialData yang bisa basi)
+        let serverData = paksaAmbil ? null : initialData;
+        if (!serverData) {
+          const res = await pesanGet(guru.idGuru);
+          if (res?.success && res.data) {
+            serverData = res.data;
           }
         }
 
-        // 2. Cek pesan Guru
-        if (serverData.pesanGuru && serverData.pesanGuru.trim()) {
-          const cleanTeks = serverData.pesanGuru.trim();
-          const existing = currentList.find(
-            (m) => m.pengirim === "guru" && m.teks.trim() === cleanTeks,
-          );
+        if (serverData) {
+          let currentList = getChatHistory(guru.idGuru);
+          let changed = false;
 
-          if (existing) {
-            // Update status dibaca jika berubah
-            if (existing.dibaca !== Boolean(serverData.dibacaKepsek)) {
-              existing.dibaca = Boolean(serverData.dibacaKepsek);
+          // 1. Cek pesan Kepsek
+          if (serverData.pesanKepsek && serverData.pesanKepsek.trim()) {
+            const cleanTeks = serverData.pesanKepsek.trim();
+            const existing = currentList.find(
+              (m) => m.pengirim === "kepsek" && m.teks.trim() === cleanTeks,
+            );
+
+            if (existing) {
+              // Update status dibaca jika berubah
+              if (existing.dibaca !== Boolean(serverData.dibacaGuru)) {
+                existing.dibaca = Boolean(serverData.dibacaGuru);
+                changed = true;
+              }
+            } else {
+              // Hanya push jika pesan belum ada sama sekali
+              currentList.push({
+                id: "ks-" + (serverData.waktuKepsek || Date.now()),
+                pengirim: "kepsek",
+                namaPengirim: "Kepala Sekolah",
+                teks: cleanTeks,
+                waktu: serverData.waktuKepsek || new Date().toISOString(),
+                dibaca: Boolean(serverData.dibacaGuru),
+              });
               changed = true;
             }
-          } else {
-            // Hanya push jika pesan belum ada sama sekali
-            currentList.push({
-              id: "gr-" + (serverData.waktuGuru || Date.now()),
-              pengirim: "guru",
-              namaPengirim: serverData.namaGuru || "Guru",
-              teks: cleanTeks,
-              waktu: serverData.waktuGuru || new Date().toISOString(),
-              dibaca: Boolean(serverData.dibacaKepsek),
-            });
-            changed = true;
+          }
+
+          // 2. Cek pesan Guru
+          if (serverData.pesanGuru && serverData.pesanGuru.trim()) {
+            const cleanTeks = serverData.pesanGuru.trim();
+            const existing = currentList.find(
+              (m) => m.pengirim === "guru" && m.teks.trim() === cleanTeks,
+            );
+
+            if (existing) {
+              // Update status dibaca jika berubah
+              if (existing.dibaca !== Boolean(serverData.dibacaKepsek)) {
+                existing.dibaca = Boolean(serverData.dibacaKepsek);
+                changed = true;
+              }
+            } else {
+              // Hanya push jika pesan belum ada sama sekali
+              currentList.push({
+                id: "gr-" + (serverData.waktuGuru || Date.now()),
+                pengirim: "guru",
+                namaPengirim: serverData.namaGuru || "Guru",
+                teks: cleanTeks,
+                waktu: serverData.waktuGuru || new Date().toISOString(),
+                dibaca: Boolean(serverData.dibacaKepsek),
+              });
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            currentList.sort(
+              (a, b) =>
+                new Date(a.waktu || 0).getTime() -
+                new Date(b.waktu || 0).getTime(),
+            );
+            const deduped = bersihkanDuplikat(currentList);
+            saveChatHistory(guru.idGuru, deduped);
+            setMessages([...deduped]);
+          }
+
+          // Tandai dibaca jika ada pesan masuk yang belum dibaca
+          const adaMasukBelumDibaca =
+            mode === "guru"
+              ? serverData.pesanKepsek && !serverData.dibacaGuru
+              : serverData.pesanGuru && !serverData.dibacaKepsek;
+
+          // Hanya tandai dibaca jika layar sedang dilihat pengguna
+          const layarTerlihat =
+            typeof document === "undefined" ||
+            document.visibilityState === "visible";
+
+          if (adaMasukBelumDibaca && layarTerlihat) {
+            pesanTandaiDibaca(guru.idGuru, mode)
+              .then((r) => {
+                if (r?.success) onChanged?.();
+              })
+              .catch(() => {});
           }
         }
-
-        if (changed) {
-          currentList.sort(
-            (a, b) =>
-              new Date(a.waktu || 0).getTime() -
-              new Date(b.waktu || 0).getTime(),
-          );
-          const deduped = bersihkanDuplikat(currentList);
-          saveChatHistory(guru.idGuru, deduped);
-          setMessages([...deduped]);
-        }
-
-        // Tandai dibaca jika ada pesan masuk yang belum dibaca
-        const adaMasukBelumDibaca =
-          mode === "guru"
-            ? serverData.pesanKepsek && !serverData.dibacaGuru
-            : serverData.pesanGuru && !serverData.dibacaKepsek;
-
-        if (adaMasukBelumDibaca) {
-          pesanTandaiDibaca(guru.idGuru, mode)
-            .then((r) => {
-              if (r?.success) onChanged?.();
-            })
-            .catch(() => {});
-        }
+      } catch (e) {
+        console.warn("[Chat] Sync warning:", e);
       }
-    } catch (e) {
-      console.warn("[Chat] Sync warning:", e);
-    }
-  }, [guru.idGuru, mode, initialData, onChanged]);
+    },
+    [guru.idGuru, mode, initialData, onChanged],
+  );
 
   useEffect(() => {
-    const t = setTimeout(syncServer, 0);
+    const t = setTimeout(() => syncServer(false), 0);
     return () => clearTimeout(t);
   }, [syncServer]);
+
+  // ---------------------------------------------------------
+  // AUTO-REFRESH: pesan lawan bicara muncul tanpa keluar-masuk halaman
+  // - polling tiap CHAT_POLL_MS selama layar terlihat
+  // - langsung cek saat aplikasi kembali aktif / fokus
+  // - langsung cek saat push masuk (lewat service worker)
+  // ---------------------------------------------------------
+  const syncRef = useRef(syncServer);
+  useEffect(() => {
+    syncRef.current = syncServer;
+  }, [syncServer]);
+
+  const pollBusy = useRef(false);
+  const ambilTerbaru = useCallback(async (hanyaJikaTerlihat = true) => {
+    if (hanyaJikaTerlihat && document.visibilityState !== "visible") return;
+    if (pollBusy.current) return; // jangan menumpuk request
+    pollBusy.current = true;
+    try {
+      await Promise.race([
+        syncRef.current(true),
+        new Promise((resolve) => setTimeout(resolve, 20000)), // pengaman macet
+      ]);
+    } finally {
+      pollBusy.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => ambilTerbaru(true), CHAT_POLL_MS);
+    const saatAktif = () => ambilTerbaru(true);
+    document.addEventListener("visibilitychange", saatAktif);
+    window.addEventListener("focus", saatAktif);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", saatAktif);
+      window.removeEventListener("focus", saatAktif);
+    };
+  }, [ambilTerbaru]);
+
+  useEventPesanMasuk(() => ambilTerbaru(false));
 
   // Hapus semua percakapan
   function handleHapusChat() {
@@ -741,6 +824,303 @@ export function PesanGuruModal({ isOpen, onClose, user, onChanged }) {
 }
 
 // =========================================================
+// PANEL PESAN MASSAL (Kepala Sekolah -> semua guru / guru tertentu)
+// Pesan ditulis ke kolom PESAN_KEPSEK tiap guru tujuan (menimpa pesan
+// Kepala Sekolah sebelumnya), sehingga guru membacanya di chat biasa.
+// =========================================================
+function BroadcastPanel({ guruList, user, onBack, onSent }) {
+  const [mode, setMode] = useState("semua"); // "semua" | "pilih"
+  const [pilihan, setPilihan] = useState(() => new Set());
+  const [cari, setCari] = useState("");
+  const [isi, setIsi] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+
+  const daftarTampil = useMemo(() => {
+    const q = cari.trim().toLowerCase();
+    const base = q
+      ? guruList.filter(
+          (g) =>
+            g.namaGuru.toLowerCase().includes(q) ||
+            g.idGuru.toLowerCase().includes(q),
+        )
+      : guruList;
+    return [...base].sort((a, b) => a.namaGuru.localeCompare(b.namaGuru));
+  }, [guruList, cari]);
+
+  const jumlahTarget = mode === "semua" ? guruList.length : pilihan.size;
+
+  function toggle(id) {
+    setPilihan((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setError("");
+  }
+
+  function pilihSemuaTampil() {
+    setPilihan((prev) => {
+      const next = new Set(prev);
+      daftarTampil.forEach((g) => next.add(g.idGuru));
+      return next;
+    });
+  }
+
+  async function kirim() {
+    setError("");
+    setInfo("");
+
+    const teks = isi.trim();
+    if (!teks) {
+      setError("Pesan tidak boleh kosong.");
+      return;
+    }
+    if (teks.length > PESAN_MAX_LENGTH) {
+      setError(`Pesan maksimal ${PESAN_MAX_LENGTH} karakter.`);
+      return;
+    }
+    if (jumlahTarget === 0) {
+      setError("Pilih minimal 1 guru tujuan.");
+      return;
+    }
+
+    const ids =
+      mode === "semua" ? guruList.map((g) => g.idGuru) : Array.from(pilihan);
+    const label =
+      mode === "semua"
+        ? `SEMUA guru (${ids.length} orang)`
+        : `${ids.length} guru terpilih`;
+
+    if (
+      !window.confirm(
+        `Kirim pesan ini ke ${label}?\n\nPesan Kepala Sekolah sebelumnya di chat masing-masing guru akan tergantikan.`,
+      )
+    ) {
+      return;
+    }
+
+    setSending(true);
+    try {
+      const res = await pesanKirimMassal({
+        idPengirim: String(user?.id || ""),
+        semua: mode === "semua",
+        idGuruList: mode === "semua" ? [] : ids,
+        isi: teks,
+      });
+
+      if (res?.success) {
+        const berhasil = Array.isArray(res.data?.idGuruList)
+          ? res.data.idGuruList
+          : ids;
+
+        // Notifikasi push ke guru tujuan (tidak boleh mengganggu alur kirim)
+        fetch("/api/push/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "📩 Pesan dari Kepala Sekolah",
+            body: teks.length > 100 ? teks.slice(0, 97) + "..." : teks,
+            url: "/magang/guru",
+            ...(mode === "semua"
+              ? { targetRole: "guru" }
+              : { targetUserIds: berhasil }),
+          }),
+        }).catch(() => {});
+
+        setInfo(
+          `✅ Pesan terkirim ke ${res.data?.jumlah ?? berhasil.length} guru.`,
+        );
+        setIsi("");
+        onSent?.();
+      } else {
+        setError(res?.message || "Pesan massal gagal dikirim.");
+      }
+    } catch (e) {
+      setError("Tidak dapat terhubung ke server.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 bg-[#efeae2]">
+      {/* Header */}
+      <div className="px-4 py-3 bg-[#075e54] text-white flex items-center gap-3 shrink-0 shadow-md">
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-8 h-8 rounded-full hover:bg-black/10 flex items-center justify-center text-white text-base font-bold cursor-pointer active:scale-90"
+          title="Kembali"
+        >
+          ←
+        </button>
+        <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-lg shrink-0">
+          📢
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold truncate leading-tight">
+            Pesan Massal Guru
+          </h3>
+          <p className="text-[11px] text-emerald-100/80 font-medium truncate">
+            Kirim satu pesan ke banyak guru sekaligus
+          </p>
+        </div>
+      </div>
+
+      {/* Isi */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {/* Pilih penerima */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 space-y-3">
+          <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+            Penerima
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("semua")}
+              className={`rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all cursor-pointer ${
+                mode === "semua"
+                  ? "border-[#075e54] bg-emerald-50 text-[#075e54]"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              👥 Semua Guru
+              <span className="block text-[10px] font-bold opacity-70">
+                {guruList.length} orang
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("pilih")}
+              className={`rounded-xl border-2 px-3 py-2.5 text-xs font-black transition-all cursor-pointer ${
+                mode === "pilih"
+                  ? "border-[#075e54] bg-emerald-50 text-[#075e54]"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              ☑️ Pilih Guru
+              <span className="block text-[10px] font-bold opacity-70">
+                {pilihan.size} dipilih
+              </span>
+            </button>
+          </div>
+
+          {mode === "pilih" && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={cari}
+                onChange={(e) => setCari(e.target.value)}
+                placeholder="Cari nama atau ID guru..."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none font-medium"
+              />
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={pilihSemuaTampil}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-black cursor-pointer"
+                >
+                  Pilih semua{cari.trim() ? " hasil pencarian" : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPilihan(new Set())}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-black cursor-pointer"
+                >
+                  Kosongkan
+                </button>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+                {daftarTampil.length === 0 ? (
+                  <p className="p-4 text-center text-xs font-bold text-slate-400">
+                    Guru tidak ditemukan.
+                  </p>
+                ) : (
+                  daftarTampil.map((g) => (
+                    <label
+                      key={g.idGuru}
+                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pilihan.has(g.idGuru)}
+                        onChange={() => toggle(g.idGuru)}
+                        className="w-4 h-4 accent-emerald-600"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-bold text-slate-800 truncate">
+                          {g.namaGuru || g.idGuru}
+                        </span>
+                        <span className="block text-[10px] text-slate-400 font-medium">
+                          ID: {g.idGuru}
+                        </span>
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            ⚠️ {error}
+          </p>
+        )}
+        {info && !error && (
+          <p className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            {info}
+          </p>
+        )}
+      </div>
+
+      {/* Kotak tulis */}
+      <div className="p-3 bg-[#f0f2f5] border-t border-slate-200 shrink-0 space-y-2">
+        <textarea
+          rows={3}
+          value={isi}
+          maxLength={PESAN_MAX_LENGTH}
+          onChange={(e) => {
+            setIsi(e.target.value);
+            setError("");
+            setInfo("");
+          }}
+          placeholder={
+            mode === "semua"
+              ? "Tulis pesan untuk semua guru..."
+              : `Tulis pesan untuk ${pilihan.size} guru terpilih...`
+          }
+          className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-800 font-medium focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 placeholder:text-slate-400"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-medium text-slate-500 leading-snug">
+            Menimpa pesan Kepala Sekolah sebelumnya di chat tiap guru.
+            <span className="ml-1 font-black">
+              {isi.length}/{PESAN_MAX_LENGTH}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={kirim}
+            disabled={sending || !isi.trim() || jumlahTarget === 0}
+            className="shrink-0 px-4 py-2 rounded-xl bg-[#075e54] hover:brightness-110 text-white text-xs font-black shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {sending ? "⏳ Mengirim..." : `📢 Kirim ke ${jumlahTarget} guru`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================
 // SISI KEPALA SEKOLAH: Kotak Pesan Seluruh Guru + Chat
 // =========================================================
 function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
@@ -762,6 +1142,7 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
   const [selected, setSelected] = useState(
     initialGuru?.idGuru ? initialGuru : null,
   );
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
 
   const loadAll = useCallback(
     async (quiet = false) => {
@@ -816,6 +1197,29 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
     onChanged?.();
   }, [loadAll, onChanged]);
 
+  // Segarkan hanya daftar pesan (ringan, tanpa memuat ulang daftar guru)
+  const refreshDaftar = useCallback(async () => {
+    try {
+      const r = await pesanGetDaftar();
+      if (r?.success && Array.isArray(r.data)) {
+        const map = {};
+        r.data.forEach((row) => {
+          map[String(row.idGuru)] = row;
+        });
+        setDaftar(map);
+      }
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refreshDaftar();
+    }, INBOX_POLL_MS);
+    return () => clearInterval(timer);
+  }, [refreshDaftar]);
+
+  useEventPesanMasuk(refreshDaftar);
+
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
     const base = guruList.map((g) => ({ ...g, row: daftar[g.idGuru] || null }));
@@ -858,7 +1262,7 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
         {/* DAFTAR GURU */}
         <div
           className={`${
-            selected ? "hidden md:flex" : "flex"
+            selected || broadcastOpen ? "hidden md:flex" : "flex"
           } md:w-80 shrink-0 flex-col border-r border-slate-200 min-h-0 flex-1 md:flex-none bg-white`}
         >
           {/* Header List */}
@@ -871,6 +1275,25 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
               className="md:hidden w-7 h-7 rounded-full hover:bg-black/10 flex items-center justify-center text-white"
             >
               ✕
+            </button>
+          </div>
+
+          {/* Tombol Pesan Massal */}
+          <div className="px-3 pt-3 bg-slate-50 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(null);
+                setBroadcastOpen(true);
+              }}
+              className={`w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all active:scale-[0.98] cursor-pointer border ${
+                broadcastOpen
+                  ? "bg-[#075e54] text-white border-[#075e54]"
+                  : "bg-emerald-50 text-[#075e54] border-emerald-200 hover:bg-emerald-100"
+              }`}
+            >
+              <span>📢</span>
+              <span>Pesan ke Semua / Guru Tertentu</span>
             </button>
           </div>
 
@@ -928,13 +1351,14 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                 <button
                   key={g.idGuru}
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    setBroadcastOpen(false);
                     setSelected({
                       idGuru: g.idGuru,
                       namaGuru: g.namaGuru,
                       row: g.row,
-                    })
-                  }
+                    });
+                  }}
                   className={`w-full text-left px-3.5 py-3 flex items-center gap-3 transition-colors cursor-pointer ${
                     aktif ? "bg-[#f0f2f5]" : "hover:bg-slate-50"
                   }`}
@@ -972,15 +1396,25 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
         {/* PANEL CHAT */}
         <div
           className={`${
-            selected ? "flex" : "hidden md:flex"
+            selected || broadcastOpen ? "flex" : "hidden md:flex"
           } flex-1 min-w-0 min-h-0 flex-col`}
         >
-          {selected ? (
+          {broadcastOpen ? (
+            <BroadcastPanel
+              guruList={guruList}
+              user={user}
+              onBack={() => setBroadcastOpen(false)}
+              onSent={() => {
+                refreshDaftar();
+                onChanged?.();
+              }}
+            />
+          ) : selected ? (
             <ChatPanel
               key={selected.idGuru}
               mode="kepsek"
               guru={selected}
-              initialData={selected.row || daftar[selected.idGuru] || null}
+              initialData={daftar[selected.idGuru] || null}
               idPengirim={String(user?.id || "")}
               onChanged={handleChanged}
               onBack={() => setSelected(null)}

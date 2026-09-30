@@ -696,3 +696,12 @@ export async function pesanTandaiDibaca(idGuru, oleh) {
 export async function pesanGetJumlahBaru(role, idGuru = "") {
   return request("pesanGetJumlahBaru", { role, idGuru });
 }
+
+export async function pesanKirimMassal(data) {
+  return request("pesanKirimMassal", {
+    idPengirim: data.idPengirim,
+    semua: !!data.semua,
+    idGuruList: data.idGuruList || [],
+    isi: data.isi,
+  });
+}
