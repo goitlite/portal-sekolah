@@ -1,41 +1,22 @@
 // src/app/api/push/send/route.js
-// Kirim Web Push ke guru atau kepsek (kompatibel Vercel Serverless & Local)
+// Kirim Web Push ke guru atau kepsek (menggunakan Supabase)
 
 import { NextResponse } from "next/server";
 import { getWebPush } from "@/lib/webpush";
-import fs from "fs/promises";
-import path from "path";
-import os from "os";
+import { createClient } from "@supabase/supabase-js";
 
-const TMP_FILE = path.join(os.tmpdir(), "push_subscriptions.json");
-const LOCAL_FILE = path.join(process.cwd(), "push_subscriptions.json");
-
-async function readSubs() {
-  for (const filePath of [LOCAL_FILE, TMP_FILE]) {
-    try {
-      const raw = await fs.readFile(filePath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    } catch {}
-  }
-  return [];
-}
-
-async function writeSubs(subs) {
-  const content = JSON.stringify(subs, null, 2);
-  try {
-    await fs.writeFile(LOCAL_FILE, content, "utf-8");
-  } catch {}
-  try {
-    await fs.writeFile(TMP_FILE, content, "utf-8");
-  } catch {}
-}
+// Inisialisasi Supabase Client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
 
 /**
  * POST /api/push/send
  * Body: {
  *   title, body, url?,
  *   targetUserId?,    // kirim ke user spesifik
+ *   targetUserIds?,   // kirim ke daftar banyak guru tertentu
  *   targetRole?,      // kirim ke role ("guru"/"kepsek")
  * }
  */
@@ -46,7 +27,7 @@ export async function POST(request) {
       body: notifBody,
       url = "/magang/login",
       targetUserId,
-      targetUserIds, // <- BARU: daftar banyak guru tertentu
+      targetUserIds,
       targetRole,
     } = await request.json();
 
@@ -57,7 +38,12 @@ export async function POST(request) {
       );
     }
 
-    const allSubs = await readSubs();
+    // Ambil SEMUA subscription dari Supabase
+    const { data: allSubs, error } = await supabase
+      .from("push_subscriptions")
+      .select("*");
+
+    if (error) throw error;
 
     const cleanTargetId = targetUserId
       ? String(targetUserId).trim().toLowerCase()
@@ -73,11 +59,11 @@ export async function POST(request) {
       ? String(targetRole).trim().toLowerCase()
       : "";
 
-    // Filter penerima:
+    // Filter penerima (Logika ini dipertahankan dari file lama)
     // 1. Jika ada targetUserId, cocokkan userId
     // 2. Jika ada targetRole, masukkan juga subscriber dengan role tersebut agar HP penerima PASTI kena
-    let targets = allSubs.filter((s) => {
-      const sId = String(s.userId || "")
+    let targets = (allSubs || []).filter((s) => {
+      const sId = String(s.user_id || "")
         .trim()
         .toLowerCase();
       const sRole = String(s.role || "")
@@ -91,18 +77,17 @@ export async function POST(request) {
     });
 
     console.log(
-      `[Push Send] Target filter -> Id: "${cleanTargetId}", Role: "${cleanTargetRole}". Cocok: ${targets.length} dari ${allSubs.length} subs. Subs di server:`,
-      allSubs.map((s) => `${s.role}:${s.userId}`),
+      `[Push Send] Target filter -> Id: "${cleanTargetId}", Role: "${cleanTargetRole}". Cocok: ${targets.length} dari ${(allSubs || []).length} subs.`,
     );
 
     if (targets.length === 0) {
-      const daftarDiServer = allSubs
-        .map((s) => `${s.role}:${s.userId}`)
+      const daftarDiServer = (allSubs || [])
+        .map((s) => `${s.role}:${s.user_id}`)
         .join(", ");
       return NextResponse.json({
         ok: false,
         sent: 0,
-        message: `Tidak ada subscriber yang cocok untuk ID "${cleanTargetId}" atau Role "${cleanTargetRole}". Di server ada ${allSubs.length} perangkat terdaftar: [${daftarDiServer || "Kosong"}]. Silakan tekan tombol Tes Notif di HP agar HP Anda terdaftar.`,
+        message: `Tidak ada subscriber yang cocok untuk ID "${cleanTargetId}" atau Role "${cleanTargetRole}". Di server ada ${(allSubs || []).length} perangkat terdaftar: [${daftarDiServer || "Kosong"}]. Silakan tekan tombol Tes Notif di HP agar HP Anda terdaftar.`,
       });
     }
 
@@ -114,27 +99,36 @@ export async function POST(request) {
       url,
     });
 
+    // Kirim menggunakan webpush
     const results = await Promise.allSettled(
-      targets.map(({ endpoint, keys }) =>
-        wp.sendNotification({ endpoint, keys }, payload),
+      targets.map((row) =>
+        wp.sendNotification(
+          {
+            endpoint: row.endpoint,
+            keys: { p256dh: row.p256dh, auth: row.auth },
+          },
+          payload,
+        ),
       ),
     );
 
-    // Hapus subscription yang sudah tidak valid (410 = browser mencabut izin)
-    const toDelete = new Set();
+    // Hapus subscription yang sudah tidak valid (410 = browser mencabut izin) dari Supabase
+    const toDeleteEndpoints = [];
     results.forEach((r, i) => {
       if (r.status === "rejected" && r.reason?.statusCode === 410) {
-        toDelete.add(targets[i].endpoint);
+        toDeleteEndpoints.push(targets[i].endpoint);
         console.warn(
-          "[Push Send] Hapus subscription kadaluarsa:",
-          targets[i].userId,
+          "[Push Send] Hapus subscription kadaluarsa dari database:",
+          targets[i].user_id,
         );
       }
     });
 
-    if (toDelete.size > 0) {
-      const cleaned = allSubs.filter((s) => !toDelete.has(s.endpoint));
-      await writeSubs(cleaned);
+    if (toDeleteEndpoints.length > 0) {
+      await supabase
+        .from("push_subscriptions")
+        .delete()
+        .in("endpoint", toDeleteEndpoints);
     }
 
     const sent = results.filter((r) => r.status === "fulfilled").length;

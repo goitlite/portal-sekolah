@@ -1,51 +1,14 @@
 // src/app/api/push/subscribe/route.js
-// Simpan PushSubscription dari browser (kompatibel Vercel Serverless & Local)
+// Simpan PushSubscription dari browser (menggunakan Supabase)
 
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import os from "os";
+import { createClient } from "@supabase/supabase-js";
 
-// Di Vercel Serverless, root folder read-only, sehingga wajib pakai os.tmpdir() (/tmp)
-const TMP_FILE = path.join(os.tmpdir(), "push_subscriptions.json");
-const LOCAL_FILE = path.join(process.cwd(), "push_subscriptions.json");
-
-async function readSubs() {
-  // Coba baca dari file lokal dulu (jika dev), lalu coba dari /tmp (jika Vercel)
-  for (const filePath of [LOCAL_FILE, TMP_FILE]) {
-    try {
-      const raw = await fs.readFile(filePath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    } catch {}
-  }
-  return [];
-}
-
-async function writeSubs(subs) {
-  const content = JSON.stringify(subs, null, 2);
-  let saved = false;
-
-  // 1. Coba tulis ke lokal
-  try {
-    await fs.writeFile(LOCAL_FILE, content, "utf-8");
-    saved = true;
-  } catch (e) {
-    // Di Vercel, lokal read-only (EROFS)
-  }
-
-  // 2. Selalu tulis juga ke /tmp (writable di Vercel Serverless)
-  try {
-    await fs.writeFile(TMP_FILE, content, "utf-8");
-    saved = true;
-  } catch (e) {
-    console.warn("[Push Subscribe] Gagal tulis ke /tmp:", e);
-  }
-
-  if (!saved) {
-    throw new Error("Gagal menyimpan subscription ke penyimpanan server");
-  }
-}
+// Inisialisasi Supabase Client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
 
 /**
  * POST /api/push/subscribe
@@ -62,31 +25,31 @@ export async function POST(request) {
       );
     }
 
-    const subs = await readSubs();
-
     // Upsert: update jika endpoint sama sudah ada, tambah jika baru
-    const idx = subs.findIndex((s) => s.endpoint === subscription.endpoint);
-    const entry = {
-      userId: String(userId).trim(),
-      role: String(role).trim(),
-      endpoint: subscription.endpoint,
-      keys: subscription.keys,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (idx >= 0) {
-      subs[idx] = entry;
-    } else {
-      subs.push(entry);
-    }
-
-    await writeSubs(subs);
-
-    console.log(
-      `[Push Subscribe] ${role} id=${userId} terdaftar. Total subs di server: ${subs.length}`,
+    const { error } = await supabase.from("push_subscriptions").upsert(
+      {
+        user_id: String(userId).trim(),
+        role: String(role).trim(),
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "endpoint" },
     );
 
-    return NextResponse.json({ ok: true, total: subs.length });
+    if (error) throw error;
+
+    // Untuk log, kita ambil total data agar mirip dengan sistem lama
+    const { count } = await supabase
+      .from("push_subscriptions")
+      .select("*", { count: "exact", head: true });
+
+    console.log(
+      `[Push Subscribe] ${role} id=${userId} terdaftar ke Supabase. Total subs di database: ${count || 1}`,
+    );
+
+    return NextResponse.json({ ok: true, total: count || 1 });
   } catch (err) {
     console.error("[Push Subscribe] Error:", err);
     return NextResponse.json(
