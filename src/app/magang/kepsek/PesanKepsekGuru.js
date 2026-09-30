@@ -2,11 +2,13 @@
 
 // =========================================================
 // PesanKepsekGuru.js
-// Pesan 1-kali-chat antara Kepala Sekolah <-> Guru.
-// - Menampilkan status "✓✓ Dibaca" (hijau) dan "✓ Terkirim" (kuning).
-// - Memiliki riwayat storage pesan sebelumnya + tombol "Hapus Semua Pesan".
-// - Loading instan (0 detik) dengan cache lokal + background sync.
-// - Terintegrasi Web Push Notification ke Android & Desktop.
+// Ruang Chat Kepala Sekolah <-> Guru Model WhatsApp.
+// - Gelembung chat mengalir ala WhatsApp (Kiri = Masuk, Kanan = Keluar).
+// - Centang 1 (✓ Terkirim) dan Centang 2 Biru (✓✓ Dibaca).
+// - Tidak ada tombol pesan tersimpan yang terpisah (otomatis mengalir).
+// - Semua chat tersimpan otomatis di localStorage.
+// - Tombol Hapus Chat membersihkan semua riwayat.
+// - Web Push Notification langsung terkirim ke Android.
 // =========================================================
 
 import React, {
@@ -26,52 +28,60 @@ import {
 } from "../lib/api";
 
 export const PESAN_MAX_LENGTH = 500;
-const STORAGE_HISTORI_PREFIX = "portal_pesan_histori_";
-const STORAGE_LAST_PREFIX = "portal_pesan_last_";
+const STORAGE_CHAT_PREFIX = "portal_pesan_chat_";
 const STORAGE_KEPSEK_LIST_CACHE = "portal_pesan_kepsek_list_cache";
 
 // =========================================================
-// HELPER STORAGE PESAN (HISTORI LOKAL)
+// HELPER STORAGE (CHAT HISTORY LOCALSTORAGE)
 // =========================================================
-export function getPesanHistori(idGuru) {
+export function getChatHistory(idGuru) {
   if (typeof window === "undefined" || !idGuru) return [];
   try {
-    const raw = localStorage.getItem(STORAGE_HISTORI_PREFIX + idGuru);
+    const raw = localStorage.getItem(STORAGE_CHAT_PREFIX + idGuru);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
   }
 }
 
-export function savePesanHistori(idGuru, list) {
+export function saveChatHistory(idGuru, list) {
   if (typeof window === "undefined" || !idGuru) return;
   try {
-    localStorage.setItem(STORAGE_HISTORI_PREFIX + idGuru, JSON.stringify(list));
+    localStorage.setItem(STORAGE_CHAT_PREFIX + idGuru, JSON.stringify(list));
   } catch (e) {}
 }
 
-export function hapusSemuaPesanStorage(idGuru) {
+export function hapusSemuaChat(idGuru) {
   if (typeof window === "undefined" || !idGuru) return;
   try {
-    localStorage.removeItem(STORAGE_HISTORI_PREFIX + idGuru);
-    localStorage.removeItem(STORAGE_LAST_PREFIX + idGuru);
+    localStorage.removeItem(STORAGE_CHAT_PREFIX + idGuru);
+    localStorage.removeItem("portal_pesan_last_" + idGuru);
+    localStorage.removeItem("portal_pesan_histori_" + idGuru);
   } catch (e) {}
 }
 
-function formatWaktuPesan(waktu) {
+function formatJamPesan(waktu) {
   if (!waktu) return "";
   const d = new Date(waktu);
   if (isNaN(d.getTime())) return String(waktu);
-  return (
-    d.toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }) + " WIB"
-  );
+  return d.toLocaleTimeString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatTanggalHeader(waktu) {
+  if (!waktu) return "";
+  const d = new Date(waktu);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function normalisasiGuru(g) {
@@ -84,7 +94,6 @@ function normalisasiGuru(g) {
 
 // =========================================================
 // HOOK: JUMLAH PESAN BELUM DIBACA (untuk badge tombol)
-// role: "guru" | "kepsek"
 // =========================================================
 export function useJumlahPesanBaru({
   role,
@@ -102,9 +111,7 @@ export function useJumlahPesanBaru({
       if (res && res.success) {
         setJumlah(Number(res.data?.jumlah ?? res.data) || 0);
       }
-    } catch (e) {
-      // badge tidak boleh mengganggu dashboard
-    }
+    } catch (e) {}
   }, [role, idGuru, enabled]);
 
   useEffect(() => {
@@ -127,195 +134,163 @@ export function useJumlahPesanBaru({
 }
 
 // =========================================================
-// SHELL MODAL
+// SHELL MODAL CHAT
 // =========================================================
-function PesanShell({
-  title,
-  subtitle,
-  onClose,
-  maxWidth = "max-w-3xl",
-  children,
-}) {
+function PesanShell({ onClose, maxWidth = "max-w-3xl", children }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div
-        className={`bg-white rounded-3xl shadow-2xl w-full ${maxWidth} max-h-[92vh] flex flex-col overflow-hidden border border-slate-200`}
+        className={`bg-white rounded-3xl shadow-2xl w-full ${maxWidth} h-[92vh] max-h-[850px] flex flex-col overflow-hidden border border-slate-200/80`}
       >
-        <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 p-4 sm:p-5 flex items-center justify-between text-white border-b border-blue-800 shrink-0">
-          <div className="min-w-0 pr-3">
-            <h3 className="text-sm sm:text-base font-black tracking-tight truncate">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="text-[11px] text-blue-200 mt-0.5 truncate">
-                {subtitle}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition-colors shrink-0 cursor-pointer active:scale-95"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+        {children}
       </div>
     </div>
   );
 }
 
 // =========================================================
-// PANEL CHAT (1 pesan masuk + 1 pesan keluar + Riwayat Storage + Status Dibaca)
-// mode: "guru"   -> lawan bicara = Kepala Sekolah
-//       "kepsek" -> lawan bicara = guru terpilih
+// PANEL CHAT MODEL WHATSAPP
 // =========================================================
-function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBack }) {
+function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBack, onClose }) {
   const lawan = mode === "guru" ? "Kepala Sekolah" : guru.namaGuru || "Guru";
 
-  // Baca cache data terakhir dari storage -> Tampil 0 detik!
-  const [data, setData] = useState(() => {
-    if (initialData) return initialData;
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem(STORAGE_LAST_PREFIX + guru.idGuru);
-        if (cached) return JSON.parse(cached);
-      } catch (e) {}
-    }
-    return null;
-  });
-
-  const [histori, setHistori] = useState(() => getPesanHistori(guru.idGuru));
-  const [showHistori, setShowHistori] = useState(false);
-  const [loading, setLoading] = useState(() => !data && !initialData);
-  const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+  // Baca histori chat langsung dari storage -> Langsung tampil dalam 0 detik!
+  const [messages, setMessages] = useState(() => getChatHistory(guru.idGuru));
   const [isi, setIsi] = useState("");
   const [sending, setSending] = useState(false);
+  const [info, setInfo] = useState("");
+  const [error, setError] = useState("");
 
-  const onChangedRef = useRef(onChanged);
+  const chatContainerRef = useRef(null);
+
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
   useEffect(() => {
-    onChangedRef.current = onChanged;
-  }, [onChanged]);
+    scrollToBottom();
+  }, [messages]);
 
-  // Muat & Sinkronisasi Pesan Terkini dari Server
-  const load = useCallback(async () => {
-    setError("");
+  // Sinkronisasi data terkini dari server
+  const syncServer = useCallback(async () => {
     try {
-      let d = initialData;
-      if (!d) {
+      let serverData = initialData;
+      if (!serverData) {
         const res = await pesanGet(guru.idGuru);
         if (res?.success && res.data) {
-          d = res.data;
-        } else if (!data) {
-          setError(res?.message || "Gagal memuat pesan.");
-          return;
+          serverData = res.data;
         }
       }
 
-      if (d) {
-        setData(d);
-        try {
-          localStorage.setItem(STORAGE_LAST_PREFIX + guru.idGuru, JSON.stringify(d));
-        } catch (e) {}
+      if (serverData) {
+        let currentList = getChatHistory(guru.idGuru);
+        let changed = false;
 
-        // Simpan juga ke histori storage jika ada teks baru
-        let currentHistori = getPesanHistori(guru.idGuru);
-        let updated = false;
-
-        if (d.pesanKepsek && !currentHistori.some((m) => m.teks === d.pesanKepsek && m.pengirim === "kepsek")) {
-          currentHistori.push({
-            id: "ks-" + (d.waktuKepsek || Date.now()),
-            pengirim: "kepsek",
-            namaPengirim: "Kepala Sekolah",
-            teks: d.pesanKepsek,
-            waktu: d.waktuKepsek || new Date().toISOString(),
-          });
-          updated = true;
+        // Cek pesan Kepsek
+        if (serverData.pesanKepsek && serverData.pesanKepsek.trim()) {
+          const exists = currentList.find(
+            (m) =>
+              m.pengirim === "kepsek" &&
+              m.teks === serverData.pesanKepsek &&
+              (m.waktu === serverData.waktuKepsek || !serverData.waktuKepsek)
+          );
+          if (exists) {
+            // Update status dibaca
+            if (exists.dibaca !== serverData.dibacaGuru) {
+              exists.dibaca = serverData.dibacaGuru;
+              changed = true;
+            }
+          } else {
+            currentList.push({
+              id: "ks-" + (serverData.waktuKepsek || Date.now()),
+              pengirim: "kepsek",
+              namaPengirim: "Kepala Sekolah",
+              teks: serverData.pesanKepsek,
+              waktu: serverData.waktuKepsek || new Date().toISOString(),
+              dibaca: serverData.dibacaGuru,
+            });
+            changed = true;
+          }
         }
 
-        if (d.pesanGuru && !currentHistori.some((m) => m.teks === d.pesanGuru && m.pengirim === "guru")) {
-          currentHistori.push({
-            id: "gr-" + (d.waktuGuru || Date.now()),
-            pengirim: "guru",
-            namaPengirim: d.namaGuru || "Guru",
-            teks: d.pesanGuru,
-            waktu: d.waktuGuru || new Date().toISOString(),
-          });
-          updated = true;
+        // Cek pesan Guru
+        if (serverData.pesanGuru && serverData.pesanGuru.trim()) {
+          const exists = currentList.find(
+            (m) =>
+              m.pengirim === "guru" &&
+              m.teks === serverData.pesanGuru &&
+              (m.waktu === serverData.waktuGuru || !serverData.waktuGuru)
+          );
+          if (exists) {
+            // Update status dibaca
+            if (exists.dibaca !== serverData.dibacaKepsek) {
+              exists.dibaca = serverData.dibacaKepsek;
+              changed = true;
+            }
+          } else {
+            currentList.push({
+              id: "gr-" + (serverData.waktuGuru || Date.now()),
+              pengirim: "guru",
+              namaPengirim: serverData.namaGuru || "Guru",
+              teks: serverData.pesanGuru,
+              waktu: serverData.waktuGuru || new Date().toISOString(),
+              dibaca: serverData.dibacaKepsek,
+            });
+            changed = true;
+          }
         }
 
-        if (updated) {
-          savePesanHistori(guru.idGuru, currentHistori);
-          setHistori([...currentHistori]);
+        if (changed) {
+          currentList.sort(
+            (a, b) => new Date(a.waktu || 0).getTime() - new Date(b.waktu || 0).getTime()
+          );
+          saveChatHistory(guru.idGuru, currentList);
+          setMessages([...currentList]);
         }
 
         // Tandai dibaca jika ada pesan masuk yang belum dibaca
         const adaMasukBelumDibaca =
           mode === "guru"
-            ? d?.pesanKepsek && !d?.dibacaGuru
-            : d?.pesanGuru && !d?.dibacaKepsek;
+            ? serverData.pesanKepsek && !serverData.dibacaGuru
+            : serverData.pesanGuru && !serverData.dibacaKepsek;
 
         if (adaMasukBelumDibaca) {
-          pesanTandaiDibaca(guru.idGuru, mode).then((r2) => {
-            if (r2?.success) {
-              onChangedRef.current?.();
-            }
+          pesanTandaiDibaca(guru.idGuru, mode).then((r) => {
+            if (r?.success) onChanged?.();
           }).catch(() => {});
         }
       }
     } catch (e) {
-      if (!data) setError("Tidak dapat terhubung ke server.");
-    } finally {
-      setLoading(false);
+      console.warn("[Chat] Sync warning:", e);
     }
-  }, [guru.idGuru, mode, initialData, data]);
+  }, [guru.idGuru, mode, initialData, onChanged]);
 
   useEffect(() => {
-    const t = setTimeout(load, 0);
+    const t = setTimeout(syncServer, 0);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [syncServer]);
 
-  // Pemetaan pesan masuk & keluar
-  const masuk =
-    mode === "guru"
-      ? { teks: data?.pesanKepsek, waktu: data?.waktuKepsek }
-      : { teks: data?.pesanGuru, waktu: data?.waktuGuru };
-
-  const keluar =
-    mode === "guru"
-      ? {
-          teks: data?.pesanGuru,
-          waktu: data?.waktuGuru,
-          dibaca: data?.dibacaKepsek,
-        }
-      : {
-          teks: data?.pesanKepsek,
-          waktu: data?.waktuKepsek,
-          dibaca: data?.dibacaGuru,
-        };
-
-  // Hapus semua pesan di storage
-  function handleHapusSemua() {
-    const totalPesan = histori.length + (data?.pesanGuru || data?.pesanKepsek ? 1 : 0);
-    if (totalPesan === 0) {
-      alert("Tidak ada pesan tersimpan untuk dihapus.");
+  // Hapus semua percakapan
+  function handleHapusChat() {
+    if (messages.length === 0) {
+      alert("Ruang chat sudah kosong.");
       return;
     }
+
     const yakin = window.confirm(
-      `Hapus semua riwayat pesan dengan ${lawan} dari penyimpanan perangkat ini?\n\nPesan lama yang tersimpan di storage HP/browser ini akan dibersihkan.`
+      `Hapus semua pesan chat dengan ${lawan}?\n\nSemua riwayat percakapan di perangkat ini akan dibersihkan.`
     );
     if (!yakin) return;
 
-    hapusSemuaPesanStorage(guru.idGuru);
-    setHistori([]);
-    setData(null);
-    setInfo("🗑️ Semua riwayat pesan di storage perangkat ini berhasil dibersihkan.");
+    hapusSemuaChat(guru.idGuru);
+    setMessages([]);
+    setInfo("🗑️ Semua riwayat chat berhasil dibersihkan.");
     setTimeout(() => setInfo(""), 4000);
   }
 
-  // Tes Notifikasi langsung di HP ini
+  // Tes Notifikasi langsung
   async function handleTesNotif() {
     if (!("Notification" in window)) {
       alert("Browser/HP ini tidak mendukung Web Notification.");
@@ -324,7 +299,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
 
     if (Notification.permission === "denied") {
       alert(
-        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nCara mengaktifkannya:\n1. Buka Pengaturan HP (Settings)\n2. Pilih 'Aplikasi' (Apps) > 'Portal Sekolah' (atau Chrome)\n3. Pilih 'Notifikasi' > Hidupkan 'Izinkan Notifikasi'."
+        "❌ Izin notifikasi DIBLOKIR di HP Anda.\n\nCara mengaktifkannya:\n1. Buka Pengaturan HP > Aplikasi > Portal Sekolah (atau Chrome)\n2. Pilih Notifikasi > Hidupkan Izinkan Notifikasi."
       );
       return;
     }
@@ -332,26 +307,26 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     try {
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
-        alert("⚠️ Izin notifikasi belum diizinkan (Status: " + perm + "). Silakan pilih 'Izinkan' saat muncul pop-up.");
+        alert("⚠️ Izin notifikasi belum diizinkan. Silakan pilih 'Izinkan'.");
         return;
       }
 
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification("🔔 Tes Notifikasi Portal Sekolah", {
-        body: "Hebat! Notifikasi di HP Anda sudah aktif dan berfungsi normal.",
+        body: "Hebat! Notifikasi di HP Anda sudah aktif dan berfungsi.",
         icon: "/logo.png",
-        badge: "/logo.png",
         vibrate: [200, 100, 200],
       });
 
       setInfo("🔔 Notifikasi percobaan dikirim ke HP Anda!");
-      setTimeout(() => setInfo(""), 5000);
+      setTimeout(() => setInfo(""), 4000);
 
+      // Trigger Web Push server
       fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "🔔 Web Push FCM Berhasil!",
+          title: "🔔 Web Push Berhasil!",
           body: `Halo ${mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah"}, push notifikasi server aktif.`,
           targetUserId: mode === "guru" ? String(guru.idGuru).trim() : String(idPengirim).trim(),
           targetRole: mode,
@@ -362,64 +337,40 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
     }
   }
 
-  async function kirim() {
-    setError("");
-    setInfo("");
+  // Kirim Pesan ala WhatsApp
+  async function handleKirim(e) {
+    if (e) e.preventDefault();
+
     const teks = isi.trim();
-    if (!teks) {
-      setError("Pesan tidak boleh kosong.");
-      return;
-    }
+    if (!teks) return;
+
     if (teks.length > PESAN_MAX_LENGTH) {
       setError(`Pesan maksimal ${PESAN_MAX_LENGTH} karakter.`);
       return;
     }
-    if (
-      keluar.teks &&
-      !window.confirm(
-        "Pesan Anda sebelumnya kepada " +
-          lawan +
-          " akan diganti dengan pesan baru ini.\n\nLanjutkan?"
-      )
-    ) {
-      return;
-    }
 
+    setError("");
+    setInfo("");
     setSending(true);
 
     const waktuSkrg = new Date().toISOString();
 
-    // 1. Update Tampilan Langsung (Optimistic) dengan status "✓ Terkirim"
-    const dataBaru = {
-      ...(data || {}),
-      idGuru: guru.idGuru,
-      namaGuru: guru.namaGuru,
-      [mode === "guru" ? "pesanGuru" : "pesanKepsek"]: teks,
-      [mode === "guru" ? "waktuGuru" : "waktuKepsek"]: waktuSkrg,
-      [mode === "guru" ? "dibacaKepsek" : "dibacaGuru"]: false, // Belum dibaca oleh lawan bicara
+    // 1. Optimistic Chat Bubble Langsung Masuk (Centang 1 Terkirim)
+    const pesanBaru = {
+      id: "msg-" + Date.now(),
+      pengirim: mode,
+      namaPengirim: mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah",
+      teks,
+      waktu: waktuSkrg,
+      dibaca: false, // Centang 1 (Belum dibaca lawan bicara)
     };
-    setData(dataBaru);
-    try {
-      localStorage.setItem(STORAGE_LAST_PREFIX + guru.idGuru, JSON.stringify(dataBaru));
-    } catch (e) {}
 
-    // Simpan juga ke histori storage
-    const historiBaru = [
-      ...histori,
-      {
-        id: "msg-" + Date.now(),
-        pengirim: mode,
-        namaPengirim: mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah",
-        teks,
-        waktu: waktuSkrg,
-        dibaca: false,
-      },
-    ];
-    setHistori(historiBaru);
-    savePesanHistori(guru.idGuru, historiBaru);
+    const newHistory = [...messages, pesanBaru];
+    setMessages(newHistory);
+    saveChatHistory(guru.idGuru, newHistory);
     setIsi("");
 
-    // 2. Kirim Web Push Langsung ke HP lawan bicara (Paralel, tanpa menunggu Apps Script)
+    // 2. Tembakkan Web Push Langsung ke HP lawan bicara tanpa menunggu
     const targetUserIdKirim = mode === "guru" ? "" : String(guru.idGuru).trim();
     const targetRoleKirim = mode === "guru" ? "kepsek" : "guru";
     const namaPengirimNotif = mode === "guru" ? (guru.namaGuru || "Guru") : "Kepala Sekolah";
@@ -434,14 +385,7 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
         targetUserId: targetUserIdKirim,
         targetRole: targetRoleKirim,
       }),
-    })
-      .then((r) => r.json())
-      .then((resPush) => {
-        console.log("[Push Send Status]:", resPush);
-      })
-      .catch((err) => {
-        console.warn("[Push Send Error]:", err);
-      });
+    }).catch(() => {});
 
     // 3. Simpan ke Google Apps Script (Spreadsheet)
     try {
@@ -453,241 +397,223 @@ function ChatPanel({ mode, guru, idPengirim, initialData = null, onChanged, onBa
       });
 
       if (res?.success) {
-        if (res.data) {
-          setData(res.data);
-          try {
-            localStorage.setItem(STORAGE_LAST_PREFIX + guru.idGuru, JSON.stringify(res.data));
-          } catch (e) {}
-        }
-        setInfo("✅ Pesan terkirim.");
-        onChangedRef.current?.();
+        onChanged?.();
       } else {
-        setError(res?.message || "Pesan disimpan di storage lokal, tapi gagal tersimpan di Spreadsheet.");
+        console.warn("[Chat] Gagal sync spreadsheet:", res?.message);
       }
     } catch (e) {
-      setError("Pesan tersimpan di storage lokal. Menunggu sinkronisasi ke server.");
+      console.warn("[Chat] Server sync pending:", e);
     } finally {
       setSending(false);
-      setTimeout(() => setInfo(""), 4000);
     }
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-slate-50/70">
-      {/* Header lawan bicara + Tombol Aksi */}
-      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
+    <div className="flex flex-col flex-1 min-h-0 bg-[#efeae2] relative">
+      {/* HEADER ALA WHATSAPP */}
+      <div className="px-4 py-3 bg-[#075e54] text-white flex items-center justify-between gap-3 shrink-0 shadow-md z-10">
         <div className="flex items-center gap-3 min-w-0">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="md:hidden px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black cursor-pointer active:scale-95"
+              className="md:hidden w-8 h-8 rounded-full hover:bg-black/10 flex items-center justify-center text-white text-base font-bold cursor-pointer active:scale-90"
             >
-              ← Kembali
+              ←
             </button>
           )}
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+
+          {/* Avatar */}
+          <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-inner">
             {mode === "guru" ? "KS" : String(lawan).substring(0, 2).toUpperCase()}
           </div>
+
           <div className="min-w-0">
-            <p className="text-sm font-black text-slate-800 truncate">{lawan}</p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              {mode === "guru"
-                ? "Pesan ke / dari Kepala Sekolah"
-                : `ID Guru: ${guru.idGuru}`}
+            <h3 className="text-sm font-bold text-white truncate leading-tight">{lawan}</h3>
+            <p className="text-[11px] text-emerald-100/80 font-medium truncate">
+              {mode === "guru" ? "Kepala Sekolah SMKN 1 Teluk Kuantan" : `ID: ${guru.idGuru}`}
             </p>
           </div>
         </div>
 
+        {/* Tombol Aksi Header */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Tombol Tes Notifikasi */}
           <button
             type="button"
             onClick={handleTesNotif}
-            title="Tes apakah notifikasi bisa bergetar dan muncul di HP ini"
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
+            title="Tes Notifikasi HP"
+            className="px-2.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-emerald-100 text-xs font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
           >
             <span>🔔</span>
-            <span className="hidden sm:inline">Tes Notif HP</span>
+            <span className="hidden sm:inline text-[11px]">Tes Notif</span>
           </button>
 
-          {/* Tombol Hapus Semua Pesan di Storage */}
           <button
             type="button"
-            onClick={handleHapusSemua}
-            title="Hapus riwayat pesan di penyimpanan perangkat ini"
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
+            onClick={handleHapusChat}
+            title="Hapus Semua Chat"
+            className="w-8 h-8 rounded-full hover:bg-black/20 flex items-center justify-center text-white text-sm transition-all active:scale-95 cursor-pointer"
           >
-            <span>🗑️</span>
-            <span className="hidden sm:inline">Hapus Semua Pesan</span>
+            🗑️
           </button>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Tutup Chat"
+              className="w-8 h-8 rounded-full hover:bg-black/20 flex items-center justify-center text-white text-base font-bold transition-all active:scale-95 cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Isi percakapan (Format Asli Elegan dengan Status Terbaca/Belum Dibaca) */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-        {loading && !data ? (
-          <div className="text-center py-10 space-y-2">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-xs font-bold text-slate-400">Memuat pesan...</p>
+      {/* NOTIFIKASI INFO / ERROR */}
+      {info && (
+        <div className="bg-emerald-600 text-white text-xs px-4 py-1.5 text-center font-semibold animate-in fade-in duration-200">
+          {info}
+        </div>
+      )}
+      {error && (
+        <div className="bg-rose-600 text-white text-xs px-4 py-1.5 text-center font-semibold animate-in fade-in duration-200">
+          {error}
+        </div>
+      )}
+
+      {/* RUANG OBROLAN (CANVAS CHAT WHATSAPP) */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-2.5 bg-[#efeae2] bg-[radial-gradient(#0000000d_1px,transparent_1px)] [background-size:16px_16px]"
+      >
+        {/* Banner Enkripsi / Info Sekolah */}
+        <div className="text-center my-2">
+          <span className="inline-block bg-[#ffeecd] border border-[#e2d4b7] text-[#54656f] text-[10px] font-medium px-3 py-1 rounded-lg shadow-2xs max-w-xs sm:max-w-md">
+            🔒 Pesan terenkripsi & tersimpan otomatis di perangkat ini.
+          </span>
+        </div>
+
+        {messages.length === 0 ? (
+          <div className="text-center py-16 space-y-2 max-w-xs mx-auto">
+            <div className="w-12 h-12 bg-white/70 rounded-full flex items-center justify-center text-2xl mx-auto shadow-xs border border-stone-200">
+              💬
+            </div>
+            <p className="text-xs font-bold text-stone-600">Belum ada percakapan</p>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Mulai kirim pesan pertama Anda ke {lawan} di bawah.
+            </p>
           </div>
         ) : (
-          <>
-            {/* Pesan masuk (Kiri) */}
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
-                Pesan dari {lawan}
-              </p>
-              {masuk.teks ? (
-                <div className="max-w-[92%] sm:max-w-[80%] rounded-2xl rounded-tl-sm bg-white border border-slate-200 shadow-sm p-3.5">
-                  <p className="text-xs sm:text-sm font-semibold text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
-                    {masuk.teks}
-                  </p>
-                  <p className="mt-2 text-[10px] font-medium text-slate-400">
-                    🕒 {formatWaktuPesan(masuk.waktu)}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs italic text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-3">
-                  Belum ada pesan dari {lawan}.
-                </p>
-              )}
-            </div>
-
-            {/* Pesan keluar (Kanan - Pesan Anda dengan Status ✓✓ Dibaca / ✓ Terkirim) */}
-            <div className="flex flex-col items-end">
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
-                Pesan Anda
-              </p>
-              {keluar.teks ? (
-                <div className="max-w-[92%] sm:max-w-[80%] rounded-2xl rounded-tr-sm bg-gradient-to-br from-blue-700 to-indigo-800 text-white shadow-sm p-3.5">
-                  <p className="text-xs sm:text-sm font-semibold whitespace-pre-wrap break-words leading-relaxed">
-                    {keluar.teks}
-                  </p>
-                  <div className="mt-2 text-[10px] font-medium text-blue-200 flex items-center justify-between gap-3 pt-1 border-t border-white/15">
-                    <span>🕒 {formatWaktuPesan(keluar.waktu)}</span>
-                    <span
-                      className={`font-black text-[11px] flex items-center gap-1 ${
-                        keluar.dibaca ? "text-emerald-300 font-extrabold" : "text-amber-300"
-                      }`}
-                    >
-                      {keluar.dibaca ? "✓✓ Dibaca" : "✓ Terkirim"}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs italic text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-3">
-                  Anda belum mengirim pesan.
-                </p>
-              )}
-            </div>
-
-            {/* Bagian Riwayat Pesan Storage Sebelumnya (Jika Ada) */}
-            {histori.length > 2 && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowHistori(!showHistori)}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-200/70 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          messages.map((msg, index) => {
+            const isMe = msg.pengirim === mode;
+            return (
+              <div
+                key={msg.id || index}
+                className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-2xl shadow-xs text-xs sm:text-sm ${
+                    isMe
+                      ? "bg-[#d9fdd3] text-slate-900 rounded-tr-xs border border-[#bbf7d0]/40"
+                      : "bg-white text-slate-900 rounded-tl-xs border border-slate-200/60"
+                  }`}
                 >
-                  <span>📜</span>
-                  <span>{showHistori ? "Sembunyikan Riwayat Pesan Lama" : `Lihat Riwayat Pesan Lama (${histori.length} pesan di storage)`}</span>
-                </button>
+                  {/* Nama Pengirim di bubble jika bukan kita */}
+                  {!isMe && (
+                    <p className="text-[10px] font-black text-[#128c7e] mb-0.5">
+                      {lawan}
+                    </p>
+                  )}
 
-                {showHistori && (
-                  <div className="mt-3 p-3 bg-white/80 rounded-2xl border border-slate-200 space-y-2.5 divide-y divide-slate-100">
-                    {histori.slice(0, -2).map((m, idx) => (
-                      <div key={m.id || idx} className="pt-2 first:pt-0">
-                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-0.5">
-                          <span className={m.pengirim === mode ? "text-blue-700" : "text-slate-700"}>
-                            {m.pengirim === mode ? "Anda" : lawan}
-                          </span>
-                          <span className="text-[9px] text-slate-400">{formatWaktuPesan(m.waktu)}</span>
-                        </div>
-                        <p className="text-xs text-slate-700 whitespace-pre-wrap">{m.teks}</p>
-                      </div>
-                    ))}
+                  {/* Isi Pesan */}
+                  <p className="whitespace-pre-wrap break-words leading-relaxed text-slate-800 pr-14">
+                    {msg.teks}
+                  </p>
+
+                  {/* Jam & Status Centang di Kanan Bawah */}
+                  <div className="absolute right-2 bottom-1.5 flex items-center gap-1 select-none pointer-events-none">
+                    <span className="text-[9px] text-slate-500 font-medium">
+                      {formatJamPesan(msg.waktu)}
+                    </span>
+
+                    {/* Centang Status (Hanya untuk pesan kita) */}
+                    {isMe && (
+                      <span
+                        className={`text-[11px] font-black leading-none ${
+                          msg.dibaca ? "text-[#53bdeb]" : "text-slate-400"
+                        }`}
+                        title={msg.dibaca ? "Dibaca" : "Terkirim"}
+                      >
+                        {msg.dibaca ? "✓✓" : "✓"}
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            )}
-          </>
+            );
+          })
         )}
       </div>
 
-      {/* Kotak Tulis Pesan */}
-      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white shrink-0 space-y-2">
-        {error && (
-          <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5 flex items-center justify-between">
-            <span>⚠️ {error}</span>
-            <button onClick={() => setError("")} className="text-rose-500 font-bold ml-2">✕</button>
-          </p>
-        )}
-        {info && (
-          <p className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
-            {info}
-          </p>
-        )}
+      {/* INPUT BAR ALA WHATSAPP */}
+      <div className="p-2 sm:p-3 bg-[#f0f2f5] border-t border-slate-200/80 shrink-0">
+        <form onSubmit={handleKirim} className="flex items-center gap-2 max-w-4xl mx-auto">
+          <div className="flex-1 bg-white rounded-full border border-slate-300 px-4 py-2 flex items-center shadow-xs focus-within:border-[#00a884] focus-within:ring-2 focus-within:ring-[#00a884]/20 transition-all">
+            <textarea
+              rows={1}
+              value={isi}
+              maxLength={PESAN_MAX_LENGTH}
+              onChange={(e) => setIsi(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleKirim();
+                }
+              }}
+              placeholder="Ketik pesan..."
+              className="w-full resize-none text-xs sm:text-sm text-slate-800 outline-none max-h-24 bg-transparent placeholder:text-slate-400 font-medium"
+            />
+          </div>
 
-        <textarea
-          rows={3}
-          value={isi}
-          maxLength={PESAN_MAX_LENGTH}
-          onChange={(e) => {
-            setIsi(e.target.value);
-            if (error) setError("");
-          }}
-          placeholder={`Tulis pesan untuk ${lawan}...`}
-          className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-800 font-medium focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
-        />
-
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] font-medium text-slate-400 leading-snug">
-            Tersimpan di storage • Pesan baru menimpa di spreadsheet.
-            <span className="ml-1 font-black text-slate-500">
-              {isi.length}/{PESAN_MAX_LENGTH}
-            </span>
-          </p>
           <button
-            type="button"
-            onClick={kirim}
+            type="submit"
             disabled={sending || !isi.trim()}
-            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:brightness-110 text-white text-xs font-black shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#008f6f] active:scale-95 text-white flex items-center justify-center font-bold text-sm shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 cursor-pointer"
           >
-            {sending ? "⏳ Mengirim..." : "📨 Kirim Pesan"}
+            {sending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <span className="translate-x-0.5">➤</span>
+            )}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
 }
 
 // =========================================================
-// SISI GURU: pesan ke/dari Kepala Sekolah
+// SISI GURU: Modal Chat Kepala Sekolah
 // =========================================================
 export function PesanGuruModal({ isOpen, onClose, user, onChanged }) {
   if (!isOpen || !user?.id) return null;
   return (
-    <PesanShell
-      title="✉️ Pesan Kepala Sekolah"
-      subtitle="Satu pesan terakhir untuk Kepala Sekolah SMKN 1 Teluk Kuantan"
-      onClose={onClose}
-      maxWidth="max-w-xl"
-    >
+    <PesanShell onClose={onClose} maxWidth="max-w-xl">
       <ChatPanel
         key={String(user.id)}
         mode="guru"
         guru={{ idGuru: String(user.id), namaGuru: user.nama || "" }}
         idPengirim={String(user.id)}
         onChanged={onChanged}
+        onClose={onClose}
       />
     </PesanShell>
   );
 }
 
 // =========================================================
-// SISI KEPALA SEKOLAH: kotak pesan seluruh guru + chat
-// initialGuru: {idGuru, namaGuru} -> langsung buka chat guru tsb
+// SISI KEPALA SEKOLAH: Kotak Pesan Seluruh Guru + Chat
 // =========================================================
 function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
   const [guruList, setGuruList] = useState(() => {
@@ -791,19 +717,28 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
   }, [guruList, daftar, search, initialGuru]);
 
   return (
-    <PesanShell
-      title="✉️ Pesan Guru"
-      subtitle="Satu pesan terakhir per guru — pesan baru menimpa pesan lama"
-      onClose={onClose}
-      maxWidth="max-w-4xl"
-    >
-      <div className="flex flex-col md:flex-row flex-1 min-h-0 h-[72vh]">
+    <PesanShell onClose={onClose} maxWidth="max-w-4xl">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 h-full">
         {/* DAFTAR GURU */}
         <div
           className={`${
             selected ? "hidden md:flex" : "flex"
-          } md:w-80 shrink-0 flex-col border-r border-slate-200 min-h-0 flex-1 md:flex-none`}
+          } md:w-80 shrink-0 flex-col border-r border-slate-200 min-h-0 flex-1 md:flex-none bg-white`}
         >
+          {/* Header List */}
+          <div className="p-3.5 bg-[#075e54] text-white flex items-center justify-between shrink-0">
+            <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
+              <span>💬</span> Kotak Pesan Guru
+            </h3>
+            <button
+              onClick={onClose}
+              className="md:hidden w-7 h-7 rounded-full hover:bg-black/10 flex items-center justify-center text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Search Box */}
           <div className="p-3 border-b border-slate-200 bg-slate-50 shrink-0">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
@@ -813,8 +748,8 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari nama / ID guru..."
-                className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:border-blue-500 outline-none font-medium"
+                placeholder="Cari guru atau ID..."
+                className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:border-[#00a884] outline-none font-medium"
               />
             </div>
           </div>
@@ -852,6 +787,7 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                     : ""
                   : `Anda: ${g.row?.pesanKepsek || ""}`;
               const aktif = selected?.idGuru === g.idGuru;
+
               return (
                 <button
                   key={g.idGuru}
@@ -859,28 +795,28 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
                   onClick={() =>
                     setSelected({ idGuru: g.idGuru, namaGuru: g.namaGuru, row: g.row })
                   }
-                  className={`w-full text-left px-3 py-3 flex items-center gap-3 transition-colors cursor-pointer ${
-                    aktif ? "bg-blue-50" : "hover:bg-slate-50"
+                  className={`w-full text-left px-3.5 py-3 flex items-center gap-3 transition-colors cursor-pointer ${
+                    aktif ? "bg-[#f0f2f5]" : "hover:bg-slate-50"
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-900 flex items-center justify-center font-black text-xs shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#128c7e] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                     {g.namaGuru.substring(0, 2).toUpperCase() || "??"}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-black text-slate-800 truncate">
+                      <p className="text-xs font-bold text-slate-800 truncate">
                         {g.namaGuru || g.idGuru}
                       </p>
                       {belumDibaca && (
-                        <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black">
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-[#25d366] text-white text-[9px] font-black">
                           BARU
                         </span>
                       )}
                     </div>
                     <p
-                      className={`text-[11px] truncate ${
+                      className={`text-[11px] truncate mt-0.5 ${
                         belumDibaca
-                          ? "font-bold text-slate-700"
+                          ? "font-bold text-slate-800"
                           : "font-medium text-slate-400"
                       }`}
                     >
@@ -908,12 +844,16 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
               idPengirim={String(user?.id || "")}
               onChanged={handleChanged}
               onBack={() => setSelected(null)}
+              onClose={onClose}
             />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-400">
-              <span className="text-5xl mb-2">✉️</span>
-              <p className="text-sm font-black text-slate-500">
-                Pilih guru untuk mengirim atau membaca pesan
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-400 bg-[#f0f2f5]">
+              <span className="text-5xl mb-3">💬</span>
+              <p className="text-sm font-bold text-slate-600">
+                Pilih guru untuk memulai obrolan
+              </p>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                Pesan akan langsung terkirim dan memunculkan notifikasi di HP Guru.
               </p>
             </div>
           )}
