@@ -392,6 +392,64 @@ function PersenKehadiranBar({ data, label, semuaData, jumlahSesi }) {
   );
 }
 
+// =========================================================
+// WARNA BADGE % KEHADIRAN SISWA GURU WALI
+// Diambil dari model JS Guru Lama
+// >=95 emas berkilau + bintang
+// >=85 hijau
+// >=65 hijau-kuning
+// >=55 oranye
+// <55 merah
+// belum ada data = abu-abu
+// =========================================================
+function getStyleBadgePersen(persen) {
+  if (persen === null || persen === undefined) {
+    return {
+      box: "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400 border-slate-100/80 text-slate-700",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 95) {
+    return {
+      box: "bg-gradient-to-br from-yellow-100 via-amber-300 to-yellow-500 border-yellow-100 text-amber-950 ring-1 ring-yellow-200/80 shadow-[0_0_12px_rgba(251,191,36,0.75)]",
+      star: true,
+      shine: true,
+    };
+  }
+
+  if (persen >= 85) {
+    return {
+      box: "bg-gradient-to-br from-emerald-300 via-green-500 to-emerald-600 border-emerald-100/80 text-white",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 65) {
+    return {
+      box: "bg-gradient-to-br from-green-400 via-lime-400 to-yellow-300 border-lime-100/80 text-lime-950",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 55) {
+    return {
+      box: "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 border-orange-100/80 text-orange-950",
+      star: false,
+      shine: false,
+    };
+  }
+
+  return {
+    box: "bg-gradient-to-br from-red-400 via-red-500 to-red-700 border-red-200/80 text-white",
+    star: false,
+    shine: false,
+  };
+}
+
 function DashboardGuruContent() {
   const router = useRouter();
   // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
@@ -480,6 +538,8 @@ function DashboardGuruContent() {
   // Persentase kehadiran per siswa (diambil dari grid presensi wali kelas)
   const [persenHadirSiswa, setPersenHadirSiswa] = useState({});
   const [loadingPersenHadir, setLoadingPersenHadir] = useState(false);
+  // Peta ID siswa -> nama Guru Pembimbing PKL
+  const [guruPklSiswa, setGuruPklSiswa] = useState({});
 
   // --- STATE CATATAN PERKEMBANGAN (LAMPIRAN B) ---
   const [showCatatanModal, setShowCatatanModal] = useState(false);
@@ -1243,6 +1303,77 @@ function DashboardGuruContent() {
     [user?.id],
   );
 
+  // --- AMBIL NAMA GURU PEMBIMBING PKL TIAP SISWA ---
+  // Data diambil dari master SISWA, kolom NAMA_GURU,
+  // lalu dicocokkan berdasarkan ID siswa.
+  const loadGuruPklSiswa = useCallback(async () => {
+    if (!user?.id) return;
+
+    const cacheKey = "guruPklMapCache_v1";
+
+    // Tampilkan cache lebih dulu
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+
+      if (cached) {
+        const parsed = JSON.parse(cached);
+
+        if (parsed && typeof parsed === "object") {
+          setGuruPklSiswa(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn("Gagal membaca cache guru PKL:", e);
+    }
+
+    try {
+      const res = await fetchStepWithRetry(() => getSiswa(), {
+        retries: 1,
+        timeoutMs: 15000,
+      });
+
+      if (!res?.success || !Array.isArray(res.data)) {
+        return;
+      }
+
+      const bersihkan = (v) => {
+        const t = String(v ?? "").trim();
+
+        if (!t || t === "-" || t === "0") return "";
+        if (t.toLowerCase() === "null") return "";
+        if (t.toLowerCase().includes("belum")) return "";
+
+        return t;
+      };
+
+      const peta = {};
+
+      res.data.forEach((row) => {
+        const id = String(
+          row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
+        ).trim();
+
+        if (!id) return;
+
+        const namaGuru = bersihkan(
+          row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
+        );
+
+        if (namaGuru) {
+          peta[id] = namaGuru;
+        }
+      });
+
+      setGuruPklSiswa(peta);
+
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(peta));
+      } catch (e) {}
+    } catch (err) {
+      console.warn("Gagal memuat nama Guru Pembimbing PKL:", err);
+    }
+  }, [user?.id]);
+
   // Helper format tanggal pertemuan mapel
   const formatTanggalMapelIndo = (tanggalStr) => {
     if (!tanggalStr) return "";
@@ -1636,8 +1767,9 @@ function DashboardGuruContent() {
   useEffect(() => {
     if (activeMenuTab === "wali" && user?.id) {
       loadPersenKehadiranSiswaWali(false);
+      loadGuruPklSiswa();
     }
-  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali]);
+  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali, loadGuruPklSiswa]);
 
   // Handler cetak laporan PDF langsung dari kartu Mapel
   const handleCetakPdfMapelDirect = async (mapel) => {
@@ -2776,12 +2908,13 @@ function DashboardGuruContent() {
                 </div>
               )}
 
-            {/* GRID KARTU SISWA WALI */}
+            {/* LIST SISWA WALI — MODEL JS GURU LAMA */}
             {!loadingSiswaWali && (
-              <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5 sm:gap-3">
                 {dataSiswaWali
                   .filter((siswa) => {
                     if (!searchSiswaWali.trim()) return true;
+
                     const q = searchSiswaWali.toLowerCase();
                     const nama = String(siswa.nama || "").toLowerCase();
                     const idS = String(siswa.idSiswa || "").toLowerCase();
@@ -2789,6 +2922,7 @@ function DashboardGuruContent() {
                     const tempat = String(
                       siswa.tempatMagang || "",
                     ).toLowerCase();
+
                     return (
                       nama.includes(q) ||
                       idS.includes(q) ||
@@ -2796,14 +2930,31 @@ function DashboardGuruContent() {
                       tempat.includes(q)
                     );
                   })
+                  .slice()
+                  .sort((a, b) => {
+                    const namaA = String(a.nama || "")
+                      .replace(/\s*\[.*?\]\s*/, "")
+                      .trim();
+
+                    const namaB = String(b.nama || "")
+                      .replace(/\s*\[.*?\]\s*/, "")
+                      .trim();
+
+                    return namaA.localeCompare(namaB, "id", {
+                      sensitivity: "base",
+                    });
+                  })
                   .map((siswa, idx) => {
                     const namaMentah = siswa.nama || "-";
+
                     const matchKelas = namaMentah.match(/\[(.*?)\]/);
                     const kelas = matchKelas ? matchKelas[1] : siswa.kelas;
+
                     const namaBersih = namaMentah
                       .replace(/\s*\[.*?\]\s*/, "")
                       .trim();
 
+                    // Persentase kehadiran siswa
                     const persenInfo =
                       persenHadirSiswa[String(siswa.idSiswa || "").trim()] ||
                       null;
@@ -2813,6 +2964,7 @@ function DashboardGuruContent() {
                       siswa.kontakIbu ||
                       siswa.noHpOrtu ||
                       siswa.noHpOrangTua;
+
                     const labelOrtu = siswa.kontakAyah
                       ? "Ayah"
                       : siswa.kontakIbu
@@ -2821,133 +2973,190 @@ function DashboardGuruContent() {
 
                     return (
                       <div
-                        key={siswa.idSiswa || idx}
-                        className="group flex flex-col overflow-hidden rounded-[1.75rem] border border-[#EADBBD] bg-gradient-to-b from-[#FFFDF9] via-[#FAF6ED] to-[#F5EEDD] shadow-[0_6px_25px_rgba(217,180,74,0.12)] hover:shadow-[0_14px_35px_rgba(217,180,74,0.22)] hover:border-[#D4AF37] transition-all duration-300"
+                        key={`${siswa.idSiswa || "siswa"}-${idx}`}
+                        className="flex flex-col overflow-hidden rounded-2xl border border-[#EADBBD] bg-[#FFFDF9] shadow-sm transition-all duration-200 hover:border-[#D4AF37] hover:shadow-md"
                       >
-                        {/* HEADER KARTU: ELEGAN BLUE-NAVY DENGAN SENTUHAN EMAS */}
-                        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-4 sm:p-5 text-white border-b border-[#D4AF37]/30">
-                          {/* Ambient Glow Emas Lembut */}
-                          <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br from-amber-400/20 via-yellow-400/10 to-transparent blur-2xl"></div>
-
-                          {/* BADGE % KEHADIRAN (SUDUT KANAN ATAS) */}
-                          <div
-                            className="absolute right-0 top-0 z-20 flex min-w-[58px] flex-col items-center justify-center rounded-bl-2xl bg-gradient-to-br from-yellow-200 via-amber-300 to-amber-500 px-2.5 py-1.5 text-amber-950 shadow-md border-b border-l border-amber-100/80"
-                            title={
-                              persenInfo
-                                ? `Hadir ${persenInfo.hadir} dari ${persenInfo.total} pertemuan`
-                                : "Data kehadiran kelas belum tersedia"
-                            }
-                          >
-                            <span className="text-sm sm:text-base font-black leading-none">
-                              {persenInfo
-                                ? `${persenInfo.persen}%`
-                                : loadingPersenHadir
-                                  ? "…"
-                                  : "-"}
-                            </span>
-                            <span className="mt-0.5 text-[7px] sm:text-[8px] font-extrabold uppercase leading-none tracking-wide">
-                              % Hadir Kelas
-                            </span>
+                        {/* HEADER RINGKAS */}
+                        <div className="flex items-start gap-2.5 border-b border-[#D4AF37]/30 bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 px-3 py-2.5 text-white">
+                          {/* NOMOR */}
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300/40 bg-amber-400/20 text-[11px] font-black text-amber-200">
+                            {idx + 1}
                           </div>
 
-                          <div className="relative z-10 flex items-start gap-3.5">
-                            <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 via-white/10 to-indigo-500/25 text-2xl shadow-inner border border-amber-300/40">
-                              👨‍🎓
+                          {/* NAMA + KELAS + ID */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              <h3 className="break-words text-[13px] sm:text-sm font-black leading-tight text-amber-50">
+                                {namaBersih || "-"}
+                              </h3>
+
+                              {kelas && (
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200/90 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2 py-0.5 text-[9px] sm:text-[10px] font-black text-amber-950 shadow-sm">
+                                  {kelas}
+                                </span>
+                              )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5 pr-14 sm:pr-16">
-                                <h3 className="truncate text-sm sm:text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-100 to-yellow-100 leading-tight drop-shadow-xs">
-                                  {namaBersih || "-"}
-                                </h3>
-                                {kelas && (
-                                  <span className="inline-flex items-center shrink-0 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-2.5 py-0.5 text-[10px] font-black text-amber-950 border border-amber-200/90 shadow-sm">
-                                    {kelas}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-1.5 flex items-center justify-between gap-2">
-                                <p className="text-[11px] font-bold text-amber-200/90 tracking-wide">
-                                  ID:{" "}
-                                  <span className="text-white font-black">
-                                    {siswa.idSiswa || "-"}
-                                  </span>
-                                </p>
-                                {siswa.idSiswa && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      kirimLoginWhatsApp(
-                                        siswa.idSiswa,
-                                        siswa.nama,
-                                      )
-                                    }
-                                    title="Bagi ID login siswa via WhatsApp"
-                                    className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 px-2.5 py-1 text-[10px] font-black text-white shadow-sm border border-emerald-400/30 transition-all hover:scale-105 active:scale-95"
-                                  >
-                                    <span>📲</span>
-                                    <span>Bagi ID</span>
-                                  </button>
-                                )}
-                              </div>
+
+                            {/* ID + BAGI ID */}
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <p className="text-[11px] font-bold tracking-wide text-amber-200/90">
+                                ID:{" "}
+                                <span className="font-black text-white">
+                                  {siswa.idSiswa || "-"}
+                                </span>
+                              </p>
+
+                              {siswa.idSiswa && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    kirimLoginWhatsApp(
+                                      siswa.idSiswa,
+                                      siswa.nama,
+                                    )
+                                  }
+                                  title="Bagi ID login siswa via WhatsApp"
+                                  className="inline-flex items-center gap-1 rounded-md border border-emerald-400/30 bg-gradient-to-r from-emerald-600 to-teal-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-110 active:scale-95"
+                                >
+                                  <span>📲</span>
+                                  <span>Bagi ID</span>
+                                </button>
+                              )}
                             </div>
                           </div>
+
+                          {/* BADGE PERSENTASE KEHADIRAN */}
+                          {(() => {
+                            const st = getStyleBadgePersen(
+                              persenInfo ? persenInfo.persen : null,
+                            );
+
+                            return (
+                              <div
+                                className={`relative flex min-w-[52px] shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl border px-2 py-1 shadow-md ${st.box}`}
+                                title={
+                                  persenInfo
+                                    ? `Hadir ${persenInfo.hadir} dari ${persenInfo.total} pertemuan`
+                                    : "Data kehadiran kelas belum tersedia"
+                                }
+                              >
+                                {st.shine && (
+                                  <span className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-tr from-white/0 via-white/60 to-white/0"></span>
+                                )}
+
+                                <span className="relative flex items-center gap-0.5 text-[13px] sm:text-sm font-black leading-none">
+                                  {st.star && (
+                                    <span className="text-[11px] drop-shadow">
+                                      ⭐
+                                    </span>
+                                  )}
+
+                                  {persenInfo
+                                    ? `${persenInfo.persen}%`
+                                    : loadingPersenHadir
+                                      ? "…"
+                                      : "-"}
+                                </span>
+
+                                <span className="relative mt-0.5 text-[7px] font-extrabold uppercase leading-none tracking-wide">
+                                  Hadir Kelas
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
-                        {/* INFORMASI PENTING (BODY KARTU BERWARNA LEMBUT & ELEGAN) */}
-                        <div className="flex flex-1 flex-col p-4 sm:p-5 bg-gradient-to-b from-white/90 via-[#FFFDF9]/95 to-[#FAF6ED] space-y-3">
-                          {/* 1. KONTAK WHATSAPP SISWA & ORANG TUA */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {/* WHATSAPP SISWA */}
-                            <div className="p-3 rounded-2xl bg-gradient-to-br from-white via-emerald-50/40 to-emerald-100/30 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800/80 block mb-1.5 flex items-center gap-1">
+                        {/* BODY PADAT */}
+                        <div className="flex flex-1 flex-col gap-2 px-3 py-2.5">
+                          {/* INFORMASI UTAMA */}
+                          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                            {/* WA SISWA */}
+                            <div className="min-w-0 rounded-xl border border-emerald-200/80 bg-emerald-50/50 px-2 py-1.5">
+                              <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-800/80">
                                 📱 WA Siswa
                               </span>
+
                               {siswa.noHp ? (
                                 <a
                                   href={getWhatsAppUrl(siswa.noHp)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white text-xs font-black shadow-xs transition-all active:scale-95 break-all w-full justify-center"
+                                  className="mt-0.5 block truncate text-[11px] font-black text-emerald-700 hover:underline"
                                 >
-                                  <span>💬</span>
-                                  <span>{siswa.noHp}</span>
+                                  💬 {siswa.noHp}
                                 </a>
                               ) : (
-                                <span className="text-xs font-semibold text-slate-400 italic block py-0.5">
+                                <span className="mt-0.5 block text-[11px] font-semibold italic text-slate-400">
                                   Belum diisi
                                 </span>
                               )}
                             </div>
 
-                            {/* WHATSAPP ORANG TUA */}
-                            <div className="p-3 rounded-2xl bg-gradient-to-br from-white via-teal-50/40 to-cyan-100/30 border border-teal-200/80 shadow-xs transition-all hover:border-teal-300">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-teal-800/80 block mb-1.5 flex items-center gap-1">
+                            {/* WA ORANG TUA */}
+                            <div className="min-w-0 rounded-xl border border-teal-200/80 bg-teal-50/50 px-2 py-1.5">
+                              <span className="block text-[9px] font-black uppercase tracking-wider text-teal-800/80">
                                 👨‍👩‍👧 WA {labelOrtu}
                               </span>
+
                               {ortuHp ? (
                                 <a
                                   href={getWhatsAppUrl(ortuHp)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-700 hover:brightness-110 text-white text-xs font-black shadow-xs transition-all active:scale-95 break-all w-full justify-center"
+                                  className="mt-0.5 block truncate text-[11px] font-black text-teal-700 hover:underline"
                                 >
-                                  <span>💬</span>
-                                  <span>{ortuHp}</span>
+                                  💬 {ortuHp}
                                 </a>
                               ) : (
-                                <span className="text-xs font-semibold text-slate-400 italic block py-0.5">
+                                <span className="mt-0.5 block text-[11px] font-semibold italic text-slate-400">
                                   Belum diisi
                                 </span>
                               )}
                             </div>
+
+                            {/* TEMPAT MAGANG */}
+                            <div className="min-w-0 rounded-xl border border-blue-200/70 bg-blue-50/50 px-2 py-1.5">
+                              <span className="block text-[9px] font-black uppercase tracking-wider text-blue-800/70">
+                                🏢 Magang / DUDI
+                              </span>
+
+                              <p
+                                className="mt-0.5 truncate text-[11px] font-bold text-slate-800"
+                                title={siswa.tempatMagang || ""}
+                              >
+                                {siswa.tempatMagang || "-"}
+                              </p>
+                            </div>
+
+                            {/* GURU PEMBIMBING PKL */}
+                            <div className="min-w-0 rounded-xl border border-indigo-200/70 bg-indigo-50/50 px-2 py-1.5">
+                              <span className="block text-[9px] font-black uppercase tracking-wider text-indigo-800/70">
+                                👔 Guru Pembimbing
+                              </span>
+
+                              <p
+                                className="mt-0.5 truncate text-[11px] font-bold text-slate-800"
+                                title={
+                                  guruPklSiswa[
+                                    String(siswa.idSiswa || "").trim()
+                                  ] || ""
+                                }
+                              >
+                                {guruPklSiswa[
+                                  String(siswa.idSiswa || "").trim()
+                                ] || "-"}
+                              </p>
+                            </div>
                           </div>
 
-                          {/* 2. ALAMAT SISWA */}
-                          <div className="p-3 rounded-2xl bg-gradient-to-br from-white to-amber-50/30 border border-amber-200/60 shadow-xs">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-900/70 block mb-1 flex items-center gap-1">
-                              📍 Alamat Domisili
-                            </span>
-                            <p className="text-xs font-semibold text-slate-700 leading-relaxed line-clamp-2">
+                          {/* ALAMAT */}
+                          <div className="flex items-start gap-1.5 rounded-xl border border-amber-200/60 bg-amber-50/40 px-2 py-1.5">
+                            <span className="shrink-0 text-[11px]">📍</span>
+
+                            <p
+                              className="line-clamp-1 min-w-0 flex-1 text-[11px] font-semibold text-slate-700"
+                              title={siswa.alamat || ""}
+                            >
                               {siswa.alamat ? (
                                 siswa.alamat
                               ) : (
@@ -2958,47 +3167,32 @@ function DashboardGuruContent() {
                             </p>
                           </div>
 
-                          {/* 3. TEMPAT MAGANG & PEMBIMBING */}
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-white to-blue-50/50 border border-blue-200/60 shadow-xs">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-blue-800/70 block mb-0.5">
-                                🏢 Magang / DUDI
-                              </span>
-                              <p className="text-[11px] font-bold text-slate-800 truncate">
-                                {siswa.tempatMagang || "-"}
-                              </p>
-                            </div>
-                            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-white to-indigo-50/50 border border-indigo-200/60 shadow-xs">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800/70 block mb-0.5">
-                                👔 Guru Wali
-                              </span>
-                              <p className="text-[11px] font-bold text-slate-800 truncate">
-                                {siswa.namaGuru || "-"}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* 4. TOMBOL AKSI KARTU */}
-                          <div className="pt-2 mt-auto grid grid-cols-2 gap-2.5">
+                          {/* TOMBOL AKSI */}
+                          <div className="mt-auto grid grid-cols-2 gap-1.5">
+                            {/* PROFIL */}
                             <button
                               type="button"
                               onClick={() => setSelectedSiswaWali(siswa)}
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-100 hover:from-blue-100 hover:to-indigo-100 border border-blue-300/80 px-2.5 py-2.5 text-[11px] sm:text-xs font-black text-blue-900 shadow-xs transition-all active:scale-95"
+                              className="flex items-center justify-center gap-1 rounded-lg border border-blue-300/80 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-100 px-2 py-1.5 text-[11px] font-black text-blue-900 transition-all hover:from-blue-100 hover:to-indigo-100 active:scale-95"
                             >
                               <span>👁️</span>
-                              <span>Profil Lengkap</span>
+                              <span>Profil</span>
+                              <span className="hidden sm:inline">Lengkap</span>
                             </button>
 
-                            {/* GANTI EDIT MENJADI CATATAN PERKEMBANGAN */}
+                            {/* CATATAN PERKEMBANGAN */}
                             <button
                               type="button"
                               onClick={() =>
                                 handleBukaCatatanPerkembangan(siswa)
                               }
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-700 hover:brightness-110 border border-indigo-400/50 px-2.5 py-2.5 text-[11px] sm:text-xs font-black text-white shadow-md shadow-indigo-500/20 transition-all active:scale-95"
+                              className="flex items-center justify-center gap-1 rounded-lg border border-indigo-400/50 bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-700 px-2 py-1.5 text-[11px] font-black text-white shadow-sm transition-all hover:brightness-110 active:scale-95"
                             >
                               <span>📝</span>
-                              <span>Catatan Perkembangan</span>
+                              <span>Catatan</span>
+                              <span className="hidden sm:inline">
+                                Perkembangan
+                              </span>
                             </button>
                           </div>
                         </div>
