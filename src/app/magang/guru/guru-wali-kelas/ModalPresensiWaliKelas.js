@@ -5,6 +5,7 @@ import {
   getPresensiWaliGrid,
   savePresensiWaliKelas,
   hapusSiswaWaliKelas,
+  getDataSiswaWali,
 } from "../../lib/api";
 import { generateLaporanWaliKelasPDF } from "./generateLaporanWaliKelasPDF";
 import ModalTambahSiswaWali from "./kelola/ModalTambahSiswaWali";
@@ -45,6 +46,70 @@ function formatTanggalKolom(tanggalISO) {
   }
 }
 
+// ===== PERSENTASE KEHADIRAN + TINGKAT WARNA =====
+// Persen = Hadir / (Hadir+Sakit+Izin+Alfa+Cabut) x 100, dihitung dari sel yang sudah terisi.
+function hitungPersenKehadiran(total) {
+  const jumlah =
+    (total.Hadir || 0) +
+    (total.Sakit || 0) +
+    (total.Izin || 0) +
+    (total.Alfa || 0) +
+    (total.Cabut || 0);
+  if (jumlah === 0) return null;
+  return Math.round(((total.Hadir || 0) / jumlah) * 100);
+}
+
+function tierPersenKehadiran(persen) {
+  // Warna pakai inline style (hex) supaya pasti tampil, tidak tergantung class Tailwind.
+  if (persen === null || persen === undefined)
+    return {
+      label: "Belum ada data",
+      text: "#64748b",
+      bg: "#e2e8f0",
+      from: "#94a3b8",
+      to: "#64748b",
+    };
+  if (persen >= 90)
+    return {
+      label: "Sangat Baik",
+      text: "#065f46",
+      bg: "#a7f3d0",
+      from: "#34d399",
+      to: "#059669",
+    };
+  if (persen >= 80)
+    return {
+      label: "Baik",
+      text: "#3f6212",
+      bg: "#d9f99d",
+      from: "#a3e635",
+      to: "#65a30d",
+    };
+  if (persen >= 70)
+    return {
+      label: "Cukup",
+      text: "#92400e",
+      bg: "#fde68a",
+      from: "#fbbf24",
+      to: "#d97706",
+    };
+  if (persen >= 60)
+    return {
+      label: "Kurang",
+      text: "#9a3412",
+      bg: "#fed7aa",
+      from: "#fb923c",
+      to: "#ea580c",
+    };
+  return {
+    label: "Rendah",
+    text: "#9f1239",
+    bg: "#fecdd3",
+    from: "#fb7185",
+    to: "#e11d48",
+  };
+}
+
 export default function ModalPresensiWaliKelas({
   isOpen,
   onClose,
@@ -61,8 +126,26 @@ export default function ModalPresensiWaliKelas({
   const [menghapusId, setMenghapusId] = useState(null);
   const [cetakLoading, setCetakLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  // true bila ada perubahan yang BERHASIL tersimpan ke server (simpan presensi,
+  // hapus siswa, tambah siswa). Dipakai dashboard untuk memutuskan perlu refresh kartu atau tidak.
+  const didChangeRef = useRef(false);
+
+  function tutupModal() {
+    onClose(didChangeRef.current);
+  }
   const [showTambahModal, setShowTambahModal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0); // progress bar saat memuat
+
+  // Bar merayap pelan (maks 88%) selama menunggu server, supaya tidak terlihat diam.
+  // Lonjakan nyata terjadi tiap request selesai (lihat loadGrid).
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => {
+      setLoadProgress((p) => (p < 88 ? p + (88 - p) * 0.06 : p));
+    }, 300);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     if (isOpen && wali?.idWali && guru?.id) {
@@ -74,12 +157,49 @@ export default function ModalPresensiWaliKelas({
   async function loadGrid() {
     try {
       setLoading(true);
-      const result = await getPresensiWaliGrid(guru.id, wali.idWali);
+      setLoadProgress(8);
+      // Ambil grid presensi + daftar Guru Wali (idSiswa -> namaGuru) secara paralel.
+      // Kalau data guru wali gagal diambil, tabel tetap tampil (hanya tanpa info wali).
+      let selesai = 0;
+      const bump = () => {
+        selesai += 1;
+        setLoadProgress((p) =>
+          Math.max(p, 10 + Math.round((selesai / 2) * 75)),
+        );
+      };
+      const [result, waliRes] = await Promise.all([
+        getPresensiWaliGrid(guru.id, wali.idWali).finally(bump),
+        getDataSiswaWali("ALL")
+          .catch(() => null)
+          .finally(bump),
+      ]);
       const data = result.success ? result.data : { siswa: [], presensi: [] };
+
+      const waliMap = {};
+      if (waliRes?.success && Array.isArray(waliRes.data)) {
+        waliRes.data.forEach((w) => {
+          const idS = String(w.idSiswa || "").trim();
+          if (idS) waliMap[idS] = String(w.namaGuru || "").trim();
+        });
+      }
+
+      // DEBUG sementara: cek di Console browser (F12) kenapa nama wali kosong
+      console.log("[WALI KELAS] respons getDataSiswaWali(ALL):", {
+        success: waliRes?.success,
+        message: waliRes?.message,
+        jumlah: Array.isArray(waliRes?.data) ? waliRes.data.length : null,
+        contohData: Array.isArray(waliRes?.data) ? waliRes.data[0] : null,
+        contohSiswaGrid: (data.siswa || [])[0],
+      });
 
       const daftarSiswa = (data.siswa || [])
         .slice()
-        .map((s) => ({ ...s, nama: s.namaSiswa || s.nama || "" }))
+        .map((s) => ({
+          ...s,
+          nama: s.namaSiswa || s.nama || "",
+          namaGuruWali:
+            s.namaGuruWali || waliMap[String(s.idSiswa || "").trim()] || "",
+        }))
         .sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
       setSiswaList(daftarSiswa);
 
@@ -104,6 +224,9 @@ export default function ModalPresensiWaliKelas({
       console.error("ERROR LOAD GRID PRESENSI WALI KELAS:", err);
       alert("Gagal memuat data presensi wali kelas.");
     } finally {
+      setLoadProgress(100);
+      // jeda singkat agar 100% sempat terlihat
+      await new Promise((r) => setTimeout(r, 250));
       setLoading(false);
     }
   }
@@ -207,6 +330,7 @@ export default function ModalPresensiWaliKelas({
           `✅ Presensi wali kelas berhasil disimpan!\nTotal: ${result.data?.tersimpan || cells.length} data tersimpan.`,
         );
         setHasUnsavedChanges(false);
+        didChangeRef.current = true;
       } else {
         alert(result.message || "Gagal menyimpan presensi.");
       }
@@ -240,6 +364,7 @@ export default function ModalPresensiWaliKelas({
           });
           return salinan;
         });
+        didChangeRef.current = true;
         alert(`✅ "${siswa.nama}" berhasil dihapus dari kelas wali ini.`);
       } else {
         alert(result.message || "Gagal menghapus siswa dari kelas wali.");
@@ -270,7 +395,7 @@ export default function ModalPresensiWaliKelas({
     if (hasUnsavedChanges) {
       setShowCloseConfirm(true);
     } else {
-      onClose();
+      tutupModal();
     }
   }
 
@@ -458,14 +583,21 @@ export default function ModalPresensiWaliKelas({
           {/* AREA TABEL UTAMA */}
           <div className="flex-1 overflow-auto bg-slate-50 p-2 sm:p-4 custom-scrollbar">
             {loading ? (
-              <div className="py-20 text-center">
-                <div className="relative mx-auto h-12 w-12">
-                  <div className="absolute inset-0 rounded-full border-4 border-teal-200"></div>
-                  <div className="absolute inset-0 rounded-full border-4 border-teal-600 border-t-transparent animate-spin"></div>
+              <div className="py-20 flex items-center justify-center p-6">
+                <div className="w-full max-w-xs text-center">
+                  <p className="mb-4 text-base font-bold text-slate-600 tracking-wide">
+                    Memuat presensi harian kelas...
+                  </p>
+                  <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${loadProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-black text-slate-400">
+                    {Math.round(loadProgress)}%
+                  </p>
                 </div>
-                <p className="mt-4 text-xs font-black text-slate-500">
-                  Memuat data presensi harian kelas...
-                </p>
               </div>
             ) : filteredSiswaList.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
@@ -529,7 +661,7 @@ export default function ModalPresensiWaliKelas({
 
                         {/* Kolom Total */}
                         <th className="px-1 py-1 font-black border-b-2 border-slate-300 border-l-2 border-slate-300 text-center sticky top-0 bg-slate-200/80 z-50">
-                          <div className="w-[100px] min-w-[100px] max-w-[100px] mx-auto">
+                          <div className="w-[140px] min-w-[140px] max-w-[140px] mx-auto">
                             <div className="text-[9px] sm:text-[10px] mb-0.5 uppercase tracking-widest text-slate-600 font-extrabold">
                               TOTAL
                             </div>
@@ -563,6 +695,12 @@ export default function ModalPresensiWaliKelas({
                                 title="Cabut"
                               >
                                 C
+                              </span>
+                              <span
+                                className="w-10 text-slate-700 font-bold"
+                                title="Persentase kehadiran"
+                              >
+                                %
                               </span>
                             </div>
                           </div>
@@ -616,6 +754,9 @@ export default function ModalPresensiWaliKelas({
                                         {s.kelas}
                                       </span>
                                     )}
+                                    <span className="shrink-0 text-[7px] sm:text-[8px] text-slate-400 font-medium bg-slate-100 px-1 py-0 rounded truncate">
+                                      ID: {s.idSiswa}
+                                    </span>
                                   </div>
                                   <button
                                     type="button"
@@ -626,6 +767,20 @@ export default function ModalPresensiWaliKelas({
                                   >
                                     {menghapusId === s.idSiswa ? "⏳" : "✕"}
                                   </button>
+                                </div>
+                                <div className="mt-0.5 w-full min-w-0 overflow-hidden">
+                                  {s.namaGuruWali ? (
+                                    <span
+                                      className="block truncate rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0 text-[7px] font-bold"
+                                      title={`Wali: ${s.namaGuruWali}`}
+                                    >
+                                      Wali: {s.namaGuruWali}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block rounded bg-red-50 text-red-500 border border-red-200 px-1 py-0 text-[7px] font-bold">
+                                      Tanpa Wali
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -686,7 +841,7 @@ export default function ModalPresensiWaliKelas({
                                 isEven ? "bg-slate-100/70" : "bg-slate-50/50"
                               }`}
                             >
-                              <div className="flex items-center justify-center gap-1 w-[100px] min-w-[100px] max-w-[100px] mx-auto leading-none font-bold">
+                              <div className="flex items-center justify-center gap-1 w-[140px] min-w-[140px] max-w-[140px] mx-auto leading-none font-bold">
                                 <span className="w-4 text-[10px] text-emerald-600 bg-emerald-100 py-0.5 rounded">
                                   {total.Hadir}
                                 </span>
@@ -702,6 +857,22 @@ export default function ModalPresensiWaliKelas({
                                 <span className="w-4 text-[10px] text-violet-600 bg-violet-100 py-0.5 rounded">
                                   {total.Cabut}
                                 </span>
+                                {(() => {
+                                  const persen = hitungPersenKehadiran(total);
+                                  const tier = tierPersenKehadiran(persen);
+                                  return (
+                                    <span
+                                      className="w-10 text-[10px] font-black py-0.5 rounded"
+                                      style={{
+                                        color: tier.text,
+                                        backgroundColor: tier.bg,
+                                      }}
+                                      title={`Kehadiran: ${tier.label}`}
+                                    >
+                                      {persen === null ? "-" : `${persen}%`}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </td>
                           </tr>
@@ -755,7 +926,7 @@ export default function ModalPresensiWaliKelas({
                 onClick={async () => {
                   await handleSimpanPresensi();
                   setShowCloseConfirm(false);
-                  onClose();
+                  tutupModal();
                 }}
                 className="w-full rounded-xl bg-teal-600 text-white text-xs sm:text-sm font-black py-2.5 hover:bg-teal-700 transition-colors shadow-sm"
               >
@@ -765,7 +936,7 @@ export default function ModalPresensiWaliKelas({
                 type="button"
                 onClick={() => {
                   setShowCloseConfirm(false);
-                  onClose();
+                  tutupModal();
                 }}
                 className="w-full rounded-xl bg-rose-50 text-rose-600 border border-rose-200 text-xs sm:text-sm font-black py-2.5 hover:bg-rose-100 transition-colors"
               >
@@ -791,6 +962,7 @@ export default function ModalPresensiWaliKelas({
           guru={guru}
           wali={wali}
           onSiswaAdded={() => {
+            didChangeRef.current = true;
             loadGrid();
           }}
         />
