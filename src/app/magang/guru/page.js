@@ -271,6 +271,52 @@ async function fetchPrintDataWithRetry(
   throw lastError;
 }
 
+// Warna badge % kehadiran berdasarkan tingkat kehadiran:
+// >=95 emas berkilau + bintang | >=85 hijau | >=65 hijau-kuning
+// >=55 oranye | <55 merah | belum ada data = abu-abu
+function getStyleBadgePersen(persen) {
+  if (persen === null || persen === undefined) {
+    return {
+      box: "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400 border-slate-100/80 text-slate-700",
+      star: false,
+      shine: false,
+    };
+  }
+  if (persen >= 95) {
+    return {
+      box: "bg-gradient-to-br from-yellow-100 via-amber-300 to-yellow-500 border-yellow-100 text-amber-950 ring-1 ring-yellow-200/80 shadow-[0_0_12px_rgba(251,191,36,0.75)]",
+      star: true,
+      shine: true,
+    };
+  }
+  if (persen >= 85) {
+    return {
+      box: "bg-gradient-to-br from-emerald-300 via-green-500 to-emerald-600 border-emerald-100/80 text-white",
+      star: false,
+      shine: false,
+    };
+  }
+  if (persen >= 65) {
+    return {
+      box: "bg-gradient-to-br from-green-400 via-lime-400 to-yellow-300 border-lime-100/80 text-lime-950",
+      star: false,
+      shine: false,
+    };
+  }
+  if (persen >= 55) {
+    return {
+      box: "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 border-orange-100/80 text-orange-950",
+      star: false,
+      shine: false,
+    };
+  }
+  return {
+    box: "bg-gradient-to-br from-red-400 via-red-500 to-red-700 border-red-200/80 text-white",
+    star: false,
+    shine: false,
+  };
+}
+
 function DashboardGuruContent() {
   const router = useRouter();
   // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
@@ -2766,26 +2812,41 @@ function DashboardGuruContent() {
                             </div>
                           </div>
 
-                          {/* BADGE % HADIR KELAS — di dalam alur flex (tidak menimpa teks) */}
-                          <div
-                            className="flex min-w-[52px] shrink-0 flex-col items-center justify-center self-start rounded-xl border border-amber-100/80 bg-gradient-to-br from-yellow-200 via-amber-300 to-amber-500 px-2 py-1 text-amber-950 shadow-md"
-                            title={
-                              persenInfo
-                                ? `Hadir ${persenInfo.hadir} dari ${persenInfo.total} pertemuan`
-                                : "Data kehadiran kelas belum tersedia"
-                            }
-                          >
-                            <span className="text-[13px] sm:text-sm font-black leading-none">
-                              {persenInfo
-                                ? `${persenInfo.persen}%`
-                                : loadingPersenHadir
-                                  ? "…"
-                                  : "-"}
-                            </span>
-                            <span className="mt-0.5 text-[7px] font-extrabold uppercase leading-none tracking-wide">
-                              Hadir Kelas
-                            </span>
-                          </div>
+                          {/* BADGE % HADIR KELAS — warna sesuai tingkat kehadiran */}
+                          {(() => {
+                            const st = getStyleBadgePersen(
+                              persenInfo ? persenInfo.persen : null,
+                            );
+                            return (
+                              <div
+                                className={`relative flex min-w-[52px] shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl border px-2 py-1 shadow-md ${st.box}`}
+                                title={
+                                  persenInfo
+                                    ? `Hadir ${persenInfo.hadir} dari ${persenInfo.total} pertemuan`
+                                    : "Data kehadiran kelas belum tersedia"
+                                }
+                              >
+                                {st.shine && (
+                                  <span className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-tr from-white/0 via-white/60 to-white/0"></span>
+                                )}
+                                <span className="relative flex items-center gap-0.5 text-[13px] sm:text-sm font-black leading-none">
+                                  {st.star && (
+                                    <span className="text-[11px] drop-shadow">
+                                      ⭐
+                                    </span>
+                                  )}
+                                  {persenInfo
+                                    ? `${persenInfo.persen}%`
+                                    : loadingPersenHadir
+                                      ? "…"
+                                      : "-"}
+                                </span>
+                                <span className="relative mt-0.5 text-[7px] font-extrabold uppercase leading-none tracking-wide">
+                                  Hadir Kelas
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* BODY PADAT */}
