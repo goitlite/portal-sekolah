@@ -131,6 +131,55 @@ function getWhatsAppUrl(noHp) {
 }
 
 // Bagikan template ID login ke nomor WhatsApp siswa
+// Warna badge persentase kehadiran siswa Guru Wali.
+function getStyleBadgePersen(persen) {
+  if (persen === null || persen === undefined) {
+    return {
+      box: "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400 border-slate-100/80 text-slate-700",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 95) {
+    return {
+      box: "bg-gradient-to-br from-yellow-100 via-amber-300 to-yellow-500 border-yellow-100 text-amber-950 ring-1 ring-yellow-200/80 shadow-[0_0_12px_rgba(251,191,36,0.75)]",
+      star: true,
+      shine: true,
+    };
+  }
+
+  if (persen >= 85) {
+    return {
+      box: "bg-gradient-to-br from-emerald-300 via-green-500 to-emerald-600 border-emerald-100/80 text-white",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 65) {
+    return {
+      box: "bg-gradient-to-br from-green-400 via-lime-400 to-yellow-300 border-lime-100/80 text-lime-950",
+      star: false,
+      shine: false,
+    };
+  }
+
+  if (persen >= 55) {
+    return {
+      box: "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 border-orange-100/80 text-orange-950",
+      star: false,
+      shine: false,
+    };
+  }
+
+  return {
+    box: "bg-gradient-to-br from-red-400 via-red-500 to-red-700 border-red-200/80 text-white",
+    star: false,
+    shine: false,
+  };
+}
+
 function kirimLoginWhatsApp(idSiswa, namaSiswa) {
   if (!idSiswa) {
     alert("ID siswa tidak tersedia.");
@@ -232,6 +281,104 @@ async function fetchStepWithRetry(fn, { retries = 1, timeoutMs = 15000 } = {}) {
     }
   }
   throw lastError;
+}
+
+// ============================================================
+// OPTIMASI REQUEST GURU — SHARED IN-FLIGHT + SESSION CACHE
+// Tujuan:
+// 1. Dua bagian UI yang meminta data sama memakai 1 request yang sama.
+// 2. Data yang baru dibaca tidak dibaca ulang selama TTL.
+// 3. Refresh manual tetap bisa memaksa request terbaru.
+// 4. Tidak mengubah endpoint Apps Script yang sudah ada.
+// ============================================================
+const guruInFlightRequests = new Map();
+const GURU_CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
+const GURU_READ_TIMEOUT_MS = 20000;
+
+function readGuruSessionCache(key, ttlMs = GURU_CACHE_TTL_MS) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return { hit: false, fresh: false, data: null };
+
+    const parsed = JSON.parse(raw);
+
+    // Format baru: { savedAt, data }
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      Object.prototype.hasOwnProperty.call(parsed, "savedAt") &&
+      Object.prototype.hasOwnProperty.call(parsed, "data")
+    ) {
+      const age = Date.now() - Number(parsed.savedAt || 0);
+      return {
+        hit: true,
+        fresh: Number.isFinite(age) && age >= 0 && age <= ttlMs,
+        data: parsed.data,
+      };
+    }
+
+    return { hit: false, fresh: false, data: null };
+  } catch (err) {
+    console.warn("Gagal membaca cache Guru:", err);
+    return { hit: false, fresh: false, data: null };
+  }
+}
+
+function writeGuruSessionCache(key, data) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch (err) {
+    console.warn("Cache Guru dilewati:", err);
+  }
+}
+
+function removeGuruSessionCacheByPrefix(prefix) {
+  try {
+    const keys = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => sessionStorage.removeItem(key));
+  } catch (err) {
+    console.warn("Gagal membersihkan cache Guru:", err);
+  }
+}
+
+function getSharedGuruRequest(key, requestFn) {
+  const existing = guruInFlightRequests.get(key);
+  if (existing) return existing;
+
+  const promise = Promise.resolve()
+    .then(() => fetchWithTimeout(requestFn, GURU_READ_TIMEOUT_MS))
+    .finally(() => {
+      guruInFlightRequests.delete(key);
+    });
+
+  guruInFlightRequests.set(key, promise);
+  return promise;
+}
+
+async function getCachedGuruData({
+  key,
+  fetcher,
+  forceRefresh = false,
+  ttlMs = GURU_CACHE_TTL_MS,
+}) {
+  if (!forceRefresh) {
+    const cached = readGuruSessionCache(key, ttlMs);
+    if (cached.hit && cached.fresh) {
+      return { success: true, data: cached.data, fromCache: true };
+    }
+  }
+
+  const res = await getSharedGuruRequest(key, fetcher);
+
+  if (res?.success) {
+    writeGuruSessionCache(key, res.data);
+  }
+
+  return res;
 }
 
 // Retry khusus alur CETAK (bukan loading dashboard) — bedanya dari
@@ -392,69 +539,11 @@ function PersenKehadiranBar({ data, label, semuaData, jumlahSesi }) {
   );
 }
 
-// =========================================================
-// WARNA BADGE % KEHADIRAN SISWA GURU WALI
-// Diambil dari model JS Guru Lama
-// >=95 emas berkilau + bintang
-// >=85 hijau
-// >=65 hijau-kuning
-// >=55 oranye
-// <55 merah
-// belum ada data = abu-abu
-// =========================================================
-function getStyleBadgePersen(persen) {
-  if (persen === null || persen === undefined) {
-    return {
-      box: "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400 border-slate-100/80 text-slate-700",
-      star: false,
-      shine: false,
-    };
-  }
-
-  if (persen >= 95) {
-    return {
-      box: "bg-gradient-to-br from-yellow-100 via-amber-300 to-yellow-500 border-yellow-100 text-amber-950 ring-1 ring-yellow-200/80 shadow-[0_0_12px_rgba(251,191,36,0.75)]",
-      star: true,
-      shine: true,
-    };
-  }
-
-  if (persen >= 85) {
-    return {
-      box: "bg-gradient-to-br from-emerald-300 via-green-500 to-emerald-600 border-emerald-100/80 text-white",
-      star: false,
-      shine: false,
-    };
-  }
-
-  if (persen >= 65) {
-    return {
-      box: "bg-gradient-to-br from-green-400 via-lime-400 to-yellow-300 border-lime-100/80 text-lime-950",
-      star: false,
-      shine: false,
-    };
-  }
-
-  if (persen >= 55) {
-    return {
-      box: "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 border-orange-100/80 text-orange-950",
-      star: false,
-      shine: false,
-    };
-  }
-
-  return {
-    box: "bg-gradient-to-br from-red-400 via-red-500 to-red-700 border-red-200/80 text-white",
-    star: false,
-    shine: false,
-  };
-}
-
 function DashboardGuruContent() {
   const router = useRouter();
   // v2: dinaikkan supaya cache lama yang mungkin korup (struktur tidak lengkap)
   // otomatis diabaikan begitu fix ini live, tanpa perlu user hapus data browser manual.
-  const CACHE_KEY = "dashboardGuruCache_v2";
+  const CACHE_KEY = "dashboardGuruCache_v3";
   // --- STATE UNTUK TAB MENU UTAMA ---
   const [activeMenuTab, setActiveMenuTab] = useState("pembimbing");
 
@@ -515,6 +604,36 @@ function DashboardGuruContent() {
   // Tab aktif di modal: "statistik" | "semua" | "X" | "XI" | "XII"
   const [statModalTab, setStatModalTab] = useState("statistik");
 
+  // Guru Pembimbing PKL diturunkan langsung dari dataMasterSiswa.
+  // Tidak ada request tambahan ke Apps Script.
+  const guruPklSiswa = useMemo(() => {
+    const peta = {};
+
+    (dataMasterSiswa || []).forEach((row) => {
+      const id = String(
+        row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
+      ).trim();
+
+      if (!id) return;
+
+      const namaGuru = String(
+        row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
+      ).trim();
+
+      if (
+        namaGuru &&
+        namaGuru !== "-" &&
+        namaGuru !== "0" &&
+        namaGuru.toLowerCase() !== "null" &&
+        !namaGuru.toLowerCase().includes("belum")
+      ) {
+        peta[id] = namaGuru;
+      }
+    });
+
+    return peta;
+  }, [dataMasterSiswa]);
+
   // --- STATE UNTUK GALERI AKTIVITAS & FULLSCREEN ---
   const [showGallery, setShowGallery] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -538,8 +657,6 @@ function DashboardGuruContent() {
   // Persentase kehadiran per siswa (diambil dari grid presensi wali kelas)
   const [persenHadirSiswa, setPersenHadirSiswa] = useState({});
   const [loadingPersenHadir, setLoadingPersenHadir] = useState(false);
-  // Peta ID siswa -> nama Guru Pembimbing PKL
-  const [guruPklSiswa, setGuruPklSiswa] = useState({});
 
   // --- STATE CATATAN PERKEMBANGAN (LAMPIRAN B) ---
   const [showCatatanModal, setShowCatatanModal] = useState(false);
@@ -729,165 +846,169 @@ function DashboardGuruContent() {
   // loadDashboard dibuat sebagai fungsi biasa (bukan hanya di dalam useEffect)
   // supaya bisa dipanggil ulang oleh tombol "🔄 Muat Ulang" saat gagal, tanpa
   // perlu reload seluruh halaman.
-  const loadDashboard = useCallback(async () => {
-    if (!isLoggedIn()) {
-      router.replace("/magang/login");
-      return;
-    }
+  const loadDashboard = useCallback(
+    async (forceRefresh = false) => {
+      if (!isLoggedIn()) {
+        router.replace("/magang/login");
+        return;
+      }
 
-    const session = getSession();
+      const session = getSession();
 
-    if (!session || session.role !== "guru") {
-      router.replace("/magang/login");
-      return;
-    }
+      if (!session || session.role !== "guru") {
+        router.replace("/magang/login");
+        return;
+      }
 
-    if (isMountedRef.current) {
-      setUser(session);
-      setLoadFailed(false);
-      setLoadFailedMessage("");
-      setLoadProgress(8);
-    }
+      const dashboardCacheKey = `${CACHE_KEY}_${String(session.id)}`;
 
-    // 1. LOAD CACHE — tampil instan kalau ada & valid, lalu tetap disegarkan
-    // di latar belakang oleh fetch di bawah.
-    const cachedDataStr = localStorage.getItem(CACHE_KEY);
-    let usedCache = false;
+      if (isMountedRef.current) {
+        setUser(session);
+        setLoadFailed(false);
+        setLoadFailedMessage("");
+        if (forceRefresh) setLoadProgress(8);
+      }
 
-    if (cachedDataStr && isMountedRef.current) {
+      // Cache dashboard per-GURU.
+      // Cache fresh -> tampil instan dan tidak melakukan request.
+      // Cache stale -> tampilkan cache dulu, lalu refresh di background.
+      let usedCache = false;
       try {
-        const cachedData = JSON.parse(cachedDataStr);
+        const cachedRaw = localStorage.getItem(dashboardCacheKey);
+        if (cachedRaw) {
+          const payload = JSON.parse(cachedRaw);
+          const cachedData = payload?.data ?? null;
+          const savedAt = Number(payload?.savedAt || 0);
 
-        // PENTING: validasi ketat struktur cache sebelum dipakai.
-        // Ini akar masalah "sekali gagal, seterusnya selalu gagal": kalau cache
-        // pernah tersimpan dengan field yang undefined/rusak (misal karena request
-        // sempat gagal saat pertama kali disimpan), versi lama kode langsung
-        // percaya bentuk cache apa adanya. Akibatnya .length/.map dipanggil pada
-        // undefined saat render -> seluruh halaman crash, dan karena crash terjadi
-        // sebelum data baru sempat menimpa cache yang rusak, error ini berulang
-        // di SETIAP login berikutnya sampai localStorage dibersihkan manual.
-        const isValidCache =
-          cachedData &&
-          typeof cachedData === "object" &&
-          cachedData.dashboard &&
-          typeof cachedData.dashboard === "object" &&
-          Array.isArray(cachedData.tempatMagang) &&
-          Array.isArray(cachedData.aktivitas);
+          const isValidCache =
+            cachedData &&
+            typeof cachedData === "object" &&
+            cachedData.dashboard &&
+            typeof cachedData.dashboard === "object" &&
+            Array.isArray(cachedData.tempatMagang) &&
+            Array.isArray(cachedData.aktivitas);
 
-        if (isValidCache) {
-          setDashboard(cachedData.dashboard);
-          setTempatMagang(cachedData.tempatMagang);
-          setAktivitas(cachedData.aktivitas);
-          setLoading(false);
-          usedCache = true;
-        } else {
-          console.warn(
-            "Cache dashboard tidak valid, diabaikan & dihapus. Menunggu data baru dari server.",
-          );
-          localStorage.removeItem(CACHE_KEY);
+          if (isValidCache) {
+            setDashboard(cachedData.dashboard);
+            setTempatMagang(cachedData.tempatMagang);
+            setAktivitas(cachedData.aktivitas);
+            usedCache = true;
+
+            const age = Date.now() - savedAt;
+            const fresh =
+              !forceRefresh &&
+              Number.isFinite(age) &&
+              age >= 0 &&
+              age <= GURU_CACHE_TTL_MS;
+
+            if (fresh) {
+              setLoadProgress(100);
+              setLoading(false);
+              return;
+            }
+
+            if (!forceRefresh) {
+              setLoading(false);
+            }
+          } else {
+            localStorage.removeItem(dashboardCacheKey);
+          }
         }
       } catch (error) {
-        console.error("Gagal membaca cache dashboard, cache dihapus:", error);
-        localStorage.removeItem(CACHE_KEY);
+        console.warn("Gagal membaca cache dashboard:", error);
+        localStorage.removeItem(dashboardCacheKey);
       }
-    }
 
-    // 2. FETCH DATA — tiap request dibungkus timeout (15 detik) + retry 1x
-    // supaya cold-start GAS tidak bikin spinner menggantung selamanya, dan
-    // progress bar naik nyata setiap salah satu dari 3 request selesai
-    // (bukan animasi buatan).
-    const totalSteps = 3;
-    let doneSteps = 0;
-    const bumpProgress = () => {
-      doneSteps += 1;
-      if (isMountedRef.current) {
-        setLoadProgress(10 + Math.round((doneSteps / totalSteps) * 80));
-      }
-    };
-
-    try {
-      const [result, tempat, aktivitasResult] = await Promise.allSettled([
-        fetchStepWithRetry(() => getDashboardGuru(session.id)).finally(
-          bumpProgress,
-        ),
-        fetchStepWithRetry(() => getTempatMagangGuru(session.id)).finally(
-          bumpProgress,
-        ),
-        fetchStepWithRetry(() => getAktivitasGuru(session.id)).finally(
-          bumpProgress,
-        ),
-      ]);
-
-      if (!isMountedRef.current) return;
-
-      // Dashboard
-      const dashboardData =
-        result.status === "fulfilled" &&
-        result.value?.success &&
-        result.value?.data
-          ? result.value.data
-          : null;
-
-      // Tempat Magang (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
-      const tempatDataRaw =
-        tempat.status === "fulfilled" && tempat.value?.success
-          ? tempat.value.data
-          : [];
-      const tempatData = Array.isArray(tempatDataRaw) ? tempatDataRaw : [];
-
-      // Aktivitas (dipaksa array - jaga-jaga backend mengembalikan bentuk lain saat error)
-      const aktivitasDataRaw =
-        aktivitasResult.status === "fulfilled" && aktivitasResult.value?.success
-          ? aktivitasResult.value.data
-          : [];
-      const aktivitasData = Array.isArray(aktivitasDataRaw)
-        ? aktivitasDataRaw
-        : [];
-
-      // Jika dashboard berhasil
-      if (dashboardData) {
-        const serverData = {
-          dashboard: dashboardData,
-          tempatMagang: tempatData,
-          aktivitas: aktivitasData,
-        };
-
-        setDashboard(serverData.dashboard);
-        setTempatMagang(serverData.tempatMagang);
-        setAktivitas(serverData.aktivitas);
-        setLoadProgress(100);
-
-        try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
-        } catch (cacheErr) {
-          // Beberapa browser mobile punya kuota localStorage kecil.
-          // Gagal cache tidak boleh menghentikan render dashboard.
-          console.warn("Cache dashboard dilewati (kuota penuh?):", cacheErr);
+      const totalSteps = 3;
+      let doneSteps = 0;
+      const bumpProgress = () => {
+        doneSteps += 1;
+        if (isMountedRef.current) {
+          setLoadProgress(10 + Math.round((doneSteps / totalSteps) * 80));
         }
-      } else if (!usedCache) {
-        // Gagal total dan tidak ada cache sebagai fallback — tampilkan status
-        // gagal + tombol refresh, JANGAN biarkan spinner berputar selamanya.
-        setLoadFailed(true);
-        setLoadFailedMessage(
-          result.status === "rejected"
-            ? "Koneksi ke server terputus atau server lambat merespons."
-            : "Data dashboard tidak ditemukan di server.",
-        );
+      };
+
+      try {
+        const [result, tempat, aktivitasResult] = await Promise.allSettled([
+          getSharedGuruRequest(`dashboard:${session.id}`, () =>
+            getDashboardGuru(session.id),
+          ).finally(bumpProgress),
+          getSharedGuruRequest(`tempat:${session.id}`, () =>
+            getTempatMagangGuru(session.id),
+          ).finally(bumpProgress),
+          getSharedGuruRequest(`aktivitas:${session.id}`, () =>
+            getAktivitasGuru(session.id),
+          ).finally(bumpProgress),
+        ]);
+
+        if (!isMountedRef.current) return;
+
+        const dashboardData =
+          result.status === "fulfilled" &&
+          result.value?.success &&
+          result.value?.data
+            ? result.value.data
+            : null;
+
+        const tempatDataRaw =
+          tempat.status === "fulfilled" && tempat.value?.success
+            ? tempat.value.data
+            : [];
+        const tempatData = Array.isArray(tempatDataRaw) ? tempatDataRaw : [];
+
+        const aktivitasDataRaw =
+          aktivitasResult.status === "fulfilled" &&
+          aktivitasResult.value?.success
+            ? aktivitasResult.value.data
+            : [];
+        const aktivitasData = Array.isArray(aktivitasDataRaw)
+          ? aktivitasDataRaw
+          : [];
+
+        if (dashboardData) {
+          const serverData = {
+            dashboard: dashboardData,
+            tempatMagang: tempatData,
+            aktivitas: aktivitasData,
+          };
+
+          setDashboard(serverData.dashboard);
+          setTempatMagang(serverData.tempatMagang);
+          setAktivitas(serverData.aktivitas);
+          setLoadProgress(100);
+
+          try {
+            localStorage.setItem(
+              dashboardCacheKey,
+              JSON.stringify({ savedAt: Date.now(), data: serverData }),
+            );
+          } catch (cacheErr) {
+            console.warn("Cache dashboard dilewati:", cacheErr);
+          }
+        } else if (!usedCache) {
+          setLoadFailed(true);
+          setLoadFailedMessage(
+            result.status === "rejected"
+              ? "Koneksi ke server terputus atau server lambat merespons."
+              : "Data dashboard tidak ditemukan di server.",
+          );
+        }
+      } catch (err) {
+        console.error("Error fetching dashboard:", err);
+        if (!usedCache) {
+          setLoadFailed(true);
+          setLoadFailedMessage(
+            "Terjadi kesalahan saat mengambil data. Periksa koneksi internet Anda.",
+          );
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
-    } catch (err) {
-      console.error("Error fetching dashboard:", err);
-      if (!usedCache) {
-        setLoadFailed(true);
-        setLoadFailedMessage(
-          "Terjadi kesalahan saat mengambil data. Periksa koneksi internet Anda.",
-        );
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [router, CACHE_KEY]);
+    },
+    [router, CACHE_KEY],
+  );
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -900,9 +1021,20 @@ function DashboardGuruContent() {
 
   function handleLogout() {
     if (!confirm("Keluar dari aplikasi?")) return;
-    localStorage.removeItem(CACHE_KEY); // Menghapus cache guru
-    localStorage.removeItem("dashboardSiswaCache"); // Menghapus cache siswa
-    sessionStorage.removeItem("guru_cache_master_siswa"); // Cache statistik akun siswa
+
+    const currentUser = user?.id ? String(user.id) : "";
+
+    if (currentUser) {
+      localStorage.removeItem(`${CACHE_KEY}_${currentUser}`);
+    }
+
+    localStorage.removeItem(CACHE_KEY); // kompatibilitas cache lama
+    localStorage.removeItem("dashboardSiswaCache");
+
+    removeGuruSessionCacheByPrefix("guru:v3:");
+    sessionStorage.removeItem("api:getSiswa");
+    sessionStorage.removeItem("guru_cache_master_siswa");
+
     logout();
     router.replace("/magang/login");
   }
@@ -1133,40 +1265,16 @@ function DashboardGuruContent() {
   const loadSiswaWaliData = useCallback(
     async (forceRefresh = false) => {
       if (!user?.id) return [];
-      const cacheKey = `siswaWaliCache_${user.id}`;
 
-      // Gunakan cache session agar instan jika bukan refresh manual
+      const cacheKey = `guru:v3:siswaWali:${user.id}`;
+
       if (!forceRefresh) {
-        try {
-          const cached = sessionStorage.getItem(cacheKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setDataSiswaWali(parsed);
-              setSiswaWaliLoaded(true);
-              // Stale-while-revalidate: tampilkan cache dulu, lalu segarkan
-              // diam-diam di latar belakang agar siswa baru tetap muncul.
-              fetchStepWithRetry(() => getDataSiswaWali(user.id), {
-                retries: 1,
-                timeoutMs: 15000,
-              })
-                .then((fresh) => {
-                  if (fresh && fresh.success && Array.isArray(fresh.data)) {
-                    setDataSiswaWali(fresh.data);
-                    try {
-                      sessionStorage.setItem(
-                        cacheKey,
-                        JSON.stringify(fresh.data),
-                      );
-                    } catch (e) {}
-                  }
-                })
-                .catch(() => {});
-              return parsed;
-            }
-          }
-        } catch (e) {
-          console.warn("Gagal membaca cache siswa wali:", e);
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && Array.isArray(cached.data)) {
+          setDataSiswaWali(cached.data);
+          setSiswaWaliLoaded(true);
+          setLoadingSiswaWali(false);
+          return cached.data;
         }
       }
 
@@ -1174,32 +1282,31 @@ function DashboardGuruContent() {
       setErrorSiswaWali("");
 
       try {
-        const res = await fetchStepWithRetry(() => getDataSiswaWali(user.id), {
-          retries: 1,
-          timeoutMs: 15000,
+        const res = await getCachedGuruData({
+          key: `api:siswaWali:${user.id}`,
+          fetcher: () => getDataSiswaWali(user.id),
+          forceRefresh,
         });
 
-        if (res && res.success) {
+        if (res?.success) {
           const list = Array.isArray(res.data) ? res.data : [];
           setDataSiswaWali(list);
           setSiswaWaliLoaded(true);
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(list));
-          } catch (e) {}
+          writeGuruSessionCache(cacheKey, list);
           return list;
-        } else {
-          setErrorSiswaWali(res?.message || "Gagal mengambil data siswa wali.");
-          return [];
         }
+
+        setErrorSiswaWali(res?.message || "Gagal mengambil data siswa wali.");
       } catch (err) {
         console.error("Error load siswa wali:", err);
         setErrorSiswaWali(
           "Terjadi kendala koneksi saat mengambil data siswa wali.",
         );
-        return [];
       } finally {
         setLoadingSiswaWali(false);
       }
+
+      return [];
     },
     [user?.id],
   );
@@ -1210,62 +1317,60 @@ function DashboardGuruContent() {
   const loadPersenKehadiranSiswaWali = useCallback(
     async (forceRefresh = false) => {
       if (!user?.id) return;
-      const cacheKey = `persenHadirWaliCache_${user.id}`;
+      const cacheKey = `guru:v3:persenHadirWali:${user.id}`;
 
       if (!forceRefresh) {
-        try {
-          const cached = sessionStorage.getItem(cacheKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (
-              parsed &&
-              typeof parsed === "object" &&
-              Object.keys(parsed).length > 0
-            ) {
-              setPersenHadirSiswa(parsed);
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn("Gagal membaca cache persen kehadiran:", e);
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && cached.data) {
+          setPersenHadirSiswa(cached.data);
+          setLoadingPersenHadir(false);
+          return;
         }
       }
 
       setLoadingPersenHadir(true);
+
       try {
-        const resWali = await fetchStepWithRetry(
-          () => getWaliKelasByGuru(user.id),
-          { retries: 1, timeoutMs: 15000 },
-        );
-        const raw = resWali?.success ? (resWali.data ?? []) : [];
+        // Pakai request bersama dengan loadWaliKelasData().
+        const resWali = await getCachedGuruData({
+          key: `api:waliKelas:${user.id}`,
+          fetcher: () => getWaliKelasByGuru(user.id),
+          forceRefresh,
+        });
+
+        const raw = resWali?.success
+          ? (resWali.data ?? resWali.message ?? [])
+          : [];
         const listWali = Array.isArray(raw) ? raw : [];
 
         const grids = await Promise.allSettled(
           listWali.map((w) => {
-            const idWali = String(w.idWali || w.ID_WALI || w.id || "");
+            const idWali = String(w.idWali || w.ID_WALI || w.id || "").trim();
             if (!idWali) return Promise.resolve(null);
-            return fetchStepWithRetry(
+
+            return getSharedGuruRequest(
+              `api:waliGrid:${user.id}:${idWali}`,
               () => getPresensiWaliGrid(user.id, idWali),
-              {
-                retries: 1,
-                timeoutMs: 15000,
-              },
             );
           }),
         );
 
         const hasil = {};
+
         grids.forEach((g) => {
-          if (g.status !== "fulfilled" || !g.value?.success || !g.value?.data)
+          if (g.status !== "fulfilled" || !g.value?.success || !g.value?.data) {
             return;
+          }
+
           const siswaArr = g.value.data.siswa || [];
           const presensi = g.value.data.presensi || [];
-
           const tanggalSet = new Set();
           const hadirMap = {};
+
           presensi.forEach((p) => {
             if (!p.tanggal) return;
             tanggalSet.add(String(p.tanggal).trim());
+
             if (String(p.status || "").trim() === "Hadir") {
               const sid = String(p.idSiswa).trim();
               hadirMap[sid] = (hadirMap[sid] || 0) + 1;
@@ -1273,10 +1378,13 @@ function DashboardGuruContent() {
           });
 
           const totalPertemuan = tanggalSet.size;
+
           siswaArr.forEach((s) => {
             const sid = String(s.idSiswa || s.id || "").trim();
             if (!sid) return;
+
             const hadir = hadirMap[sid] || 0;
+
             hasil[sid] = {
               hadir,
               total: totalPertemuan,
@@ -1289,11 +1397,7 @@ function DashboardGuruContent() {
         });
 
         setPersenHadirSiswa(hasil);
-        if (Object.keys(hasil).length > 0) {
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(hasil));
-          } catch (e) {}
-        }
+        writeGuruSessionCache(cacheKey, hasil);
       } catch (err) {
         console.warn("Gagal memuat persentase kehadiran siswa wali:", err);
       } finally {
@@ -1302,36 +1406,6 @@ function DashboardGuruContent() {
     },
     [user?.id],
   );
-
-  const loadGuruPklSiswa = useCallback(() => {
-    if (!user?.id || !Array.isArray(dataMasterSiswa)) return;
-
-    const peta = {};
-
-    dataMasterSiswa.forEach((row) => {
-      const id = String(
-        row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
-      ).trim();
-
-      if (!id) return;
-
-      const namaGuru = String(
-        row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
-      ).trim();
-
-      if (
-        namaGuru &&
-        namaGuru !== "-" &&
-        namaGuru !== "0" &&
-        namaGuru.toLowerCase() !== "null" &&
-        !namaGuru.toLowerCase().includes("belum")
-      ) {
-        peta[id] = namaGuru;
-      }
-    });
-
-    setGuruPklSiswa(peta);
-  }, [user?.id, dataMasterSiswa]);
 
   // Helper format tanggal pertemuan mapel
   const formatTanggalMapelIndo = (tanggalStr) => {
@@ -1352,13 +1426,35 @@ function DashboardGuruContent() {
 
   // --- AMBIL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA MAPEL ---
   const loadStatsMapel = useCallback(
-    async (idMapel) => {
+    async (idMapel, forceRefresh = false) => {
       if (!user?.id || !idMapel) return;
+
+      const cacheKey = `guru:v3:statsMapel:${user.id}:${idMapel}`;
+
+      if (!forceRefresh) {
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && cached.data) {
+          setStatsPresensiMapel((prev) => ({
+            ...prev,
+            [idMapel]: cached.data,
+          }));
+          setLoadingStatsMapel((prev) => ({
+            ...prev,
+            [idMapel]: false,
+          }));
+          return cached.data;
+        }
+      }
+
       setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: true }));
 
       try {
-        const res = await getPresensiMapelGrid(user.id, idMapel);
-        if (res && res.success && res.data) {
+        const res = await getSharedGuruRequest(
+          `api:mapelGrid:${user.id}:${idMapel}`,
+          () => getPresensiMapelGrid(user.id, idMapel),
+        );
+
+        if (res?.success && res?.data) {
           const siswaList = res.data.siswa || [];
           const presensiList = res.data.presensi || [];
 
@@ -1372,7 +1468,10 @@ function DashboardGuruContent() {
             if (!p.pertemuanKe) return;
             const pKe = Number(p.pertemuanKe);
             if (!meetingsMap[pKe]) {
-              meetingsMap[pKe] = { tanggal: p.tanggal || "", records: [] };
+              meetingsMap[pKe] = {
+                tanggal: p.tanggal || "",
+                records: [],
+              };
             }
             if (p.tanggal && !meetingsMap[pKe].tanggal) {
               meetingsMap[pKe].tanggal = p.tanggal;
@@ -1391,6 +1490,7 @@ function DashboardGuruContent() {
             validMeetings.length > 0 ? Math.max(...validMeetings) : null;
 
           const perPertemuan = {};
+
           Object.keys(meetingsMap).forEach((pStr) => {
             const pKe = Number(pStr);
             const mData = meetingsMap[pKe];
@@ -1417,16 +1517,32 @@ function DashboardGuruContent() {
                 }
               } else if (st === "Sakit") {
                 sakit++;
-                absenList.push({ idSiswa: sid, nama, status: "Sakit" });
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: "Sakit",
+                });
               } else if (st === "Izin") {
                 izin++;
-                absenList.push({ idSiswa: sid, nama, status: "Izin" });
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: "Izin",
+                });
               } else if (st === "Alfa") {
                 alfa++;
-                absenList.push({ idSiswa: sid, nama, status: "Alfa" });
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: "Alfa",
+                });
               } else if (st === "Cabut") {
                 cabut++;
-                absenList.push({ idSiswa: sid, nama, status: "Cabut" });
+                absenList.push({
+                  idSiswa: sid,
+                  nama,
+                  status: "Cabut",
+                });
               }
             });
 
@@ -1446,21 +1562,30 @@ function DashboardGuruContent() {
             };
           });
 
+          const stats = {
+            totalSiswa: siswaList.length,
+            validMeetings,
+            latestP,
+            perPertemuan,
+          };
+
           setStatsPresensiMapel((prev) => ({
             ...prev,
-            [idMapel]: {
-              totalSiswa: siswaList.length,
-              validMeetings,
-              latestP,
-              perPertemuan,
-            },
+            [idMapel]: stats,
           }));
+          writeGuruSessionCache(cacheKey, stats);
+          return stats;
         }
       } catch (err) {
         console.warn("Gagal memuat statistik presensi mapel:", err);
       } finally {
-        setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: false }));
+        setLoadingStatsMapel((prev) => ({
+          ...prev,
+          [idMapel]: false,
+        }));
       }
+
+      return null;
     },
     [user?.id],
   );
@@ -1469,61 +1594,62 @@ function DashboardGuruContent() {
   const loadMapelData = useCallback(
     async (forceRefresh = false, silent = false) => {
       if (!user?.id) return [];
-      const cacheKey = `mapelCache_${user.id}`;
+
+      const cacheKey = `guru:v3:mapel:${user.id}`;
 
       if (!forceRefresh) {
-        try {
-          const cached = sessionStorage.getItem(cacheKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setDaftarMapel(parsed);
-              setMapelLoaded(true);
-              parsed.forEach((m) => {
-                if (m.idMapel) loadStatsMapel(m.idMapel);
-              });
-              return parsed;
-            }
-          }
-        } catch (e) {
-          console.warn("Gagal membaca cache mapel:", e);
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && Array.isArray(cached.data)) {
+          setDaftarMapel(cached.data);
+          setMapelLoaded(true);
+          setLoadingMapel(false);
+
+          // Pertahankan perilaku lama: statistik kartu langsung tersedia,
+          // tetapi setiap grid sekarang dilindungi shared-request + cache.
+          cached.data.forEach((m) => {
+            if (m.idMapel) loadStatsMapel(m.idMapel, false);
+          });
+
+          return cached.data;
         }
       }
 
-      // silent = refresh di latar belakang: kartu tetap tampil, tidak ganti skeleton
       if (!silent) setLoadingMapel(true);
       setErrorMapel("");
 
       try {
-        const res = await fetchStepWithRetry(() => getMapelByGuru(user.id), {
-          retries: 1,
-          timeoutMs: 15000,
+        const res = await getCachedGuruData({
+          key: `api:mapelList:${user.id}`,
+          fetcher: () => getMapelByGuru(user.id),
+          forceRefresh,
         });
 
-        if (res && res.success) {
+        if (res?.success) {
           const list = Array.isArray(res.data) ? res.data : [];
           setDaftarMapel(list);
           setMapelLoaded(true);
+          writeGuruSessionCache(cacheKey, list);
+
           list.forEach((m) => {
-            if (m.idMapel) loadStatsMapel(m.idMapel);
+            if (m.idMapel) {
+              loadStatsMapel(m.idMapel, forceRefresh);
+            }
           });
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(list));
-          } catch (e) {}
+
           return list;
-        } else {
-          setErrorMapel(res?.message || "Gagal mengambil data mata pelajaran.");
-          return [];
         }
+
+        setErrorMapel(res?.message || "Gagal mengambil data mata pelajaran.");
       } catch (err) {
         console.error("Error load mapel:", err);
         setErrorMapel(
           "Terjadi kendala koneksi saat mengambil data mata pelajaran.",
         );
-        return [];
       } finally {
         setLoadingMapel(false);
       }
+
+      return [];
     },
     [user?.id, loadStatsMapel],
   );
@@ -1531,14 +1657,38 @@ function DashboardGuruContent() {
   // --- AMBIL STATISTIK PRESENSI HARI INI KELAS WALI ---
   // --- AMBIL RIWAYAT STATISTIK PRESENSI KELAS WALI (SEMUA SESI/TANGGAL) ---
   const loadStatsHariIniWali = useCallback(
-    async (idWali) => {
-      if (!user?.id || !idWali) return;
-      setLoadingStatsWali((prev) => ({ ...prev, [idWali]: true }));
+    async (idWali, forceRefresh = false) => {
+      if (!user?.id || !idWali) return null;
+
+      const cacheKey = `guru:v3:statsWali:${user.id}:${idWali}`;
+
+      if (!forceRefresh) {
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && cached.data) {
+          setStatsPresensiHariIniWali((prev) => ({
+            ...prev,
+            [idWali]: cached.data,
+          }));
+          setLoadingStatsWali((prev) => ({
+            ...prev,
+            [idWali]: false,
+          }));
+          return cached.data;
+        }
+      }
+
+      setLoadingStatsWali((prev) => ({
+        ...prev,
+        [idWali]: true,
+      }));
 
       try {
-        const res = await getPresensiWaliGrid(user.id, idWali);
+        const res = await getSharedGuruRequest(
+          `api:waliGrid:${user.id}:${idWali}`,
+          () => getPresensiWaliGrid(user.id, idWali),
+        );
 
-        if (res && res.success && res.data) {
+        if (res?.success && res?.data) {
           const siswaList = res.data.siswa || [];
           const presensiList = res.data.presensi || [];
 
@@ -1565,6 +1715,7 @@ function DashboardGuruContent() {
               : null;
 
           const perTanggal = {};
+
           validTanggal.forEach((tgl) => {
             const records = tanggalMap[tgl];
             let hadir = 0,
@@ -1608,21 +1759,30 @@ function DashboardGuruContent() {
             };
           });
 
+          const stats = {
+            totalSiswa: siswaList.length,
+            validTanggal,
+            latestTanggal,
+            perTanggal,
+          };
+
           setStatsPresensiHariIniWali((prev) => ({
             ...prev,
-            [idWali]: {
-              totalSiswa: siswaList.length,
-              validTanggal,
-              latestTanggal,
-              perTanggal,
-            },
+            [idWali]: stats,
           }));
+          writeGuruSessionCache(cacheKey, stats);
+          return stats;
         }
       } catch (err) {
         console.warn("Gagal memuat statistik presensi kelas wali:", err);
       } finally {
-        setLoadingStatsWali((prev) => ({ ...prev, [idWali]: false }));
+        setLoadingStatsWali((prev) => ({
+          ...prev,
+          [idWali]: false,
+        }));
       }
+
+      return null;
     },
     [user?.id],
   );
@@ -1631,41 +1791,35 @@ function DashboardGuruContent() {
   const loadWaliKelasData = useCallback(
     async (forceRefresh = false, silent = false) => {
       if (!user?.id) return [];
-      const cacheKey = `waliKelasCache_${user.id}`;
+
+      const cacheKey = `guru:v3:waliKelas:${user.id}`;
 
       if (!forceRefresh) {
-        try {
-          const cached = sessionStorage.getItem(cacheKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setDaftarWaliKelas(parsed);
-              setWaliKelasLoaded(true);
-              parsed.forEach((w) => {
-                if (w.idWali) loadStatsHariIniWali(w.idWali);
-              });
-              return parsed;
-            }
-          }
-        } catch (e) {
-          console.warn("Gagal membaca cache wali kelas:", e);
+        const cached = readGuruSessionCache(cacheKey);
+        if (cached.hit && cached.fresh && Array.isArray(cached.data)) {
+          setDaftarWaliKelas(cached.data);
+          setWaliKelasLoaded(true);
+          setLoadingWaliKelas(false);
+
+          cached.data.forEach((w) => {
+            if (w.idWali) loadStatsHariIniWali(w.idWali, false);
+          });
+
+          return cached.data;
         }
       }
 
-      // silent = refresh di latar belakang: kartu tetap tampil, tidak ganti skeleton
       if (!silent) setLoadingWaliKelas(true);
       setErrorWaliKelas("");
 
       try {
-        const res = await fetchStepWithRetry(
-          () => getWaliKelasByGuru(user.id),
-          {
-            retries: 1,
-            timeoutMs: 15000,
-          },
-        );
+        const res = await getCachedGuruData({
+          key: `api:waliKelas:${user.id}`,
+          fetcher: () => getWaliKelasByGuru(user.id),
+          forceRefresh,
+        });
 
-        if (res && res.success) {
+        if (res?.success) {
           const raw = res.data ?? res.message ?? [];
           const list = (Array.isArray(raw) ? raw : []).map((w, idx) => ({
             ...w,
@@ -1676,28 +1830,31 @@ function DashboardGuruContent() {
             keterangan: String(w.keterangan || w.KETERANGAN || ""),
             jumlahSiswa: w.jumlahSiswa,
           }));
+
           setDaftarWaliKelas(list);
           setWaliKelasLoaded(true);
+          writeGuruSessionCache(cacheKey, list);
+
           list.forEach((w) => {
-            if (w.idWali) loadStatsHariIniWali(w.idWali);
+            if (w.idWali) {
+              loadStatsHariIniWali(w.idWali, forceRefresh);
+            }
           });
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(list));
-          } catch (e) {}
+
           return list;
-        } else {
-          setErrorWaliKelas(res?.message || "Gagal mengambil data kelas wali.");
-          return [];
         }
+
+        setErrorWaliKelas(res?.message || "Gagal mengambil data kelas wali.");
       } catch (err) {
         console.error("Error load wali kelas:", err);
         setErrorWaliKelas(
           "Terjadi kendala koneksi saat mengambil data kelas wali.",
         );
-        return [];
       } finally {
         setLoadingWaliKelas(false);
       }
+
+      return [];
     },
     [user?.id, loadStatsHariIniWali],
   );
@@ -1726,9 +1883,8 @@ function DashboardGuruContent() {
   useEffect(() => {
     if (activeMenuTab === "wali" && user?.id) {
       loadPersenKehadiranSiswaWali(false);
-      loadGuruPklSiswa();
     }
-  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali, loadGuruPklSiswa]);
+  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali]);
 
   // Handler cetak laporan PDF langsung dari kartu Mapel
   const handleCetakPdfMapelDirect = async (mapel) => {
@@ -1866,36 +2022,37 @@ function DashboardGuruContent() {
   // STATISTIK AKUN SISWA (SHEET SISWA - SEMUA KELAS)
   // =========================================================
   const loadMasterSiswa = useCallback(async (forceRefresh = false) => {
-    const cacheKey = "guru_cache_master_siswa";
+    const cacheKey = "guru:v3:masterSiswa";
+
     if (!forceRefresh) {
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setDataMasterSiswa(parsed);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("Gagal membaca cache master siswa:", e);
+      const cached = readGuruSessionCache(cacheKey);
+      if (cached.hit && cached.fresh && Array.isArray(cached.data)) {
+        setDataMasterSiswa(cached.data);
+        setLoadingMasterSiswa(false);
+        return cached.data;
       }
     }
 
     setLoadingMasterSiswa(true);
     try {
-      const res = await getSiswa();
-      if (res && res.success && Array.isArray(res.data)) {
+      const res = await getCachedGuruData({
+        key: "api:getSiswa",
+        fetcher: () => getSiswa(),
+        forceRefresh,
+      });
+
+      if (res?.success && Array.isArray(res.data)) {
         setDataMasterSiswa(res.data);
-        try {
-          sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
-        } catch (e) {}
+        writeGuruSessionCache(cacheKey, res.data);
+        return res.data;
       }
     } catch (err) {
       console.error("Error load master siswa Guru:", err);
     } finally {
       setLoadingMasterSiswa(false);
     }
+
+    return [];
   }, []);
 
   // Muat statistik siswa di latar belakang setelah user siap
@@ -2034,7 +2191,7 @@ function DashboardGuruContent() {
             onClick={() => {
               setLoading(true);
               setLoadProgress(0);
-              loadDashboard();
+              loadDashboard(true);
             }}
             className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors active:scale-95 shadow-lg shadow-indigo-200"
           >
@@ -2867,13 +3024,12 @@ function DashboardGuruContent() {
                 </div>
               )}
 
-            {/* LIST SISWA WALI — MODEL JS GURU LAMA */}
+            {/* LIST SISWA WALI — PADAT, RESPONSIF, URUT ABJAD */}
             {!loadingSiswaWali && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5 sm:gap-3">
                 {dataSiswaWali
                   .filter((siswa) => {
                     if (!searchSiswaWali.trim()) return true;
-
                     const q = searchSiswaWali.toLowerCase();
                     const nama = String(siswa.nama || "").toLowerCase();
                     const idS = String(siswa.idSiswa || "").toLowerCase();
@@ -2881,7 +3037,6 @@ function DashboardGuruContent() {
                     const tempat = String(
                       siswa.tempatMagang || "",
                     ).toLowerCase();
-
                     return (
                       nama.includes(q) ||
                       idS.includes(q) ||
@@ -2894,36 +3049,30 @@ function DashboardGuruContent() {
                     const namaA = String(a.nama || "")
                       .replace(/\s*\[.*?\]\s*/, "")
                       .trim();
-
                     const namaB = String(b.nama || "")
                       .replace(/\s*\[.*?\]\s*/, "")
                       .trim();
-
                     return namaA.localeCompare(namaB, "id", {
                       sensitivity: "base",
                     });
                   })
                   .map((siswa, idx) => {
                     const namaMentah = siswa.nama || "-";
-
                     const matchKelas = namaMentah.match(/\[(.*?)\]/);
                     const kelas = matchKelas ? matchKelas[1] : siswa.kelas;
-
                     const namaBersih = namaMentah
                       .replace(/\s*\[.*?\]\s*/, "")
                       .trim();
 
-                    // Persentase kehadiran siswa
-                    const persenInfo =
-                      persenHadirSiswa[String(siswa.idSiswa || "").trim()] ||
-                      null;
+                    const sid = String(siswa.idSiswa || "").trim();
+                    const persenInfo = persenHadirSiswa[sid] || null;
+                    const guruPembimbing = guruPklSiswa[sid] || "";
 
                     const ortuHp =
                       siswa.kontakAyah ||
                       siswa.kontakIbu ||
                       siswa.noHpOrtu ||
                       siswa.noHpOrangTua;
-
                     const labelOrtu = siswa.kontakAyah
                       ? "Ayah"
                       : siswa.kontakIbu
@@ -2932,17 +3081,15 @@ function DashboardGuruContent() {
 
                     return (
                       <div
-                        key={`${siswa.idSiswa || "siswa"}-${idx}`}
+                        key={`${sid || "siswa"}-${idx}`}
                         className="flex flex-col overflow-hidden rounded-2xl border border-[#EADBBD] bg-[#FFFDF9] shadow-sm transition-all duration-200 hover:border-[#D4AF37] hover:shadow-md"
                       >
                         {/* HEADER RINGKAS */}
                         <div className="flex items-start gap-2.5 border-b border-[#D4AF37]/30 bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 px-3 py-2.5 text-white">
-                          {/* NOMOR */}
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300/40 bg-amber-400/20 text-[11px] font-black text-amber-200">
                             {idx + 1}
                           </div>
 
-                          {/* NAMA + KELAS + ID */}
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                               <h3 className="break-words text-[13px] sm:text-sm font-black leading-tight text-amber-50">
@@ -2956,7 +3103,6 @@ function DashboardGuruContent() {
                               )}
                             </div>
 
-                            {/* ID + BAGI ID */}
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                               <p className="text-[11px] font-bold tracking-wide text-amber-200/90">
                                 ID:{" "}
@@ -2984,12 +3130,11 @@ function DashboardGuruContent() {
                             </div>
                           </div>
 
-                          {/* BADGE PERSENTASE KEHADIRAN */}
+                          {/* BADGE % HADIR KELAS */}
                           {(() => {
                             const st = getStyleBadgePersen(
                               persenInfo ? persenInfo.persen : null,
                             );
-
                             return (
                               <div
                                 className={`relative flex min-w-[52px] shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl border px-2 py-1 shadow-md ${st.box}`}
@@ -3027,14 +3172,11 @@ function DashboardGuruContent() {
 
                         {/* BODY PADAT */}
                         <div className="flex flex-1 flex-col gap-2 px-3 py-2.5">
-                          {/* INFORMASI UTAMA */}
                           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                            {/* WA SISWA */}
                             <div className="min-w-0 rounded-xl border border-emerald-200/80 bg-emerald-50/50 px-2 py-1.5">
                               <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-800/80">
                                 📱 WA Siswa
                               </span>
-
                               {siswa.noHp ? (
                                 <a
                                   href={getWhatsAppUrl(siswa.noHp)}
@@ -3051,12 +3193,10 @@ function DashboardGuruContent() {
                               )}
                             </div>
 
-                            {/* WA ORANG TUA */}
                             <div className="min-w-0 rounded-xl border border-teal-200/80 bg-teal-50/50 px-2 py-1.5">
                               <span className="block text-[9px] font-black uppercase tracking-wider text-teal-800/80">
                                 👨‍👩‍👧 WA {labelOrtu}
                               </span>
-
                               {ortuHp ? (
                                 <a
                                   href={getWhatsAppUrl(ortuHp)}
@@ -3073,12 +3213,10 @@ function DashboardGuruContent() {
                               )}
                             </div>
 
-                            {/* TEMPAT MAGANG */}
                             <div className="min-w-0 rounded-xl border border-blue-200/70 bg-blue-50/50 px-2 py-1.5">
                               <span className="block text-[9px] font-black uppercase tracking-wider text-blue-800/70">
                                 🏢 Magang / DUDI
                               </span>
-
                               <p
                                 className="mt-0.5 truncate text-[11px] font-bold text-slate-800"
                                 title={siswa.tempatMagang || ""}
@@ -3087,23 +3225,15 @@ function DashboardGuruContent() {
                               </p>
                             </div>
 
-                            {/* GURU PEMBIMBING PKL */}
                             <div className="min-w-0 rounded-xl border border-indigo-200/70 bg-indigo-50/50 px-2 py-1.5">
                               <span className="block text-[9px] font-black uppercase tracking-wider text-indigo-800/70">
                                 👔 Guru Pembimbing
                               </span>
-
                               <p
                                 className="mt-0.5 truncate text-[11px] font-bold text-slate-800"
-                                title={
-                                  guruPklSiswa[
-                                    String(siswa.idSiswa || "").trim()
-                                  ] || ""
-                                }
+                                title={guruPembimbing}
                               >
-                                {guruPklSiswa[
-                                  String(siswa.idSiswa || "").trim()
-                                ] || "-"}
+                                {guruPembimbing || "-"}
                               </p>
                             </div>
                           </div>
@@ -3111,7 +3241,6 @@ function DashboardGuruContent() {
                           {/* ALAMAT */}
                           <div className="flex items-start gap-1.5 rounded-xl border border-amber-200/60 bg-amber-50/40 px-2 py-1.5">
                             <span className="shrink-0 text-[11px]">📍</span>
-
                             <p
                               className="line-clamp-1 min-w-0 flex-1 text-[11px] font-semibold text-slate-700"
                               title={siswa.alamat || ""}
@@ -3128,7 +3257,6 @@ function DashboardGuruContent() {
 
                           {/* TOMBOL AKSI */}
                           <div className="mt-auto grid grid-cols-2 gap-1.5">
-                            {/* PROFIL */}
                             <button
                               type="button"
                               onClick={() => setSelectedSiswaWali(siswa)}
@@ -3139,7 +3267,6 @@ function DashboardGuruContent() {
                               <span className="hidden sm:inline">Lengkap</span>
                             </button>
 
-                            {/* CATATAN PERKEMBANGAN */}
                             <button
                               type="button"
                               onClick={() =>
@@ -5343,7 +5470,9 @@ function DashboardGuruContent() {
                       Guru Pembimbing:
                     </span>
                     <span className="font-bold text-slate-800">
-                      {selectedSiswaWali.namaGuru || "-"}
+                      {guruPklSiswa[
+                        String(selectedSiswaWali.idSiswa || "").trim()
+                      ] || "-"}
                     </span>
                   </div>
                   <div>
@@ -5580,7 +5709,11 @@ function DashboardGuruContent() {
                         Guru Wali
                       </span>
                       <p className="font-black text-indigo-950">
-                        {siswaCatatanAktif.namaGuru || user?.nama || "-"}
+                        {guruPklSiswa[
+                          String(siswaCatatanAktif.idSiswa || "").trim()
+                        ] ||
+                          user?.nama ||
+                          "-"}
                       </p>
                     </div>
                     <div className="text-right">
@@ -5752,7 +5885,7 @@ function DashboardGuruContent() {
             // Hanya lihat-lihat lalu tutup (tanpa perubahan tersimpan) -> kartu
             // dibiarkan seperti semula, tanpa proses loading.
             if (changed === false) return;
-            if (targetId) loadStatsMapel(targetId);
+            if (targetId) loadStatsMapel(targetId, true);
             loadMapelData(true, true);
           }}
           guru={user}
@@ -5770,7 +5903,7 @@ function DashboardGuruContent() {
             // Hanya lihat-lihat lalu tutup (tanpa perubahan tersimpan) -> kartu
             // dibiarkan seperti semula, tanpa proses loading.
             if (changed === false) return;
-            if (targetId) loadStatsHariIniWali(targetId);
+            if (targetId) loadStatsHariIniWali(targetId, true);
             loadWaliKelasData(true, true);
           }}
           guru={user}
