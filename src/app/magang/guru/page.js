@@ -1303,76 +1303,35 @@ function DashboardGuruContent() {
     [user?.id],
   );
 
-  // --- AMBIL NAMA GURU PEMBIMBING PKL TIAP SISWA ---
-  // Data diambil dari master SISWA, kolom NAMA_GURU,
-  // lalu dicocokkan berdasarkan ID siswa.
-  const loadGuruPklSiswa = useCallback(async () => {
-    if (!user?.id) return;
+  const loadGuruPklSiswa = useCallback(() => {
+    if (!user?.id || !Array.isArray(dataMasterSiswa)) return;
 
-    const cacheKey = "guruPklMapCache_v1";
+    const peta = {};
 
-    // Tampilkan cache lebih dulu
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
+    dataMasterSiswa.forEach((row) => {
+      const id = String(
+        row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
+      ).trim();
 
-      if (cached) {
-        const parsed = JSON.parse(cached);
+      if (!id) return;
 
-        if (parsed && typeof parsed === "object") {
-          setGuruPklSiswa(parsed);
-        }
+      const namaGuru = String(
+        row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
+      ).trim();
+
+      if (
+        namaGuru &&
+        namaGuru !== "-" &&
+        namaGuru !== "0" &&
+        namaGuru.toLowerCase() !== "null" &&
+        !namaGuru.toLowerCase().includes("belum")
+      ) {
+        peta[id] = namaGuru;
       }
-    } catch (e) {
-      console.warn("Gagal membaca cache guru PKL:", e);
-    }
+    });
 
-    try {
-      const res = await fetchStepWithRetry(() => getSiswa(), {
-        retries: 1,
-        timeoutMs: 15000,
-      });
-
-      if (!res?.success || !Array.isArray(res.data)) {
-        return;
-      }
-
-      const bersihkan = (v) => {
-        const t = String(v ?? "").trim();
-
-        if (!t || t === "-" || t === "0") return "";
-        if (t.toLowerCase() === "null") return "";
-        if (t.toLowerCase().includes("belum")) return "";
-
-        return t;
-      };
-
-      const peta = {};
-
-      res.data.forEach((row) => {
-        const id = String(
-          row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
-        ).trim();
-
-        if (!id) return;
-
-        const namaGuru = bersihkan(
-          row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
-        );
-
-        if (namaGuru) {
-          peta[id] = namaGuru;
-        }
-      });
-
-      setGuruPklSiswa(peta);
-
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(peta));
-      } catch (e) {}
-    } catch (err) {
-      console.warn("Gagal memuat nama Guru Pembimbing PKL:", err);
-    }
-  }, [user?.id]);
+    setGuruPklSiswa(peta);
+  }, [user?.id, dataMasterSiswa]);
 
   // Helper format tanggal pertemuan mapel
   const formatTanggalMapelIndo = (tanggalStr) => {
