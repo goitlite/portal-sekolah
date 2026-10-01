@@ -405,6 +405,8 @@ function DashboardGuruContent() {
   // Persentase kehadiran per siswa (diambil dari grid presensi wali kelas)
   const [persenHadirSiswa, setPersenHadirSiswa] = useState({});
   const [loadingPersenHadir, setLoadingPersenHadir] = useState(false);
+  // Peta idSiswa -> nama Guru PKL (Guru Pembimbing magang) dari master SISWA
+  const [guruPklSiswa, setGuruPklSiswa] = useState({});
 
   // --- STATE CATATAN PERKEMBANGAN (LAMPIRAN B) ---
   const [showCatatanModal, setShowCatatanModal] = useState(false);
@@ -1563,12 +1565,65 @@ function DashboardGuruContent() {
     loadWaliKelasData,
   ]);
 
+  // --- AMBIL NAMA GURU PKL TIAP SISWA (dari master SISWA) ---
+  // getDataSiswaWali().namaGuru adalah nama GURU WALI, bukan guru PKL.
+  // Guru PKL tersimpan di sheet SISWA (kolom NAMA_GURU), jadi diambil
+  // lewat getSiswa() lalu dicocokkan berdasarkan ID siswa.
+  const loadGuruPklSiswa = useCallback(async () => {
+    if (!user?.id) return;
+    const cacheKey = "guruPklMapCache_v1";
+
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object") setGuruPklSiswa(parsed);
+      }
+    } catch (e) {}
+
+    try {
+      const res = await fetchStepWithRetry(() => getSiswa(), {
+        retries: 1,
+        timeoutMs: 15000,
+      });
+      if (!res || !res.success || !Array.isArray(res.data)) return;
+
+      const bersihkan = (v) => {
+        const t = String(v ?? "").trim();
+        if (!t || t === "-" || t === "0") return "";
+        if (t.toLowerCase() === "null") return "";
+        if (t.toLowerCase().includes("belum")) return "";
+        return t;
+      };
+
+      const peta = {};
+      res.data.forEach((row) => {
+        const id = String(
+          row?.id ?? row?.ID ?? row?.idSiswa ?? row?.ID_SISWA ?? "",
+        ).trim();
+        if (!id) return;
+        const namaGuru = bersihkan(
+          row?.namaGuru ?? row?.NAMA_GURU ?? row?.nama_guru ?? "",
+        );
+        if (namaGuru) peta[id] = namaGuru;
+      });
+
+      setGuruPklSiswa(peta);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(peta));
+      } catch (e) {}
+    } catch (err) {
+      console.warn("Gagal memuat nama guru PKL siswa:", err);
+    }
+  }, [user?.id]);
+
   // Muat persentase kehadiran saat tab Guru Wali dibuka
   useEffect(() => {
     if (activeMenuTab === "wali" && user?.id) {
       loadPersenKehadiranSiswaWali(false);
+      loadGuruPklSiswa();
     }
-  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali]);
+  }, [activeMenuTab, user?.id, loadPersenKehadiranSiswaWali, loadGuruPklSiswa]);
 
   // Handler cetak laporan PDF langsung dari kartu Mapel
   const handleCetakPdfMapelDirect = async (mapel) => {
@@ -2631,6 +2686,7 @@ function DashboardGuruContent() {
                   onClick={() => {
                     loadSiswaWaliData(true);
                     loadPersenKehadiranSiswaWali(true);
+                    loadGuruPklSiswa();
                   }}
                   disabled={loadingSiswaWali}
                   title="Segarkan data siswa wali"
@@ -2750,6 +2806,9 @@ function DashboardGuruContent() {
                     const persenInfo =
                       persenHadirSiswa[String(siswa.idSiswa || "").trim()] ||
                       null;
+
+                    const guruPklNama =
+                      guruPklSiswa[String(siswa.idSiswa || "").trim()] || "";
 
                     const ortuHp =
                       siswa.kontakAyah ||
@@ -2906,13 +2965,13 @@ function DashboardGuruContent() {
 
                             <div className="min-w-0 rounded-xl border border-indigo-200/70 bg-indigo-50/50 px-2 py-1.5">
                               <span className="block text-[9px] font-black uppercase tracking-wider text-indigo-800/70">
-                                👔 Guru Wali
+                                👔 Guru PKL
                               </span>
                               <p
                                 className="mt-0.5 truncate text-[11px] font-bold text-slate-800"
-                                title={siswa.namaGuru || ""}
+                                title={guruPklNama}
                               >
-                                {siswa.namaGuru || "-"}
+                                {guruPklNama || "-"}
                               </p>
                             </div>
                           </div>
