@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { getGuru, getMapelByGuru, getPresensiMapelGrid } from "../lib/api";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { getGuru, getMapelByGuru, getPresensiMapelGrid, uploadJawabanSiswa, getTugasMapel, getJawabanSiswa } from "../lib/api";
+
+export function checkIsOnlineMapel(m) {
+  if (!m) return false;
+  const ket = String(m.keterangan || "").toUpperCase();
+  const jns = String(m.jenisMapel || "").toUpperCase();
+  const nama = String(m.namaMapel || "").toUpperCase();
+  return ket.includes("ONLINE") || jns.includes("ONLINE") || nama.includes("ONLINE");
+}
 
 function warnaStatus(status) {
   switch (status) {
@@ -29,18 +37,8 @@ function formatTanggalMapel(tglStr) {
       const month = Number(parts[1]) - 1;
       const day = Number(parts[2]);
       const months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "Mei",
-        "Jun",
-        "Jul",
-        "Agu",
-        "Sep",
-        "Okt",
-        "Nov",
-        "Des",
+        "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+        "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
       ];
       return `${day} ${months[month] || parts[1]} ${year}`;
     }
@@ -52,35 +50,46 @@ function formatTanggalMapel(tglStr) {
 
 export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
   const [loading, setLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStageText, setLoadingStageText] = useState("");
   const [mapelList, setMapelList] = useState([]);
   const [selectedMapelId, setSelectedMapelId] = useState(null);
   const [error, setError] = useState("");
   const [lastSync, setLastSync] = useState(null);
+
+  // State untuk fitur upload tugas (mapel online)
+  const [tugasPerMapel, setTugasPerMapel] = useState({}); // { idMapel: { pertemuanKe: [tugas] } }
+  const [uploadState, setUploadState] = useState({}); // { "idMapel_pKe": { file, keterangan, loading, sukses, error } }
+  const [pDipilihUpload, setPDipilihUpload] = useState(1);
+  const fileInputRefs = useRef({});
 
   const CACHE_KEY = `cache_mapel_siswa_${user?.id}`;
 
   const loadDataMapel = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
+    setLoadingProgress(15);
+    setLoadingStageText("Menghubungkan ke server akademik...");
     setError("");
 
     try {
-      // 1. Ambil daftar semua guru
       const resGuru = await getGuru();
+      setLoadingProgress(32);
+      setLoadingStageText("Mencocokkan daftar guru mata pelajaran...");
       const daftarGuru =
         resGuru?.success && Array.isArray(resGuru.data) ? resGuru.data : [];
 
       if (daftarGuru.length === 0) {
         setMapelList([]);
+        setLoadingProgress(100);
+        setTimeout(() => setLoading(false), 250);
         return;
       }
 
-      // Ambil kelas siswa dari nama: "Nama Siswa [X TO 1]"
       const namaMentah = String(user?.nama || "");
       const matchKelas = namaMentah.match(/\[(.*?)\]/);
       const kelasSiswa = matchKelas ? matchKelas[1].trim().toLowerCase() : "";
 
-      // 2. Cari mapel dari guru-guru secara paralel
       const mapelPromises = daftarGuru.map(async (g) => {
         try {
           const res = await getMapelByGuru(g.ID || g.id || g.idGuru);
@@ -96,14 +105,12 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
       });
 
       const hasilSemuaMapel = (await Promise.all(mapelPromises)).flat();
+      setLoadingProgress(55);
+      setLoadingStageText("Memeriksa rombel & kurikulum mata pelajaran...");
 
-      // 3. Filter mapel yang relevan bagi siswa:
-      // Prioritaskan mapel yang kelasnya cocok dengan kelas siswa, atau periksa semua mapel
       const mapelKandidat = hasilSemuaMapel.filter((m) => {
         if (!kelasSiswa) return true;
-        const kelasMapel = String(m.kelas || "")
-          .trim()
-          .toLowerCase();
+        const kelasMapel = String(m.kelas || "").trim().toLowerCase();
         return (
           !kelasMapel ||
           kelasMapel === kelasSiswa ||
@@ -112,11 +119,9 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
         );
       });
 
-      // Target mapel yang akan diperiksa presensi grid-nya
       const targetMapelList =
         mapelKandidat.length > 0 ? mapelKandidat : hasilSemuaMapel;
 
-      // 4. Periksa keterdaftaran & presensi siswa di setiap mapel
       const gridPromises = targetMapelList.map(async (m) => {
         try {
           const resGrid = await getPresensiMapelGrid(m.idGuru, m.idMapel);
@@ -127,24 +132,17 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
             (s) => String(s.idSiswa).trim() === String(user.id).trim(),
           );
 
-          // Jika siswa terdaftar di mapel ini:
           if (isEnrolled) {
+            const isOnline = checkIsOnlineMapel(m);
             const presensiSemua = resGrid.data.presensi || [];
             const presensiSaya = presensiSemua.filter(
               (p) => String(p.idSiswa).trim() === String(user.id).trim(),
             );
 
-            // Hitung statistik
-            let hadir = 0;
-            let sakit = 0;
-            let izin = 0;
-            let alfa = 0;
-            let cabut = 0;
-            let totalNilai = 0;
-            let jumlahNilaiAda = 0;
-
-            // Kumpulkan per pertemuan
+            let hadir = 0, sakit = 0, izin = 0, alfa = 0, cabut = 0;
+            let totalNilai = 0, jumlahNilaiAda = 0;
             const pertemuanMap = {};
+
             presensiSaya.forEach((p) => {
               const pKe = Number(p.pertemuanKe);
               if (pKe) {
@@ -152,8 +150,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                   pertemuanKe: pKe,
                   tanggal: p.tanggal || "",
                   status: p.status || "-",
-                  nilai:
-                    p.nilai !== undefined && p.nilai !== "" ? p.nilai : null,
+                  nilai: p.nilai !== undefined && p.nilai !== "" ? p.nilai : null,
                 };
 
                 if (p.status === "Hadir") hadir++;
@@ -162,46 +159,53 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                 else if (p.status === "Alfa") alfa++;
                 else if (p.status === "Cabut") cabut++;
 
-                if (
-                  p.nilai !== null &&
-                  p.nilai !== undefined &&
-                  p.nilai !== ""
-                ) {
+                if (p.nilai !== null && p.nilai !== undefined && p.nilai !== "") {
                   const val = Number(p.nilai);
-                  if (!isNaN(val)) {
-                    totalNilai += val;
-                    jumlahNilaiAda++;
-                  }
+                  if (!isNaN(val)) { totalNilai += val; jumlahNilaiAda++; }
                 }
               }
             });
 
-            // Urutkan riwayat pertemuan
+            // Untuk Mapel Online: gabungkan pertemuan dari presensi semua siswa
+            if (isOnline) {
+              presensiSemua.forEach((p) => {
+                const pKe = Number(p.pertemuanKe);
+                if (pKe && !pertemuanMap[pKe]) {
+                  pertemuanMap[pKe] = {
+                    pertemuanKe: pKe,
+                    tanggal: p.tanggal || "",
+                    status: "Belum Tercatat",
+                    nilai: null,
+                  };
+                }
+              });
+
+              // Jika tetap kosong (guru belum input presensi), buat minimal Pertemuan 1 agar siswa langsung bisa upload tugas
+              if (Object.keys(pertemuanMap).length === 0) {
+                pertemuanMap[1] = {
+                  pertemuanKe: 1,
+                  tanggal: new Date().toLocaleDateString("en-CA"),
+                  status: "Online",
+                  nilai: null,
+                };
+              }
+            }
+
             const pertemuanList = Object.values(pertemuanMap).sort(
               (a, b) => a.pertemuanKe - b.pertemuanKe,
             );
 
             const totalPertemuan = pertemuanList.length;
-            const persentaseHadir =
-              totalPertemuan > 0
-                ? Math.round((hadir / totalPertemuan) * 100)
-                : 0;
-            const rataRataNilai =
-              jumlahNilaiAda > 0
-                ? Math.round((totalNilai / jumlahNilaiAda) * 10) / 10
-                : null;
+            const persentaseHadir = totalPertemuan > 0
+              ? Math.round((hadir / totalPertemuan) * 100) : 0;
+            const rataRataNilai = jumlahNilaiAda > 0
+              ? Math.round((totalNilai / jumlahNilaiAda) * 10) / 10 : null;
 
             return {
               ...m,
-              totalPertemuan,
-              hadir,
-              sakit,
-              izin,
-              alfa,
-              cabut,
-              persentaseHadir,
-              rataRataNilai,
-              pertemuanList,
+              isOnline,
+              totalPertemuan, hadir, sakit, izin, alfa, cabut,
+              persentaseHadir, rataRataNilai, pertemuanList,
             };
           }
         } catch (e) {
@@ -210,9 +214,13 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
         return null;
       });
 
-      const mapelSiswaDitemukan = (await Promise.all(gridPromises)).filter(
-        Boolean,
-      );
+      setLoadingProgress(76);
+      setLoadingStageText("Mengambil riwayat kehadiran & nilai siswa...");
+
+      const mapelSiswaDitemukan = (await Promise.all(gridPromises)).filter(Boolean);
+
+      setLoadingProgress(88);
+      setLoadingStageText("Menyiapkan materi tugas & riwayat upload online...");
 
       setMapelList(mapelSiswaDitemukan);
       if (mapelSiswaDitemukan.length > 0 && !selectedMapelId) {
@@ -220,12 +228,83 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
       }
 
       const syncTime = new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
+        hour: "2-digit", minute: "2-digit",
       });
       setLastSync(syncTime);
 
-      // Simpan ke cache
+      // Load tugas guru & jawaban siswa untuk mapel online
+      const onlineMapels = mapelSiswaDitemukan.filter((m) => checkIsOnlineMapel(m));
+      await Promise.all(
+        onlineMapels.map(async (m) => {
+          try {
+            // 1. Ambil tugas dari guru
+            const resTugas = await getTugasMapel(m.idMapel, "");
+            if (resTugas?.success && Array.isArray(resTugas.data)) {
+              const tugasMap = {};
+              resTugas.data.forEach((t) => {
+                const pKe = String(t.pertemuanKe || "1");
+                if (!tugasMap[pKe]) tugasMap[pKe] = [];
+                tugasMap[pKe].push(t);
+              });
+              setTugasPerMapel((prev) => ({ ...prev, [m.idMapel]: tugasMap }));
+
+              // Pastikan jika ada tugas pertemuan yang belum ada di pertemuanList, tambahkan
+              setMapelList((prevList) =>
+                prevList.map((mapelItem) => {
+                  if (mapelItem.idMapel === m.idMapel) {
+                    const existingP = new Set(
+                      (mapelItem.pertemuanList || []).map((p) => Number(p.pertemuanKe))
+                    );
+                    const tambahan = [];
+                    resTugas.data.forEach((t) => {
+                      const pKe = Number(t.pertemuanKe);
+                      if (pKe && !existingP.has(pKe)) {
+                        existingP.add(pKe);
+                        tambahan.push({
+                          pertemuanKe: pKe,
+                          tanggal: t.createdAt ? t.createdAt.substring(0, 10) : "",
+                          status: "Ada Tugas",
+                          nilai: null,
+                        });
+                      }
+                    });
+                    if (tambahan.length > 0) {
+                      const baru = [...(mapelItem.pertemuanList || []), ...tambahan].sort(
+                        (a, b) => a.pertemuanKe - b.pertemuanKe
+                      );
+                      return { ...mapelItem, pertemuanList: baru };
+                    }
+                  }
+                  return mapelItem;
+                })
+              );
+            }
+
+            // 2. Ambil riwayat upload jawaban siswa dari server
+            const resJwb = await getJawabanSiswa(m.idMapel, "", user.id);
+            if (resJwb?.success && Array.isArray(resJwb.data)) {
+              const jMap = {};
+              resJwb.data.forEach((j) => {
+                const key = `${m.idMapel}_${j.pertemuanKe}`;
+                jMap[key] = {
+                  sukses: true,
+                  fileUrl: j.fileUrl,
+                  namaFile: j.namaFile || "Berkas Terkirim",
+                  keterangan: j.keterangan || "",
+                  waktu: j.createdAt || "",
+                };
+              });
+              setUploadState((prev) => ({ ...prev, ...jMap }));
+            }
+          } catch (e) {
+            console.error("Error load tugas/jawaban online siswa:", e);
+          }
+        })
+      );
+
+      setLoadingProgress(100);
+      setLoadingStageText("Data mata pelajaran siap!");
+
       try {
         localStorage.setItem(
           CACHE_KEY,
@@ -236,13 +315,14 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
       console.error("Gagal memuat mapel siswa:", err);
       setError("Gagal menyinkronkan data mata pelajaran dari server.");
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 350);
     }
   }, [user?.id, user?.nama, CACHE_KEY, selectedMapelId]);
 
   useEffect(() => {
     if (isOpen && user?.id) {
-      // Baca cache dulu
       try {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
@@ -261,10 +341,81 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
     }
   }, [isOpen, user?.id]);
 
+  // Handler upload jawaban siswa
+  const handleUploadJawaban = async (mapelId, pertemuanKe, idTugas) => {
+    const stateKey = `${mapelId}_${pertemuanKe}`;
+    const current = uploadState[stateKey] || {};
+    const file = current.file;
+    if (!file) { alert("Pilih file terlebih dahulu."); return; }
+
+    setUploadState((prev) => ({
+      ...prev,
+      [stateKey]: { ...current, loading: true, error: "", sukses: false },
+    }));
+
+    try {
+      // Baca file sebagai base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const result = await uploadJawabanSiswa({
+        idSiswa: user.id,
+        namaSiswa: String(user.nama || "").replace(/\s*\[.*?\]\s*/g, "").trim(),
+        idMapel: mapelId,
+        idTugas: idTugas || "",
+        pertemuanKe,
+        keterangan: current.keterangan || "",
+        fileBase64: base64,
+        namaFile: file.name,
+        mimeType: file.type || "application/octet-stream",
+      });
+
+      if (result?.success) {
+        setUploadState((prev) => ({
+          ...prev,
+          [stateKey]: {
+            ...current,
+            loading: false,
+            sukses: true,
+            file: null,
+            keterangan: "",
+            namaFile: file.name,
+            fileUrl: result.data?.fileUrl || "",
+          },
+        }));
+      } else {
+        setUploadState((prev) => ({
+          ...prev,
+          [stateKey]: {
+            ...current,
+            loading: false,
+            error: result?.message || "Gagal mengunggah jawaban.",
+          },
+        }));
+      }
+    } catch (err) {
+      console.error("Error upload jawaban:", err);
+      setUploadState((prev) => ({
+        ...prev,
+        [stateKey]: { ...current, loading: false, error: "Terjadi kesalahan saat mengunggah file." },
+      }));
+    }
+  };
+
   if (!isOpen) return null;
 
   const mapelAktif =
     mapelList.find((m) => m.idMapel === selectedMapelId) || mapelList[0];
+
+  // Deteksi apakah mapel aktif adalah mapel online
+  const isMapelOnline = checkIsOnlineMapel(mapelAktif);
+  const keteranganBersih = String(mapelAktif?.keterangan || "")
+    .replace(/^\[ONLINE\]\s*/i, "")
+    .trim();
 
   return (
     <div
@@ -287,7 +438,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                   Akademik &middot; Kehadiran Mapel
                 </div>
                 <h3 className="text-base sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-100">
-                  Presensi & Nilai Mata Pelajaran
+                  Presensi &amp; Nilai Mata Pelajaran
                 </h3>
                 <p className="text-[11px] sm:text-xs text-blue-200 font-medium">
                   Pantau kehadiran dan nilai tiap pertemuan yang tercatat oleh
@@ -297,6 +448,12 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {loading && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/25 border border-amber-400/40 text-amber-300 text-[11px] font-black shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                  <span>{loadingProgress}%</span>
+                </div>
+              )}
               <button
                 onClick={loadDataMapel}
                 disabled={loading}
@@ -330,7 +487,27 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
               </span>
             )}
           </div>
+          {loading && (
+            <div className="flex items-center gap-2 text-xs text-blue-700 font-black">
+              <span className="truncate max-w-[180px] hidden md:inline text-[11px] font-bold text-slate-500">
+                {loadingStageText}
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200">
+                {loadingProgress}%
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* PROGRESS BAR PERSENTASE DI ATAS KONTEN */}
+        {loading && (
+          <div className="shrink-0 w-full bg-slate-200/90 h-2 overflow-hidden border-b border-slate-300 shadow-inner">
+            <div
+              className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 transition-all duration-300 ease-out"
+              style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+            />
+          </div>
+        )}
 
         {/* KONTEN UTAMA */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-5">
@@ -342,17 +519,43 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
           )}
 
           {loading && mapelList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="relative h-12 w-12 mb-3">
-                <div className="absolute inset-0 rounded-full border-3 border-blue-200" />
-                <div className="absolute inset-0 rounded-full border-3 border-blue-600 border-t-transparent animate-spin" />
+            <div className="flex flex-col items-center justify-center py-12 px-4 sm:px-8 text-center max-w-md mx-auto my-4">
+              {/* Meter Lingkaran Persentase */}
+              <div className="relative flex items-center justify-center mb-6">
+                <div className="w-24 h-24 rounded-full border-4 border-slate-200 border-t-blue-600 border-r-indigo-500 animate-spin" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-slate-800 tracking-tight">
+                    {loadingProgress}%
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    Memuat
+                  </span>
+                </div>
               </div>
-              <p className="text-sm font-bold text-slate-700">
-                Menyinkronkan Daftar Mapel...
-              </p>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Mencocokkan kelas dan kehadiran siswa dari guru mata pelajaran
-              </p>
+
+              {/* Box Progress Bar Persentase */}
+              <div className="w-full space-y-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span className="truncate max-w-[280px] text-left text-blue-900 font-extrabold">
+                    {loadingStageText || "Menyiapkan mata pelajaran..."}
+                  </span>
+                  <span className="text-blue-700 font-black shrink-0 ml-2 text-sm">
+                    {loadingProgress}%
+                  </span>
+                </div>
+
+                {/* Bar Persentase */}
+                <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 shadow-inner">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 shadow-sm transition-all duration-300 ease-out relative"
+                    style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+                  />
+                </div>
+
+                <p className="text-[11px] text-slate-400 font-medium text-left leading-relaxed">
+                  Menghubungkan ke database sekolah untuk mengambil data kelas, kehadiran, dan materi tugas siswa...
+                </p>
+              </div>
             </div>
           ) : mapelList.length === 0 ? (
             <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-8 sm:p-12 text-center shadow-sm">
@@ -377,6 +580,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
               <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                 {mapelList.map((m) => {
                   const isSelected = m.idMapel === mapelAktif?.idMapel;
+                  const mIsOnline = checkIsOnlineMapel(m);
                   return (
                     <button
                       key={m.idMapel}
@@ -388,15 +592,20 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-base">📖</span>
+                        <span className="text-base">{mIsOnline ? "🌐" : "📖"}</span>
                         <div>
                           <div className="text-xs sm:text-sm font-black leading-tight">
                             {m.namaMapel}
                           </div>
                           <div
-                            className={`text-[10px] font-medium mt-0.5 ${isSelected ? "text-blue-200" : "text-slate-400"}`}
+                            className={`text-[10px] font-medium mt-0.5 flex items-center gap-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}
                           >
                             {m.namaGuru} &middot; {m.kelas || "Semua"}
+                            {mIsOnline && (
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${isSelected ? "bg-emerald-400/30 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>
+                                ONLINE
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -418,6 +627,11 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                         <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider">
                           Kelas {mapelAktif.kelas || "-"}
                         </span>
+                        {isMapelOnline && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                            🌐 Mapel Online
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 font-medium">
                         Guru Pengampu:{" "}
@@ -425,9 +639,9 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                           {mapelAktif.namaGuru}
                         </strong>
                       </p>
-                      {mapelAktif.keterangan && (
+                      {keteranganBersih && (
                         <p className="text-[11px] text-slate-400 italic mt-0.5">
-                          {mapelAktif.keterangan}
+                          {keteranganBersih}
                         </p>
                       )}
                     </div>
@@ -450,60 +664,260 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
 
                   {/* GRID STATISTIK KEHADIRAN MAPEL */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
-                    <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block mb-0.5">
-                        Hadir
-                      </span>
-                      <span className="text-xl font-black text-emerald-800">
-                        {mapelAktif.hadir}
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl bg-blue-50 border border-blue-200 p-3 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 block mb-0.5">
-                        Sakit
-                      </span>
-                      <span className="text-xl font-black text-blue-800">
-                        {mapelAktif.sakit}
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 block mb-0.5">
-                        Izin
-                      </span>
-                      <span className="text-xl font-black text-amber-800">
-                        {mapelAktif.izin}
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 block mb-0.5">
-                        Alfa
-                      </span>
-                      <span className="text-xl font-black text-rose-800">
-                        {mapelAktif.alfa}
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl bg-purple-50 border border-purple-200 p-3 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 block mb-0.5">
-                        Cabut
-                      </span>
-                      <span className="text-xl font-black text-purple-800">
-                        {mapelAktif.cabut}
-                      </span>
-                    </div>
-
+                    {[
+                      { label: "Hadir", val: mapelAktif.hadir, cls: "emerald" },
+                      { label: "Sakit", val: mapelAktif.sakit, cls: "blue" },
+                      { label: "Izin", val: mapelAktif.izin, cls: "amber" },
+                      { label: "Alfa", val: mapelAktif.alfa, cls: "rose" },
+                      { label: "Cabut", val: mapelAktif.cabut, cls: "purple" },
+                    ].map(({ label, val, cls }) => (
+                      <div key={label} className={`rounded-2xl bg-${cls}-50 border border-${cls}-200 p-3 text-center`}>
+                        <span className={`text-[10px] font-black uppercase tracking-wider text-${cls}-700 block mb-0.5`}>{label}</span>
+                        <span className={`text-xl font-black text-${cls}-800`}>{val}</span>
+                      </div>
+                    ))}
                     <div className="rounded-2xl bg-indigo-50 border border-indigo-200 p-3 text-center col-span-2 sm:col-span-1">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 block mb-0.5">
-                        % Kehadiran
-                      </span>
-                      <span className="text-xl font-black text-indigo-800">
-                        {mapelAktif.persentaseHadir}%
-                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 block mb-0.5">% Kehadiran</span>
+                      <span className="text-xl font-black text-indigo-800">{mapelAktif.persentaseHadir}%</span>
                     </div>
                   </div>
+
+                  {/* ======================================================== */}
+                  {/* PANEL UTAMA: UPLOAD TUGAS SISWA (MAPEL ONLINE)           */}
+                  {/* ======================================================== */}
+                  {isMapelOnline && (
+                    <div className="rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-blue-50 border-2 border-emerald-300 p-4 sm:p-6 shadow-md space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white text-xl shadow-sm">
+                            📤
+                          </div>
+                          <div>
+                            <h5 className="text-sm sm:text-base font-black text-emerald-950 uppercase tracking-wide flex items-center gap-2">
+                              <span>Upload &amp; Pengumpulan Tugas</span>
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">ONLINE</span>
+                            </h5>
+                            <p className="text-[11px] text-emerald-700 font-medium">
+                              Kirimkan berkas tugas/jawaban Anda langsung ke Guru Mapel
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* PILIH PERTEMUAN */}
+                        <div className="flex items-center gap-1.5 shrink-0 bg-white/90 border border-emerald-300 rounded-xl px-2.5 py-1">
+                          <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
+                            Pertemuan:
+                          </span>
+                          <select
+                            value={pDipilihUpload}
+                            onChange={(e) => setPDipilihUpload(Number(e.target.value))}
+                            className="bg-transparent font-black text-xs text-emerald-900 outline-none cursor-pointer"
+                          >
+                            {Array.from(
+                              {
+                                length: Math.max(
+                                  mapelAktif.pertemuanList?.length || 1,
+                                  Object.keys(tugasPerMapel[mapelAktif.idMapel] || {}).length || 1,
+                                  5
+                                ),
+                              },
+                              (_, idx) => idx + 1
+                            ).map((pNum) => (
+                              <option key={pNum} value={pNum}>
+                                Pertemuan {pNum}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* INFO TUGAS DARI GURU UNTUK PERTEMUAN INI */}
+                      {(() => {
+                        const tugasList = tugasPerMapel[mapelAktif.idMapel]?.[String(pDipilihUpload)] || [];
+                        const stateKey = `${mapelAktif.idMapel}_${pDipilihUpload}`;
+                        const upState = uploadState[stateKey] || {};
+
+                        return (
+                          <div className="space-y-3">
+                            {tugasList.length > 0 ? (
+                              <div className="rounded-2xl bg-white border border-blue-200 p-3.5 space-y-2 shadow-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                                    📋 Modul / Soal dari Guru (Pertemuan {pDipilihUpload})
+                                  </span>
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                    {tugasList.length} Tugas
+                                  </span>
+                                </div>
+                                {tugasList.map((t, ti) => (
+                                  <div key={ti} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-black text-slate-800">
+                                        {t.judulTugas || `Tugas Pertemuan ${pDipilihUpload}`}
+                                      </p>
+                                      {t.deskripsi && (
+                                        <p className="text-[10px] text-slate-600 mt-0.5">
+                                          {t.deskripsi}
+                                        </p>
+                                      )}
+                                    </div>
+                                    {t.fileUrl && (
+                                      <a
+                                        href={t.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black shadow-xs transition-all shrink-0 active:scale-95"
+                                      >
+                                        <span>📥</span>
+                                        <span>Unduh Lampiran Guru</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-xl bg-white/70 border border-slate-200 px-3 py-2 text-[10px] text-slate-500 font-medium italic flex items-center gap-1.5">
+                                <span>ℹ️</span>
+                                <span>Guru belum melampirkan modul tugas untuk Pertemuan {pDipilihUpload}. Anda tetap dapat mengunggah berkas tugas di bawah ini.</span>
+                              </div>
+                            )}
+
+                            {/* STATUS & FORM UPLOAD JAWABAN SISWA */}
+                            {upState.sukses ? (
+                              <div className="rounded-2xl bg-emerald-100 border border-emerald-300 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-2xl">✅</span>
+                                  <div>
+                                    <p className="text-xs font-black text-emerald-900">
+                                      Tugas Pertemuan {pDipilihUpload} Berhasil Dikirim!
+                                    </p>
+                                    <p className="text-[10px] text-emerald-700 font-medium">
+                                      Berkas: <strong>{upState.namaFile || "Berkas Jawaban"}</strong>
+                                      {upState.waktu ? ` · Dikirim ${upState.waktu.substring(0, 10)}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {upState.fileUrl && (
+                                    <a
+                                      href={upState.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3 py-1.5 rounded-xl bg-white border border-emerald-400 text-emerald-800 text-[10px] font-black hover:bg-emerald-50 transition-all shadow-xs"
+                                    >
+                                      📄 Buka Berkas
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setUploadState((prev) => ({ ...prev, [stateKey]: {} }))}
+                                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black transition-all shadow-xs active:scale-95"
+                                  >
+                                    🔄 Ganti Berkas
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl bg-white border border-emerald-200 p-3.5 sm:p-4 space-y-3 shadow-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                    <span>📎</span>
+                                    <span>Pilih Berkas Jawaban (Pertemuan {pDipilihUpload})</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    PDF, DOC, Gambar, ZIP (Maks 10MB)
+                                  </span>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="cursor-pointer block">
+                                    <div
+                                      className={`rounded-xl border-2 border-dashed p-3 text-center transition-all ${
+                                        upState.file
+                                          ? "border-emerald-500 bg-emerald-50/80 text-emerald-800"
+                                          : "border-slate-300 bg-slate-50 hover:border-emerald-400 text-slate-600"
+                                      }`}
+                                    >
+                                      {upState.file ? (
+                                        <div className="text-xs font-black truncate">
+                                          📄 {upState.file.name}
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs font-bold text-slate-500">
+                                          📂 Klik untuk memilih berkas...
+                                        </div>
+                                      )}
+                                    </div>
+                                    <input
+                                      type="file"
+                                      className="hidden"
+                                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
+                                      onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) {
+                                          setUploadState((prev) => ({
+                                            ...prev,
+                                            [stateKey]: {
+                                              ...prev[stateKey],
+                                              file: f,
+                                              error: "",
+                                              sukses: false,
+                                            },
+                                          }));
+                                        }
+                                      }}
+                                    />
+                                  </label>
+
+                                  <input
+                                    type="text"
+                                    value={upState.keterangan || ""}
+                                    onChange={(e) =>
+                                      setUploadState((prev) => ({
+                                        ...prev,
+                                        [stateKey]: {
+                                          ...prev[stateKey],
+                                          keterangan: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Catatan pengerjaan (opsional)..."
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+                                  />
+                                </div>
+
+                                {upState.error && (
+                                  <p className="text-xs font-bold text-rose-600">
+                                    ⚠️ {upState.error}
+                                  </p>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUploadJawaban(
+                                      mapelAktif.idMapel,
+                                      pDipilihUpload,
+                                      tugasList[0]?.idTugas || ""
+                                    )
+                                  }
+                                  disabled={!upState.file || upState.loading}
+                                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-98 text-white font-black text-xs py-2.5 shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                >
+                                  <span>{upState.loading ? "⏳" : "📤"}</span>
+                                  <span>
+                                    {upState.loading
+                                      ? "Sedang Mengirim Berkas ke Server..."
+                                      : `Kirim Tugas Pertemuan ${pDipilihUpload}`}
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {/* DAFTAR PERTEMUAN */}
                   <div className="space-y-3 pt-2">
@@ -512,6 +926,11 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                         📅 Riwayat Pertemuan (
                         {mapelAktif.pertemuanList?.length || 0})
                       </h5>
+                      {isMapelOnline && (
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                          🌐 Kelas Online — Upload Tugas Tersedia
+                        </span>
+                      )}
                     </div>
 
                     {!mapelAktif.pertemuanList ||
@@ -521,43 +940,161 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                         ini.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {mapelAktif.pertemuanList.map((item) => (
-                          <div
-                            key={item.pertemuanKe}
-                            className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50/80 border border-slate-200 hover:bg-slate-100/80 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 shadow-sm">
-                                P{item.pertemuanKe}
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-slate-800">
-                                  Pertemuan {item.pertemuanKe}
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-medium">
-                                  {formatTanggalMapel(item.tanggal)}
-                                </div>
-                              </div>
-                            </div>
+                      <div className="space-y-3">
+                        {mapelAktif.pertemuanList.map((item) => {
+                          const stateKey = `${mapelAktif.idMapel}_${item.pertemuanKe}`;
+                          const upState = uploadState[stateKey] || {};
+                          const tugasGuru = tugasPerMapel[mapelAktif.idMapel]?.[String(item.pertemuanKe)] || [];
 
-                            <div className="flex items-center gap-2">
-                              {item.nilai !== null &&
-                                item.nilai !== undefined && (
-                                  <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-black shadow-xs">
-                                    ⭐ {item.nilai}
+                          return (
+                            <div
+                              key={item.pertemuanKe}
+                              className={`rounded-2xl border transition-colors ${
+                                isMapelOnline
+                                  ? "bg-slate-50/80 border-emerald-100"
+                                  : "bg-slate-50/80 border-slate-200"
+                              }`}
+                            >
+                              {/* Baris utama presensi */}
+                              <div className="flex items-center justify-between gap-3 p-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-black text-slate-700 shadow-sm ${isMapelOnline ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200"}`}>
+                                    P{item.pertemuanKe}
+                                  </div>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800">
+                                      Pertemuan {item.pertemuanKe}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-medium">
+                                      {formatTanggalMapel(item.tanggal)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {item.nilai !== null && item.nilai !== undefined && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-black shadow-xs">
+                                      ⭐ {item.nilai}
+                                    </span>
+                                  )}
+                                  <span className={`px-2.5 py-1 rounded-xl text-[11px] font-black border shadow-xs ${warnaStatus(item.status)}`}>
+                                    {item.status}
                                   </span>
-                                )}
-                              <span
-                                className={`px-2.5 py-1 rounded-xl text-[11px] font-black border shadow-xs ${warnaStatus(
-                                  item.status,
-                                )}`}
-                              >
-                                {item.status}
-                              </span>
+                                </div>
+                              </div>
+
+                              {/* AREA UPLOAD TUGAS (hanya untuk mapel online) */}
+                              {isMapelOnline && (
+                                <div className="px-3 pb-3 space-y-2">
+                                  {/* Tugas dari guru */}
+                                  {tugasGuru.length > 0 ? (
+                                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-1.5">
+                                      <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                                        📋 Tugas dari Guru
+                                      </p>
+                                      {tugasGuru.map((t, ti) => (
+                                        <div key={ti} className="flex items-center justify-between gap-2">
+                                          <div>
+                                            <p className="text-xs font-bold text-slate-800">{t.judulTugas || `Tugas P-${item.pertemuanKe}`}</p>
+                                            {t.deskripsi && <p className="text-[10px] text-slate-500">{t.deskripsi}</p>}
+                                          </div>
+                                          {t.fileUrl && (
+                                            <a
+                                              href={t.fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-3 py-1.5 transition-all"
+                                            >
+                                              📥 Unduh
+                                            </a>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 text-[10px] text-slate-400 font-medium italic">
+                                      📋 Belum ada tugas dari guru untuk pertemuan ini
+                                    </div>
+                                  )}
+
+                                  {/* Area upload jawaban siswa */}
+                                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+                                      📤 Upload Jawaban / Tugas Kamu
+                                    </p>
+
+                                    {upState.sukses ? (
+                                      <div className="flex items-center gap-2 bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2">
+                                        <span className="text-emerald-600 text-base">✅</span>
+                                        <div>
+                                          <p className="text-xs font-black text-emerald-800">Berhasil dikirim!</p>
+                                          {upState.namaFile && <p className="text-[10px] text-emerald-600">{upState.namaFile}</p>}
+                                          {upState.fileUrl && (
+                                            <a href={upState.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 underline font-bold">Lihat file</a>
+                                          )}
+                                        </div>
+                                        <button
+                                          onClick={() => setUploadState((prev) => ({ ...prev, [stateKey]: {} }))}
+                                          className="ml-auto text-[10px] text-slate-500 hover:text-slate-700 font-bold underline"
+                                        >
+                                          Upload ulang
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <label className="flex-1 cursor-pointer">
+                                            <div className={`rounded-lg border-2 border-dashed px-3 py-2 text-center transition-all ${upState.file ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white hover:border-emerald-300"}`}>
+                                              {upState.file ? (
+                                                <div className="text-[10px] font-bold text-emerald-700 truncate">📎 {upState.file.name}</div>
+                                              ) : (
+                                                <div className="text-[10px] text-slate-400 font-medium">📎 Pilih file (PDF, DOC, gambar...)</div>
+                                              )}
+                                            </div>
+                                            <input
+                                              type="file"
+                                              className="hidden"
+                                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
+                                              onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) {
+                                                  setUploadState((prev) => ({
+                                                    ...prev,
+                                                    [stateKey]: { ...prev[stateKey], file: f, error: "", sukses: false },
+                                                  }));
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                          <button
+                                            onClick={() => handleUploadJawaban(mapelAktif.idMapel, item.pertemuanKe, tugasGuru[0]?.idTugas || "")}
+                                            disabled={!upState.file || upState.loading}
+                                            className="shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-2 shadow-sm transition-all disabled:opacity-50 active:scale-95"
+                                          >
+                                            {upState.loading ? "⏳ Mengirim..." : "📤 Kirim"}
+                                          </button>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={upState.keterangan || ""}
+                                          onChange={(e) => setUploadState((prev) => ({
+                                            ...prev,
+                                            [stateKey]: { ...prev[stateKey], keterangan: e.target.value },
+                                          }))}
+                                          placeholder="Keterangan (opsional)"
+                                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] outline-none focus:border-emerald-400 transition-all"
+                                        />
+                                        {upState.error && (
+                                          <p className="text-[10px] text-rose-600 font-bold">⚠️ {upState.error}</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -570,7 +1107,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
         {/* FOOTER */}
         <div className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4 flex items-center justify-between">
           <p className="text-[10px] sm:text-xs text-slate-400 font-medium">
-            Data disinkronkan dengan aplikasi Presensi & Jurnal Guru Mapel
+            Data disinkronkan dengan aplikasi Presensi &amp; Jurnal Guru Mapel
           </p>
           <button
             onClick={onClose}

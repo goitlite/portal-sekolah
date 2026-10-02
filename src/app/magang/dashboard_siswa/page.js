@@ -803,13 +803,13 @@ export default function DashboardSiswa() {
               }}
             />
 
-            {/* 2. KEHADIRAN MAPEL (FITUR BARU) */}
+            {/* 2. TUGAS & KEHADIRAN MAPEL ONLINE */}
             <MenuCard
-              title="Kehadiran Mapel"
-              subtitle="Cek presensi & nilai pelajaran"
+              title="Tugas & Kehadiran Mapel"
+              subtitle="Upload tugas online & presensi mapel"
               icon="📚"
-              bgGrad="from-blue-600 via-indigo-600 to-blue-800 shadow-indigo-500/25 border-amber-300/40"
-              badge="Baru"
+              bgGrad="from-emerald-600 via-teal-600 to-indigo-700 shadow-teal-500/25 border-emerald-300/40"
+              badge="Mapel"
               onClick={() => setShowModalMapel(true)}
             />
 

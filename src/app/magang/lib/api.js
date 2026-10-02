@@ -553,6 +553,54 @@ export async function getJurnalMapel(idGuru, idMapel) {
   return request("getJurnalMapel", { idGuru, idMapel });
 }
 
+// ==========================================
+// MAPEL ONLINE — TUGAS GURU & JAWABAN SISWA
+// ==========================================
+
+/** Guru upload/simpan tugas untuk pertemuan tertentu */
+export async function uploadTugasMapel(data) {
+  return request("uploadTugasMapel", {
+    idGuru: data.idGuru,
+    idMapel: data.idMapel,
+    pertemuanKe: data.pertemuanKe,
+    judulTugas: data.judulTugas || "",
+    deskripsi: data.deskripsi || "",
+    fileUrl: data.fileUrl || "",
+    fileBase64: data.fileBase64 || "",
+    namaFile: data.namaFile || "",
+    mimeType: data.mimeType || "application/pdf",
+  });
+}
+
+/** Ambil tugas yang sudah diupload guru untuk suatu mapel & pertemuan */
+export async function getTugasMapel(idMapel, pertemuanKe) {
+  return request("getTugasMapel", { idMapel, pertemuanKe: pertemuanKe || "" });
+}
+
+/** Siswa upload jawaban/tugas untuk suatu pertemuan mapel */
+export async function uploadJawabanSiswa(data) {
+  return request("uploadJawabanSiswa", {
+    idSiswa: data.idSiswa,
+    namaSiswa: data.namaSiswa || "",
+    idMapel: data.idMapel,
+    idTugas: data.idTugas || "",
+    pertemuanKe: data.pertemuanKe,
+    keterangan: data.keterangan || "",
+    fileBase64: data.fileBase64 || "",
+    namaFile: data.namaFile || "",
+    mimeType: data.mimeType || "application/pdf",
+  });
+}
+
+/** Ambil semua jawaban/upload siswa untuk suatu tugas/pertemuan */
+export async function getJawabanSiswa(idMapel, pertemuanKe, idSiswa) {
+  return request("getJawabanSiswa", {
+    idMapel,
+    pertemuanKe: pertemuanKe || "",
+    idSiswa: idSiswa || "",
+  });
+}
+
 /**
  * ====================================================================
  * GURU WALI KELAS (Presensi Harian + Jurnal Bimbingan)

@@ -5,6 +5,9 @@ import {
   getPresensiMapelGrid,
   savePresensiMapel,
   hapusSiswaMapel,
+  uploadTugasMapel,
+  getTugasMapel,
+  getJawabanSiswa,
 } from "../../lib/api";
 import { generateLaporanMapelPDF } from "./generateLaporanMapelPDF";
 import ModalTambahSiswa from "./kelola/ModalTambahSiswa";
@@ -51,6 +54,17 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   const [showTambahModal, setShowTambahModal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  // State khusus Mapel Online
+  const isMapelOnline = String(mapel?.keterangan || "").startsWith("[ONLINE]");
+  const [tugasMapel, setTugasMapel] = useState({}); // { [pertemuanKe]: tugasObj }
+  const [jawabanSiswa, setJawabanSiswa] = useState({}); // { [`${idSiswa}_${pertemuanKe}`]: jawabanObj }
+  const [modalTugasOpen, setModalTugasOpen] = useState(false);
+  const [targetTugasP, setTargetTugasP] = useState(null);
+  const [judulTugasInput, setJudulTugasInput] = useState("");
+  const [deskripsiTugasInput, setDeskripsiTugasInput] = useState("");
+  const [fileTugasInput, setFileTugasInput] = useState(null);
+  const [uploadingTugas, setUploadingTugas] = useState(false);
+
   // Muat data saat modal dibuka atau mapel berubah
   useEffect(() => {
     if (isOpen && mapel?.idMapel && guru?.id) {
@@ -91,11 +105,103 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
       setTanggalPertemuan(tanggalBaru);
       setJumlahPertemuan(Math.min(PERTEMUAN_MAX, maxP));
       setHasUnsavedChanges(false);
+
+      // Jika mapel online, muat tugas guru dan jawaban siswa
+      if (isMapelOnline) {
+        try {
+          const resTugas = await getTugasMapel(mapel.idMapel, "");
+          if (resTugas?.success && Array.isArray(resTugas.data)) {
+            const tMap = {};
+            resTugas.data.forEach((t) => {
+              if (t.pertemuanKe) tMap[Number(t.pertemuanKe)] = t;
+            });
+            setTugasMapel(tMap);
+          }
+          const resJwb = await getJawabanSiswa(mapel.idMapel, "", "");
+          if (resJwb?.success && Array.isArray(resJwb.data)) {
+            const jMap = {};
+            resJwb.data.forEach((j) => {
+              if (j.idSiswa && j.pertemuanKe) {
+                jMap[`${j.idSiswa}_${j.pertemuanKe}`] = j;
+              }
+            });
+            setJawabanSiswa(jMap);
+          }
+        } catch (errTugas) {
+          console.warn("Gagal memuat data tugas/jawaban online:", errTugas);
+        }
+      }
     } catch (err) {
       console.error("ERROR LOAD GRID PRESENSI MAPEL:", err);
       alert("Gagal memuat data presensi mapel.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function bukaModalTugas(p) {
+    setTargetTugasP(p);
+    const existing = tugasMapel[p];
+    setJudulTugasInput(existing?.judulTugas || `Tugas Pertemuan ${p}`);
+    setDeskripsiTugasInput(existing?.deskripsi || "");
+    setFileTugasInput(null);
+    setModalTugasOpen(true);
+  }
+
+  async function handleSimpanTugas() {
+    if (!targetTugasP) return;
+    if (!judulTugasInput.trim()) {
+      alert("Judul tugas wajib diisi.");
+      return;
+    }
+    setUploadingTugas(true);
+    try {
+      let fileBase64 = "";
+      let namaFile = "";
+      let mimeType = "";
+      if (fileTugasInput) {
+        fileBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(fileTugasInput);
+        });
+        namaFile = fileTugasInput.name;
+        mimeType = fileTugasInput.type || "application/pdf";
+      }
+      const existing = tugasMapel[targetTugasP];
+      const res = await uploadTugasMapel({
+        idGuru: guru.id,
+        idMapel: mapel.idMapel,
+        pertemuanKe: targetTugasP,
+        judulTugas: judulTugasInput.trim(),
+        deskripsi: deskripsiTugasInput.trim(),
+        fileUrl: existing?.fileUrl || "",
+        fileBase64,
+        namaFile,
+        mimeType,
+      });
+
+      if (res?.success) {
+        alert("✅ Tugas berhasil disimpan.");
+        setTugasMapel((prev) => ({
+          ...prev,
+          [targetTugasP]: {
+            ...prev[targetTugasP],
+            judulTugas: judulTugasInput.trim(),
+            deskripsi: deskripsiTugasInput.trim(),
+            fileUrl: res.data?.fileUrl || existing?.fileUrl || "",
+          },
+        }));
+        setModalTugasOpen(false);
+      } else {
+        alert(res?.message || "Gagal menyimpan tugas.");
+      }
+    } catch (e) {
+      console.error("Gagal simpan tugas:", e);
+      alert("Terjadi kesalahan saat mengunggah tugas.");
+    } finally {
+      setUploadingTugas(false);
     }
   }
 
@@ -537,7 +643,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                         {currentPertemuanArray.map((p) => (
                           <th
                             key={p}
-                            className="px-1 py-1.5 font-black border-b-2 border-slate-300 border-l border-slate-200 text-center min-w-[62px] sm:min-w-[70px] sticky top-0 bg-slate-100 z-40"
+                            className={`px-1 py-1.5 font-black border-b-2 border-slate-300 border-l border-slate-200 text-center sticky top-0 bg-slate-100 z-40 ${isMapelOnline ? "min-w-[85px] sm:min-w-[95px]" : "min-w-[62px] sm:min-w-[70px]"}`}
                           >
                             <div className="mb-1 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] text-slate-800">
                               <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-black text-[9px]">
@@ -576,6 +682,29 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                               }
                               className="w-full max-w-[75px] h-[19px] rounded border border-slate-300 text-[8px] sm:text-[9px] px-0.5 py-0 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none mx-auto block cursor-pointer transition-all shadow-inner"
                             />
+
+                            {/* Tombol Tugas Guru untuk Mapel Online */}
+                            {isMapelOnline && (
+                              <div className="mt-1 flex items-center justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => bukaModalTugas(p)}
+                                  className={`text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-all shadow-xs ${
+                                    tugasMapel[p]
+                                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                                      : "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
+                                  }`}
+                                  title={
+                                    tugasMapel[p]
+                                      ? `Edit Tugas P-${p}: ${tugasMapel[p].judulTugas}`
+                                      : "Upload tugas guru untuk pertemuan ini"
+                                  }
+                                >
+                                  <span>{tugasMapel[p] ? "📎" : "➕"}</span>
+                                  <span>{tugasMapel[p] ? "Tugas P" + p : "Tugas"}</span>
+                                </button>
+                              </div>
+                            )}
                           </th>
                         ))}
 
@@ -707,70 +836,119 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                                   key={p}
                                   className="p-0.5 border-b border-slate-200 border-l border-slate-200/80 text-center align-middle hover:bg-blue-100/60 focus-within:bg-blue-100/70 transition-colors"
                                 >
-                                  <div className="flex flex-row items-center justify-center gap-0.5 w-full h-full">
-                                    {/* STATUS SELECT */}
-                                    <select
-                                      value={cell.status}
-                                      onChange={(e) =>
-                                        updateCell(
-                                          s.idSiswa,
-                                          p,
-                                          "status",
-                                          e.target.value,
-                                        )
-                                      }
-                                      className={`cursor-pointer rounded border text-[9px] sm:text-[10px] font-black h-[21px] px-0.5 shadow-xs hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${warnaStatus(cell.status)}`}
-                                      style={{
-                                        width: isHadir ? "35px" : "48px",
-                                        textAlignLast: "center",
-                                      }}
-                                    >
-                                      <option hidden value={cell.status}>
-                                        {isHadir ? "H" : cell.status || "-"}
-                                      </option>
-                                      <option
-                                        value=""
-                                        className="bg-white text-slate-800"
-                                      >
-                                        -
-                                      </option>
-                                      {STATUS_OPTIONS.map((opt) => (
-                                        <option
-                                          key={opt.value}
-                                          value={opt.value}
-                                          className="bg-white text-slate-800"
-                                        >
-                                          {opt.label}
-                                        </option>
-                                      ))}
-                                    </select>
-
-                                    {/* NILAI SELECT (JIKA HADIR) */}
-                                    {isHadir && (
+                                  <div className="flex flex-col items-center justify-center gap-1 w-full h-full py-0.5">
+                                    <div className="flex flex-row items-center justify-center gap-0.5">
+                                      {/* STATUS SELECT */}
                                       <select
-                                        value={cell.nilai}
+                                        value={cell.status}
                                         onChange={(e) =>
                                           updateCell(
                                             s.idSiswa,
                                             p,
-                                            "nilai",
+                                            "status",
                                             e.target.value,
                                           )
                                         }
-                                        title="Nilai Harian"
-                                        className="cursor-pointer rounded border border-emerald-500 text-[9px] sm:text-[10px] h-[21px] px-0.5 text-center font-black bg-white text-emerald-800 shadow-xs hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600"
+                                        className={`cursor-pointer rounded border text-[9px] sm:text-[10px] font-black h-[21px] px-0.5 shadow-xs hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${warnaStatus(cell.status)}`}
                                         style={{
-                                          width: "35px",
+                                          width: isHadir ? "35px" : "48px",
                                           textAlignLast: "center",
                                         }}
                                       >
-                                        <option value="">Nil</option>
-                                        {NILAI_OPTIONS.map((n) => (
-                                          <option key={n} value={n}>
-                                            {n}
+                                        <option hidden value={cell.status}>
+                                          {isHadir ? "H" : cell.status || "-"}
+                                        </option>
+                                        <option
+                                          value=""
+                                          className="bg-white text-slate-800"
+                                        >
+                                          -
+                                        </option>
+                                        {STATUS_OPTIONS.map((opt) => (
+                                          <option
+                                            key={opt.value}
+                                            value={opt.value}
+                                            className="bg-white text-slate-800"
+                                          >
+                                            {opt.label}
                                           </option>
                                         ))}
                                       </select>
+
+                                      {/* NILAI SELECT (JIKA HADIR) */}
+                                      {isHadir && (
+                                        <select
+                                          value={cell.nilai}
+                                          onChange={(e) =>
+                                            updateCell(
+                                              s.idSiswa,
+                                              p,
+                                              "nilai",
+                                              e.target.value,
+                                            )
+                                          }
+                                          title="Nilai Harian"
+                                          className="cursor-pointer rounded border border-emerald-500 text-[9px] sm:text-[10px] h-[21px] px-0.5 text-center font-black bg-white text-emerald-800 shadow-xs hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 transition-all appearance-none outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600"
+                                          style={{
+                                            width: "35px",
+                                            textAlignLast: "center",
+                                          }}
+                                        >
+                                          <option value="">Nil</option>
+                                          {NILAI_OPTIONS.map((n) => (
+                                            <option key={n} value={n}>
+                                              {n}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      )}
+                                    </div>
+
+                                    {/* KHUSUS MAPEL ONLINE: UPLOAD TUGAS GURU & HASIL UPLOAD SISWA */}
+                                    {isMapelOnline && (
+                                      <div className="flex flex-col items-center gap-0.5 w-full pt-1 border-t border-slate-200/60 leading-none">
+                                        {/* Tempat upload tugas untuk siswa dari guru mapel */}
+                                        {tugasMapel[p] ? (
+                                          <a
+                                            href={tugasMapel[p].fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={`Tugas Guru: ${tugasMapel[p].judulTugas || "Buka file"}`}
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-[8px] font-bold border border-blue-200 transition-all max-w-[80px] truncate"
+                                          >
+                                            <span>📎</span>
+                                            <span className="truncate">Tugas Guru</span>
+                                          </a>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => bukaModalTugas(p)}
+                                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-700 text-[7px] font-bold border border-slate-200 transition-all"
+                                            title="Upload tugas guru untuk pertemuan ini"
+                                          >
+                                            <span>➕</span>
+                                            <span>Tugas</span>
+                                          </button>
+                                        )}
+
+                                        {/* Dibawahnya: Hasil upload yang diupload siswa */}
+                                        {jawabanSiswa[`${s.idSiswa}_${p}`] ? (
+                                          <a
+                                            href={jawabanSiswa[`${s.idSiswa}_${p}`].fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={`Hasil upload ${s.nama}: ${jawabanSiswa[`${s.idSiswa}_${p}`].keterangan || "Buka jawaban siswa"}`}
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-[8px] font-extrabold border border-emerald-300 transition-all max-w-[80px] truncate"
+                                          >
+                                            <span>📥</span>
+                                            <span className="truncate">Hasil Siswa</span>
+                                          </a>
+                                        ) : (
+                                          <span className="text-[7px] text-slate-400 font-medium">
+                                            Belum kumpul
+                                          </span>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                 </td>
@@ -917,6 +1095,99 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                 className="w-full rounded-xl bg-slate-100 text-slate-600 text-xs font-bold py-2 hover:bg-slate-200 transition-all"
               >
                 Batal (Kembali Mengedit)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL UPLOAD TUGAS GURU (MAPEL ONLINE) */}
+      {modalTugasOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h4 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                <span>📎</span>
+                <span>Upload Tugas Pertemuan {targetTugasP}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModalTugasOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-black text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Judul Tugas <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={judulTugasInput}
+                  onChange={(e) => setJudulTugasInput(e.target.value)}
+                  placeholder="Contoh: Tugas Mandiri Pertemuan 1"
+                  className="w-full rounded-xl border border-slate-300 p-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Instruksi / Deskripsi (opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={deskripsiTugasInput}
+                  onChange={(e) => setDeskripsiTugasInput(e.target.value)}
+                  placeholder="Petunjuk pengerjaan tugas..."
+                  className="w-full rounded-xl border border-slate-300 p-2 text-xs font-medium text-slate-800 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  File Lampiran / Modul (PDF, Doc, Gambar)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
+                  onChange={(e) => setFileTugasInput(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-black file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                />
+                {tugasMapel[targetTugasP]?.fileUrl && !fileTugasInput && (
+                  <p className="text-[10px] text-emerald-600 mt-1">
+                    ✓ Sudah ada file tugas terunggah (
+                    <a
+                      href={tugasMapel[targetTugasP].fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-bold"
+                    >
+                      Buka File
+                    </a>
+                    ). Pilih file baru jika ingin mengganti.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={handleSimpanTugas}
+                disabled={uploadingTugas}
+                className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-2.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                {uploadingTugas ? "⏳ Menyimpan..." : "💾 Simpan Tugas"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTugasOpen(false)}
+                className="rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 px-4 transition-all"
+              >
+                Batal
               </button>
             </div>
           </div>
