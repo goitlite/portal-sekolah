@@ -217,12 +217,13 @@ export default function KelolaMapelPage() {
 
   // --- AMBIL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA MAPEL ---
   const loadStatsMapel = useCallback(
-    async (idMapel) => {
-      if (!guru?.id || !idMapel) return;
+    async (idMapel, idGuruParam = null) => {
+      const activeGuruId = idGuruParam || guru?.id || getSession()?.id;
+      if (!activeGuruId || !idMapel) return;
       setLoadingStatsMapel((prev) => ({ ...prev, [idMapel]: true }));
 
       try {
-        const res = await getPresensiMapelGrid(guru.id, idMapel);
+        const res = await getPresensiMapelGrid(activeGuruId, idMapel);
         if (res && res.success && res.data) {
           const siswaList = res.data.siswa || [];
           const presensiList = res.data.presensi || [];
@@ -388,15 +389,18 @@ export default function KelolaMapelPage() {
   }, [router]);
 
   async function loadMapel(idGuru) {
+    const activeGuruId = idGuru || guru?.id || getSession()?.id;
+    if (!activeGuruId) return;
+
     try {
       setLoading(true);
       setError("");
-      const result = await getMapelByGuru(idGuru);
+      const result = await getMapelByGuru(activeGuruId);
       if (result.success) {
         const list = result.data || [];
         setDaftarMapel(list);
         list.forEach((m) => {
-          if (m.idMapel) loadStatsMapel(m.idMapel);
+          if (m.idMapel) loadStatsMapel(m.idMapel, activeGuruId);
         });
       } else {
         setError(result.message || "Gagal mengambil data mapel.");
@@ -910,14 +914,16 @@ export default function KelolaMapelPage() {
                   return (
                     <div
                       key={mapel.idMapel}
-                      className={`rounded-[2rem] overflow-hidden shadow-lg border p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4 ${
+                      className={`relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg border-2 border-amber-300/90 p-4 sm:p-5 text-white transition-all hover:shadow-xl space-y-3 sm:space-y-4 ${
                         isAktif
-                          ? "border-amber-400 bg-gradient-to-br from-blue-950 via-indigo-950 to-slate-950 shadow-amber-500/10"
+                          ? "border-amber-400 bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 shadow-amber-500/20"
                           : isMapelOnline
-                            ? "border-emerald-700 bg-gradient-to-br from-slate-950 via-emerald-950 to-teal-950"
-                            : "border-blue-800 bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950"
+                            ? "bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 shadow-emerald-700/20"
+                            : "bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 shadow-blue-700/20"
                       }`}
                     >
+                      {/* Aksen Garis Kuning Emas Atas */}
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500" />
                       {isEditing ? (
                         <div className="space-y-3 bg-white p-4 rounded-xl shadow-inner text-slate-800">
                           <input
@@ -955,37 +961,59 @@ export default function KelolaMapelPage() {
                           {/* BAGIAN ATAS: NAMA MAPEL, BADGES & TOMBOL AKSI CEPAT */}
                           {/* ============================================================ */}
                           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-3 flex-wrap">
-                                <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-indigo-200 drop-shadow-sm">
-                                  {mapel.namaMapel}
-                                </h3>
-                                {isAktif && (
-                                  <span className="rounded-lg bg-amber-400/20 text-amber-300 px-3 py-1 text-[10px] sm:text-xs font-black uppercase border border-amber-400/30">
-                                    ✓ Aktif Terpilih
-                                  </span>
-                                )}
-                                {isMapelOnline && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-400/25 border border-emerald-400/50 text-emerald-300">
-                                    🌐 Online
-                                  </span>
-                                )}
-                              </div>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-indigo-200 drop-shadow-sm">
+                                      {mapel.namaMapel}
+                                    </h3>
+                                    {isAktif && (
+                                      <span className="rounded-lg bg-amber-400/20 text-amber-300 px-3 py-1 text-[10px] sm:text-xs font-black uppercase border border-amber-400/30">
+                                        ✓ Aktif Terpilih
+                                      </span>
+                                    )}
+                                  </div>
 
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {mapel.kelas && (
-                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-800/60 border border-blue-500/40 text-blue-100">
-                                    Kelas {mapel.kelas}
+                                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                                    {mapel.kelas && (
+                                      <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 border border-white/20 text-white">
+                                        Kelas {mapel.kelas}
+                                      </span>
+                                    )}
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 border border-white/20 text-white">
+                                      👥 {totalSiswaDisplay} Siswa
+                                    </span>
+                                    {isMapelOnline && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-400/20 border border-emerald-400/40 text-emerald-300">
+                                        ⚡ Upload Tugas
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* BADGE JUMLAH PERTEMUAN DAN JENIS PEMBELAJARAN DI SISI KANAN DALAM 1 BADGE SEPERTI CARD GURU WALI */}
+                                <div
+                                  className={`relative flex min-w-[85px] sm:min-w-[95px] shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl border px-3 py-2 shadow-md ${
+                                    isMapelOnline
+                                      ? "border-emerald-400/50 bg-gradient-to-b from-emerald-800/80 to-teal-950/90 text-emerald-100 shadow-emerald-950/40"
+                                      : "border-blue-400/50 bg-gradient-to-b from-blue-800/80 to-indigo-950/90 text-blue-100 shadow-blue-950/40"
+                                  }`}
+                                  title={`${totalPertemuanDisplay} Pertemuan • ${isMapelOnline ? "Pembelajaran Daring" : "Pembelajaran Tatap Muka"}`}
+                                >
+                                  <span className="text-[12px] sm:text-sm font-black leading-tight flex items-center gap-1">
+                                    🗓️ {totalPertemuanDisplay} Sesi
                                   </span>
-                                )}
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800/60 border border-indigo-500/40 text-indigo-100">
-                                  👥 {totalSiswaDisplay} Siswa
-                                </span>
-                                {totalPertemuanDisplay > 0 && (
-                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
-                                    🗓️ {totalPertemuanDisplay} Pertemuan
+                                  <span
+                                    className={`mt-1 inline-flex items-center rounded-md px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider ${
+                                      isMapelOnline
+                                        ? "bg-emerald-400/25 text-emerald-200 border border-emerald-400/30"
+                                        : "bg-blue-400/25 text-blue-200 border border-blue-400/30"
+                                    }`}
+                                  >
+                                    {isMapelOnline ? "🌐 Daring" : "📚 Luring"}
                                   </span>
-                                )}
+                                </div>
                               </div>
 
                               {keteranganBersih && (
@@ -1067,17 +1095,17 @@ export default function KelolaMapelPage() {
                           {/* ============================================================ */}
                           {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA (PADAT & COMPACT) */}
                           {/* ============================================================ */}
-                          <div className="rounded-2xl border border-blue-700/60 bg-blue-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
+                          <div className="rounded-2xl border border-white/25 bg-white/15 p-3.5 sm:p-4 space-y-3">
                             {/* Header Bar Statistik */}
-                            <div className="flex items-center justify-between gap-2 border-b border-blue-800/60 pb-2.5 flex-wrap">
+                            <div className="flex items-center justify-between gap-2 border-b border-white/25 pb-2.5 flex-wrap">
                               <div className="flex items-center gap-2">
                                 <span className="text-base">📊</span>
                                 <div>
-                                  <span className="text-xs font-black tracking-wide text-white block sm:inline">
+                                  <span className="text-xs font-black tracking-wide text-white/95 drop-shadow block sm:inline">
                                     Presensi Pertemuan Sebelumnya
                                   </span>
                                   {activeP && (
-                                    <span className="text-[11px] text-blue-200/80 font-medium sm:ml-2">
+                                    <span className="text-[11px] text-white/75 font-medium sm:ml-2">
                                       (P-{activeP}
                                       {meetingData?.tanggal
                                         ? ` • ${formatTanggalMapelIndo(meetingData.tanggal)}`
@@ -1090,15 +1118,15 @@ export default function KelolaMapelPage() {
 
                               <div className="flex items-center gap-1.5">
                                 {isLoadingStats ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-800/70 text-blue-200 text-[10px] font-bold animate-pulse">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold animate-pulse">
                                     ⏳ Memeriksa...
                                   </span>
                                 ) : meetingData?.sudahDiisi ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-400/30 border border-white/30 text-white text-[10px] font-black uppercase tracking-wider">
                                     ✅ P-{activeP} Terisi
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/25 text-white/90 text-[10px] font-bold">
                                     ⚪ Belum Ada Pertemuan
                                   </span>
                                 )}
@@ -1109,7 +1137,7 @@ export default function KelolaMapelPage() {
                             {stats?.validMeetings &&
                               stats.validMeetings.length > 1 && (
                                 <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                                  <span className="text-[10px] text-blue-300 font-black uppercase tracking-wider">
+                                  <span className="text-[10px] text-white/80 font-black uppercase tracking-wider">
                                     Pilih Sesi:
                                   </span>
                                   <div className="flex items-center gap-1 flex-wrap">
@@ -1129,8 +1157,8 @@ export default function KelolaMapelPage() {
                                           }
                                           className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
                                             isSel
-                                              ? "bg-blue-500 text-white shadow-xs border border-blue-300 scale-105"
-                                              : "bg-blue-900/60 hover:bg-blue-800/70 text-blue-200 border border-blue-700/50"
+                                              ? "bg-gradient-to-r from-amber-400 to-yellow-400 text-amber-950 shadow-xs border border-amber-200 scale-105"
+                                              : "bg-white/15 hover:bg-white/25 text-white border border-white/25"
                                           }`}
                                         >
                                           P-{pNum}{" "}
@@ -1146,47 +1174,47 @@ export default function KelolaMapelPage() {
 
                             {/* Mini Counters Grid (Padat 5 Kolom) */}
                             <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
-                              <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
-                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
+                              <div className="rounded-xl bg-emerald-400/25 border border-white/25 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-white/80 tracking-wider">
                                   Hadir
                                 </span>
-                                <span className="text-xs sm:text-base font-black text-emerald-100">
+                                <span className="text-xs sm:text-base font-black text-white">
                                   {meetingData?.hadir || 0}
                                 </span>
                               </div>
 
-                              <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
-                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
+                              <div className="rounded-xl bg-sky-400/20 border border-white/20 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-white/80 tracking-wider">
                                   Sakit
                                 </span>
-                                <span className="text-xs sm:text-base font-black text-blue-100">
+                                <span className="text-xs sm:text-base font-black text-white">
                                   {meetingData?.sakit || 0}
                                 </span>
                               </div>
 
-                              <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
-                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
+                              <div className="rounded-xl bg-amber-400/20 border border-white/20 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-white/80 tracking-wider">
                                   Izin
                                 </span>
-                                <span className="text-xs sm:text-base font-black text-amber-100">
+                                <span className="text-xs sm:text-base font-black text-white">
                                   {meetingData?.izin || 0}
                                 </span>
                               </div>
 
-                              <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
-                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
+                              <div className="rounded-xl bg-rose-400/20 border border-white/20 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-white/80 tracking-wider">
                                   Alfa
                                 </span>
-                                <span className="text-xs sm:text-base font-black text-rose-100">
+                                <span className="text-xs sm:text-base font-black text-white">
                                   {meetingData?.alfa || 0}
                                 </span>
                               </div>
 
-                              <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
-                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
+                              <div className="rounded-xl bg-violet-400/20 border border-white/20 p-1.5 sm:p-2">
+                                <span className="block text-[9px] sm:text-[10px] font-black uppercase text-white/80 tracking-wider">
                                   Cabut
                                 </span>
-                                <span className="text-xs sm:text-base font-black text-violet-100">
+                                <span className="text-xs sm:text-base font-black text-white">
                                   {meetingData?.cabut || 0}
                                 </span>
                               </div>
@@ -1195,11 +1223,11 @@ export default function KelolaMapelPage() {
                             {/* Rata-Rata Nilai & Detail Absen Siswa */}
                             <div className="pt-1 space-y-2">
                               {meetingData?.rataRataNilai && (
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-900/60 border border-indigo-400/30 text-indigo-200 text-xs font-bold">
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/20 border border-white/30 text-white text-xs font-bold">
                                   <span>🎯</span>
                                   <span>
                                     Rata-rata Nilai:{" "}
-                                    <b className="text-white">
+                                    <b className="text-yellow-200">
                                       {meetingData.rataRataNilai}
                                     </b>
                                   </span>
@@ -1210,7 +1238,7 @@ export default function KelolaMapelPage() {
                                 meetingData?.absenList?.length > 0 ? (
                                   <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-white/90 flex items-center gap-1">
                                         <span>⚠️</span>
                                         <span>
                                           Siswa Tidak Hadir (
@@ -1222,16 +1250,16 @@ export default function KelolaMapelPage() {
                                     <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
                                       {meetingData.absenList.map((item, i) => {
                                         let colorStyle =
-                                          "bg-rose-500/20 text-rose-200 border-rose-500/40";
+                                          "bg-rose-400/30 text-white border-white/25";
                                         if (item.status === "Sakit") {
                                           colorStyle =
-                                            "bg-blue-500/20 text-blue-200 border-blue-500/40";
+                                            "bg-sky-400/30 text-white border-white/25";
                                         } else if (item.status === "Izin") {
                                           colorStyle =
-                                            "bg-amber-500/20 text-amber-200 border-amber-500/40";
+                                            "bg-amber-400/30 text-white border-white/25";
                                         } else if (item.status === "Cabut") {
                                           colorStyle =
-                                            "bg-violet-500/20 text-violet-200 border-violet-500/40";
+                                            "bg-violet-400/30 text-white border-white/25";
                                         }
 
                                         return (
@@ -1239,7 +1267,7 @@ export default function KelolaMapelPage() {
                                             key={i}
                                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
                                           >
-                                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
+                                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/25 tracking-wider">
                                               {item.status}
                                             </span>
                                             <span className="truncate max-w-[150px] sm:max-w-[220px]">
@@ -1251,7 +1279,7 @@ export default function KelolaMapelPage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
+                                  <div className="text-xs font-bold text-white flex items-center gap-1.5 bg-emerald-400/25 border border-white/25 rounded-xl px-3 py-2">
                                     <span>✨</span>
                                     <span>
                                       Semua siswa hadir pada pertemuan ini (
@@ -1260,7 +1288,7 @@ export default function KelolaMapelPage() {
                                   </div>
                                 )
                               ) : (
-                                <div className="text-[11px] text-blue-200/80 font-medium italic flex items-center gap-1.5 bg-blue-900/30 rounded-xl px-3 py-1.5">
+                                <div className="text-[11px] text-white/80 font-medium italic flex items-center gap-1.5 bg-white/10 rounded-xl px-3 py-1.5">
                                   <span>💡</span>
                                   <span>
                                     Belum ada presensi pertemuan yang dicatat.

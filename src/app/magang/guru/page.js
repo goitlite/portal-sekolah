@@ -2913,23 +2913,24 @@ function DashboardGuruContent() {
         {activeMenuTab === "pembimbing" && (
           <>
             {/* MONITORING LAPANGAN */}
-            <div className="rounded-[2rem] bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-5 sm:p-6 shadow-[0_12px_35px_rgba(212,175,55,0.22)] border border-[#D9B44A]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#D9B44A]/40 pb-4">
+            <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-3.5 sm:p-5 shadow-sm border border-[#D9B44A]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-[#D9B44A]/40 pb-2.5 sm:pb-3">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-                    📸 Monitoring Lapangan
+                  <h2 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
+                    <span>📸</span>
+                    <span>Monitoring Lapangan</span>
                   </h2>
-                  <p className="text-xs sm:text-sm font-semibold text-amber-900/70">
+                  <p className="text-[11px] sm:text-xs font-semibold text-amber-900/80">
                     Pilih area penempatan aktif untuk meninjau log presensi
                     mandiri siswa.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-5 space-y-3.5">
+              <div className="mt-3 sm:mt-4 space-y-2.5 sm:space-y-3">
                 {tempatMagang.length === 0 ? (
-                  <div className="text-center py-6 bg-white/60 rounded-2xl border border-dashed border-[#D9B44A]">
-                    <p className="text-sm font-bold text-amber-900/60">
+                  <div className="text-center py-5 bg-white/70 rounded-xl border border-dashed border-[#D9B44A]">
+                    <p className="text-xs sm:text-sm font-bold text-amber-900/60">
                       Belum ada lokasi tempat magang terdaftar.
                     </p>
                   </div>
@@ -2937,16 +2938,16 @@ function DashboardGuruContent() {
                   tempatMagang.map((item, index) => (
                     <div
                       key={index}
-                      className="rounded-2xl border border-[#D9B44A]/60 bg-white/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
+                      className="rounded-xl sm:rounded-2xl border border-[#D9B44A]/60 bg-white/90 p-3 sm:p-4 shadow-xs hover:shadow-sm transition-all"
                     >
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                         {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA */}
-                        <div>
-                          <h3 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
-                            <span className="text-sm sm:text-base">📍</span>{" "}
-                            {item.tempat}
+                        <div className="min-w-0">
+                          <h3 className="text-sm sm:text-base font-black text-slate-800 flex items-center gap-1.5 truncate">
+                            <span>📍</span>
+                            <span className="truncate">{item.tempat}</span>
                           </h3>
-                          <p className="text-xs sm:text-sm font-bold text-slate-500 mt-0.5">
+                          <p className="text-[11px] sm:text-xs font-bold text-slate-500 mt-0.5">
                             Terbimbing:{" "}
                             <span className="text-blue-600 font-extrabold">
                               {item.jumlah} Siswa
@@ -2954,8 +2955,8 @@ function DashboardGuruContent() {
                           </p>
                         </div>
 
-                        {/* BAGIAN TOMBOL */}
-                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+                        {/* BAGIAN TOMBOL - RESPONSIF 2 KOLOM DI HP */}
+                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-1.5 sm:gap-2 shrink-0">
                           <button
                             onClick={() => {
                               const date = new Date();
@@ -2987,16 +2988,18 @@ function DashboardGuruContent() {
 
                               router.push("/magang/rekap");
                             }}
-                            className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black text-white shadow-xs active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-1 sm:gap-1.5 transition-all truncate"
                           >
-                            👁️ LIHAT AKTIVITAS
+                            <span>👁️</span>
+                            <span className="truncate">Aktivitas</span>
                           </button>
 
                           <button
                             onClick={() => mulaiMonitoring(item.tempat)}
-                            className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3.5 text-xs sm:text-sm font-black text-white shadow-md active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-2 transition-all"
+                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black text-white shadow-xs active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-1 sm:gap-1.5 transition-all truncate"
                           >
-                            📷 MONITORING AREA
+                            <span>📷</span>
+                            <span className="truncate">Monitoring</span>
                           </button>
                         </div>
                       </div>
@@ -3918,441 +3921,364 @@ function DashboardGuruContent() {
                     return (
                       <article
                         key={mapel.idMapel}
-                        className={`group relative overflow-hidden rounded-2xl border-2 border-yellow-300/80 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.12)] ${
-                          isMapelOnline ? "bg-emerald-100" : "bg-sky-100"
+                        className={`relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg border-2 border-amber-300/90 p-4 sm:p-5 text-white transition-all hover:shadow-xl space-y-3 sm:space-y-4 ${
+                          isMapelOnline
+                            ? "bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 shadow-emerald-700/20"
+                            : "bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 shadow-blue-700/20"
                         }`}
                       >
-                        {/* HEADER KUNING TEBAL */}
-                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-2.5 py-2.5 sm:px-4 sm:py-3">
-                          <div className="absolute inset-y-0 right-0 w-32 bg-white/20 blur-2xl" />
-                          <div className="relative flex items-center justify-between gap-2 sm:gap-3">
-                            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-yellow-500/40 bg-white/80 text-lg shadow-sm backdrop-blur-sm sm:h-10 sm:w-10 sm:text-xl">
-                                {isMapelOnline ? "🌐" : "📚"}
+                        {/* Aksen Garis Kuning Emas Atas */}
+                        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500" />
+
+                        {/* ============================================================ */}
+                        {/* BAGIAN ATAS: NAMA MAPEL, BADGES, BADGE KANAN & TOMBOL AKSI */}
+                        {/* ============================================================ */}
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 pt-1">
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-black text-lg sm:text-2xl text-white drop-shadow-sm truncate">
+                                  {mapel.namaMapel}
+                                </h3>
+
+                                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mt-1.5">
+                                  {mapel.kelas && (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-white/20 border border-white/30 text-white">
+                                      Kelas {mapel.kelas}
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-white/20 border border-white/30 text-white">
+                                    👥 {totalSiswaDisplay} Siswa
+                                  </span>
+                                  {isMapelOnline && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-400/25 border border-amber-300/40 text-amber-200">
+                                      ⚡ Upload Tugas
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="min-w-0 truncate text-sm font-black leading-tight tracking-tight text-slate-950 sm:text-lg lg:text-xl">
-                                    {mapel.namaMapel}
-                                  </h3>
-
-                                  <span
-                                    className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px] ${
-                                      isMapelOnline
-                                        ? "border-emerald-600 bg-emerald-600 text-white"
-                                        : "border-blue-600 bg-blue-600 text-white"
-                                    }`}
-                                  >
-                                    {isMapelOnline
-                                      ? "🌐 MAPEL ONLINE"
-                                      : "📘 MAPEL REGULER"}
-                                  </span>
-                                </div>
-
-                                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
-                                  {mapel.kelas && (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
-                                      🎓 <span>{mapel.kelas}</span>
-                                    </span>
-                                  )}
-                                  <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
-                                    👥 <span>{totalSiswaDisplay} Siswa</span>
-                                  </span>
-                                  {totalPertemuanDisplay > 0 && (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
-                                      🗓️{" "}
-                                      <span>
-                                        {totalPertemuanDisplay} Pertemuan
-                                      </span>
-                                    </span>
-                                  )}
-                                  {isMapelOnline && (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-600 px-2 py-0.5 text-[9px] font-black text-white shadow-sm">
-                                      ⚡ <span>Upload Tugas</span>
-                                    </span>
-                                  )}
-                                </div>
+                              {/* BADGE JUMLAH PERTEMUAN DAN JENIS PEMBELAJARAN DI SISI KANAN DALAM 1 BADGE SEPERTI CARD GURU WALI */}
+                              <div
+                                className="relative flex min-w-[76px] sm:min-w-[90px] shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl sm:rounded-2xl border-2 border-amber-200 bg-gradient-to-b from-amber-400 via-yellow-300 to-amber-500 text-amber-950 px-2 py-1 sm:px-3 sm:py-1.5 shadow-md"
+                                title={`${totalPertemuanDisplay} Pertemuan • ${isMapelOnline ? "Pembelajaran Daring" : "Pembelajaran Tatap Muka"}`}
+                              >
+                                <span className="text-[11px] sm:text-xs font-black leading-tight flex items-center gap-1">
+                                  🗓️ {totalPertemuanDisplay} Sesi
+                                </span>
+                                <span className="mt-0.5 inline-flex items-center rounded-md bg-white/95 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-amber-950 shadow-xs">
+                                  {isMapelOnline ? "🌐 Daring" : "📚 Luring"}
+                                </span>
                               </div>
                             </div>
 
-                            <span
-                              className={`inline-flex shrink-0 whitespace-nowrap items-center justify-center rounded-lg border px-2 py-1 text-[7px] leading-tight font-black uppercase tracking-wide text-center shadow-sm sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-[10px] ${
-                                isMapelOnline
-                                  ? "border-emerald-600 bg-emerald-600 text-white"
-                                  : "border-blue-600 bg-blue-600 text-white"
-                              }`}
+                            {keteranganBersih && (
+                              <p className="text-xs text-white/85 font-medium italic pt-0.5">
+                                {keteranganBersih}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* TOMBOL AKSI KANAN */}
+                          <div className="flex gap-2 flex-wrap shrink-0 items-center">
+                            <button
+                              type="button"
+                              onClick={() => handleCetakPdfMapelDirect(mapel)}
+                              disabled={
+                                isLoadingStats ||
+                                cetakMapelCardLoadingId === mapel.idMapel
+                              }
+                              title="Cetak Laporan Presensi & Nilai PDF"
+                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-black text-white border border-fuchsia-400/40 shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {isMapelOnline
-                                ? "Pembelajaran Daring"
-                                : "Pembelajaran Tatap Muka"}
-                            </span>
+                              {cetakMapelCardLoadingId === mapel.idMapel ? (
+                                <>
+                                  <span className="inline-block animate-spin">
+                                    ⏳
+                                  </span>
+                                  <span>Mencetak...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>🖨️</span>
+                                  <span>Cetak PDF</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                localStorage.setItem(
+                                  "mapelAktifId",
+                                  mapel.idMapel,
+                                );
+                                router.push("/magang/guru/guru-mapel/kelola");
+                              }}
+                              disabled={isLoadingStats}
+                              title="Buka pengaturan lengkap mapel"
+                              className="rounded-xl bg-white/20 hover:bg-white/30 border border-white/30 px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span>⚙️</span>
+                              <span>Kelola Mapel</span>
+                            </button>
                           </div>
                         </div>
 
-                        {/* BODY GRADIENT */}
+                        {/* STATUS SINKRONISASI */}
+                        {isLoadingStats && (
+                          <div className="rounded-xl border border-amber-300 bg-amber-400/20 p-2.5 flex items-center justify-center gap-2 text-amber-100 text-xs font-bold animate-pulse">
+                            <span className="inline-block h-4 w-4 rounded-full border-2 border-amber-200 border-t-transparent animate-spin" />
+                            <span>
+                              Menyinkronkan data presensi dan riwayat
+                              pertemuan...
+                            </span>
+                          </div>
+                        )}
+
+                        {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA */}
                         <div
-                          className={`p-3 sm:p-4 lg:p-5 ${
-                            isMapelOnline ? "bg-emerald-100" : "bg-sky-100"
+                          className={`rounded-xl sm:rounded-2xl border p-3 sm:p-4 space-y-2.5 sm:space-y-3 ${
+                            isMapelOnline
+                              ? "border-white/30 bg-white/20"
+                              : "border-white/25 bg-white/18"
                           }`}
                         >
-                          {/* INFORMASI TAMBAHAN */}
-                          {(keteranganBersih || isMapelOnline) && (
-                            <div className="mb-3 grid grid-cols-1 gap-1.5 sm:mb-4 sm:grid-cols-2 sm:gap-2">
-                              {keteranganBersih && (
-                                <div className="rounded-xl border border-slate-200/80 bg-white/75 px-2.5 py-2 shadow-sm">
-                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
-                                    Keterangan
-                                  </span>
-                                  <p className="text-[10px] font-semibold leading-snug text-slate-700 sm:text-[11px]">
-                                    {keteranganBersih}
-                                  </p>
-                                </div>
-                              )}
-
-                              {isMapelOnline && (
-                                <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 shadow-sm">
-                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-emerald-600">
-                                    Fitur Online
-                                  </span>
-                                  <p className="text-[10px] font-semibold leading-snug text-emerald-800 sm:text-[11px]">
-                                    Modul tugas, upload tugas, dan pemeriksaan
-                                    kiriman siswa tersedia.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* AKSI CEPAT */}
-                          <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/65 p-2.5 shadow-sm sm:mb-4 sm:rounded-2xl sm:p-3">
-                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                          {/* Header Bar Statistik */}
+                          <div
+                            className={`flex items-center justify-between gap-2 border-b pb-2 flex-wrap ${
+                              isMapelOnline
+                                ? "border-white/30"
+                                : "border-white/25"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">
+                                {isMapelOnline ? "🌐" : "📊"}
+                              </span>
                               <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                                  Aksi Cepat
-                                </p>
-                                <p className="text-[9px] font-medium text-slate-400 sm:text-[10px]">
-                                  Laporan dan pengelolaan mata pelajaran
-                                </p>
-                              </div>
-                              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[8px] font-black text-yellow-800 sm:px-2 sm:py-1 sm:text-[9px]">
-                                Guru Mapel
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleCetakPdfMapelDirect(mapel)}
-                                disabled={
-                                  isLoadingStats ||
-                                  cetakMapelCardLoadingId === mapel.idMapel
-                                }
-                                title="Cetak Laporan Presensi & Nilai PDF"
-                                className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-fuchsia-700 to-pink-600 px-2 py-1.5 text-[9px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:text-[11px]"
-                              >
-                                {cetakMapelCardLoadingId === mapel.idMapel ? (
-                                  <>
-                                    <span className="animate-spin">⏳</span>
-                                    <span>Mencetak...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>🖨️</span>
-                                    <span>Cetak PDF</span>
-                                  </>
+                                <span className="text-xs font-black tracking-wide text-white/95 drop-shadow block sm:inline">
+                                  Presensi Pertemuan Terakhir
+                                </span>
+                                {activeP && (
+                                  <span className="text-[11px] font-medium sm:ml-2 text-white/75">
+                                    (P-{activeP}
+                                    {meetingData?.tanggal
+                                      ? ` • ${formatTanggalMapelIndo(
+                                          meetingData.tanggal,
+                                        )}`
+                                      : ""}
+                                    )
+                                  </span>
                                 )}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  localStorage.setItem(
-                                    "mapelAktifId",
-                                    mapel.idMapel,
-                                  );
-                                  router.push("/magang/guru/guru-mapel/kelola");
-                                }}
-                                disabled={isLoadingStats}
-                                title="Buka pengaturan lengkap mapel"
-                                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-black text-white shadow-sm transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:text-[11px] ${accent.button}`}
-                              >
-                                <span>⚙️</span>
-                                <span>Kelola Mapel</span>
-                              </button>
-                            </div>
-                          </div>
-                          {/* STATUS SINKRONISASI */}
-                          {isLoadingStats && (
-                            <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-bold text-amber-800 sm:mt-4 sm:px-3 sm:py-2.5 sm:text-[11px]">
-                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-                              <span>
-                                Menyinkronkan data presensi dan riwayat
-                                pertemuan...
-                              </span>
-                            </div>
-                          )}
-
-                          {/* PANEL PRESENSI TERAKHIR */}
-                          <div className="mt-3 rounded-xl border border-slate-200/80 bg-white/55 p-2.5 sm:mt-4 sm:rounded-2xl sm:p-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex min-w-0 items-center gap-2.5">
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${accent.soft} ${accent.softBorder} border`}
-                                >
-                                  📊
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-black text-slate-800 sm:text-sm">
-                                    Presensi Pertemuan Terakhir
-                                  </p>
-                                  <p className="mt-0.5 text-[10px] font-medium text-slate-500">
-                                    {activeP
-                                      ? `P-${activeP}${
-                                          meetingData?.tanggal
-                                            ? ` • ${formatTanggalMapelIndo(
-                                                meetingData.tanggal,
-                                              )}`
-                                            : ""
-                                        }`
-                                      : "Belum ada pertemuan"}
-                                  </p>
-                                </div>
                               </div>
+                            </div>
 
+                            <div className="flex items-center gap-1.5">
                               {isLoadingStats ? (
-                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">
-                                  ⏳ Sinkronisasi
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold animate-pulse">
+                                  ⏳ Memeriksa...
                                 </span>
                               ) : meetingData?.sudahDiisi ? (
-                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-400/30 border border-emerald-200/50 text-white text-[10px] font-black uppercase tracking-wider">
                                   ✅ P-{activeP} Terisi
                                 </span>
                               ) : (
-                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
-                                  ○ Belum Ada Pertemuan
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 text-white/90 text-[10px] font-bold">
+                                  ⚪ Belum Ada Pertemuan
                                 </span>
-                              )}
-                            </div>
-
-                            {/* PILIH PERTEMUAN */}
-                            {stats?.validMeetings &&
-                              stats.validMeetings.length > 1 && (
-                                <div className="mt-3 border-t border-slate-200 pt-3">
-                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                    <span
-                                      className={`shrink-0 text-[10px] font-black uppercase tracking-wider ${accent.subText}`}
-                                    >
-                                      Pilih Pertemuan
-                                    </span>
-                                    <div className="flex min-w-0 flex-wrap gap-1.5">
-                                      {stats.validMeetings.map((pNum) => {
-                                        const isSel = pNum === activeP;
-                                        return (
-                                          <button
-                                            key={pNum}
-                                            type="button"
-                                            disabled={isLoadingStats}
-                                            onClick={() =>
-                                              setSelectedPertemuanMapel(
-                                                (prev) => ({
-                                                  ...prev,
-                                                  [mapel.idMapel]: pNum,
-                                                }),
-                                              )
-                                            }
-                                            className={`rounded-lg border px-2.5 py-1 text-[10px] font-black transition-all disabled:opacity-50 ${
-                                              isSel
-                                                ? accent.active
-                                                : accent.inactive
-                                            }`}
-                                          >
-                                            P-{pNum}
-                                            {pNum === stats.latestP
-                                              ? " • Terakhir"
-                                              : ""}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                            {/* RINGKASAN JUMLAH */}
-                            <div className="mt-2 grid grid-cols-5 gap-1 sm:mt-3 sm:gap-2">
-                              {[
-                                {
-                                  label: "Hadir",
-                                  value: meetingData?.hadir || 0,
-                                  icon: "✓",
-                                  cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
-                                },
-                                {
-                                  label: "Sakit",
-                                  value: meetingData?.sakit || 0,
-                                  icon: "＋",
-                                  cls: "border-blue-200 bg-blue-50 text-blue-700",
-                                },
-                                {
-                                  label: "Izin",
-                                  value: meetingData?.izin || 0,
-                                  icon: "i",
-                                  cls: "border-amber-200 bg-amber-50 text-amber-700",
-                                },
-                                {
-                                  label: "Alfa",
-                                  value: meetingData?.alfa || 0,
-                                  icon: "!",
-                                  cls: "border-rose-200 bg-rose-50 text-rose-700",
-                                },
-                                {
-                                  label: "Cabut",
-                                  value: meetingData?.cabut || 0,
-                                  icon: "↗",
-                                  cls: "border-violet-200 bg-violet-50 text-violet-700",
-                                },
-                              ].map((item) => (
-                                <div
-                                  key={item.label}
-                                  className={`rounded-lg border px-1 py-1.5 text-center ${item.cls} sm:rounded-xl sm:px-1.5 sm:py-2`}
-                                >
-                                  <span className="block text-[8px] font-black uppercase tracking-wide opacity-80 sm:text-[9px]">
-                                    {item.label}
-                                  </span>
-                                  <span className="mt-0.5 block text-[13px] font-black sm:text-base">
-                                    {item.value}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-
-                            {meetingData?.sudahDiisi && (
-                              <div className="mt-3">
-                                <PersenKehadiranBar
-                                  data={meetingData}
-                                  label={`P-${activeP}`}
-                                  semuaData={gabungStatistikSesi(
-                                    stats?.perPertemuan,
-                                  )}
-                                  jumlahSesi={stats?.validMeetings?.length || 0}
-                                />
-                              </div>
-                            )}
-
-                            {/* NILAI & DETAIL ABSEN */}
-                            <div className="mt-3 space-y-2">
-                              {meetingData?.rataRataNilai && (
-                                <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] font-bold text-indigo-800">
-                                  <span>🎯</span>
-                                  <span>
-                                    Rata-rata nilai:
-                                    <b className="ml-1 text-indigo-950">
-                                      {meetingData.rataRataNilai}
-                                    </b>
-                                  </span>
-                                </div>
-                              )}
-
-                              {meetingData?.sudahDiisi ? (
-                                meetingData?.absenList?.length > 0 ? (
-                                  <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3">
-                                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
-                                        ⚠️ Siswa Tidak Hadir
-                                      </span>
-                                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-amber-700 shadow-sm">
-                                        {meetingData.absenList.length} siswa
-                                      </span>
-                                    </div>
-
-                                    <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1 custom-scrollbar">
-                                      {meetingData.absenList.map((item, i) => {
-                                        let statusStyle =
-                                          "border-rose-200 bg-rose-50 text-rose-700";
-                                        if (item.status === "Sakit") {
-                                          statusStyle =
-                                            "border-blue-200 bg-blue-50 text-blue-700";
-                                        } else if (item.status === "Izin") {
-                                          statusStyle =
-                                            "border-amber-200 bg-amber-50 text-amber-700";
-                                        } else if (item.status === "Cabut") {
-                                          statusStyle =
-                                            "border-violet-200 bg-violet-50 text-violet-700";
-                                        }
-
-                                        return (
-                                          <div
-                                            key={i}
-                                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${statusStyle}`}
-                                          >
-                                            <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-black uppercase">
-                                              {item.status}
-                                            </span>
-                                            <span className="max-w-[180px] truncate">
-                                              {item.nama}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] font-bold text-emerald-800">
-                                    <span>✨</span>
-                                    <span>
-                                      Semua siswa hadir pada pertemuan ini (
-                                      {totalSiswaDisplay} siswa) — Nihil absen.
-                                    </span>
-                                  </div>
-                                )
-                              ) : (
-                                <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] font-medium leading-relaxed text-slate-500">
-                                  <span>💡</span>
-                                  <span>
-                                    Belum ada presensi pertemuan yang dicatat.
-                                    Buka tabel presensi &amp; nilai di bawah
-                                    untuk mulai mengisi.
-                                  </span>
-                                </div>
                               )}
                             </div>
                           </div>
 
-                          {/* AKSI UTAMA */}
-                          <button
-                            type="button"
-                            disabled={isLoadingStats}
-                            onClick={() => {
-                              if (isLoadingStats) return;
-                              setMapelPresensiAktif(mapel);
-                            }}
-                            className={`mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-black tracking-wide shadow-sm transition-all active:scale-[0.99] sm:mt-4 sm:min-h-12 sm:gap-2 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs disabled:cursor-not-allowed ${
-                              isLoadingStats
-                                ? "border border-slate-200 bg-slate-100 text-slate-400"
-                                : isMapelOnline
-                                  ? "border border-emerald-300 bg-gradient-to-r from-emerald-400 via-green-400 to-lime-300 text-emerald-950 hover:brightness-105"
-                                  : "border border-blue-300 bg-gradient-to-r from-sky-400 via-blue-400 to-indigo-400 text-white hover:brightness-105"
-                            }`}
-                            title={
-                              isLoadingStats
-                                ? "Data masih dimuat, tombol dinonaktifkan sementara"
-                                : "Buka tabel presensi dan pengisian nilai siswa"
-                            }
-                          >
-                            {isLoadingStats ? (
-                              <span className="flex items-center gap-2">
-                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                                <span>Memuat data presensi...</span>
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2">
-                                <span>📊</span>
-                                <span>Buka Presensi &amp; Nilai</span>
-                              </span>
+                          {/* Selector Pertemuan (Wrap rapi tanpa scroll horizontal) */}
+                          {stats?.validMeetings &&
+                            stats.validMeetings.length > 1 && (
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <span className="text-[10px] text-white/80 font-black uppercase tracking-wider">
+                                  Pilih Sesi:
+                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {stats.validMeetings.map((pNum) => {
+                                    const isSel = pNum === activeP;
+                                    return (
+                                      <button
+                                        key={pNum}
+                                        type="button"
+                                        disabled={isLoadingStats}
+                                        onClick={() =>
+                                          setSelectedPertemuanMapel((prev) => ({
+                                            ...prev,
+                                            [mapel.idMapel]: pNum,
+                                          }))
+                                        }
+                                        className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                                          isSel
+                                            ? "bg-gradient-to-r from-amber-400 to-yellow-400 text-amber-950 shadow-xs border border-amber-200 scale-105"
+                                            : "bg-white/15 hover:bg-white/25 text-white border border-white/25"
+                                        }`}
+                                      >
+                                        P-{pNum}{" "}
+                                        {pNum === stats.latestP
+                                          ? "⭐ (Terakhir)"
+                                          : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             )}
-                          </button>
+
+                          {/* Mini Counters Grid (Padat 5 Kolom) */}
+                          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
+                            <div className="rounded-xl bg-emerald-400/25 border border-white/25 p-1 sm:p-2">
+                              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-white/80 tracking-wider">
+                                Hadir
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-white">
+                                {meetingData?.hadir || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-sky-400/20 border border-white/20 p-1 sm:p-2">
+                              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-white/80 tracking-wider">
+                                Sakit
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-white">
+                                {meetingData?.sakit || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-amber-400/20 border border-white/20 p-1 sm:p-2">
+                              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-white/80 tracking-wider">
+                                Izin
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-white">
+                                {meetingData?.izin || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-rose-400/20 border border-white/20 p-1 sm:p-2">
+                              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-white/80 tracking-wider">
+                                Alfa
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-white">
+                                {meetingData?.alfa || 0}
+                              </span>
+                            </div>
+
+                            <div className="rounded-xl bg-violet-400/20 border border-white/20 p-1 sm:p-2">
+                              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-white/80 tracking-wider">
+                                Cabut
+                              </span>
+                              <span className="text-xs sm:text-base font-black text-white">
+                                {meetingData?.cabut || 0}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Rata-Rata Nilai & Detail Absen Siswa */}
+                          <div className="pt-0.5 space-y-2">
+                            {meetingData?.rataRataNilai && (
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/20 border border-white/30 text-white text-xs font-bold">
+                                <span>🎯</span>
+                                <span>
+                                  Rata-rata Nilai:{" "}
+                                  <b className="text-yellow-200">
+                                    {meetingData.rataRataNilai}
+                                  </b>
+                                </span>
+                              </div>
+                            )}
+
+                            {meetingData?.sudahDiisi ? (
+                              meetingData?.absenList?.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-white/90 flex items-center gap-1">
+                                      <span>⚠️</span>
+                                      <span>
+                                        Siswa Tidak Hadir (
+                                        {meetingData.absenList.length}):
+                                      </span>
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                    {meetingData.absenList.map((item, i) => {
+                                      let colorStyle =
+                                        "bg-rose-400/30 text-white border-white/25";
+                                      if (item.status === "Sakit") {
+                                        colorStyle =
+                                          "bg-sky-400/30 text-white border-white/25";
+                                      } else if (item.status === "Izin") {
+                                        colorStyle =
+                                          "bg-amber-400/30 text-white border-white/25";
+                                      } else if (item.status === "Cabut") {
+                                        colorStyle =
+                                          "bg-violet-400/30 text-white border-white/25";
+                                      }
+
+                                      return (
+                                        <div
+                                          key={i}
+                                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
+                                        >
+                                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/25 tracking-wider">
+                                            {item.status}
+                                          </span>
+                                          <span className="truncate max-w-[150px] sm:max-w-[220px]">
+                                            {item.nama}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs font-bold text-white flex items-center gap-1.5 bg-emerald-400/25 border border-white/25 rounded-xl px-3 py-2">
+                                  <span>✨</span>
+                                  <span>
+                                    Semua siswa hadir pada pertemuan ini (
+                                    {totalSiswaDisplay} siswa) — Nihil Absen.
+                                  </span>
+                                </div>
+                              )
+                            ) : (
+                              <div className="text-[11px] text-white/80 font-medium italic flex items-center gap-1.5 bg-white/10 rounded-xl px-3 py-1.5">
+                                <span>💡</span>
+                                <span>
+                                  Belum ada presensi pertemuan yang dicatat.
+                                  Buka tabel presensi &amp; nilai di bawah untuk
+                                  mulai mengisi.
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* TOMBOL UTAMA: BUKA PRESENSI & NILAI */}
+                        <button
+                          type="button"
+                          disabled={isLoadingStats}
+                          onClick={() => {
+                            if (isLoadingStats) return;
+                            setMapelPresensiAktif(mapel);
+                          }}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black shadow-md border-2 border-amber-200 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 hover:brightness-105 active:scale-[0.99] text-amber-950 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isLoadingStats ? (
+                            <span className="flex items-center gap-2">
+                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-950 border-t-transparent" />
+                              <span>MEMUAT DATA PRESENSI...</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-2">
+                              <span>📊</span>
+                              <span>BUKA PRESENSI &amp; NILAI</span>
+                            </span>
+                          )}
+                        </button>
                       </article>
                     );
                   })}
@@ -6778,41 +6704,41 @@ function StatCard({ title, value, accentColor, icon, onClick }) {
       onClick={onClick}
       className={`
         group relative overflow-hidden
-        rounded-3xl
+        rounded-2xl
         bg-gradient-to-br ${bg}
         text-white
-        p-4 sm:p-5
+        p-3 sm:p-4
         w-full
-        shadow-lg
+        shadow-md
         active:scale-95
         hover:brightness-105
         transition-all duration-300
         text-left
       `}
     >
-      <div className="relative flex items-start justify-between">
-        <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-xl shadow">
+      <div className="relative flex items-center justify-between">
+        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-white/20 border border-white/20 flex items-center justify-center text-sm sm:text-base shadow-xs">
           {icon}
         </div>
 
-        <div className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold border border-white/20 flex items-center gap-1">
-          Detail
-          <span className="group-hover:translate-x-1 transition-transform">
+        <div className="rounded-full bg-white/20 px-2 py-0.5 text-[9px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
+          <span>Detail</span>
+          <span className="group-hover:translate-x-0.5 transition-transform text-[10px]">
             →
           </span>
         </div>
       </div>
 
-      <div className="relative mt-5">
-        <p className="text-[10px] sm:text-xs uppercase tracking-[2px] text-white/80 font-bold">
+      <div className="relative mt-2.5 sm:mt-3">
+        <p className="text-[9px] sm:text-[11px] uppercase tracking-wider text-white/90 font-bold truncate">
           {title}
         </p>
-        <h2 className="mt-1 text-3xl sm:text-4xl font-black leading-none drop-shadow-sm">
+        <h2 className="mt-0.5 text-xl sm:text-2xl lg:text-3xl font-black leading-tight drop-shadow-sm">
           {value}
         </h2>
       </div>
 
-      <div className="relative mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
+      <div className="relative mt-2.5 h-0.5 rounded-full bg-white/20 overflow-hidden">
         <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
       </div>
     </button>
