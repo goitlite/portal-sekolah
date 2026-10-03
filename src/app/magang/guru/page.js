@@ -54,53 +54,130 @@ import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
 import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
 import { PesanGuruModal, useJumlahPesanBaru } from "../kepsek/PesanKepsekGuru";
 
-
 // Daftar kelas statis (sama dengan kelola/page.js) — tidak bergantung pada API
 const KELAS_OPTIONS = (
   <>
     <optgroup label="Kelas X" className="font-bold text-slate-900 bg-white">
-      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">X TJKT 1</option>
-      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">X TJKT 2</option>
-      <option value="X DPIB" className="font-medium text-slate-800 bg-white">X DPIB</option>
-      <option value="X TAV" className="font-medium text-slate-800 bg-white">X TAV</option>
-      <option value="X GEOMATIKA" className="font-medium text-slate-800 bg-white">X GEOMATIKA</option>
-      <option value="X TO 1" className="font-medium text-slate-800 bg-white">X TO1</option>
-      <option value="X TO 2" className="font-medium text-slate-800 bg-white">X TO2</option>
-      <option value="X TO 3" className="font-medium text-slate-800 bg-white">X TO3</option>
-      <option value="X TO 4" className="font-medium text-slate-800 bg-white">X TO4</option>
-      <option value="X TPL" className="font-medium text-slate-800 bg-white">X TPL</option>
-      <option value="X TITL 1" className="font-medium text-slate-800 bg-white">X TITL 1</option>
-      <option value="X TITL 2" className="font-medium text-slate-800 bg-white">X TITL 2</option>
+      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">
+        X TJKT 1
+      </option>
+      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">
+        X TJKT 2
+      </option>
+      <option value="X DPIB" className="font-medium text-slate-800 bg-white">
+        X DPIB
+      </option>
+      <option value="X TAV" className="font-medium text-slate-800 bg-white">
+        X TAV
+      </option>
+      <option
+        value="X GEOMATIKA"
+        className="font-medium text-slate-800 bg-white"
+      >
+        X GEOMATIKA
+      </option>
+      <option value="X TO 1" className="font-medium text-slate-800 bg-white">
+        X TO1
+      </option>
+      <option value="X TO 2" className="font-medium text-slate-800 bg-white">
+        X TO2
+      </option>
+      <option value="X TO 3" className="font-medium text-slate-800 bg-white">
+        X TO3
+      </option>
+      <option value="X TO 4" className="font-medium text-slate-800 bg-white">
+        X TO4
+      </option>
+      <option value="X TPL" className="font-medium text-slate-800 bg-white">
+        X TPL
+      </option>
+      <option value="X TITL 1" className="font-medium text-slate-800 bg-white">
+        X TITL 1
+      </option>
+      <option value="X TITL 2" className="font-medium text-slate-800 bg-white">
+        X TITL 2
+      </option>
     </optgroup>
     <optgroup label="Kelas XI" className="font-bold text-slate-900 bg-white">
-      <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">XI TJKT 1</option>
-      <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">XI TJKT 2</option>
-      <option value="XI DPIB" className="font-medium text-slate-800 bg-white">XI DPIB</option>
-      <option value="XI TAV" className="font-medium text-slate-800 bg-white">XI TAV</option>
-      <option value="XI GEOMATIKA" className="font-medium text-slate-800 bg-white">XI GEOMATIKA</option>
-      <option value="XI TBSM 1" className="font-medium text-slate-800 bg-white">XI TBSM 1</option>
-      <option value="XI TBSM 2" className="font-medium text-slate-800 bg-white">XI TBSM 2</option>
-      <option value="XI TAB" className="font-medium text-slate-800 bg-white">XI TAB</option>
-      <option value="XI TKR" className="font-medium text-slate-800 bg-white">XI TKRO</option>
-      <option value="XI TPL" className="font-medium text-slate-800 bg-white">XI TPL</option>
-      <option value="XI TITL 1" className="font-medium text-slate-800 bg-white">XI TITL 1</option>
-      <option value="XI TITL 2" className="font-medium text-slate-800 bg-white">XI TITL 2</option>
+      <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">
+        XI TJKT 1
+      </option>
+      <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">
+        XI TJKT 2
+      </option>
+      <option value="XI DPIB" className="font-medium text-slate-800 bg-white">
+        XI DPIB
+      </option>
+      <option value="XI TAV" className="font-medium text-slate-800 bg-white">
+        XI TAV
+      </option>
+      <option
+        value="XI GEOMATIKA"
+        className="font-medium text-slate-800 bg-white"
+      >
+        XI GEOMATIKA
+      </option>
+      <option value="XI TBSM 1" className="font-medium text-slate-800 bg-white">
+        XI TBSM 1
+      </option>
+      <option value="XI TBSM 2" className="font-medium text-slate-800 bg-white">
+        XI TBSM 2
+      </option>
+      <option value="XI TAB" className="font-medium text-slate-800 bg-white">
+        XI TAB
+      </option>
+      <option value="XI TKR" className="font-medium text-slate-800 bg-white">
+        XI TKRO
+      </option>
+      <option value="XI TPL" className="font-medium text-slate-800 bg-white">
+        XI TPL
+      </option>
+      <option value="XI TITL 1" className="font-medium text-slate-800 bg-white">
+        XI TITL 1
+      </option>
+      <option value="XI TITL 2" className="font-medium text-slate-800 bg-white">
+        XI TITL 2
+      </option>
     </optgroup>
     <optgroup label="Kelas XII" className="font-bold text-slate-900 bg-white">
-      <option value="TKJ 1" className="font-medium text-slate-800 bg-white">XII TJKT 1</option>
-      <option value="TKJ 2" className="font-medium text-slate-800 bg-white">XII TJKT 2</option>
-      <option value="DPIB" className="font-medium text-slate-800 bg-white">XII DPIB</option>
-      <option value="TAV" className="font-medium text-slate-800 bg-white">XII TAV</option>
-      <option value="GEOMATIKA" className="font-medium text-slate-800 bg-white">XII GEOMATIKA</option>
-      <option value="TBSM 1" className="font-medium text-slate-800 bg-white">XII TBSM 1</option>
-      <option value="TBSM 2" className="font-medium text-slate-800 bg-white">XII TBSM 2</option>
-      <option value="TAB" className="font-medium text-slate-800 bg-white">XII TAB</option>
-      <option value="TKR" className="font-medium text-slate-800 bg-white">XII TKRO</option>
-      <option value="TPL" className="font-medium text-slate-800 bg-white">XII TPL</option>
-      <option value="TITL" className="font-medium text-slate-800 bg-white">XII TITL</option>
+      <option value="TKJ 1" className="font-medium text-slate-800 bg-white">
+        XII TJKT 1
+      </option>
+      <option value="TKJ 2" className="font-medium text-slate-800 bg-white">
+        XII TJKT 2
+      </option>
+      <option value="DPIB" className="font-medium text-slate-800 bg-white">
+        XII DPIB
+      </option>
+      <option value="TAV" className="font-medium text-slate-800 bg-white">
+        XII TAV
+      </option>
+      <option value="GEOMATIKA" className="font-medium text-slate-800 bg-white">
+        XII GEOMATIKA
+      </option>
+      <option value="TBSM 1" className="font-medium text-slate-800 bg-white">
+        XII TBSM 1
+      </option>
+      <option value="TBSM 2" className="font-medium text-slate-800 bg-white">
+        XII TBSM 2
+      </option>
+      <option value="TAB" className="font-medium text-slate-800 bg-white">
+        XII TAB
+      </option>
+      <option value="TKR" className="font-medium text-slate-800 bg-white">
+        XII TKRO
+      </option>
+      <option value="TPL" className="font-medium text-slate-800 bg-white">
+        XII TPL
+      </option>
+      <option value="TITL" className="font-medium text-slate-800 bg-white">
+        XII TITL
+      </option>
     </optgroup>
     <optgroup label="Lainnya" className="font-bold text-slate-900 bg-white">
-      <option value="CONTOH" className="font-medium text-slate-800 bg-white">KELAS CONTOH</option>
+      <option value="CONTOH" className="font-medium text-slate-800 bg-white">
+        KELAS CONTOH
+      </option>
     </optgroup>
   </>
 );
@@ -562,8 +639,8 @@ function PersenKehadiranBar({ data, label, semuaData, jumlahSesi }) {
   const tierSemua = tierPersenKehadiran(persenSemua);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
-      <span className="text-[10px] font-black uppercase tracking-wider text-white/80">
+    <div className="rounded-xl border border-yellow-200 bg-white/90 px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap shadow-sm">
+      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
         📈 % Kehadiran {label}
       </span>
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -1983,7 +2060,10 @@ function DashboardGuruContent() {
 
   const handlePilihKelasForm = async (kelas) => {
     setFormKelasDipilih(kelas);
-    if (!kelas) { setFormPreviewSiswa([]); return; }
+    if (!kelas) {
+      setFormPreviewSiswa([]);
+      return;
+    }
     try {
       setFormLoadingPreview(true);
       const res = await getSiswaByKelasMapel(kelas);
@@ -1998,15 +2078,22 @@ function DashboardGuruContent() {
 
   const handleTambahMapelInline = async (e) => {
     e.preventDefault();
-    if (!formNamaMapel.trim()) { alert("Nama mapel wajib diisi."); return; }
-    if (!user?.id) { alert("Sesi guru tidak ditemukan."); return; }
+    if (!formNamaMapel.trim()) {
+      alert("Nama mapel wajib diisi.");
+      return;
+    }
+    if (!user?.id) {
+      alert("Sesi guru tidak ditemukan.");
+      return;
+    }
 
     setFormSavingMapel(true);
     try {
       // Encode jenis mapel ke keterangan jika perlu (atau kirim sebagai field terpisah)
-      const keteranganFinal = formJenisMapel === "online"
-        ? `[ONLINE]${formKeterangan ? " " + formKeterangan.trim() : ""}`
-        : formKeterangan.trim();
+      const keteranganFinal =
+        formJenisMapel === "online"
+          ? `[ONLINE]${formKeterangan ? " " + formKeterangan.trim() : ""}`
+          : formKeterangan.trim();
 
       const result = await addMapel({
         idGuru: user.id,
@@ -2020,8 +2107,10 @@ function DashboardGuruContent() {
         if (formKelasDipilih) {
           alert(
             `✅ Mapel "${formNamaMapel.trim()}" berhasil dibuat untuk kelas ${formKelasDipilih}.\n\n` +
-            `${jumlah} siswa dari kelas tersebut otomatis dimasukkan ke mapel ini.` +
-            (formJenisMapel === "online" ? "\n\n🌐 Mapel ini dikonfigurasi sebagai Mapel Online." : "")
+              `${jumlah} siswa dari kelas tersebut otomatis dimasukkan ke mapel ini.` +
+              (formJenisMapel === "online"
+                ? "\n\n🌐 Mapel ini dikonfigurasi sebagai Mapel Online."
+                : ""),
           );
         }
         // Reset form
@@ -3483,7 +3572,9 @@ function DashboardGuruContent() {
                   className={`px-3.5 py-2 rounded-xl text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 shrink-0 ${isFormTambahMapelOpen ? "bg-slate-600 hover:bg-slate-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
                 >
                   <span>{isFormTambahMapelOpen ? "✕" : "➕"}</span>
-                  <span className="hidden sm:inline">{isFormTambahMapelOpen ? "Tutup Form" : "Tambah Mapel"}</span>
+                  <span className="hidden sm:inline">
+                    {isFormTambahMapelOpen ? "Tutup Form" : "Tambah Mapel"}
+                  </span>
                 </button>
 
                 <button
@@ -3508,9 +3599,14 @@ function DashboardGuruContent() {
               <div className="rounded-[1.5rem] bg-white border border-emerald-200 shadow-md overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-white flex items-center gap-2">
                   <span className="text-lg">➕</span>
-                  <h3 className="text-sm font-black">Tambah Mata Pelajaran Baru</h3>
+                  <h3 className="text-sm font-black">
+                    Tambah Mata Pelajaran Baru
+                  </h3>
                 </div>
-                <form onSubmit={handleTambahMapelInline} className="p-5 space-y-4">
+                <form
+                  onSubmit={handleTambahMapelInline}
+                  className="p-5 space-y-4"
+                >
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block">
                       <span className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
@@ -3563,7 +3659,9 @@ function DashboardGuruContent() {
                       Jenis Kelas Mapel
                     </span>
                     <div className="flex gap-3 flex-wrap">
-                      <label className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border-2 transition-all ${formJenisMapel === "biasa" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <label
+                        className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border-2 transition-all ${formJenisMapel === "biasa" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                      >
                         <input
                           type="radio"
                           name="jenisMapelForm"
@@ -3573,12 +3671,18 @@ function DashboardGuruContent() {
                           className="accent-blue-600"
                         />
                         <div>
-                          <span className="text-sm font-black text-slate-800">📋 Mapel Biasa</span>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Presensi & nilai harian tatap muka</p>
+                          <span className="text-sm font-black text-slate-800">
+                            📋 Mapel Biasa
+                          </span>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            Presensi & nilai harian tatap muka
+                          </p>
                         </div>
                       </label>
 
-                      <label className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border-2 transition-all ${formJenisMapel === "online" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <label
+                        className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border-2 transition-all ${formJenisMapel === "online" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                      >
                         <input
                           type="radio"
                           name="jenisMapelForm"
@@ -3588,8 +3692,12 @@ function DashboardGuruContent() {
                           className="accent-emerald-600"
                         />
                         <div>
-                          <span className="text-sm font-black text-slate-800">🌐 Mapel Online</span>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Presensi + upload tugas & pengumpulan siswa</p>
+                          <span className="text-sm font-black text-slate-800">
+                            🌐 Mapel Online
+                          </span>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            Presensi + upload tugas & pengumpulan siswa
+                          </p>
                         </div>
                       </label>
                     </div>
@@ -3606,17 +3714,26 @@ function DashboardGuruContent() {
                         </span>
                       </div>
                       {formLoadingPreview ? (
-                        <p className="text-xs font-bold text-slate-500 py-3 text-center">Memuat daftar siswa...</p>
+                        <p className="text-xs font-bold text-slate-500 py-3 text-center">
+                          Memuat daftar siswa...
+                        </p>
                       ) : formPreviewSiswa.length === 0 ? (
-                        <p className="text-xs font-bold text-slate-500 py-3 text-center">Tidak ada siswa ditemukan untuk kelas ini.</p>
+                        <p className="text-xs font-bold text-slate-500 py-3 text-center">
+                          Tidak ada siswa ditemukan untuk kelas ini.
+                        </p>
                       ) : (
                         <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                           {formPreviewSiswa.map((s, i) => (
-                            <div key={s.idSiswa || i} className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2">
+                            <div
+                              key={s.idSiswa || i}
+                              className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2"
+                            >
                               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-[9px] font-black">
                                 {i + 1}
                               </span>
-                              <span className="text-xs font-bold text-slate-800 truncate">{s.nama}</span>
+                              <span className="text-xs font-bold text-slate-800 truncate">
+                                {s.nama}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -3636,8 +3753,11 @@ function DashboardGuruContent() {
                       type="button"
                       onClick={() => {
                         setIsFormTambahMapelOpen(false);
-                        setFormNamaMapel(""); setFormKeterangan(""); setFormKelasDipilih("");
-                        setFormPreviewSiswa([]); setFormJenisMapel("biasa");
+                        setFormNamaMapel("");
+                        setFormKeterangan("");
+                        setFormKelasDipilih("");
+                        setFormPreviewSiswa([]);
+                        setFormJenisMapel("biasa");
                       }}
                       className="rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-5 py-3 transition-all active:scale-95"
                     >
@@ -3645,11 +3765,15 @@ function DashboardGuruContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
+                      onClick={() =>
+                        router.push("/magang/guru/guru-mapel/kelola")
+                      }
                       className="ml-auto rounded-xl bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold px-4 py-3 border border-slate-200 transition-all active:scale-95 flex items-center gap-1.5"
                     >
                       <span>⚙️</span>
-                      <span className="hidden sm:inline">Kelola Mapel Lanjutan</span>
+                      <span className="hidden sm:inline">
+                        Kelola Mapel Lanjutan
+                      </span>
                     </button>
                   </div>
                 </form>
@@ -3716,10 +3840,12 @@ function DashboardGuruContent() {
               </div>
             )}
 
-
-            {/* LIST KARTU MAPEL (SESUAI DENGAN KELOLA MAPEL) */}
+            {/* ============================================================
+                 KARTU GURU MAPEL — REDESAIN UI
+                 Semua handler, data, statistik, dan navigasi tetap sama.
+               ============================================================ */}
             {!loadingMapel && (
-              <div className="space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
                 {daftarMapel
                   .filter((m) => {
                     if (!searchMapel.trim()) return true;
@@ -3731,7 +3857,7 @@ function DashboardGuruContent() {
                       nama.includes(q) || kelas.includes(q) || ket.includes(q)
                     );
                   })
-                   .map((mapel) => {
+                  .map((mapel) => {
                     const stats = statsPresensiMapel[mapel.idMapel];
 
                     const activeP =
@@ -3743,465 +3869,493 @@ function DashboardGuruContent() {
                       stats?.totalSiswa || mapel.jumlahSiswa || 0;
                     const totalPertemuanDisplay =
                       stats?.validMeetings?.length || 0;
-                    // Deteksi apakah mapel online
+
                     const isMapelOnline =
-                      String(mapel.keterangan || "").toUpperCase().includes("ONLINE") ||
-                      String(mapel.jenisMapel || "").toUpperCase().includes("ONLINE") ||
-                      String(mapel.namaMapel || "").toUpperCase().includes("ONLINE");
+                      String(mapel.keterangan || "")
+                        .toUpperCase()
+                        .includes("ONLINE") ||
+                      String(mapel.jenisMapel || "")
+                        .toUpperCase()
+                        .includes("ONLINE") ||
+                      String(mapel.namaMapel || "")
+                        .toUpperCase()
+                        .includes("ONLINE");
+
                     const keteranganBersih = String(mapel.keterangan || "")
                       .replace(/^\[ONLINE\]\s*/i, "")
                       .replace(/\(ONLINE\)/i, "")
                       .trim();
 
-                    // Cek apakah data kartu sedang dimuat
-                    const isLoadingStats = !!loadingStatsMapel[mapel.idMapel] || loadingMapel;
+                    const isLoadingStats =
+                      !!loadingStatsMapel[mapel.idMapel] || loadingMapel;
+
+                    const accent = isMapelOnline
+                      ? {
+                          line: "from-emerald-400 via-teal-400 to-cyan-400",
+                          soft: "bg-emerald-50",
+                          softBorder: "border-emerald-200",
+                          text: "text-emerald-800",
+                          subText: "text-emerald-700",
+                          button: "bg-emerald-600 hover:bg-emerald-700",
+                          active:
+                            "bg-emerald-600 text-white border-emerald-500 shadow-sm",
+                          inactive:
+                            "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+                        }
+                      : {
+                          line: "from-blue-500 via-indigo-500 to-sky-400",
+                          soft: "bg-blue-50",
+                          softBorder: "border-blue-200",
+                          text: "text-blue-900",
+                          subText: "text-blue-700",
+                          button: "bg-blue-600 hover:bg-blue-700",
+                          active:
+                            "bg-blue-600 text-white border-blue-500 shadow-sm",
+                          inactive:
+                            "bg-white text-blue-700 border-blue-200 hover:bg-blue-50",
+                        };
 
                     return (
-                      <div
+                      <article
                         key={mapel.idMapel}
-                        className={`relative rounded-[2rem] overflow-hidden shadow-lg border p-5 sm:p-6 transition-all duration-300 hover:shadow-xl space-y-4 group ${
-                          isMapelOnline
-                            ? "border-emerald-500 hover:border-emerald-400 bg-gradient-to-br from-emerald-950 via-teal-900 to-emerald-950 shadow-emerald-900/40"
-                            : "border-blue-500 hover:border-blue-400 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 shadow-blue-900/40"
+                        className={`group relative overflow-hidden rounded-2xl border-2 border-yellow-300/80 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.12)] ${
+                          isMapelOnline ? "bg-emerald-100/90" : "bg-sky-100/90"
                         }`}
                       >
-                        {/* Aksen Garis Atas Identitas Kartu */}
-                        <div
-                          className={`absolute top-0 left-0 right-0 h-1 ${
-                            isMapelOnline
-                              ? "bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400"
-                              : "bg-gradient-to-r from-indigo-500 via-blue-500 to-sky-400"
-                          }`}
-                        />
-
-                        {/* ============================================================ */}
-                        {/* BAGIAN ATAS: NAMA MAPEL, BADGES & TOMBOL AKSI CEPAT */}
-                        {/* ============================================================ */}
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pt-1">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                              <h3
-                                className={`font-black text-xl sm:text-2xl`}
-                              >
-                                {mapel.namaMapel}
-                              </h3>
-
-                              {isMapelOnline ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-200">
-                                  <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-                                  </span>
-                                  🌐 Kelas Online &amp; Tugas
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800/60 border border-indigo-400/40 text-indigo-200">
-                                  <span>📚</span>
-                                  <span>Kelas Reguler</span>
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {mapel.kelas && (
-                                <span
-                                  className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                    isMapelOnline
-                                      ? "bg-emerald-800/60 border border-emerald-500/40 text-emerald-200"
-                                      : "bg-blue-800/60 border border-blue-400/40 text-blue-200"
-                                  }`}
-                                >
-                                  Kelas {mapel.kelas}
-                                </span>
-                              )}
-                              <span
-                                className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                  isMapelOnline
-                                    ? "bg-emerald-800/60 border border-emerald-500/40 text-emerald-200"
-                                    : "bg-indigo-800/60 border border-indigo-400/40 text-indigo-200"
-                                }`}
-                              >
-                                👥 {totalSiswaDisplay} Siswa
-                              </span>
-                              {totalPertemuanDisplay > 0 && (
-                                <span
-                                  className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                    isMapelOnline
-                                      ? "bg-cyan-800/60 border border-cyan-400/40 text-cyan-200"
-                                      : "bg-sky-800/60 border border-sky-400/40 text-sky-200"
-                                  }`}
-                                >
-                                  🗓️ {totalPertemuanDisplay} Pertemuan
-                                </span>
-                              )}
-                              {isMapelOnline && (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-800/60 border border-emerald-500/40 text-emerald-200">
-                                  ⚡ Fitur Upload Tugas Aktif
-                                </span>
-                              )}
-                            </div>
-
-                            {keteranganBersih && (
-                              <p className="text-xs text-slate-300 font-medium italic pt-0.5">
-                                {keteranganBersih}
-                              </p>
-                            )}
-
-                            {isMapelOnline && (
-                              <div className="text-[11px] text-emerald-300/90 font-medium flex items-center gap-1.5 pt-0.5">
-                                <span>💡</span>
-                                <span>
-                                  Guru dapat mengunggah modul tugas pertemuan &amp; memeriksa hasil kiriman file siswa.
-                                </span>
+                        {/* HEADER KUNING TEBAL */}
+                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-3 py-3 sm:px-4 sm:py-4">
+                          <div className="absolute inset-y-0 right-0 w-32 bg-white/20 blur-2xl" />
+                          <div className="relative flex items-start justify-between gap-2 sm:gap-3">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-yellow-500/40 bg-white/80 text-xl shadow-sm backdrop-blur-sm sm:h-11 sm:w-11 sm:rounded-2xl sm:text-2xl">
+                                {isMapelOnline ? "🌐" : "📚"}
                               </div>
-                            )}
-                          </div>
 
-                          {/* TOMBOL AKSI KANAN */}
-                          <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
-                            <button
-                              type="button"
-                              onClick={() => handleCetakPdfMapelDirect(mapel)}
-                              disabled={
-                                isLoadingStats ||
-                                cetakMapelCardLoadingId === mapel.idMapel
-                              }
-                              title="Cetak Laporan Presensi & Nilai PDF"
-                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {cetakMapelCardLoadingId === mapel.idMapel ? (
-                                <>
-                                  <span className="inline-block animate-spin">
-                                    ⏳
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="break-words text-base font-black leading-tight tracking-tight text-slate-950 sm:text-lg lg:text-xl">
+                                    {mapel.namaMapel}
+                                  </h3>
+
+                                  <span
+                                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px] ${
+                                      isMapelOnline
+                                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                        : "border-blue-300 bg-blue-50 text-blue-800"
+                                    }`}
+                                  >
+                                    {isMapelOnline
+                                      ? "🌐 MAPEL ONLINE"
+                                      : "📘 MAPEL REGULER"}
                                   </span>
-                                  <span>Mencetak...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🖨️</span>
-                                  <span>Cetak PDF</span>
-                                </>
-                              )}
-                            </button>
+                                </div>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                localStorage.setItem(
-                                  "mapelAktifId",
-                                  mapel.idMapel,
-                                );
-                                router.push("/magang/guru/guru-mapel/kelola");
-                              }}
-                              disabled={isLoadingStats}
-                              title="Buka pengaturan lengkap mapel"
-                              className={`rounded-xl border px-3 py-2 sm:py-2.5 text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${isMapelOnline ? "bg-emerald-600 hover:bg-emerald-700 border-emerald-500 text-white" : "bg-blue-600 hover:bg-blue-700 border-blue-500 text-white"}`}
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {mapel.kelas && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                      🎓 <span>Kelas {mapel.kelas}</span>
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                    👥 <span>{totalSiswaDisplay} Siswa</span>
+                                  </span>
+                                  {totalPertemuanDisplay > 0 && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                      🗓️{" "}
+                                      <span>
+                                        {totalPertemuanDisplay} Pertemuan
+                                      </span>
+                                    </span>
+                                  )}
+                                  {isMapelOnline && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-800 shadow-sm">
+                                      ⚡ <span>Upload Tugas Aktif</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`inline-flex max-w-[46%] shrink-0 items-center justify-center rounded-lg border px-2 py-1.5 text-[8px] leading-tight font-black uppercase tracking-wide text-center shadow-sm sm:max-w-none sm:rounded-xl sm:px-3 sm:py-2 sm:text-[10px] ${
+                                isMapelOnline
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                  : "border-blue-300 bg-blue-50 text-blue-800"
+                              }`}
                             >
-                              <span>⚙️</span>
-                              <span>Kelola Mapel</span>
-                            </button>
+                              {isMapelOnline
+                                ? "Pembelajaran Daring"
+                                : "Pembelajaran Tatap Muka"}
+                            </span>
                           </div>
                         </div>
 
-                        {/* ============================================================ */}
-                        {/* BANNER LOADING JIKA DATA KARTU SEDANG DIMUAT */}
-                        {/* ============================================================ */}
-                        {isLoadingStats && (
-                          <div className="rounded-2xl border border-amber-400/40 bg-amber-500/15 p-3 flex items-center justify-center gap-2.5 text-amber-200 text-xs font-bold animate-pulse">
-                            <span className="inline-block w-4 h-4 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
-                            <span>Menyinkronkan data presensi &amp; riwayat pertemuan... Harap tunggu sebentar.</span>
-                          </div>
-                        )}
-
-                        {/* ============================================================ */}
-                        {/* PANEL STATISTIK PRESENSI PERTEMUAN SEBELUMNYA */}
-                        {/* ============================================================ */}
+                        {/* BODY GRADIENT */}
                         <div
-                          className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 backdrop-blur-xs ${
+                          className={`p-3 sm:p-4 lg:p-5 ${
                             isMapelOnline
-                              ? "border-emerald-700/50 bg-emerald-950/50"
-                              : "border-blue-800/50 bg-blue-950/60"
+                              ? "bg-emerald-100/70"
+                              : "bg-sky-100/70"
                           }`}
                         >
-                          {/* Header Bar Statistik */}
-                          <div
-                            className={`flex items-center justify-between gap-2 border-b pb-2.5 flex-wrap ${
-                              isMapelOnline ? "border-emerald-800/60" : "border-blue-800/60"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">{isMapelOnline ? "🌐" : "📊"}</span>
-                              <div>
-                                 <span className={`text-xs font-black tracking-wide text-white block sm:inline`}>
-                                  Presensi Pertemuan Terakhir
-                                </span>
-                                {activeP && (
-                                  <span
-                                    className={`text-[11px] font-medium sm:ml-2 ${
-                                      isMapelOnline ? "text-emerald-200/80" : "text-blue-200/80"
-                                    }`}
-                                  >
-                                    (P-{activeP}
-                                    {meetingData?.tanggal
-                                      ? ` • ${formatTanggalMapelIndo(meetingData.tanggal)}`
-                                      : ""}
-                                    )
+                          {/* INFORMASI TAMBAHAN */}
+                          {(keteranganBersih || isMapelOnline) && (
+                            <div className="mb-3 grid grid-cols-1 gap-1.5 sm:mb-4 sm:grid-cols-2 sm:gap-2">
+                              {keteranganBersih && (
+                                <div className="rounded-xl border border-slate-200/80 bg-white/75 px-2.5 py-2 shadow-sm">
+                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                                    Keterangan
                                   </span>
-                                )}
+                                  <p className="text-[10px] font-semibold leading-snug text-slate-700 sm:text-[11px]">
+                                    {keteranganBersih}
+                                  </p>
+                                </div>
+                              )}
+
+                              {isMapelOnline && (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 shadow-sm">
+                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-emerald-600">
+                                    Fitur Online
+                                  </span>
+                                  <p className="text-[10px] font-semibold leading-snug text-emerald-800 sm:text-[11px]">
+                                    Modul tugas, upload tugas, dan pemeriksaan
+                                    kiriman siswa tersedia.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* AKSI CEPAT */}
+                          <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/65 p-2.5 shadow-sm sm:mb-4 sm:rounded-2xl sm:p-3">
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                  Aksi Cepat
+                                </p>
+                                <p className="text-[9px] font-medium text-slate-400 sm:text-[10px]">
+                                  Laporan dan pengelolaan mata pelajaran
+                                </p>
                               </div>
+                              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[8px] font-black text-yellow-800 sm:px-2 sm:py-1 sm:text-[9px]">
+                                Guru Mapel
+                              </span>
                             </div>
 
-                            <div className="flex items-center gap-1.5">
+                            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleCetakPdfMapelDirect(mapel)}
+                                disabled={
+                                  isLoadingStats ||
+                                  cetakMapelCardLoadingId === mapel.idMapel
+                                }
+                                title="Cetak Laporan Presensi & Nilai PDF"
+                                className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-fuchsia-700 to-pink-600 px-2 py-1.5 text-[9px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:text-[11px]"
+                              >
+                                {cetakMapelCardLoadingId === mapel.idMapel ? (
+                                  <>
+                                    <span className="animate-spin">⏳</span>
+                                    <span>Mencetak...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🖨️</span>
+                                    <span>Cetak PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  localStorage.setItem(
+                                    "mapelAktifId",
+                                    mapel.idMapel,
+                                  );
+                                  router.push("/magang/guru/guru-mapel/kelola");
+                                }}
+                                disabled={isLoadingStats}
+                                title="Buka pengaturan lengkap mapel"
+                                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-black text-white shadow-sm transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:text-[11px] ${accent.button}`}
+                              >
+                                <span>⚙️</span>
+                                <span>Kelola Mapel</span>
+                              </button>
+                            </div>
+                          </div>
+                          {/* STATUS SINKRONISASI */}
+                          {isLoadingStats && (
+                            <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-bold text-amber-800 sm:mt-4 sm:px-3 sm:py-2.5 sm:text-[11px]">
+                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                              <span>
+                                Menyinkronkan data presensi dan riwayat
+                                pertemuan...
+                              </span>
+                            </div>
+                          )}
+
+                          {/* PANEL PRESENSI TERAKHIR */}
+                          <div className="mt-3 rounded-xl border border-slate-200/80 bg-white/55 p-2.5 sm:mt-4 sm:rounded-2xl sm:p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <div
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${accent.soft} ${accent.softBorder} border`}
+                                >
+                                  📊
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black text-slate-800 sm:text-sm">
+                                    Presensi Pertemuan Terakhir
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                                    {activeP
+                                      ? `P-${activeP}${
+                                          meetingData?.tanggal
+                                            ? ` • ${formatTanggalMapelIndo(
+                                                meetingData.tanggal,
+                                              )}`
+                                            : ""
+                                        }`
+                                      : "Belum ada pertemuan"}
+                                  </p>
+                                </div>
+                              </div>
+
                               {isLoadingStats ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 text-[10px] font-bold animate-pulse border border-amber-400/30">
-                                  ⏳ Sinkronisasi...
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">
+                                  ⏳ Sinkronisasi
                                 </span>
                               ) : meetingData?.sudahDiisi ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
                                   ✅ P-{activeP} Terisi
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
-                                  ⚪ Belum Ada Pertemuan
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                                  ○ Belum Ada Pertemuan
                                 </span>
                               )}
                             </div>
-                          </div>
 
-                          {/* Selector Pertemuan */}
-                          {stats?.validMeetings &&
-                            stats.validMeetings.length > 1 && (
-                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                                <span
-                                  className={`text-[10px] font-black uppercase tracking-wider ${
-                                    isMapelOnline ? "text-teal-300" : "text-indigo-300"
-                                  }`}
-                                >
-                                  Pilih Sesi:
-                                </span>
-                                <div className="flex items-center gap-1 flex-wrap">
-                                  {stats.validMeetings.map((pNum) => {
-                                    const isSel = pNum === activeP;
-                                    return (
-                                      <button
-                                        key={pNum}
-                                        type="button"
-                                        disabled={isLoadingStats}
-                                        onClick={() =>
-                                          setSelectedPertemuanMapel((prev) => ({
-                                            ...prev,
-                                            [mapel.idMapel]: pNum,
-                                          }))
-                                        }
-                                        className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
-                                          isSel
-                                            ? isMapelOnline
-                                              ? "bg-teal-500 text-white shadow-xs border border-teal-300 scale-105"
-                                              : "bg-indigo-500 text-white shadow-xs border border-indigo-300 scale-105"
-                                            : isMapelOnline
-                                            ? "bg-teal-900/60 hover:bg-teal-800/70 text-teal-200 border border-teal-700/50"
-                                            : "bg-indigo-900/60 hover:bg-indigo-800/70 text-indigo-200 border border-indigo-700/50"
-                                        }`}
-                                      >
-                                        P-{pNum}{" "}
-                                        {pNum === stats.latestP
-                                          ? "⭐ (Terakhir)"
-                                          : ""}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                          {/* Mini Counters Grid (Padat 5 Kolom) */}
-                          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
-                            <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
-                                Hadir
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-emerald-100">
-                                {meetingData?.hadir || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
-                                Sakit
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-blue-100">
-                                {meetingData?.sakit || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
-                                Izin
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-amber-100">
-                                {meetingData?.izin || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
-                                Alfa
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-rose-100">
-                                {meetingData?.alfa || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
-                                Cabut
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-violet-100">
-                                {meetingData?.cabut || 0}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Persentase Kehadiran */}
-                          {meetingData?.sudahDiisi && (
-                            <PersenKehadiranBar
-                              data={meetingData}
-                              label={`P-${activeP}`}
-                              semuaData={gabungStatistikSesi(
-                                stats?.perPertemuan,
-                              )}
-                              jumlahSesi={stats?.validMeetings?.length || 0}
-                            />
-                          )}
-
-                          {/* Rata-Rata Nilai & Detail Absen Siswa */}
-                          <div className="pt-1 space-y-2">
-                            {meetingData?.rataRataNilai && (
-                              <div
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${
-                                  isMapelOnline
-                                    ? "bg-teal-900/60 border-teal-400/30 text-teal-200"
-                                    : "bg-indigo-900/60 border-indigo-400/30 text-indigo-200"
-                                }`}
-                              >
-                                <span>🎯</span>
-                                <span>
-                                  Rata-rata Nilai:{" "}
-                                  <b className="text-white">
-                                    {meetingData.rataRataNilai}
-                                  </b>
-                                </span>
-                              </div>
-                            )}
-
-                            {meetingData?.sudahDiisi ? (
-                              meetingData?.absenList?.length > 0 ? (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
-                                      <span>⚠️</span>
-                                      <span>
-                                        Siswa Tidak Hadir (
-                                        {meetingData.absenList.length}):
-                                      </span>
+                            {/* PILIH PERTEMUAN */}
+                            {stats?.validMeetings &&
+                              stats.validMeetings.length > 1 && (
+                                <div className="mt-3 border-t border-slate-200 pt-3">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                    <span
+                                      className={`shrink-0 text-[10px] font-black uppercase tracking-wider ${accent.subText}`}
+                                    >
+                                      Pilih Pertemuan
                                     </span>
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
-                                    {meetingData.absenList.map((item, i) => {
-                                      let colorStyle =
-                                        "bg-rose-500/20 text-rose-200 border-rose-500/40";
-                                      if (item.status === "Sakit") {
-                                        colorStyle =
-                                          "bg-blue-500/20 text-blue-200 border-blue-500/40";
-                                      } else if (item.status === "Izin") {
-                                        colorStyle =
-                                          "bg-amber-500/20 text-amber-200 border-amber-500/40";
-                                      } else if (item.status === "Cabut") {
-                                        colorStyle =
-                                          "bg-violet-500/20 text-violet-200 border-violet-500/40";
-                                      }
-
-                                      return (
-                                        <div
-                                          key={i}
-                                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
-                                        >
-                                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
-                                            {item.status}
-                                          </span>
-                                          <span className="truncate max-w-[150px] sm:max-w-[220px]">
-                                            {item.nama}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
+                                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                                      {stats.validMeetings.map((pNum) => {
+                                        const isSel = pNum === activeP;
+                                        return (
+                                          <button
+                                            key={pNum}
+                                            type="button"
+                                            disabled={isLoadingStats}
+                                            onClick={() =>
+                                              setSelectedPertemuanMapel(
+                                                (prev) => ({
+                                                  ...prev,
+                                                  [mapel.idMapel]: pNum,
+                                                }),
+                                              )
+                                            }
+                                            className={`rounded-lg border px-2.5 py-1 text-[10px] font-black transition-all disabled:opacity-50 ${
+                                              isSel
+                                                ? accent.active
+                                                : accent.inactive
+                                            }`}
+                                          >
+                                            P-{pNum}
+                                            {pNum === stats.latestP
+                                              ? " • Terakhir"
+                                              : ""}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 </div>
-                              ) : (
-                                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
-                                  <span>✨</span>
-                                  <span>
-                                    Semua siswa hadir pada pertemuan ini (
-                                    {totalSiswaDisplay} siswa) — Nihil Absen.
+                              )}
+
+                            {/* RINGKASAN JUMLAH */}
+                            <div className="mt-2 grid grid-cols-5 gap-1 sm:mt-3 sm:gap-2">
+                              {[
+                                {
+                                  label: "Hadir",
+                                  value: meetingData?.hadir || 0,
+                                  icon: "✓",
+                                  cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
+                                },
+                                {
+                                  label: "Sakit",
+                                  value: meetingData?.sakit || 0,
+                                  icon: "＋",
+                                  cls: "border-blue-200 bg-blue-50 text-blue-700",
+                                },
+                                {
+                                  label: "Izin",
+                                  value: meetingData?.izin || 0,
+                                  icon: "i",
+                                  cls: "border-amber-200 bg-amber-50 text-amber-700",
+                                },
+                                {
+                                  label: "Alfa",
+                                  value: meetingData?.alfa || 0,
+                                  icon: "!",
+                                  cls: "border-rose-200 bg-rose-50 text-rose-700",
+                                },
+                                {
+                                  label: "Cabut",
+                                  value: meetingData?.cabut || 0,
+                                  icon: "↗",
+                                  cls: "border-violet-200 bg-violet-50 text-violet-700",
+                                },
+                              ].map((item) => (
+                                <div
+                                  key={item.label}
+                                  className={`rounded-lg border px-1 py-1.5 text-center ${item.cls} sm:rounded-xl sm:px-1.5 sm:py-2`}
+                                >
+                                  <span className="block text-[8px] font-black uppercase tracking-wide opacity-80 sm:text-[9px]">
+                                    {item.label}
+                                  </span>
+                                  <span className="mt-0.5 block text-[13px] font-black sm:text-base">
+                                    {item.value}
                                   </span>
                                 </div>
-                              )
-                            ) : (
-                              <div
-                                className={`text-[11px] font-medium italic flex items-center gap-1.5 rounded-xl px-3 py-1.5 ${
-                                  isMapelOnline
-                                    ? "text-teal-200/80 bg-teal-900/30"
-                                    : "text-indigo-200/80 bg-indigo-900/30"
-                                }`}
-                              >
-                                <span>💡</span>
-                                <span>
-                                  Belum ada presensi pertemuan yang dicatat.
-                                  Buka tabel presensi &amp; nilai di bawah untuk
-                                  mulai mengisi.
-                                </span>
+                              ))}
+                            </div>
+
+                            {meetingData?.sudahDiisi && (
+                              <div className="mt-3">
+                                <PersenKehadiranBar
+                                  data={meetingData}
+                                  label={`P-${activeP}`}
+                                  semuaData={gabungStatistikSesi(
+                                    stats?.perPertemuan,
+                                  )}
+                                  jumlahSesi={stats?.validMeetings?.length || 0}
+                                />
                               </div>
                             )}
-                          </div>
-                        </div>
 
-                        {/* ============================================================ */}
-                        {/* TOMBOL UTAMA: BUKA PRESENSI & NILAI (DILINDUNGI SAAT LOADING) */}
-                        {/* ============================================================ */}
-                        <button
-                          type="button"
-                          disabled={isLoadingStats}
-                          onClick={() => {
-                            if (isLoadingStats) return;
-                            setMapelPresensiAktif(mapel);
-                          }}
-                          className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black transition-all ${
-                            isLoadingStats
-                              ? "bg-slate-800/90 text-slate-400 border border-slate-700 cursor-not-allowed opacity-75 shadow-none"
-                              : isMapelOnline
-                              ? "bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:brightness-110 active:scale-[0.99] text-slate-950 shadow-md border border-emerald-300 cursor-pointer"
-                              : "bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 active:scale-[0.99] text-amber-950 shadow-md border border-amber-300 cursor-pointer"
-                          }`}
-                          title={
-                            isLoadingStats
-                              ? "Data masih dimuat, tombol dinonaktifkan sementara"
-                              : "Buka tabel presensi dan pengisian nilai siswa"
-                          }
-                        >
-                          {isLoadingStats ? (
-                            <span className="flex items-center gap-2">
-                              <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                              <span className="tracking-wider">MEMUAT DATA PRESENSI...</span>
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-2">
-                              <span>📊</span>
-                              <span>BUKA PRESENSI &amp; NILAI</span>
-                            </span>
-                          )}
-                        </button>
-                      </div>
+                            {/* NILAI & DETAIL ABSEN */}
+                            <div className="mt-3 space-y-2">
+                              {meetingData?.rataRataNilai && (
+                                <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] font-bold text-indigo-800">
+                                  <span>🎯</span>
+                                  <span>
+                                    Rata-rata nilai:
+                                    <b className="ml-1 text-indigo-950">
+                                      {meetingData.rataRataNilai}
+                                    </b>
+                                  </span>
+                                </div>
+                              )}
+
+                              {meetingData?.sudahDiisi ? (
+                                meetingData?.absenList?.length > 0 ? (
+                                  <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3">
+                                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                                        ⚠️ Siswa Tidak Hadir
+                                      </span>
+                                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-amber-700 shadow-sm">
+                                        {meetingData.absenList.length} siswa
+                                      </span>
+                                    </div>
+
+                                    <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1 custom-scrollbar">
+                                      {meetingData.absenList.map((item, i) => {
+                                        let statusStyle =
+                                          "border-rose-200 bg-rose-50 text-rose-700";
+                                        if (item.status === "Sakit") {
+                                          statusStyle =
+                                            "border-blue-200 bg-blue-50 text-blue-700";
+                                        } else if (item.status === "Izin") {
+                                          statusStyle =
+                                            "border-amber-200 bg-amber-50 text-amber-700";
+                                        } else if (item.status === "Cabut") {
+                                          statusStyle =
+                                            "border-violet-200 bg-violet-50 text-violet-700";
+                                        }
+
+                                        return (
+                                          <div
+                                            key={i}
+                                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${statusStyle}`}
+                                          >
+                                            <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-black uppercase">
+                                              {item.status}
+                                            </span>
+                                            <span className="max-w-[180px] truncate">
+                                              {item.nama}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] font-bold text-emerald-800">
+                                    <span>✨</span>
+                                    <span>
+                                      Semua siswa hadir pada pertemuan ini (
+                                      {totalSiswaDisplay} siswa) — Nihil absen.
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] font-medium leading-relaxed text-slate-500">
+                                  <span>💡</span>
+                                  <span>
+                                    Belum ada presensi pertemuan yang dicatat.
+                                    Buka tabel presensi &amp; nilai di bawah
+                                    untuk mulai mengisi.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* AKSI UTAMA */}
+                          <button
+                            type="button"
+                            disabled={isLoadingStats}
+                            onClick={() => {
+                              if (isLoadingStats) return;
+                              setMapelPresensiAktif(mapel);
+                            }}
+                            className={`mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-black tracking-wide shadow-sm transition-all active:scale-[0.99] sm:mt-4 sm:min-h-12 sm:gap-2 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs disabled:cursor-not-allowed ${
+                              isLoadingStats
+                                ? "border border-slate-200 bg-slate-100 text-slate-400"
+                                : isMapelOnline
+                                  ? "border border-emerald-300 bg-gradient-to-r from-emerald-400 via-green-400 to-lime-300 text-emerald-950 hover:brightness-105"
+                                  : "border border-blue-300 bg-gradient-to-r from-sky-400 via-blue-400 to-indigo-400 text-white hover:brightness-105"
+                            }`}
+                            title={
+                              isLoadingStats
+                                ? "Data masih dimuat, tombol dinonaktifkan sementara"
+                                : "Buka tabel presensi dan pengisian nilai siswa"
+                            }
+                          >
+                            {isLoadingStats ? (
+                              <span className="flex items-center gap-2">
+                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                                <span>Memuat data presensi...</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2">
+                                <span>📊</span>
+                                <span>Buka Presensi &amp; Nilai</span>
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      </article>
                     );
                   })}
               </div>
@@ -4337,9 +4491,12 @@ function DashboardGuruContent() {
                 </div>
               )}
 
-            {/* LIST KARTU KELAS WALI (SESUAI DENGAN KELOLA WALI KELAS & MAPEL) */}
+            {/* ============================================================
+                 KARTU WALI KELAS — REDESAIN UI
+                 Semua handler, data, statistik, dan navigasi tetap sama.
+               ============================================================ */}
             {!loadingWaliKelas && (
-              <div className="space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 gap-5 sm:gap-6">
                 {daftarWaliKelas
                   .filter((w) => {
                     if (!searchWaliKelas.trim()) return true;
@@ -4359,7 +4516,6 @@ function DashboardGuruContent() {
                     const stats = statsPresensiHariIniWali[wali.idWali];
                     const isLoadingStats = loadingStatsWali[wali.idWali];
 
-                    // VARIABEL TANGGAL & SESI AKTIF
                     const activeTgl =
                       selectedTanggalWali[wali.idWali] ??
                       stats?.latestTanggal ??
@@ -4372,360 +4528,424 @@ function DashboardGuruContent() {
                     const totalSesiDisplay = stats?.validTanggal?.length || 0;
 
                     return (
-                      <div
+                      <article
                         key={wali.idWali}
-                        className="rounded-[2rem] overflow-hidden shadow-lg border border-teal-800 bg-gradient-to-br from-teal-950 via-teal-900 to-slate-950 p-5 sm:p-6 text-white transition-all hover:shadow-2xl space-y-4"
+                        className="group relative overflow-hidden rounded-[1.75rem] border-2 border-yellow-300/80 bg-gradient-to-br from-emerald-50 via-white to-teal-100 shadow-[0_12px_35px_rgba(15,23,42,0.10)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(15,23,42,0.14)]"
                       >
-                        {/* BAGIAN ATAS: NAMA KELAS & BADGES */}
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <h3 className="font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-teal-100 to-emerald-200 drop-shadow-sm">
-                                {wali.namaKelas}
-                              </h3>
-                            </div>
+                        {/* HEADER KUNING TEBAL */}
+                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-4 py-4 sm:px-5 sm:py-5">
+                          <div className="absolute inset-y-0 right-0 w-32 bg-white/20 blur-2xl" />
+                          <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-yellow-500/40 bg-white/80 text-2xl shadow-sm backdrop-blur-sm">
+                                🏫
+                              </div>
 
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {wali.kelas && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-800/60 border border-teal-500/40 text-teal-100">
-                                  Kelas {wali.kelas}
-                                </span>
-                              )}
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-100">
-                                👥 {totalSiswaDisplay} Siswa
-                              </span>
-                              {totalSesiDisplay > 0 && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 shadow-xs">
-                                  🗓️ {totalSesiDisplay} Sesi
-                                </span>
-                              )}
-                              {petugas?.namaSiswa && (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/25 border border-amber-300/50 text-amber-200 shadow-xs">
-                                  ⭐ Petugas: {petugas.namaSiswa}
-                                </span>
-                              )}
-                            </div>
-
-                            {cleanText && (
-                              <p className="text-xs text-teal-200/90 font-medium italic pt-0.5">
-                                {cleanText}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* TOMBOL AKSI KANAN */}
-                          <div className="flex gap-2 flex-wrap shrink-0 mt-1 md:mt-0 items-center">
-                            <button
-                              type="button"
-                              onClick={() => setWaliPetugasTarget(wali)}
-                              className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-amber-950 border border-amber-300/60 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>⭐</span>
-                              <span>Petugas Presensi</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setWaliKelasJurnalAktif(wali)}
-                              className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-indigo-400/40 shadow-md transition-all flex items-center gap-1.5"
-                            >
-                              <span>📝</span>
-                              <span>Jurnal</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCetakPdfWaliKelasDirect(wali)
-                              }
-                              disabled={
-                                cetakWaliKelasCardLoadingId === wali.idWali
-                              }
-                              className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
-                            >
-                              {cetakWaliKelasCardLoadingId === wali.idWali ? (
-                                <>
-                                  <span className="inline-block animate-spin">
-                                    ⏳
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="break-words text-lg font-black leading-tight tracking-tight text-slate-950 sm:text-xl lg:text-2xl">
+                                    {wali.namaKelas}
+                                  </h3>
+                                  <span className="inline-flex items-center rounded-full border border-teal-300 bg-teal-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-teal-800 shadow-sm">
+                                    🏫 WALI KELAS
                                   </span>
-                                  <span>Mencetak...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🖨️</span>
-                                  <span>Cetak PDF</span>
-                                </>
-                              )}
-                            </button>
+                                </div>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                router.push(
-                                  "/magang/guru/guru-wali-kelas/kelola",
-                                )
-                              }
-                              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-2 sm:py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5"
-                            >
-                              <span>⚙️</span>
-                              <span>Kelola Kelas</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* PANEL STATISTIK PRESENSI & SELECTOR SESI TANGGAL */}
-                        <div className="rounded-2xl border border-teal-700/60 bg-teal-950/70 p-3.5 sm:p-4 space-y-3 backdrop-blur-xs">
-                          {/* Header Bar Statistik */}
-                          <div className="flex items-center justify-between gap-2 border-b border-teal-800/60 pb-2.5 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">📊</span>
-                              <div>
-                                <span className="text-xs font-black tracking-wide text-white block sm:inline">
-                                  Presensi Pertemuan Sebelumnya
-                                </span>
-                                {activeTgl && (
-                                  <span className="text-[11px] text-teal-200/80 font-medium sm:ml-2">
-                                    ({formatTanggalWaliIndo(activeTgl)})
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {wali.kelas && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                      🎓 <span>Kelas {wali.kelas}</span>
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                    👥 <span>{totalSiswaDisplay} Siswa</span>
                                   </span>
-                                )}
+                                  {totalSesiDisplay > 0 && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                      🗓️ <span>{totalSesiDisplay} Sesi</span>
+                                    </span>
+                                  )}
+                                  {petugas?.namaSiswa && (
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 shadow-sm">
+                                      ⭐{" "}
+                                      <span>Petugas: {petugas.namaSiswa}</span>
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5">
+                            <span className="inline-flex w-fit shrink-0 items-center rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-teal-800 shadow-sm">
+                              Pengelolaan Siswa &amp; Bimbingan
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* BODY GRADIENT */}
+                        <div className="bg-gradient-to-br from-emerald-50/95 via-white/95 to-teal-50/95 p-4 sm:p-5 lg:p-6">
+                          {/* KETERANGAN */}
+                          {(cleanText || petugas?.namaSiswa) && (
+                            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {cleanText && (
+                                <div className="rounded-xl border border-slate-200 bg-white/85 px-3 py-2.5 shadow-sm">
+                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                                    Keterangan
+                                  </span>
+                                  <p className="text-[11px] font-semibold leading-relaxed text-slate-700">
+                                    {cleanText}
+                                  </p>
+                                </div>
+                              )}
+
+                              {petugas?.namaSiswa && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2.5 shadow-sm">
+                                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-amber-700">
+                                    Petugas Presensi
+                                  </span>
+                                  <p className="text-[11px] font-black leading-relaxed text-amber-900">
+                                    ⭐ {petugas.namaSiswa}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* AKSI CEPAT */}
+                          <div className="mb-4 rounded-2xl border border-slate-200 bg-white/75 p-3 shadow-sm">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                  Aksi Cepat
+                                </p>
+                                <p className="text-[10px] font-medium text-slate-400">
+                                  Presensi, jurnal, laporan, dan pengelolaan
+                                  kelas
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-yellow-100 px-2 py-1 text-[9px] font-black text-yellow-800">
+                                Wali Kelas
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              <button
+                                type="button"
+                                onClick={() => setWaliPetugasTarget(wali)}
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-2 text-[10px] font-black text-amber-950 shadow-sm transition-all hover:brightness-105 active:scale-95 sm:text-[11px]"
+                              >
+                                <span>⭐</span>
+                                <span>Petugas Presensi</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setWaliKelasJurnalAktif(wali)}
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 sm:text-[11px]"
+                              >
+                                <span>📝</span>
+                                <span>Jurnal</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleCetakPdfWaliKelasDirect(wali)
+                                }
+                                disabled={
+                                  cetakWaliKelasCardLoadingId === wali.idWali
+                                }
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[11px]"
+                              >
+                                {cetakWaliKelasCardLoadingId === wali.idWali ? (
+                                  <>
+                                    <span className="animate-spin">⏳</span>
+                                    <span>Mencetak...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🖨️</span>
+                                    <span>Cetak PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  router.push(
+                                    "/magang/guru/guru-wali-kelas/kelola",
+                                  )
+                                }
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-700 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:bg-slate-800 active:scale-95 sm:text-[11px]"
+                              >
+                                <span>⚙️</span>
+                                <span>Kelola Kelas</span>
+                              </button>
+                            </div>
+                          </div>
+                          {isLoadingStats && (
+                            <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-bold text-amber-800">
+                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                              <span>
+                                Memeriksa data presensi dan riwayat sesi...
+                              </span>
+                            </div>
+                          )}
+
+                          {/* PANEL PRESENSI TERAKHIR */}
+                          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 sm:p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-200 bg-teal-50">
+                                  📊
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black text-slate-800 sm:text-sm">
+                                    Presensi Pertemuan Terakhir
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                                    {activeTgl
+                                      ? formatTanggalWaliIndo(activeTgl)
+                                      : "Belum ada sesi tercatat"}
+                                  </p>
+                                </div>
+                              </div>
+
                               {isLoadingStats ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-800/70 text-teal-200 text-[10px] font-bold animate-pulse">
-                                  ⏳ Memeriksa...
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">
+                                  ⏳ Memeriksa
                                 </span>
                               ) : sesiData?.sudahDiisi ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
                                   ✅ Sudah Diisi
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-[10px] font-bold">
-                                  ⚪ Belum Ada Pertemuan
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                                  ○ Belum Ada Pertemuan
                                 </span>
+                              )}
+                            </div>
+
+                            {/* PILIH SESI */}
+                            {stats?.validTanggal &&
+                              stats.validTanggal.length > 1 && (
+                                <div className="mt-3 border-t border-slate-200 pt-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-teal-700">
+                                      Pilih Sesi
+                                    </span>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        scrollHorizontal(
+                                          `scroll-sesi-wali-${wali.idWali}`,
+                                          "left",
+                                        )
+                                      }
+                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-teal-200 bg-white text-[10px] font-black text-teal-700 transition-all hover:bg-teal-50 active:scale-95"
+                                      title="Sesi sebelumnya"
+                                    >
+                                      ◀
+                                    </button>
+
+                                    <div
+                                      id={`scroll-sesi-wali-${wali.idWali}`}
+                                      className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-0.5 scroll-smooth"
+                                      style={{
+                                        scrollbarWidth: "none",
+                                        msOverflowStyle: "none",
+                                      }}
+                                    >
+                                      <style>{`#scroll-sesi-wali-${wali.idWali}::-webkit-scrollbar { display: none; }`}</style>
+
+                                      {[...stats.validTanggal]
+                                        .reverse()
+                                        .map((tgl) => {
+                                          const isSel = tgl === activeTgl;
+                                          return (
+                                            <button
+                                              key={tgl}
+                                              type="button"
+                                              onClick={() =>
+                                                setSelectedTanggalWali(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [wali.idWali]: tgl,
+                                                  }),
+                                                )
+                                              }
+                                              className={`shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-black transition-all ${
+                                                isSel
+                                                  ? "border-teal-500 bg-teal-600 text-white shadow-sm"
+                                                  : "border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:bg-teal-50"
+                                              }`}
+                                            >
+                                              {formatTanggalKolom(tgl)}{" "}
+                                              {tgl === stats.latestTanggal
+                                                ? "⭐"
+                                                : ""}
+                                            </button>
+                                          );
+                                        })}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        scrollHorizontal(
+                                          `scroll-sesi-wali-${wali.idWali}`,
+                                          "right",
+                                        )
+                                      }
+                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-teal-200 bg-white text-[10px] font-black text-teal-700 transition-all hover:bg-teal-50 active:scale-95"
+                                      title="Sesi berikutnya"
+                                    >
+                                      ▶
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                            {/* RINGKASAN JUMLAH */}
+                            <div className="mt-3 grid grid-cols-5 gap-1.5 sm:gap-2">
+                              {[
+                                {
+                                  label: "Hadir",
+                                  value: sesiData?.hadir || 0,
+                                  cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
+                                },
+                                {
+                                  label: "Sakit",
+                                  value: sesiData?.sakit || 0,
+                                  cls: "border-blue-200 bg-blue-50 text-blue-700",
+                                },
+                                {
+                                  label: "Izin",
+                                  value: sesiData?.izin || 0,
+                                  cls: "border-amber-200 bg-amber-50 text-amber-700",
+                                },
+                                {
+                                  label: "Alfa",
+                                  value: sesiData?.alfa || 0,
+                                  cls: "border-rose-200 bg-rose-50 text-rose-700",
+                                },
+                                {
+                                  label: "Cabut",
+                                  value: sesiData?.cabut || 0,
+                                  cls: "border-violet-200 bg-violet-50 text-violet-700",
+                                },
+                              ].map((item) => (
+                                <div
+                                  key={item.label}
+                                  className={`rounded-xl border px-1.5 py-2 text-center ${item.cls}`}
+                                >
+                                  <span className="block text-[9px] font-black uppercase tracking-wide opacity-80">
+                                    {item.label}
+                                  </span>
+                                  <span className="mt-0.5 block text-sm font-black sm:text-base">
+                                    {item.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {sesiData?.sudahDiisi && (
+                              <div className="mt-3">
+                                <PersenKehadiranBar
+                                  data={sesiData}
+                                  label={formatTanggalKolom(activeTgl)}
+                                  semuaData={gabungStatistikSesi(
+                                    stats?.perTanggal,
+                                  )}
+                                  jumlahSesi={stats?.validTanggal?.length || 0}
+                                />
+                              </div>
+                            )}
+
+                            {/* DETAIL ABSEN */}
+                            <div className="mt-3">
+                              {sesiData?.sudahDiisi ? (
+                                sesiData?.absenList?.length > 0 ? (
+                                  <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3">
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                                        ⚠️ Siswa Tidak Hadir
+                                      </span>
+                                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-amber-700 shadow-sm">
+                                        {sesiData.absenList.length} siswa
+                                      </span>
+                                    </div>
+
+                                    <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1 custom-scrollbar">
+                                      {sesiData.absenList.map((item, i) => {
+                                        let statusStyle =
+                                          "border-rose-200 bg-rose-50 text-rose-700";
+                                        if (item.status === "Sakit") {
+                                          statusStyle =
+                                            "border-blue-200 bg-blue-50 text-blue-700";
+                                        } else if (item.status === "Izin") {
+                                          statusStyle =
+                                            "border-amber-200 bg-amber-50 text-amber-700";
+                                        } else if (item.status === "Cabut") {
+                                          statusStyle =
+                                            "border-violet-200 bg-violet-50 text-violet-700";
+                                        }
+
+                                        return (
+                                          <div
+                                            key={i}
+                                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${statusStyle}`}
+                                          >
+                                            <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-black uppercase">
+                                              {item.status}
+                                            </span>
+                                            <span className="max-w-[180px] truncate">
+                                              {item.nama}
+                                            </span>
+                                            {item.keterangan && (
+                                              <span className="max-w-[130px] truncate text-[10px] font-medium italic text-slate-500">
+                                                ({item.keterangan})
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] font-bold text-emerald-800">
+                                    <span>✨</span>
+                                    <span>
+                                      Semua siswa hadir pada pertemuan ini (
+                                      {totalSiswaDisplay} siswa) — Nihil absen.
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] font-medium leading-relaxed text-slate-500">
+                                  <span>💡</span>
+                                  <span>
+                                    Belum ada presensi yang dicatat. Gunakan
+                                    tombol di bawah untuk membuka tabel presensi
+                                    kelas.
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </div>
 
-                          {/* BARIS PILIH SESI (TOMBOL TANGGAL) DENGAN SCROLL HORIZONTAL */}
-                          {stats?.validTanggal &&
-                            stats.validTanggal.length > 1 && (
-                              <div className="flex items-center gap-2 pt-1 w-full overflow-hidden">
-                                <span className="text-[10px] text-teal-300 font-black uppercase tracking-wider shrink-0">
-                                  Pilih Sesi:
-                                </span>
-
-                                {/* Tombol Panah Kiri */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    scrollHorizontal(
-                                      `scroll-sesi-wali-${wali.idWali}`,
-                                      "left",
-                                    )
-                                  }
-                                  className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-teal-800/80 hover:bg-teal-700 text-teal-200 border border-teal-600/50 transition-all active:scale-95"
-                                >
-                                  ◀
-                                </button>
-
-                                {/* Container Sesi (Scroll Horizontal) */}
-                                <div
-                                  id={`scroll-sesi-wali-${wali.idWali}`}
-                                  className="flex items-center gap-1.5 overflow-x-auto scroll-smooth flex-1 px-1"
-                                  style={{
-                                    scrollbarWidth: "none",
-                                    msOverflowStyle: "none",
-                                  }}
-                                >
-                                  {/* Sembunyikan scrollbar native agar terlihat bersih */}
-                                  <style>{`#scroll-sesi-wali-${wali.idWali}::-webkit-scrollbar { display: none; }`}</style>
-
-                                  {[...stats.validTanggal]
-                                    .reverse()
-                                    .map((tgl) => {
-                                      const isSel = tgl === activeTgl;
-                                      return (
-                                        <button
-                                          key={tgl}
-                                          type="button"
-                                          onClick={() =>
-                                            setSelectedTanggalWali((prev) => ({
-                                              ...prev,
-                                              [wali.idWali]: tgl,
-                                            }))
-                                          }
-                                          className={`shrink-0 px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
-                                            isSel
-                                              ? "bg-teal-500 text-white shadow-xs border border-teal-300 scale-105"
-                                              : "bg-teal-900/60 hover:bg-teal-800/70 text-teal-200 border border-teal-700/50"
-                                          }`}
-                                        >
-                                          {formatTanggalKolom(tgl)}{" "}
-                                          {tgl === stats.latestTanggal
-                                            ? "⭐"
-                                            : ""}
-                                        </button>
-                                      );
-                                    })}
-                                </div>
-
-                                {/* Tombol Panah Kanan */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    scrollHorizontal(
-                                      `scroll-sesi-wali-${wali.idWali}`,
-                                      "right",
-                                    )
-                                  }
-                                  className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-teal-800/80 hover:bg-teal-700 text-teal-200 border border-teal-600/50 transition-all active:scale-95"
-                                >
-                                  ▶
-                                </button>
-                              </div>
-                            )}
-
-                          {/* Mini Counters Grid */}
-                          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 text-center">
-                            <div className="rounded-xl bg-emerald-950/60 border border-emerald-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-emerald-300 tracking-wider">
-                                Hadir
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-emerald-100">
-                                {sesiData?.hadir || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-blue-950/60 border border-blue-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-blue-300 tracking-wider">
-                                Sakit
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-blue-100">
-                                {sesiData?.sakit || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-amber-950/60 border border-amber-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">
-                                Izin
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-amber-100">
-                                {sesiData?.izin || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-rose-950/60 border border-rose-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-rose-300 tracking-wider">
-                                Alfa
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-rose-100">
-                                {sesiData?.alfa || 0}
-                              </span>
-                            </div>
-
-                            <div className="rounded-xl bg-violet-950/60 border border-violet-500/40 p-1.5 sm:p-2">
-                              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-violet-300 tracking-wider">
-                                Cabut
-                              </span>
-                              <span className="text-xs sm:text-base font-black text-violet-100">
-                                {sesiData?.cabut || 0}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Persentase Kehadiran (bertingkat warna) */}
-                          {sesiData?.sudahDiisi && (
-                            <PersenKehadiranBar
-                              data={sesiData}
-                              label={formatTanggalKolom(activeTgl)}
-                              semuaData={gabungStatistikSesi(stats?.perTanggal)}
-                              jumlahSesi={stats?.validTanggal?.length || 0}
-                            />
-                          )}
-
-                          {/* Detail Siswa Absen */}
-                          <div className="pt-1">
-                            {sesiData?.sudahDiisi ? (
-                              sesiData?.absenList?.length > 0 ? (
-                                <div className="space-y-1.5">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
-                                    <span>⚠️</span>
-                                    <span>
-                                      Siswa Tidak Hadir (
-                                      {sesiData.absenList.length}):
-                                    </span>
-                                  </span>
-
-                                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
-                                    {sesiData.absenList.map((item, i) => {
-                                      let colorStyle =
-                                        "bg-rose-500/20 text-rose-200 border-rose-500/40";
-                                      if (item.status === "Sakit") {
-                                        colorStyle =
-                                          "bg-blue-500/20 text-blue-200 border-blue-500/40";
-                                      } else if (item.status === "Izin") {
-                                        colorStyle =
-                                          "bg-amber-500/20 text-amber-200 border-amber-500/40";
-                                      } else if (item.status === "Cabut") {
-                                        colorStyle =
-                                          "bg-violet-500/20 text-violet-200 border-violet-500/40";
-                                      }
-
-                                      return (
-                                        <div
-                                          key={i}
-                                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border font-bold shadow-xs ${colorStyle}`}
-                                        >
-                                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded bg-black/40 tracking-wider">
-                                            {item.status}
-                                          </span>
-                                          <span className="truncate max-w-[150px] sm:max-w-[220px]">
-                                            {item.nama}
-                                          </span>
-                                          {item.keterangan && (
-                                            <span className="text-[10px] text-white/60 font-medium italic truncate max-w-[120px]">
-                                              ({item.keterangan})
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">
-                                  <span>✨</span>
-                                  <span>
-                                    Semua siswa hadir pada pertemuan ini (
-                                    {totalSiswaDisplay} siswa) — Nihil Absen.
-                                  </span>
-                                </div>
-                              )
-                            ) : (
-                              <div className="text-[11px] text-teal-200/80 font-medium italic flex items-center gap-1.5 bg-teal-900/30 rounded-xl px-3 py-1.5">
-                                <span>💡</span>
-                                <span>
-                                  Belum ada presensi yang dicatat. Gunakan
-                                  tombol di bawah untuk membuka tabel presensi
-                                  kelas.
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          {/* AKSI UTAMA */}
+                          <button
+                            type="button"
+                            onClick={() => setWaliKelasPresensiAktif(wali)}
+                            className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 px-4 py-3 text-xs font-black tracking-wide text-amber-950 shadow-sm transition-all hover:brightness-105 active:scale-[0.99]"
+                          >
+                            <span>📅</span>
+                            <span>Buka Presensi Harian</span>
+                          </button>
                         </div>
-
-                        {/* TOMBOL UTAMA PRESENSI */}
-                        <button
-                          type="button"
-                          onClick={() => setWaliKelasPresensiAktif(wali)}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-110 active:scale-[0.99] px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-amber-950 shadow-md border border-amber-300 transition-all cursor-pointer"
-                        >
-                          <span>📅</span>
-                          <span>BUKA PRESENSI HARIAN</span>
-                        </button>
-                      </div>
+                      </article>
                     );
                   })}
               </div>
@@ -6689,8 +6909,3 @@ function SolidCompactCard({
     </button>
   );
 }
-
-
-
-
-
