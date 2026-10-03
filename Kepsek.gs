@@ -4,7 +4,7 @@
 // Agregator Read-Only Lintas Guru untuk 4 Modul:
 // 1. Pembimbing PKL
 // 2. Guru Wali
-// 3. Guru Mapel
+// 3. Guru Mapel  ← sekarang termasuk presensi & tugas per mapel
 // 4. Wali Kelas
 // ============================================================
 
@@ -145,7 +145,9 @@ function getSheetRowsAsObjects_(sheetName) {
     typeof getAllDataMapel_ === "function" &&
     (sheetName === "MAPEL" ||
       sheetName === "SISWA_MAPEL" ||
-      sheetName === "JURNAL_MAPEL")
+      sheetName === "JURNAL_MAPEL" ||
+      sheetName === "PRESENSI_MAPEL" ||
+      sheetName === "UPLOAD_SISWA")
   ) {
     try {
       const rowsMapel = getAllDataMapel_(sheetName);
@@ -557,7 +559,7 @@ function getDashboardKepsekWali(params) {
           sw.NAMA_SISWA ||
           sw.namaSiswa ||
           sw.NAMA ||
-          `Siswa ${idSiswa}`,
+          "Siswa " + idSiswa,
       ).trim();
       const kelasSiswa = String(
         infoSiswa.kelas || sw.KELAS || sw.kelas || "-",
@@ -696,11 +698,26 @@ function getDashboardKepsekWali(params) {
 
 // ------------------------------------------------------------
 // 3. DASHBOARD KEPSEK: MODUL GURU MAPEL
+// Termasuk: presensi per pertemuan & tugas (UPLOAD_SISWA) per mapel
 // ------------------------------------------------------------
+function formatTglMapelSafe_(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    try {
+      return Utilities.formatDate(val, "Asia/Jakarta", "yyyy-MM-dd");
+    } catch (e) {
+      try { return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e2) {}
+    }
+  }
+  var s = String(val).trim();
+  if (s.length >= 10 && s.charAt(4) === "-" && s.charAt(7) === "-") return s.substring(0, 10);
+  return s;
+}
+
 function getDashboardKepsekMapel(params) {
   params = params || {};
   const forceRefresh = !!params.forceRefresh;
-  const cacheKey = "MAPEL_DATA_V2";
+  const cacheKey = "MAPEL_DATA_V3";
 
   if (!forceRefresh) {
     const cached = getKepsekCache_(cacheKey);
@@ -712,6 +729,15 @@ function getDashboardKepsekMapel(params) {
     const mapelRows = getSheetRowsAsObjects_("MAPEL");
     const siswaMapelRows = getSheetRowsAsObjects_("SISWA_MAPEL");
     const jurnalMapelRows = getSheetRowsAsObjects_("JURNAL_MAPEL");
+    const presensiMapelRows = getSheetRowsAsObjects_("PRESENSI_MAPEL");
+
+    // Ambil data tugas (UPLOAD_SISWA) jika ada
+    var uploadSiswaRows = [];
+    try {
+      uploadSiswaRows = getSheetRowsAsObjects_("UPLOAD_SISWA");
+    } catch(e) {
+      Logger.log("UPLOAD_SISWA tidak tersedia: " + e.message);
+    }
 
     const guruMap = {};
     const guruByName = {};
@@ -734,21 +760,32 @@ function getDashboardKepsekMapel(params) {
       }
     });
 
-    // Mapel & Rombel
+    // Mapel & Rombel — tentukan juga apakah ONLINE berdasarkan KETERANGAN
     const mapelDetailMap = {};
     mapelRows.forEach(function (m) {
       const idMapel = String(m.ID_MAPEL || m.idMapel || "").trim();
       const idGuru = String(m.ID_GURU || m.idGuru || "").trim();
       const namaMapel = String(m.NAMA_MAPEL || m.namaMapel || "").trim();
       const kelas = String(m.KELAS || m.kelas || "").trim();
+      const keterangan = String(m.KETERANGAN || m.keterangan || "").trim();
+      const isOnline = keterangan.toUpperCase().indexOf("ONLINE") !== -1 ||
+                       namaMapel.toUpperCase().indexOf("ONLINE") !== -1;
 
       const itemMapel = {
         idMapel: idMapel,
         namaMapel: namaMapel,
         kelas: kelas,
+        keterangan: keterangan,
+        isOnline: isOnline,
         idGuru: idGuru,
         siswaCount: 0,
         daftarSiswa: [],
+        // Presensi per pertemuan: Map pertemuanKe -> { tanggal, daftarHadir[], daftarTidakHadir[], totalHadir, totalSiswa }
+        presensiPertemuan: [],
+        totalPertemuan: 0,
+        // Tugas per pertemuan
+        tugasPertemuan: [],
+        totalTugasDikumpulkan: 0,
       };
       mapelDetailMap[idMapel] = itemMapel;
 
@@ -762,7 +799,7 @@ function getDashboardKepsekMapel(params) {
       const idMapel = String(sm.ID_MAPEL || sm.idMapel || "").trim();
       const idSiswa = String(sm.ID_SISWA || sm.idSiswa || "").trim();
       const namaSiswa = String(
-        sm.NAMA_SISWA || sm.namaSiswa || `Siswa ${idSiswa}`,
+        sm.NAMA_SISWA || sm.namaSiswa || "Siswa " + idSiswa,
       ).trim();
 
       if (idMapel && mapelDetailMap[idMapel]) {
@@ -772,6 +809,118 @@ function getDashboardKepsekMapel(params) {
           nama: namaSiswa,
         });
       }
+    });
+
+    // ============================================
+    // PRESENSI PER MAPEL — kelompokkan per pertemuan
+    // ============================================
+    // Struktur: mapelPresensiMap[idMapel][pertemuanKe] = { tanggal, rows[] }
+    const mapelPresensiMap = {};
+    presensiMapelRows.forEach(function (p) {
+      const idMapel = String(p.ID_MAPEL || p.idMapel || "").trim();
+      const idSiswa = String(p.ID_SISWA || p.idSiswa || "").trim();
+      const namaSiswa = String(p.NAMA_SISWA || p.namaSiswa || "Siswa " + idSiswa).trim();
+      const pertemuan = Number(p.PERTEMUAN_KE || p.pertemuanKe || 0);
+      const tgl = formatTglMapelSafe_(p.TANGGAL || p.tanggal || p.CREATED_AT);
+      const status = String(p.STATUS || p.status || "Hadir").trim();
+      const nilai = p.NILAI_HARIAN || p.nilaiHarian || "";
+
+      if (!idMapel || !mapelDetailMap[idMapel]) return;
+      if (!mapelPresensiMap[idMapel]) mapelPresensiMap[idMapel] = {};
+      const key = String(pertemuan);
+      if (!mapelPresensiMap[idMapel][key]) {
+        mapelPresensiMap[idMapel][key] = {
+          pertemuanKe: pertemuan,
+          tanggal: tgl,
+          rows: [],
+          hadir: 0,
+          tidakHadir: 0,
+        };
+      }
+      // Selalu update tanggal ke yang lebih baru
+      if (tgl && tgl > mapelPresensiMap[idMapel][key].tanggal) {
+        mapelPresensiMap[idMapel][key].tanggal = tgl;
+      }
+      mapelPresensiMap[idMapel][key].rows.push({
+        idSiswa: idSiswa,
+        nama: namaSiswa,
+        status: status,
+        nilai: nilai,
+      });
+      if (status === "Hadir") {
+        mapelPresensiMap[idMapel][key].hadir++;
+      } else {
+        mapelPresensiMap[idMapel][key].tidakHadir++;
+      }
+    });
+
+    // Masukkan presensiPertemuan ke mapelDetailMap
+    Object.keys(mapelPresensiMap).forEach(function(idMapel) {
+      if (!mapelDetailMap[idMapel]) return;
+      const pertemuanObj = mapelPresensiMap[idMapel];
+      const pertemuanList = Object.keys(pertemuanObj)
+        .map(function(k) { return pertemuanObj[k]; })
+        .sort(function(a, b) { return a.pertemuanKe - b.pertemuanKe; });
+
+      mapelDetailMap[idMapel].presensiPertemuan = pertemuanList.map(function(pt) {
+        const total = pt.hadir + pt.tidakHadir;
+        return {
+          pertemuanKe: pt.pertemuanKe,
+          tanggal: pt.tanggal,
+          totalHadir: pt.hadir,
+          totalTidakHadir: pt.tidakHadir,
+          totalSiswa: total,
+          persenHadir: total > 0 ? Math.round((pt.hadir / total) * 100) : 0,
+          daftarSiswa: pt.rows.slice(0, 50), // max 50 per pertemuan untuk hemat payload
+        };
+      });
+      mapelDetailMap[idMapel].totalPertemuan = pertemuanList.length;
+    });
+
+    // ============================================
+    // TUGAS (UPLOAD_SISWA) PER MAPEL
+    // ============================================
+    // Struktur UPLOAD_SISWA: ID_UPLOAD, ID_GURU, ID_MAPEL, ID_SISWA, PERTEMUAN_KE, NAMA_FILE, FILE_URL, CREATED_AT
+    const mapelTugasMap = {};
+    uploadSiswaRows.forEach(function(u) {
+      const idMapel = String(u.ID_MAPEL || u.idMapel || "").trim();
+      const idSiswa = String(u.ID_SISWA || u.idSiswa || "").trim();
+      const pertemuan = Number(u.PERTEMUAN_KE || u.pertemuanKe || 0);
+      const namaFile = String(u.NAMA_FILE || u.namaFile || u.NAMA || "").trim();
+      const fileUrl = String(u.FILE_URL || u.fileUrl || u.URL || "").trim();
+      const tgl = formatTglMapelSafe_(u.CREATED_AT || u.createdAt || u.TANGGAL);
+
+      if (!idMapel || !mapelDetailMap[idMapel]) return;
+      if (!mapelTugasMap[idMapel]) mapelTugasMap[idMapel] = {};
+      const key = String(pertemuan);
+      if (!mapelTugasMap[idMapel][key]) {
+        mapelTugasMap[idMapel][key] = {
+          pertemuanKe: pertemuan,
+          jumlahDikumpulkan: 0,
+          daftarTugas: [],
+        };
+      }
+      mapelTugasMap[idMapel][key].jumlahDikumpulkan++;
+      mapelTugasMap[idMapel][key].daftarTugas.push({
+        idSiswa: idSiswa,
+        namaFile: namaFile,
+        fileUrl: fileUrl,
+        tanggal: tgl,
+      });
+    });
+
+    // Masukkan tugasPertemuan ke mapelDetailMap
+    Object.keys(mapelTugasMap).forEach(function(idMapel) {
+      if (!mapelDetailMap[idMapel]) return;
+      const tugasObj = mapelTugasMap[idMapel];
+      let totalTugas = 0;
+      const tugasList = Object.keys(tugasObj)
+        .map(function(k) { return tugasObj[k]; })
+        .sort(function(a, b) { return a.pertemuanKe - b.pertemuanKe; });
+
+      tugasList.forEach(function(t) { totalTugas += t.jumlahDikumpulkan; });
+      mapelDetailMap[idMapel].tugasPertemuan = tugasList;
+      mapelDetailMap[idMapel].totalTugasDikumpulkan = totalTugas;
     });
 
     // Jurnal Mapel
@@ -784,9 +933,11 @@ function getDashboardKepsekMapel(params) {
       const ket = String(jm.KETERANGAN || jm.keterangan || "").trim();
       const namaSiswa = String(jm.NAMA_SISWA || jm.namaSiswa || "").trim();
       const fotoUrl = String(jm.FOTO_URL || jm.fotoUrl || "").trim();
+      const idMapel = String(jm.ID_MAPEL || jm.idMapel || "").trim();
 
       const itemJurnal = {
         idJurnal: String(jm.ID_JURNAL || jm.idJurnal || ""),
+        idMapel: idMapel,
         tanggal: tgl,
         topik: topik,
         keterangan: ket,
@@ -810,8 +961,12 @@ function getDashboardKepsekMapel(params) {
       .map(function (k) {
         const g = guruMap[k];
         let totalSiswaGuru = 0;
+        let totalPertemuanGuru = 0;
+        let totalTugasGuru = 0;
         g.mapelList.forEach(function (m) {
           totalSiswaGuru += m.siswaCount;
+          totalPertemuanGuru += m.totalPertemuan;
+          totalTugasGuru += m.totalTugasDikumpulkan;
         });
 
         return {
@@ -820,6 +975,8 @@ function getDashboardKepsekMapel(params) {
           jumlahMapel: g.mapelList.length,
           daftarMapel: g.mapelList,
           totalSiswa: totalSiswaGuru,
+          totalPertemuan: totalPertemuanGuru,
+          totalTugas: totalTugasGuru,
           jumlahJurnal: g.jurnalList.length,
           jurnalTerakhir: {
             tanggal: g.lastJurnalDate,
@@ -842,13 +999,15 @@ function getDashboardKepsekMapel(params) {
         guruAktifMapel.length > 0 ? guruAktifMapel.length : allGuru.length,
       totalKelasMapel: mapelRows.length,
       totalJurnalMapel: jurnalMapelRows.length,
+      totalPresensiMapel: presensiMapelRows.length,
+      totalTugasDikumpulkan: uploadSiswaRows.length,
       listGuruMapel: (guruAktifMapel.length > 0
         ? guruAktifMapel
         : cardGuruMapel
       ).map(function (g) {
         return {
           nama: g.namaGuru,
-          info: g.jumlahMapel + " mapel/rombel • " + g.totalSiswa + " siswa",
+          info: g.jumlahMapel + " mapel/rombel • " + g.totalSiswa + " siswa • " + g.totalPertemuan + " pertemuan",
         };
       }),
       listKelasMapel: mapelRows.map(function (m) {
@@ -1173,13 +1332,11 @@ function getDashboardKepsekWaliKelas(params) {
             presensiStat.todayEntries ||
             {};
 
-        // Hitung rincian status sesi aktif (hari ini atau sesi terbaru)
         let activeHadir = 0;
         let activeSakit = 0;
         let activeIzin = 0;
         let activeAlfa = 0;
 
-        // Buat daftar siswa lengkap dengan status hari ini / sesi aktif
         const siswaDetailList = rawSiswaIds.map(function (sid) {
           const sInfo = siswaMap[sid] || {};
           const tEntry = activeEntries ? activeEntries[sid] : null;
@@ -1220,7 +1377,6 @@ function getDashboardKepsekWaliKelas(params) {
         grandIzinHariIni += activeIzin;
         grandAlfaHariIni += activeAlfa;
 
-        // Urutkan siswa: yang sudah Hadir di atas, lalu abjad
         siswaDetailList.sort(function (a, b) {
           if (a.isHadirHariIni && !b.isHadirHariIni) return -1;
           if (!a.isHadirHariIni && b.isHadirHariIni) return 1;
@@ -1238,7 +1394,6 @@ function getDashboardKepsekWaliKelas(params) {
             ? Math.round((totalHadirKelas / totalSiswaKelas) * 100)
             : 0;
 
-        // Urutkan riwayat presensi kelas (terbaru di atas)
         const riwayatKelas = (presensiStat.riwayatPresensi || [])
           .slice()
           .reverse();
@@ -1251,7 +1406,6 @@ function getDashboardKepsekWaliKelas(params) {
           keterangan: ket,
           jumlahSiswa: totalSiswaKelas,
           daftarSiswa: siswaDetailList,
-          // Presensi Hari Ini / Sesi Aktif
           presensiHariIni: {
             tanggal: activeDate,
             isToday: hasTodayPresensi,
@@ -1273,7 +1427,6 @@ function getDashboardKepsekWaliKelas(params) {
               return s.statusHariIni === "Belum Presensi";
             }),
           },
-          // Presensi Kumulatif (Keseluruhan)
           presensi: {
             hadir: presensiStat.hadir || 0,
             sakit: presensiStat.sakit || 0,
@@ -1282,10 +1435,8 @@ function getDashboardKepsekWaliKelas(params) {
             totalEntries: presensiStat.totalEntries || 0,
             latestDate: presensiStat.latestDate || "",
           },
-          // Riwayat Presensi Kelas Ini (Max 300 record terbaru)
           riwayatPresensi: riwayatKelas.slice(0, 300),
           totalPresensiKelas: riwayatKelas.length,
-          // Jurnal Bimbingan
           jumlahJurnal: jurnalList.length,
           riwayatJurnal: jurnalList.slice(-10).reverse(),
           createdAt: String(w.CREATED_AT || w.createdAt || ""),
@@ -1306,7 +1457,6 @@ function getDashboardKepsekWaliKelas(params) {
       totalSiswaWaliKelas: totalSiswaWaliKelas,
       totalPresensiTercatat: presensiWaliRows.length,
       totalJurnalBimbingan: jurnalWaliRows.length,
-      // Statistik Hari Ini
       tanggalHariIni: todayYmd,
       totalHadirHariIni: grandHadirHariIni,
       totalSakitHariIni: grandSakitHariIni,
@@ -1347,7 +1497,6 @@ function getDashboardKepsekWaliKelas(params) {
               String(j.TOPIK || j.topik || ""),
           };
         }),
-      // Seluruh presensi terbaru (150 record terakhir untuk modal seluruh presensi)
       semuaPresensiTerbaru: allPresensiList.slice(-150).reverse(),
     };
 

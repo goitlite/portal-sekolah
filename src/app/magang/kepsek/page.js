@@ -3218,66 +3218,188 @@ export default function DashboardKepalaSekolah() {
       )}
 
       {/* ======================================================= */}
-      {/* MODAL 3: DETAIL GURU MAPEL */}
+      {/* MODAL 3: DETAIL GURU MAPEL (LENGKAP) */}
       {/* ======================================================= */}
       {selectedGuruMapel && (
         <ModalWrapper
           title={`Detail Guru Mapel: ${selectedGuruMapel.namaGuru}`}
           onClose={() => setSelectedGuruMapel(null)}
+          maxWidth="max-w-5xl"
         >
-          <div className="space-y-6">
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-5">
+            {/* HEADER GURU */}
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase">
-                  ID: {selectedGuruMapel.idGuru}
-                </p>
-                <h4 className="text-lg font-black text-slate-800">
-                  {selectedGuruMapel.namaGuru}
-                </h4>
+                <p className="text-xs font-bold text-slate-400 uppercase">ID: {selectedGuruMapel.idGuru}</p>
+                <h4 className="text-lg font-black text-slate-800">{selectedGuruMapel.namaGuru}</h4>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Mengampu {selectedGuruMapel.jumlahMapel} mata pelajaran /
-                  rombel
+                  Mengampu {selectedGuruMapel.jumlahMapel} mata pelajaran / rombel
                 </p>
               </div>
-
-              <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-800 text-xs font-black">
-                📖 {selectedGuruMapel.jumlahJurnal} Jurnal Mengajar
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-800 text-xs font-black">
+                  📖 {selectedGuruMapel.jumlahJurnal || 0} Jurnal
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-indigo-100 text-indigo-800 text-xs font-black">
+                  📅 {selectedGuruMapel.totalPertemuan || 0} Pertemuan
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-black">
+                  📎 {selectedGuruMapel.totalTugas || 0} Tugas Dikumpulkan
+                </span>
+              </div>
             </div>
 
-            {/* DAFTAR MAPEL YANG DIAMPU */}
+            {/* DAFTAR MAPEL DENGAN PRESENSI & TUGAS */}
             <div>
-              <h5 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
-                <span>📚</span> Mata Pelajaran & Rombel (
-                {selectedGuruMapel.daftarMapel?.length || 0})
+              <h5 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
+                <span>📚</span> Mata Pelajaran & Rombel ({selectedGuruMapel.daftarMapel?.length || 0})
               </h5>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {selectedGuruMapel.daftarMapel?.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl border border-slate-200 bg-white"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h6 className="text-xs font-black text-slate-800">
-                        {m.namaMapel}
-                      </h6>
-                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
-                        {m.kelas}
-                      </span>
+              <div className="space-y-4">
+                {(selectedGuruMapel.daftarMapel || []).map((m, idx) => {
+                  const isOnline = m.isOnline ||
+                    String(m.keterangan || "").toUpperCase().includes("ONLINE") ||
+                    String(m.namaMapel || "").toUpperCase().includes("ONLINE");
+                  const hasPresentasi = m.presensiPertemuan && m.presensiPertemuan.length > 0;
+                  const hasTugas = m.tugasPertemuan && m.tugasPertemuan.length > 0;
+
+                  return (
+                    <div
+                      key={m.idMapel || idx}
+                      className={`rounded-2xl border overflow-hidden ${isOnline ? "border-teal-200 bg-gradient-to-br from-teal-50 to-emerald-50" : "border-indigo-200 bg-gradient-to-br from-indigo-50 to-slate-50"}`}
+                    >
+                      {/* Header Mapel */}
+                      <div className={`px-4 py-3 flex items-center justify-between gap-2 ${isOnline ? "bg-gradient-to-r from-teal-600 to-emerald-600" : "bg-gradient-to-r from-indigo-600 to-blue-600"}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-white text-sm">{isOnline ? "🌐" : "📚"}</span>
+                          <h6 className="text-sm font-black text-white truncate">{m.namaMapel}</h6>
+                          {isOnline && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded bg-white/20 text-white text-[10px] font-bold">ONLINE</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {m.kelas && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-bold">{m.kelas}</span>
+                          )}
+                          <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-bold">
+                            👥 {m.siswaCount || 0} Siswa
+                          </span>
+                          {hasPresentasi && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-bold">
+                              📅 {m.presensiPertemuan.length} Sesi
+                            </span>
+                          )}
+                          {m.totalTugasDikumpulkan > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-bold">
+                              📎 {m.totalTugasDikumpulkan} Tugas
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Presensi Per Pertemuan */}
+                      {hasPresentasi && (
+                        <div className="p-3">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">📊 Presensi Per Pertemuan</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[11px]">
+                              <thead>
+                                <tr className={`text-white ${isOnline ? "bg-teal-600" : "bg-indigo-600"}`}>
+                                  <th className="px-2 py-1.5 text-left font-bold rounded-tl-lg">Pertemuan</th>
+                                  <th className="px-2 py-1.5 text-left font-bold">Tanggal</th>
+                                  <th className="px-2 py-1.5 text-center font-bold">Hadir</th>
+                                  <th className="px-2 py-1.5 text-center font-bold">Tdk Hadir</th>
+                                  <th className="px-2 py-1.5 text-center font-bold rounded-tr-lg">% Hadir</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {m.presensiPertemuan.map((pt, ptIdx) => {
+                                  const pct = pt.persenHadir || 0;
+                                  const barColor = pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-400" : "bg-rose-500";
+                                  return (
+                                    <tr key={ptIdx} className={ptIdx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                                      <td className="px-2 py-1.5 font-bold text-slate-700">
+                                        Ke-{pt.pertemuanKe}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-slate-500">
+                                        {formatTanggalKolom(pt.tanggal) || "-"}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-center font-bold text-emerald-700">
+                                        {pt.totalHadir}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-center font-bold text-rose-600">
+                                        {pt.totalTidakHadir}
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                                          </div>
+                                          <span className={`text-[10px] font-bold ${pct >= 80 ? "text-emerald-700" : pct >= 60 ? "text-amber-700" : "text-rose-600"}`}>
+                                            {pct}%
+                                          </span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr className={`font-black text-white text-[10px] ${isOnline ? "bg-teal-700" : "bg-indigo-700"}`}>
+                                  <td colSpan={2} className="px-2 py-1.5 rounded-bl-lg">TOTAL ({m.presensiPertemuan.length} Sesi)</td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    {m.presensiPertemuan.reduce((s, p) => s + (p.totalHadir || 0), 0)}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    {m.presensiPertemuan.reduce((s, p) => s + (p.totalTidakHadir || 0), 0)}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center rounded-br-lg">
+                                    {(() => {
+                                      const totH = m.presensiPertemuan.reduce((s, p) => s + (p.totalHadir || 0), 0);
+                                      const totA = m.presensiPertemuan.reduce((s, p) => s + (p.totalSiswa || 0), 0);
+                                      return totA > 0 ? Math.round((totH / totA) * 100) + "%" : "-";
+                                    })()}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tugas Terkumpul Per Pertemuan */}
+                      {hasTugas && (
+                        <div className={`px-3 pb-3 ${hasPresentasi ? "border-t border-slate-200/60" : ""}`}>
+                          {hasPresentasi && <div className="h-2" />}
+                          <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">📎 Tugas Dikumpulkan per Pertemuan</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {m.tugasPertemuan.map((t, tIdx) => (
+                              <span
+                                key={tIdx}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${isOnline ? "bg-teal-100 text-teal-800 border-teal-200" : "bg-indigo-100 text-indigo-800 border-indigo-200"}`}
+                              >
+                                Sesi {t.pertemuanKe}: {t.jumlahDikumpulkan} file
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Jika belum ada presensi & tugas */}
+                      {!hasPresentasi && !hasTugas && (
+                        <div className="px-4 py-3 text-[11px] text-slate-400 font-medium italic">
+                          Belum ada presensi atau tugas yang tercatat untuk mapel ini.
+                        </div>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      👥 {m.siswaCount || 0} Siswa Terdaftar
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* LOG JURNAL MAPEL */}
             <div>
               <h5 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
-                <span>📖</span> Riwayat Jurnal Mengajar (
-                {selectedGuruMapel.riwayatJurnal?.length || 0})
+                <span>📖</span> Riwayat Jurnal Mengajar ({selectedGuruMapel.riwayatJurnal?.length || 0})
               </h5>
               {(!selectedGuruMapel.riwayatJurnal ||
                 selectedGuruMapel.riwayatJurnal.length === 0) && (
@@ -3322,6 +3444,7 @@ export default function DashboardKepalaSekolah() {
           </div>
         </ModalWrapper>
       )}
+
 
       {/* ======================================================= */}
       {/* MODAL 4: DETAIL WALI KELAS */}

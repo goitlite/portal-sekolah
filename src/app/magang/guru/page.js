@@ -54,6 +54,57 @@ import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
 import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
 import { PesanGuruModal, useJumlahPesanBaru } from "../kepsek/PesanKepsekGuru";
 
+
+// Daftar kelas statis (sama dengan kelola/page.js) — tidak bergantung pada API
+const KELAS_OPTIONS = (
+  <>
+    <optgroup label="Kelas X" className="font-bold text-slate-900 bg-white">
+      <option value="X TKJ 1" className="font-medium text-slate-800 bg-white">X TJKT 1</option>
+      <option value="X TKJ 2" className="font-medium text-slate-800 bg-white">X TJKT 2</option>
+      <option value="X DPIB" className="font-medium text-slate-800 bg-white">X DPIB</option>
+      <option value="X TAV" className="font-medium text-slate-800 bg-white">X TAV</option>
+      <option value="X GEOMATIKA" className="font-medium text-slate-800 bg-white">X GEOMATIKA</option>
+      <option value="X TO 1" className="font-medium text-slate-800 bg-white">X TO1</option>
+      <option value="X TO 2" className="font-medium text-slate-800 bg-white">X TO2</option>
+      <option value="X TO 3" className="font-medium text-slate-800 bg-white">X TO3</option>
+      <option value="X TO 4" className="font-medium text-slate-800 bg-white">X TO4</option>
+      <option value="X TPL" className="font-medium text-slate-800 bg-white">X TPL</option>
+      <option value="X TITL 1" className="font-medium text-slate-800 bg-white">X TITL 1</option>
+      <option value="X TITL 2" className="font-medium text-slate-800 bg-white">X TITL 2</option>
+    </optgroup>
+    <optgroup label="Kelas XI" className="font-bold text-slate-900 bg-white">
+      <option value="XI TKJ 1" className="font-medium text-slate-800 bg-white">XI TJKT 1</option>
+      <option value="XI TKJ 2" className="font-medium text-slate-800 bg-white">XI TJKT 2</option>
+      <option value="XI DPIB" className="font-medium text-slate-800 bg-white">XI DPIB</option>
+      <option value="XI TAV" className="font-medium text-slate-800 bg-white">XI TAV</option>
+      <option value="XI GEOMATIKA" className="font-medium text-slate-800 bg-white">XI GEOMATIKA</option>
+      <option value="XI TBSM 1" className="font-medium text-slate-800 bg-white">XI TBSM 1</option>
+      <option value="XI TBSM 2" className="font-medium text-slate-800 bg-white">XI TBSM 2</option>
+      <option value="XI TAB" className="font-medium text-slate-800 bg-white">XI TAB</option>
+      <option value="XI TKR" className="font-medium text-slate-800 bg-white">XI TKRO</option>
+      <option value="XI TPL" className="font-medium text-slate-800 bg-white">XI TPL</option>
+      <option value="XI TITL 1" className="font-medium text-slate-800 bg-white">XI TITL 1</option>
+      <option value="XI TITL 2" className="font-medium text-slate-800 bg-white">XI TITL 2</option>
+    </optgroup>
+    <optgroup label="Kelas XII" className="font-bold text-slate-900 bg-white">
+      <option value="TKJ 1" className="font-medium text-slate-800 bg-white">XII TJKT 1</option>
+      <option value="TKJ 2" className="font-medium text-slate-800 bg-white">XII TJKT 2</option>
+      <option value="DPIB" className="font-medium text-slate-800 bg-white">XII DPIB</option>
+      <option value="TAV" className="font-medium text-slate-800 bg-white">XII TAV</option>
+      <option value="GEOMATIKA" className="font-medium text-slate-800 bg-white">XII GEOMATIKA</option>
+      <option value="TBSM 1" className="font-medium text-slate-800 bg-white">XII TBSM 1</option>
+      <option value="TBSM 2" className="font-medium text-slate-800 bg-white">XII TBSM 2</option>
+      <option value="TAB" className="font-medium text-slate-800 bg-white">XII TAB</option>
+      <option value="TKR" className="font-medium text-slate-800 bg-white">XII TKRO</option>
+      <option value="TPL" className="font-medium text-slate-800 bg-white">XII TPL</option>
+      <option value="TITL" className="font-medium text-slate-800 bg-white">XII TITL</option>
+    </optgroup>
+    <optgroup label="Lainnya" className="font-bold text-slate-900 bg-white">
+      <option value="CONTOH" className="font-medium text-slate-800 bg-white">KELAS CONTOH</option>
+    </optgroup>
+  </>
+);
+
 // --- OPTIMASI FOTO: paksa Google mengirim versi kecil, bukan resolusi asli ---
 // Foto asli dari kamera HP bisa 3-8MB / 4000x3000px. Ditampilkan di thumbnail kecil
 // tetap saja didekode browser di resolusi aslinya -> bisa habiskan ratusan MB RAM
@@ -3427,7 +3478,7 @@ function DashboardGuruContent() {
                   type="button"
                   onClick={() => {
                     setIsFormTambahMapelOpen(!isFormTambahMapelOpen);
-                    if (!isFormTambahMapelOpen) loadFormDaftarKelas();
+                    // Tidak perlu load kelas - sudah menggunakan dropdown statis
                   }}
                   className={`px-3.5 py-2 rounded-xl text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 shrink-0 ${isFormTambahMapelOpen ? "bg-slate-600 hover:bg-slate-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
                 >
@@ -3485,15 +3536,10 @@ function DashboardGuruContent() {
                       <select
                         value={formKelasDipilih}
                         onChange={(e) => handlePilihKelasForm(e.target.value)}
-                        disabled={formLoadingKelas}
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                       >
-                        <option value="">
-                          {formLoadingKelas ? "Memuat daftar kelas..." : "-- Tanpa kelas (manual) --"}
-                        </option>
-                        {formDaftarKelas.map((k) => (
-                          <option key={k} value={k}>{k}</option>
-                        ))}
+                        <option value="">-- Tanpa kelas (manual) --</option>
+                        {KELAS_OPTIONS}
                       </select>
                     </label>
                   </div>
@@ -3660,7 +3706,7 @@ function DashboardGuruContent() {
                   type="button"
                   onClick={() => {
                     setIsFormTambahMapelOpen(true);
-                    loadFormDaftarKelas();
+                    // loadFormDaftarKelas() - tidak dipakai, menggunakan dropdown statis
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-xs sm:text-sm font-bold shadow-md transition-all active:scale-95"

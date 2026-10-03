@@ -103,7 +103,16 @@ function doPost(e) {
     }
 
     else if (action === 'deleteSiswa') {
-      response = deleteSiswa(params);
+      const idSiswaHapus = params.id || params.idSiswa;
+      if (idSiswaHapus && typeof isSiswaAmanDihapusPermanen_ === 'function') {
+        if (!isSiswaAmanDihapusPermanen_(idSiswaHapus)) {
+          response = errorResponse('Siswa tidak dapat dihapus karena masih digunakan di Wali Kelas, Mapel lain, atau memiliki Guru Pembimbing/Wali.');
+        } else {
+          response = deleteSiswa(params);
+        }
+      } else {
+        response = deleteSiswa(params);
+      }
     }
 
     // ============================================

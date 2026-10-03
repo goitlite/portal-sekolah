@@ -359,8 +359,8 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   async function hapusSiswaDariMapel(siswa) {
     const konfirmasi = window.confirm(
       `Hapus "${siswa.nama}" dari mapel "${mapel.namaMapel}"?\n\n` +
-        `• Jika siswa ini TIDAK punya Guru Pembimbing Magang DAN TIDAK punya Guru Wali, sistem akan otomatis menghapusnya dari database sekolah.\n` +
-        `• Jika masih punya salah satu di antaranya, siswa hanya dihapus dari mapel ini saja.`,
+        `• Jika siswa ini TIDAK terdaftar di mapel lain, TIDAK punya Guru Pembimbing Magang, TIDAK punya Guru Wali PKL, dan TIDAK terdaftar di kelas Wali Kelas, sistem akan otomatis menghapusnya dari database sekolah.\n` +
+        `• Jika masih aktif di mapel lain, kelas wali, atau kegiatan magang, siswa HANYA dihapus dari mapel ini saja dan data induknya tetap aman.\n\nLanjutkan?`,
     );
     if (!konfirmasi) return;
 
@@ -379,7 +379,15 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
           });
           return salinan;
         });
-        alert(`✅ "${siswa.nama}" berhasil dihapus dari mapel ini.`);
+        if (result.data?.action === "hapus_permanen_dari_sistem") {
+          alert(
+            `✅ "${siswa.nama}" dihapus PERMANEN dari sistem (tidak terdaftar di mapel lain / Guru Pembimbing / Guru Wali / Wali Kelas).`,
+          );
+        } else {
+          alert(
+            `✅ "${siswa.nama}" berhasil dihapus dari mapel ini.\n(Data induk siswa di sistem tetap aman karena masih aktif di Wali Kelas, mapel lain, atau bimbingan magang).`,
+          );
+        }
       } else {
         alert(result.message || "Gagal menghapus siswa dari mapel.");
       }
