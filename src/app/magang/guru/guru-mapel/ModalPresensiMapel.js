@@ -715,26 +715,30 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                               className="w-full max-w-[75px] h-[19px] rounded border border-slate-300 text-[8px] sm:text-[9px] px-0.5 py-0 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none mx-auto block cursor-pointer transition-all shadow-inner"
                             />
 
-                            {/* Tombol Tugas Guru untuk Mapel Online */}
+                            {/* Badge Tugas Guru di header kolom — lebih besar & informatif */}
                             {isMapelOnline && (
-                              <div className="mt-1 flex items-center justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => bukaModalTugas(p)}
-                                  className={`text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-all shadow-xs ${
-                                    tugasMapel[p]
-                                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                                      : "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
-                                  }`}
-                                  title={
-                                    tugasMapel[p]
-                                      ? `Edit Tugas P-${p}: ${tugasMapel[p].judulTugas}`
-                                      : "Upload tugas guru untuk pertemuan ini"
-                                  }
-                                >
-                                  <span>{tugasMapel[p] ? "📎" : "➕"}</span>
-                                  <span>{tugasMapel[p] ? "Tugas P" + p : "Tugas"}</span>
-                                </button>
+                              <div className="mt-1.5 flex items-center justify-center">
+                                {tugasMapel[p] ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => bukaModalTugas(p)}
+                                    className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all w-full"
+                                    title={`Edit Tugas P-${p}: ${tugasMapel[p].judulTugas}`}
+                                  >
+                                    <span className="text-[10px] font-black leading-none">📎 Ada Tugas</span>
+                                    <span className="text-[8px] font-semibold opacity-90 truncate w-full text-center max-w-[60px]">{tugasMapel[p].judulTugas}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => bukaModalTugas(p)}
+                                    className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-700 border border-dashed border-slate-300 hover:border-blue-400 text-[9px] font-bold transition-all w-full justify-center"
+                                    title="Upload tugas guru untuk pertemuan ini"
+                                  >
+                                    <span>➕</span>
+                                    <span>Tugas</span>
+                                  </button>
+                                )}
                               </div>
                             )}
                           </th>
@@ -936,48 +940,23 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                                       )}
                                     </div>
 
-                                    {/* KHUSUS MAPEL ONLINE: UPLOAD TUGAS GURU & HASIL UPLOAD SISWA */}
+                                    {/* KHUSUS MAPEL ONLINE: HANYA HASIL UPLOAD SISWA */}
                                     {isMapelOnline && (
                                       <div className="flex flex-col items-center gap-0.5 w-full pt-1 border-t border-slate-200/60 leading-none">
-                                        {/* Tempat upload tugas untuk siswa dari guru mapel */}
-                                        {tugasMapel[p] ? (
-                                          <a
-                                            href={tugasMapel[p].fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title={`Tugas Guru: ${tugasMapel[p].judulTugas || "Buka file"}`}
-                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-[8px] font-bold border border-blue-200 transition-all max-w-[80px] truncate"
-                                          >
-                                            <span>📎</span>
-                                            <span className="truncate">Tugas Guru</span>
-                                          </a>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={() => bukaModalTugas(p)}
-                                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-700 text-[7px] font-bold border border-slate-200 transition-all"
-                                            title="Upload tugas guru untuk pertemuan ini"
-                                          >
-                                            <span>➕</span>
-                                            <span>Tugas</span>
-                                          </button>
-                                        )}
-
-                                        {/* Dibawahnya: Hasil upload yang diupload siswa */}
                                         {jawabanSiswa[`${s.idSiswa}_${p}`] ? (
                                           <a
                                             href={jawabanSiswa[`${s.idSiswa}_${p}`].fileUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             title={`Hasil upload ${s.nama}: ${jawabanSiswa[`${s.idSiswa}_${p}`].keterangan || "Buka jawaban siswa"}`}
-                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-[8px] font-extrabold border border-emerald-300 transition-all max-w-[80px] truncate"
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-[9px] font-extrabold border border-emerald-300 transition-all w-full justify-center"
                                           >
                                             <span>📥</span>
-                                            <span className="truncate">Hasil Siswa</span>
+                                            <span>Terkumpul</span>
                                           </a>
                                         ) : (
-                                          <span className="text-[7px] text-slate-400 font-medium">
-                                            Belum kumpul
+                                          <span className="text-[7px] text-slate-400 font-medium italic">
+                                            —
                                           </span>
                                         )}
                                       </div>

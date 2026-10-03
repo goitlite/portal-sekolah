@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, {
   useEffect,
@@ -15,6 +15,7 @@ import {
   getDashboardKepsekWali,
   getDashboardKepsekMapel,
   getDashboardKepsekWaliKelas,
+  getDetailMapelKepsek,
   getPresensiWaliGrid,
   getSiswa,
   getMonitoringGuru,
@@ -211,6 +212,8 @@ export default function DashboardKepalaSekolah() {
   const [sortMapel, setSortMapel] = useState("terbaru"); // "terbaru" | "mapel_terbanyak" | "siswa_terbanyak" | "nama"
   const [selectedGuruMapel, setSelectedGuruMapel] = useState(null); // Detail modal
   const [selectedPertemuanMapel, setSelectedPertemuanMapel] = useState({}); // { [idMapel]: pertemuanKe }
+  const [detailMapelKepsek, setDetailMapelKepsek] = useState(null); // { mapel, data } sub-modal per siswa
+  const [loadingDetailMapel, setLoadingDetailMapel] = useState(false); // loading sub-modal
 
   // =========================================================
   // 4. STATE & DATA TAB: WALI KELAS
@@ -3496,20 +3499,37 @@ export default function DashboardKepalaSekolah() {
                 <span>📚</span> Mata Pelajaran & Rombel ({selectedGuruMapel.daftarMapel?.length || 0})
               </h5>
               <div className="space-y-4">
-                {(selectedGuruMapel.daftarMapel || []).map((m, idx) => {
+                 {(selectedGuruMapel.daftarMapel || []).map((m, idx) => {
                   const isOnline = m.isOnline ||
                     String(m.keterangan || "").toUpperCase().includes("ONLINE") ||
                     String(m.namaMapel || "").toUpperCase().includes("ONLINE");
                   const hasPresentasi = m.presensiPertemuan && m.presensiPertemuan.length > 0;
                   const hasTugas = m.tugasPertemuan && m.tugasPertemuan.length > 0;
 
+                  async function bukaDetailMapel() {
+                    setDetailMapelKepsek({ mapel: m, guru: selectedGuruMapel, data: null });
+                    setLoadingDetailMapel(true);
+                    try {
+                      const res = await getDetailMapelKepsek(selectedGuruMapel.idGuru, m.idMapel);
+                      setDetailMapelKepsek({ mapel: m, guru: selectedGuruMapel, data: res?.data || null });
+                    } catch (e) {
+                      setDetailMapelKepsek({ mapel: m, guru: selectedGuruMapel, data: null, error: String(e) });
+                    } finally {
+                      setLoadingDetailMapel(false);
+                    }
+                  }
+
                   return (
                     <div
                       key={m.idMapel || idx}
                       className={`rounded-2xl border overflow-hidden ${isOnline ? "border-teal-200 bg-gradient-to-br from-teal-50 to-emerald-50" : "border-indigo-200 bg-gradient-to-br from-indigo-50 to-slate-50"}`}
                     >
-                      {/* Header Mapel */}
-                      <div className={`px-4 py-3 flex items-center justify-between gap-2 ${isOnline ? "bg-gradient-to-r from-teal-600 to-emerald-600" : "bg-gradient-to-r from-indigo-600 to-blue-600"}`}>
+                      {/* Header Mapel — diklik buka sub-modal */}
+                      <button
+                        type="button"
+                        onClick={bukaDetailMapel}
+                        className={`w-full px-4 py-3 flex items-center justify-between gap-2 text-left transition-all hover:brightness-110 active:scale-[0.99] ${isOnline ? "bg-gradient-to-r from-teal-600 to-emerald-600" : "bg-gradient-to-r from-indigo-600 to-blue-600"}`}
+                      >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-white text-sm">{isOnline ? "🌐" : "📚"}</span>
                           <h6 className="text-sm font-black text-white truncate">{m.namaMapel}</h6>
@@ -3534,8 +3554,11 @@ export default function DashboardKepalaSekolah() {
                               📎 {m.totalTugasDikumpulkan} Tugas
                             </span>
                           )}
+                          <span className="ml-1 px-2 py-0.5 rounded-md bg-white/30 text-white text-[10px] font-black">
+                            Lihat Detail →
+                          </span>
                         </div>
-                      </div>
+                      </button>
 
                       {/* Presensi Per Pertemuan */}
                       {hasPresentasi && (
@@ -3686,6 +3709,264 @@ export default function DashboardKepalaSekolah() {
         </ModalWrapper>
       )}
 
+      {/* ======================================================= */}
+      {/* MODAL 3b: DETAIL SISWA PER MAPEL (Sub-Modal) */}
+      {/* ======================================================= */}
+      {detailMapelKepsek && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-3 sm:p-5 animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            {(() => {
+              const m = detailMapelKepsek.mapel;
+              const g = detailMapelKepsek.guru;
+              const isOnline = m.isOnline || String(m.keterangan || "").toUpperCase().includes("ONLINE");
+              return (
+                <>
+                  <div className={`px-5 py-4 flex items-center justify-between gap-3 ${isOnline ? "bg-gradient-to-r from-teal-600 to-emerald-600" : "bg-gradient-to-r from-indigo-600 to-blue-700"}`}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xl">{isOnline ? "🌐" : "📚"}</span>
+                        <h3 className="text-base font-black text-white truncate">{m.namaMapel}</h3>
+                        {isOnline && <span className="px-2 py-0.5 rounded bg-white/25 text-white text-[10px] font-black">ONLINE</span>}
+                        {m.kelas && <span className="px-2 py-0.5 rounded bg-white/20 text-white text-[10px] font-bold">{m.kelas}</span>}
+                      </div>
+                      <p className="text-xs text-white/80 font-medium mt-0.5">
+                        Guru: {g.namaGuru} · {detailMapelKepsek.data?.jumlahSiswa ?? m.siswaCount ?? 0} Siswa · {detailMapelKepsek.data?.jumlahSesi ?? m.presensiPertemuan?.length ?? 0} Sesi
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setDetailMapelKepsek(null)}
+                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-all font-black text-base"
+                    >✕</button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {loadingDetailMapel && (
+                      <div className="py-16 flex flex-col items-center justify-center gap-3">
+                        <div className={`w-10 h-10 rounded-full border-4 border-t-transparent animate-spin ${isOnline ? "border-teal-500" : "border-indigo-500"}`} />
+                        <p className="text-sm font-bold text-slate-500">Memuat data kehadiran & nilai siswa...</p>
+                      </div>
+                    )}
+
+                    {!loadingDetailMapel && detailMapelKepsek.error && (
+                      <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold text-center">
+                        ⚠️ Gagal memuat data: {detailMapelKepsek.error}
+                      </div>
+                    )}
+
+                    {!loadingDetailMapel && detailMapelKepsek.data && (() => {
+                      const d = detailMapelKepsek.data;
+                      const pertemuanList = d.pertemuanList || [];
+                      const siswaRows = d.siswaRows || [];
+
+                      if (siswaRows.length === 0) {
+                        return (
+                          <div className="py-12 text-center">
+                            <span className="text-5xl block mb-2">👥</span>
+                            <p className="text-sm font-bold text-slate-500">Belum ada siswa terdaftar di mapel ini.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <>
+                          {/* Statistik Ringkas */}
+                          <div className={`p-4 rounded-2xl border ${isOnline ? "bg-teal-50 border-teal-200" : "bg-indigo-50 border-indigo-200"}`}>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              {[
+                                { label: "Total Siswa", val: siswaRows.length, icon: "👥" },
+                                { label: "Sesi Direkam", val: pertemuanList.length, icon: "📅" },
+                                {
+                                  label: "Rata-rata Kehadiran",
+                                  val: siswaRows.length
+                                    ? Math.round(siswaRows.reduce((s, x) => s + (x.persenHadir || 0), 0) / siswaRows.length) + "%"
+                                    : "-",
+                                  icon: "📊"
+                                },
+                                {
+                                  label: "Rata-rata Nilai",
+                                  val: (() => {
+                                    const withNilai = siswaRows.filter(x => x.avgNilai !== null);
+                                    return withNilai.length
+                                      ? Math.round(withNilai.reduce((s, x) => s + x.avgNilai, 0) / withNilai.length)
+                                      : "-";
+                                  })(),
+                                  icon: "⭐"
+                                },
+                              ].map((st) => (
+                                <div key={st.label} className="bg-white rounded-xl p-3 text-center shadow-xs border border-white">
+                                  <div className="text-lg">{st.icon}</div>
+                                  <div className={`text-xl font-black ${isOnline ? "text-teal-700" : "text-indigo-700"}`}>{st.val}</div>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase">{st.label}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Tabel Presensi & Nilai Per Siswa */}
+                          <div>
+                            <h4 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
+                              <span>📋</span> Kehadiran & Nilai Per Siswa
+                            </h4>
+                            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className={`text-white ${isOnline ? "bg-teal-700" : "bg-indigo-700"}`}>
+                                    <th className="px-3 py-2 text-left font-bold sticky left-0 bg-inherit min-w-[140px] rounded-tl-2xl">Nama Siswa</th>
+                                    <th className="px-2 py-2 text-center font-bold min-w-[60px]">Hadir</th>
+                                    <th className="px-2 py-2 text-center font-bold min-w-[50px]">%</th>
+                                    <th className="px-2 py-2 text-center font-bold min-w-[50px]">Nilai</th>
+                                    {pertemuanList.map(pt => (
+                                      <th key={pt.pertemuanKe} className="px-2 py-2 text-center font-bold min-w-[52px]">
+                                        <div className="font-black">P{pt.pertemuanKe}</div>
+                                        {pt.tanggal && <div className="text-[9px] font-medium opacity-80">{formatTanggalKolom(pt.tanggal)}</div>}
+                                      </th>
+                                    ))}
+                                    {isOnline && pertemuanList.some(pt => pt.tugas) && (
+                                      <th className="px-2 py-2 text-center font-bold min-w-[60px] rounded-tr-2xl">Tugas</th>
+                                    )}
+                                  </tr>
+                                </thead>
+                                 <tbody>
+                                   {siswaRows.map((s, sIdx) => {
+                                     const pctColor = s.persenHadir >= 80 ? "text-emerald-700 font-black" : s.persenHadir >= 60 ? "text-amber-700 font-bold" : "text-rose-600 font-bold";
+                                     return (
+                                       <tr key={s.idSiswa} className={sIdx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                                         <td className={`px-3 py-2 font-bold text-slate-800 sticky left-0 ${sIdx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                                           <div className="truncate max-w-[130px]">{s.nama}</div>
+                                           {s.kelas && <div className="text-[9px] text-slate-400 font-medium">{s.kelas}</div>}
+                                         </td>
+                                         <td className="px-2 py-2 text-center font-bold text-slate-700">{s.totalHadir}/{s.totalSesi}</td>
+                                         <td className={`px-2 py-2 text-center text-[11px] ${pctColor}`}>{s.persenHadir}%</td>
+                                         <td className="px-2 py-2 text-center font-black text-slate-700">{s.avgNilai !== null ? s.avgNilai : "-"}</td>
+                                         {s.pertemuan.map(pt => {
+                                           const st = String(pt.status || "").toUpperCase();
+                                           const isH = st === "H" || st === "HADIR";
+                                           const isI = st === "I" || st === "IZIN";
+                                           const isS = st === "S" || st === "SAKIT";
+                                           const isA = st === "A" || st === "ALPHA" || (st && !isH && !isI && !isS);
+                                           const bgCell = isH ? "bg-emerald-100 text-emerald-800" : isI ? "bg-amber-100 text-amber-800" : isS ? "bg-blue-100 text-blue-800" : isA && st ? "bg-rose-100 text-rose-700" : "text-slate-300";
+                                           const label = isH ? "H" : isI ? "I" : isS ? "S" : isA && st ? "A" : "·";
+                                           const jwbArr = Array.isArray(pt.jawaban) ? pt.jawaban : (pt.jawaban ? [pt.jawaban] : null);
+                                           return (
+                                             <td key={pt.pertemuanKe} className="px-1.5 py-2 text-center">
+                                               <div className="inline-flex flex-col items-center gap-0.5">
+                                                 <span className={`px-1.5 py-0.5 rounded font-black text-[11px] min-w-[20px] text-center ${bgCell}`}>{label}</span>
+                                                 {pt.nilai !== "" && pt.nilai !== null && pt.nilai !== undefined && (
+                                                   <span className="text-[9px] font-bold text-slate-500">{pt.nilai}</span>
+                                                 )}
+                                                 {jwbArr && jwbArr.length > 0 && jwbArr[0].fileUrl && (
+                                                   <a
+                                                     href={jwbArr[0].fileUrl}
+                                                     target="_blank"
+                                                     rel="noopener noreferrer"
+                                                     onClick={(e) => e.stopPropagation()}
+                                                     title={jwbArr[0].namaFile || "Lihat file tugas"}
+                                                     className="text-[9px] font-black text-teal-600 hover:text-teal-800 bg-teal-50 border border-teal-200 rounded px-1 py-0.5 leading-none hover:underline"
+                                                   >
+                                                     📎
+                                                   </a>
+                                                 )}
+                                                 {jwbArr && jwbArr.length > 1 && (
+                                                   <span className="text-[8px] text-teal-600 font-bold">+{jwbArr.length - 1}</span>
+                                                 )}
+                                               </div>
+                                             </td>
+                                           );
+                                         })}
+                                         {isOnline && pertemuanList.some(pt => pt.tugas) && (
+                                           <td className="px-2 py-2 text-center">
+                                             {(() => {
+                                               const jwbCount = s.pertemuan.filter(pt => {
+                                                 const arr = Array.isArray(pt.jawaban) ? pt.jawaban : (pt.jawaban ? [pt.jawaban] : null);
+                                                 return arr && arr.length > 0;
+                                               }).length;
+                                               const tugasTotal = pertemuanList.filter(pt => pt.tugas).length;
+                                               return (
+                                                 <span className={`text-[10px] font-bold ${jwbCount > 0 ? "text-teal-700" : "text-slate-300"}`}>
+                                                   {jwbCount}/{tugasTotal}
+                                                 </span>
+                                               );
+                                             })()}
+                                           </td>
+                                         )}
+                                       </tr>
+                                     );
+                                   })}
+                                 </tbody>
+                               </table>
+                             </div>
+                             <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                               H = Hadir · S = Sakit · I = Izin · A = Alpha · Angka di bawah = Nilai · 📎 = ada file tugas
+                             </p>
+                           </div>
+
+                           {/* Tugas Per Pertemuan (online) — dengan daftar siswa dan link file */}
+                           {isOnline && pertemuanList.some(pt => pt.tugas) && (
+                             <div>
+                               <h4 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
+                                 <span>📎</span> Tugas Per Pertemuan
+                               </h4>
+                               <div className="space-y-3">
+                                 {pertemuanList.filter(pt => pt.tugas).map(pt => {
+                                   const jawabanSiswa = siswaRows.map(s => {
+                                     const ptData = s.pertemuan.find(x => x.pertemuanKe === pt.pertemuanKe);
+                                     const arr = ptData ? (Array.isArray(ptData.jawaban) ? ptData.jawaban : (ptData.jawaban ? [ptData.jawaban] : null)) : null;
+                                     return { nama: s.nama, kelas: s.kelas, arr };
+                                   }).filter(x => x.arr && x.arr.length > 0);
+                                   const belumKumpul = siswaRows.length - jawabanSiswa.length;
+                                   return (
+                                     <div key={pt.pertemuanKe} className="rounded-xl border border-teal-200 bg-teal-50 overflow-hidden">
+                                       <div className="px-3 py-2 bg-teal-600 flex items-center justify-between">
+                                         <span className="text-xs font-black text-white">Sesi {pt.pertemuanKe}: {pt.tugas.judulTugas}</span>
+                                         <div className="flex items-center gap-1.5">
+                                           <span className="text-[10px] font-bold text-white/90 bg-teal-700 px-2 py-0.5 rounded-full">{jawabanSiswa.length}/{siswaRows.length} dikumpulkan</span>
+                                           {belumKumpul > 0 && <span className="text-[10px] font-bold text-rose-200 bg-rose-600/40 px-2 py-0.5 rounded-full">{belumKumpul} belum</span>}
+                                         </div>
+                                       </div>
+                                       {pt.tugas.deskripsi && <p className="px-3 py-1.5 text-[10px] text-teal-800 border-b border-teal-100">{pt.tugas.deskripsi}</p>}
+                                       {jawabanSiswa.length > 0 ? (
+                                         <div className="px-3 py-2 space-y-1.5">
+                                           {jawabanSiswa.map((js, jsIdx) => (
+                                             <div key={jsIdx} className="flex items-start gap-2 flex-wrap">
+                                               <span className="text-[10px] font-bold text-teal-800 min-w-[100px] flex-shrink-0">
+                                                 {js.nama}{js.kelas && <span className="text-teal-500 font-normal ml-1">({js.kelas})</span>}
+                                               </span>
+                                               <div className="flex flex-wrap gap-1">
+                                                 {js.arr.map((jwb, jIdx) => (
+                                                   <a key={jIdx} href={jwb.fileUrl || "#"} target="_blank" rel="noopener noreferrer"
+                                                     onClick={(e) => !jwb.fileUrl && e.preventDefault()}
+                                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${jwb.fileUrl ? "bg-white text-teal-700 border-teal-300 hover:bg-teal-50 hover:border-teal-500 cursor-pointer" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"}`}
+                                                     title={jwb.fileUrl ? ("Buka: " + (jwb.namaFile || "file tugas")) : "File tidak tersedia"}
+                                                   >
+                                                     <span>{jwb.fileUrl ? "📄" : "❌"}</span>
+                                                     <span className="truncate max-w-[120px]">{jwb.namaFile || ("File " + (jIdx + 1))}</span>
+                                                   </a>
+                                                 ))}
+                                               </div>
+                                             </div>
+                                           ))}
+                                         </div>
+                                       ) : (
+                                         <p className="px-3 py-2 text-[10px] text-slate-400 font-medium italic">Belum ada siswa yang mengumpulkan tugas ini.</p>
+                                       )}
+                                     </div>
+                                   );
+                                 })}
+                               </div>
+                             </div>
+                           )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* ======================================================= */}
       {/* MODAL 4: DETAIL WALI KELAS */}

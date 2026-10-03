@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, {
   useEffect,
@@ -3759,15 +3759,15 @@ function DashboardGuruContent() {
                     return (
                       <div
                         key={mapel.idMapel}
-                        className={`relative rounded-[2rem] overflow-hidden shadow-xl border p-5 sm:p-6 text-white transition-all duration-300 hover:shadow-2xl space-y-4 group ${
+                        className={`relative rounded-[2rem] overflow-hidden shadow-lg border p-5 sm:p-6 transition-all duration-300 hover:shadow-xl space-y-4 group ${
                           isMapelOnline
-                            ? "border-teal-500/40 hover:border-emerald-400/80 bg-gradient-to-br from-slate-950 via-teal-950 to-emerald-950 shadow-emerald-950/30"
-                            : "border-indigo-500/30 hover:border-indigo-400/70 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 shadow-indigo-950/30"
+                            ? "border-emerald-500 hover:border-emerald-400 bg-gradient-to-br from-emerald-950 via-teal-900 to-emerald-950 shadow-emerald-900/40"
+                            : "border-blue-500 hover:border-blue-400 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 shadow-blue-900/40"
                         }`}
                       >
                         {/* Aksen Garis Atas Identitas Kartu */}
                         <div
-                          className={`absolute top-0 left-0 right-0 h-1.5 shadow-xs ${
+                          className={`absolute top-0 left-0 right-0 h-1 ${
                             isMapelOnline
                               ? "bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400"
                               : "bg-gradient-to-r from-indigo-500 via-blue-500 to-sky-400"
@@ -3781,17 +3781,13 @@ function DashboardGuruContent() {
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center gap-2.5 flex-wrap">
                               <h3
-                                className={`font-black text-xl sm:text-2xl text-transparent bg-clip-text drop-shadow-sm ${
-                                  isMapelOnline
-                                    ? "bg-gradient-to-r from-white via-emerald-100 to-teal-200"
-                                    : "bg-gradient-to-r from-white via-blue-100 to-indigo-200"
-                                }`}
+                                className={`font-black text-xl sm:text-2xl`}
                               >
                                 {mapel.namaMapel}
                               </h3>
 
                               {isMapelOnline ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 shadow-xs">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-800/60 border border-emerald-500/40 text-emerald-200">
                                   <span className="relative flex h-2 w-2">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
@@ -3799,7 +3795,7 @@ function DashboardGuruContent() {
                                   🌐 Kelas Online &amp; Tugas
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 shadow-xs">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800/60 border border-indigo-400/40 text-indigo-200">
                                   <span>📚</span>
                                   <span>Kelas Reguler</span>
                                 </span>
@@ -3811,8 +3807,8 @@ function DashboardGuruContent() {
                                 <span
                                   className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                                     isMapelOnline
-                                      ? "bg-teal-900/60 border border-teal-500/40 text-teal-200"
-                                      : "bg-blue-900/60 border border-blue-500/40 text-blue-200"
+                                      ? "bg-emerald-800/60 border border-emerald-500/40 text-emerald-200"
+                                      : "bg-blue-800/60 border border-blue-400/40 text-blue-200"
                                   }`}
                                 >
                                   Kelas {mapel.kelas}
@@ -3821,8 +3817,8 @@ function DashboardGuruContent() {
                               <span
                                 className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                                   isMapelOnline
-                                    ? "bg-emerald-900/60 border border-emerald-500/40 text-emerald-200"
-                                    : "bg-indigo-900/60 border border-indigo-500/40 text-indigo-200"
+                                    ? "bg-emerald-800/60 border border-emerald-500/40 text-emerald-200"
+                                    : "bg-indigo-800/60 border border-indigo-400/40 text-indigo-200"
                                 }`}
                               >
                                 👥 {totalSiswaDisplay} Siswa
@@ -3831,15 +3827,15 @@ function DashboardGuruContent() {
                                 <span
                                   className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                                     isMapelOnline
-                                      ? "bg-cyan-900/60 border border-cyan-400/40 text-cyan-200"
-                                      : "bg-sky-900/60 border border-sky-400/40 text-sky-200"
+                                      ? "bg-cyan-800/60 border border-cyan-400/40 text-cyan-200"
+                                      : "bg-sky-800/60 border border-sky-400/40 text-sky-200"
                                   }`}
                                 >
                                   🗓️ {totalPertemuanDisplay} Pertemuan
                                 </span>
                               )}
                               {isMapelOnline && (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-teal-400/15 border border-teal-300/30 text-teal-300">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-800/60 border border-emerald-500/40 text-emerald-200">
                                   ⚡ Fitur Upload Tugas Aktif
                                 </span>
                               )}
@@ -3852,7 +3848,7 @@ function DashboardGuruContent() {
                             )}
 
                             {isMapelOnline && (
-                              <div className="text-[11px] text-teal-200/90 font-medium flex items-center gap-1.5 pt-0.5">
+                              <div className="text-[11px] text-emerald-300/90 font-medium flex items-center gap-1.5 pt-0.5">
                                 <span>💡</span>
                                 <span>
                                   Guru dapat mengunggah modul tugas pertemuan &amp; memeriksa hasil kiriman file siswa.
@@ -3899,7 +3895,7 @@ function DashboardGuruContent() {
                               }}
                               disabled={isLoadingStats}
                               title="Buka pengaturan lengkap mapel"
-                              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-2 sm:py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className={`rounded-xl border px-3 py-2 sm:py-2.5 text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${isMapelOnline ? "bg-emerald-600 hover:bg-emerald-700 border-emerald-500 text-white" : "bg-blue-600 hover:bg-blue-700 border-blue-500 text-white"}`}
                             >
                               <span>⚙️</span>
                               <span>Kelola Mapel</span>
@@ -3923,26 +3919,26 @@ function DashboardGuruContent() {
                         <div
                           className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 backdrop-blur-xs ${
                             isMapelOnline
-                              ? "border-teal-700/50 bg-teal-950/50"
-                              : "border-indigo-800/50 bg-slate-950/60"
+                              ? "border-emerald-700/50 bg-emerald-950/50"
+                              : "border-blue-800/50 bg-blue-950/60"
                           }`}
                         >
                           {/* Header Bar Statistik */}
                           <div
                             className={`flex items-center justify-between gap-2 border-b pb-2.5 flex-wrap ${
-                              isMapelOnline ? "border-teal-800/60" : "border-indigo-800/60"
+                              isMapelOnline ? "border-emerald-800/60" : "border-blue-800/60"
                             }`}
                           >
                             <div className="flex items-center gap-2">
                               <span className="text-base">{isMapelOnline ? "🌐" : "📊"}</span>
                               <div>
-                                <span className="text-xs font-black tracking-wide text-white block sm:inline">
+                                 <span className={`text-xs font-black tracking-wide text-white block sm:inline`}>
                                   Presensi Pertemuan Terakhir
                                 </span>
                                 {activeP && (
                                   <span
                                     className={`text-[11px] font-medium sm:ml-2 ${
-                                      isMapelOnline ? "text-teal-200/80" : "text-indigo-200/80"
+                                      isMapelOnline ? "text-emerald-200/80" : "text-blue-200/80"
                                     }`}
                                   >
                                     (P-{activeP}
@@ -6693,3 +6689,8 @@ function SolidCompactCard({
     </button>
   );
 }
+
+
+
+
+

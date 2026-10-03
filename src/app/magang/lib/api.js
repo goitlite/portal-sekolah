@@ -717,6 +717,10 @@ export async function getDashboardKepsekSemua(forceRefresh = false) {
   return request("getDashboardKepsekSemua", { forceRefresh });
 }
 
+export async function getDetailMapelKepsek(idGuru, idMapel) {
+  return request("getDetailMapelKepsek", { idGuru, idMapel });
+}
+
 // =========================================================
 // PESAN KEPALA SEKOLAH <-> GURU (1 pesan terakhir)
 // =========================================================

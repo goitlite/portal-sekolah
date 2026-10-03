@@ -24,6 +24,8 @@ function handleKepsekAction_(action, params) {
       return getDashboardKepsekWaliKelas(params);
     case "getDashboardKepsekSemua":
       return getDashboardKepsekSemua(params);
+    case "getDetailMapelKepsek":
+      return getDetailMapelKepsek(params);
     default:
       return ContentService.createTextOutput(
         JSON.stringify({
@@ -706,11 +708,18 @@ function formatTglMapelSafe_(val) {
     try {
       return Utilities.formatDate(val, "Asia/Jakarta", "yyyy-MM-dd");
     } catch (e) {
-      try { return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e2) {}
+      try {
+        return Utilities.formatDate(
+          val,
+          Session.getScriptTimeZone(),
+          "yyyy-MM-dd",
+        );
+      } catch (e2) {}
     }
   }
   var s = String(val).trim();
-  if (s.length >= 10 && s.charAt(4) === "-" && s.charAt(7) === "-") return s.substring(0, 10);
+  if (s.length >= 10 && s.charAt(4) === "-" && s.charAt(7) === "-")
+    return s.substring(0, 10);
   return s;
 }
 
@@ -735,7 +744,7 @@ function getDashboardKepsekMapel(params) {
     var uploadSiswaRows = [];
     try {
       uploadSiswaRows = getSheetRowsAsObjects_("UPLOAD_SISWA");
-    } catch(e) {
+    } catch (e) {
       Logger.log("UPLOAD_SISWA tidak tersedia: " + e.message);
     }
 
@@ -768,8 +777,9 @@ function getDashboardKepsekMapel(params) {
       const namaMapel = String(m.NAMA_MAPEL || m.namaMapel || "").trim();
       const kelas = String(m.KELAS || m.kelas || "").trim();
       const keterangan = String(m.KETERANGAN || m.keterangan || "").trim();
-      const isOnline = keterangan.toUpperCase().indexOf("ONLINE") !== -1 ||
-                       namaMapel.toUpperCase().indexOf("ONLINE") !== -1;
+      const isOnline =
+        keterangan.toUpperCase().indexOf("ONLINE") !== -1 ||
+        namaMapel.toUpperCase().indexOf("ONLINE") !== -1;
 
       const itemMapel = {
         idMapel: idMapel,
@@ -819,7 +829,9 @@ function getDashboardKepsekMapel(params) {
     presensiMapelRows.forEach(function (p) {
       const idMapel = String(p.ID_MAPEL || p.idMapel || "").trim();
       const idSiswa = String(p.ID_SISWA || p.idSiswa || "").trim();
-      const namaSiswa = String(p.NAMA_SISWA || p.namaSiswa || "Siswa " + idSiswa).trim();
+      const namaSiswa = String(
+        p.NAMA_SISWA || p.namaSiswa || "Siswa " + idSiswa,
+      ).trim();
       const pertemuan = Number(p.PERTEMUAN_KE || p.pertemuanKe || 0);
       const tgl = formatTglMapelSafe_(p.TANGGAL || p.tanggal || p.CREATED_AT);
       const status = String(p.STATUS || p.status || "Hadir").trim();
@@ -855,25 +867,31 @@ function getDashboardKepsekMapel(params) {
     });
 
     // Masukkan presensiPertemuan ke mapelDetailMap
-    Object.keys(mapelPresensiMap).forEach(function(idMapel) {
+    Object.keys(mapelPresensiMap).forEach(function (idMapel) {
       if (!mapelDetailMap[idMapel]) return;
       const pertemuanObj = mapelPresensiMap[idMapel];
       const pertemuanList = Object.keys(pertemuanObj)
-        .map(function(k) { return pertemuanObj[k]; })
-        .sort(function(a, b) { return a.pertemuanKe - b.pertemuanKe; });
+        .map(function (k) {
+          return pertemuanObj[k];
+        })
+        .sort(function (a, b) {
+          return a.pertemuanKe - b.pertemuanKe;
+        });
 
-      mapelDetailMap[idMapel].presensiPertemuan = pertemuanList.map(function(pt) {
-        const total = pt.hadir + pt.tidakHadir;
-        return {
-          pertemuanKe: pt.pertemuanKe,
-          tanggal: pt.tanggal,
-          totalHadir: pt.hadir,
-          totalTidakHadir: pt.tidakHadir,
-          totalSiswa: total,
-          persenHadir: total > 0 ? Math.round((pt.hadir / total) * 100) : 0,
-          daftarSiswa: pt.rows.slice(0, 50), // max 50 per pertemuan untuk hemat payload
-        };
-      });
+      mapelDetailMap[idMapel].presensiPertemuan = pertemuanList.map(
+        function (pt) {
+          const total = pt.hadir + pt.tidakHadir;
+          return {
+            pertemuanKe: pt.pertemuanKe,
+            tanggal: pt.tanggal,
+            totalHadir: pt.hadir,
+            totalTidakHadir: pt.tidakHadir,
+            totalSiswa: total,
+            persenHadir: total > 0 ? Math.round((pt.hadir / total) * 100) : 0,
+            daftarSiswa: pt.rows.slice(0, 50), // max 50 per pertemuan untuk hemat payload
+          };
+        },
+      );
       mapelDetailMap[idMapel].totalPertemuan = pertemuanList.length;
     });
 
@@ -882,7 +900,7 @@ function getDashboardKepsekMapel(params) {
     // ============================================
     // Struktur UPLOAD_SISWA: ID_UPLOAD, ID_GURU, ID_MAPEL, ID_SISWA, PERTEMUAN_KE, NAMA_FILE, FILE_URL, CREATED_AT
     const mapelTugasMap = {};
-    uploadSiswaRows.forEach(function(u) {
+    uploadSiswaRows.forEach(function (u) {
       const idMapel = String(u.ID_MAPEL || u.idMapel || "").trim();
       const idSiswa = String(u.ID_SISWA || u.idSiswa || "").trim();
       const pertemuan = Number(u.PERTEMUAN_KE || u.pertemuanKe || 0);
@@ -910,15 +928,21 @@ function getDashboardKepsekMapel(params) {
     });
 
     // Masukkan tugasPertemuan ke mapelDetailMap
-    Object.keys(mapelTugasMap).forEach(function(idMapel) {
+    Object.keys(mapelTugasMap).forEach(function (idMapel) {
       if (!mapelDetailMap[idMapel]) return;
       const tugasObj = mapelTugasMap[idMapel];
       let totalTugas = 0;
       const tugasList = Object.keys(tugasObj)
-        .map(function(k) { return tugasObj[k]; })
-        .sort(function(a, b) { return a.pertemuanKe - b.pertemuanKe; });
+        .map(function (k) {
+          return tugasObj[k];
+        })
+        .sort(function (a, b) {
+          return a.pertemuanKe - b.pertemuanKe;
+        });
 
-      tugasList.forEach(function(t) { totalTugas += t.jumlahDikumpulkan; });
+      tugasList.forEach(function (t) {
+        totalTugas += t.jumlahDikumpulkan;
+      });
       mapelDetailMap[idMapel].tugasPertemuan = tugasList;
       mapelDetailMap[idMapel].totalTugasDikumpulkan = totalTugas;
     });
@@ -1007,7 +1031,13 @@ function getDashboardKepsekMapel(params) {
       ).map(function (g) {
         return {
           nama: g.namaGuru,
-          info: g.jumlahMapel + " mapel/rombel • " + g.totalSiswa + " siswa • " + g.totalPertemuan + " pertemuan",
+          info:
+            g.jumlahMapel +
+            " mapel/rombel • " +
+            g.totalSiswa +
+            " siswa • " +
+            g.totalPertemuan +
+            " pertemuan",
         };
       }),
       listKelasMapel: mapelRows.map(function (m) {
@@ -1545,4 +1575,255 @@ function getDashboardKepsekSemua(params) {
       walikelas: walikelas.data,
     },
   );
+}
+
+// ============================================================
+// getDetailMapelKepsek  (VERSI DIPERBAIKI)
+// - Nama siswa diambil via getSiswaMapel() (join ke sheet SISWA)
+//   atau fallback dari PRESENSI_MAPEL.NAMA_SISWA
+// - NILAI dibaca dari kolom NILAI_HARIAN (sesuai setupMapelSpreadsheet)
+// - Jawaban siswa menyertakan FILE_URL agar bisa diklik
+// ============================================================
+
+function getDetailMapelKepsek(params) {
+  var idGuru = String(params.idGuru || "").trim();
+  var idMapel = String(params.idMapel || "").trim();
+
+  if (!idGuru || !idMapel) {
+    return kepsekJsonError_("idGuru dan idMapel wajib diisi");
+  }
+
+  try {
+    // --------------------------------------------------------
+    // 1. Daftar siswa — gunakan getSiswaMapel (join ke SISWA)
+    // --------------------------------------------------------
+    var siswaDiMapel = [];
+    if (typeof getSiswaMapel === "function") {
+      try {
+        var rawSiswa = getSiswaMapel(idGuru, idMapel) || [];
+        siswaDiMapel = rawSiswa
+          .map(function (s) {
+            return {
+              idSiswa: String(s.idSiswa || s.ID_SISWA || "").trim(),
+              nama: String(s.nama || s.NAMA || "").trim(),
+              kelas: String(s.kelas || s.KELAS || "").trim(),
+            };
+          })
+          .filter(function (s) {
+            return !!s.idSiswa;
+          });
+      } catch (e) {
+        Logger.log("getSiswaMapel error: " + e.message);
+      }
+    }
+
+    // Fallback: ambil nama dari PRESENSI_MAPEL (punya kolom NAMA_SISWA)
+    var mapelSS = typeof getMapelSS_ === "function" ? getMapelSS_() : null;
+
+    function readSheetByName_(shName) {
+      if (!mapelSS) return [];
+      var sh = mapelSS.getSheetByName(shName);
+      if (!sh) return [];
+      var lr = sh.getLastRow();
+      var lc = sh.getLastColumn();
+      if (lr <= 1 || lc === 0) return [];
+      var hdrs = sh
+        .getRange(1, 1, 1, lc)
+        .getValues()[0]
+        .map(function (h) {
+          return String(h || "").trim();
+        });
+      var rows = sh.getRange(2, 1, lr - 1, lc).getValues();
+      return rows.map(function (r) {
+        var o = {};
+        hdrs.forEach(function (h, i) {
+          if (h) o[h] = r[i];
+        });
+        return o;
+      });
+    }
+
+    var allPres = readSheetByName_("PRESENSI_MAPEL");
+    var allTugas = readSheetByName_("TUGAS_MAPEL");
+    var allJwb = readSheetByName_("JAWABAN_SISWA");
+
+    // Jika daftar siswa masih kosong, pakai PRESENSI_MAPEL (NAMA_SISWA tersedia)
+    if (siswaDiMapel.length === 0) {
+      var seen = {};
+      allPres.forEach(function (r) {
+        if (String(r.ID_MAPEL || "").trim() !== idMapel) return;
+        if (String(r.ID_GURU || "").trim() !== idGuru) return;
+        var idS = String(r.ID_SISWA || "").trim();
+        if (!idS || seen[idS]) return;
+        seen[idS] = true;
+        var rawNama = String(r.NAMA_SISWA || idS).trim();
+        var match = rawNama.match(/(.+?)\s*\[(.*?)\]/);
+        siswaDiMapel.push({
+          idSiswa: idS,
+          nama: match ? match[1].trim() : rawNama,
+          kelas: match ? match[2].trim() : "",
+        });
+      });
+      siswaDiMapel.sort(function (a, b) {
+        return a.nama.localeCompare(b.nama);
+      });
+    }
+
+    // --------------------------------------------------------
+    // 2. Grid presensi — status + NILAI_HARIAN + tanggal
+    // --------------------------------------------------------
+    var presMapel = allPres.filter(function (r) {
+      return (
+        String(r.ID_MAPEL || "").trim() === idMapel &&
+        String(r.ID_GURU || "").trim() === idGuru
+      );
+    });
+
+    var maxP = 0;
+    var tanggalMap = {};
+    presMapel.forEach(function (r) {
+      var p = Number(r.PERTEMUAN_KE || 0);
+      if (p > maxP) maxP = p;
+      if (r.TANGGAL && !tanggalMap[p]) {
+        try {
+          tanggalMap[p] = Utilities.formatDate(
+            new Date(r.TANGGAL),
+            Session.getScriptTimeZone(),
+            "yyyy-MM-dd",
+          );
+        } catch (e2) {
+          tanggalMap[p] = String(r.TANGGAL).trim();
+        }
+      }
+    });
+
+    var gridPres = {};
+    presMapel.forEach(function (r) {
+      var idS = String(r.ID_SISWA || "").trim();
+      var p = Number(r.PERTEMUAN_KE || 0);
+      if (!idS || !p) return;
+      // Kolom nilai: NILAI_HARIAN (sesuai struktur asli), fallback ke NILAI
+      var nilaiRaw =
+        r.NILAI_HARIAN !== undefined && r.NILAI_HARIAN !== ""
+          ? r.NILAI_HARIAN
+          : r.NILAI !== undefined
+            ? r.NILAI
+            : "";
+      gridPres[idS + "_" + p] = {
+        status: String(r.STATUS || "").trim(),
+        nilai: nilaiRaw,
+      };
+    });
+
+    // --------------------------------------------------------
+    // 3. Tugas yang diposting guru
+    // --------------------------------------------------------
+    var tugasMap = {};
+    allTugas
+      .filter(function (r) {
+        return String(r.ID_MAPEL || "").trim() === idMapel;
+      })
+      .forEach(function (r) {
+        var p = Number(r.PERTEMUAN_KE || 0);
+        if (!p) return;
+        tugasMap[p] = {
+          idTugas: String(r.ID_TUGAS || "").trim(),
+          judulTugas: String(r.JUDUL_TUGAS || "Tugas Sesi " + p).trim(),
+          deskripsi: String(r.DESKRIPSI || "").trim(),
+        };
+      });
+
+    // --------------------------------------------------------
+    // 4. Jawaban siswa — sertakan FILE_URL agar bisa diklik
+    // --------------------------------------------------------
+    // Satu siswa bisa punya beberapa file per pertemuan
+    var jwbMap = {}; // key = "idSiswa_pertemuanKe" → array upload
+    allJwb
+      .filter(function (r) {
+        return String(r.ID_MAPEL || "").trim() === idMapel;
+      })
+      .forEach(function (r) {
+        var idS = String(r.ID_SISWA || "").trim();
+        var p = Number(r.PERTEMUAN_KE || 0);
+        if (!idS || !p) return;
+        var key = idS + "_" + p;
+        if (!jwbMap[key]) jwbMap[key] = [];
+        jwbMap[key].push({
+          idJawaban: String(r.ID_JAWABAN || "").trim(),
+          fileUrl: String(r.FILE_URL || "").trim(),
+          namaFile: String(r.NAMA_FILE || r.namaFile || "").trim(),
+          keterangan: String(r.KETERANGAN || "").trim(),
+          createdAt: r.CREATED_AT ? String(r.CREATED_AT) : "",
+        });
+      });
+
+    // --------------------------------------------------------
+    // 5. Susun pertemuanList & siswaRows
+    // --------------------------------------------------------
+    var pertemuanList = [];
+    for (var p = 1; p <= maxP; p++) {
+      pertemuanList.push({
+        pertemuanKe: p,
+        tanggal: tanggalMap[p] || "",
+        tugas: tugasMap[p] || null,
+      });
+    }
+
+    var siswaRows = siswaDiMapel.map(function (s) {
+      var pertemuan = pertemuanList.map(function (pt) {
+        var key = s.idSiswa + "_" + pt.pertemuanKe;
+        var pres = gridPres[key] || { status: "", nilai: "" };
+        var jwbArr = jwbMap[key] || null; // array atau null
+        return {
+          pertemuanKe: pt.pertemuanKe,
+          status: pres.status,
+          nilai: pres.nilai,
+          jawaban: jwbArr, // null = belum kumpulkan; array = file-file upload
+        };
+      });
+
+      var totalHadir = pertemuan.filter(function (x) {
+        var st = String(x.status).toUpperCase();
+        return st === "H" || st === "HADIR";
+      }).length;
+
+      var vals = pertemuan
+        .map(function (x) {
+          return parseFloat(x.nilai) || 0;
+        })
+        .filter(function (n) {
+          return n > 0;
+        });
+      var avgNilai = vals.length
+        ? Math.round(
+            vals.reduce(function (a, b) {
+              return a + b;
+            }, 0) / vals.length,
+          )
+        : null;
+
+      return {
+        idSiswa: s.idSiswa,
+        nama: s.nama, // nama bersih (bukan ID)
+        kelas: s.kelas,
+        pertemuan: pertemuan,
+        totalHadir: totalHadir,
+        totalSesi: maxP,
+        persenHadir: maxP > 0 ? Math.round((totalHadir / maxP) * 100) : 0,
+        avgNilai: avgNilai,
+      };
+    });
+
+    return kepsekJsonSuccess_("Detail mapel berhasil dimuat", {
+      idMapel: idMapel,
+      idGuru: idGuru,
+      jumlahSiswa: siswaDiMapel.length,
+      jumlahSesi: maxP,
+      pertemuanList: pertemuanList,
+      siswaRows: siswaRows,
+    });
+  } catch (e) {
+    Logger.log("getDetailMapelKepsek ERROR: " + e.message);
+    return kepsekJsonError_("Gagal memuat detail mapel: " + e.message);
+  }
 }
