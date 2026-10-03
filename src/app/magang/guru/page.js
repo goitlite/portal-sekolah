@@ -3919,29 +3919,29 @@ function DashboardGuruContent() {
                       <article
                         key={mapel.idMapel}
                         className={`group relative overflow-hidden rounded-2xl border-2 border-yellow-300/80 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.12)] ${
-                          isMapelOnline ? "bg-emerald-100/90" : "bg-sky-100/90"
+                          isMapelOnline ? "bg-emerald-100" : "bg-sky-100"
                         }`}
                       >
                         {/* HEADER KUNING TEBAL */}
-                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-3 py-3 sm:px-4 sm:py-4">
+                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-2.5 py-2.5 sm:px-4 sm:py-3">
                           <div className="absolute inset-y-0 right-0 w-32 bg-white/20 blur-2xl" />
-                          <div className="relative flex items-start justify-between gap-2 sm:gap-3">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-yellow-500/40 bg-white/80 text-xl shadow-sm backdrop-blur-sm sm:h-11 sm:w-11 sm:rounded-2xl sm:text-2xl">
+                          <div className="relative flex items-center justify-between gap-2 sm:gap-3">
+                            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-yellow-500/40 bg-white/80 text-lg shadow-sm backdrop-blur-sm sm:h-10 sm:w-10 sm:text-xl">
                                 {isMapelOnline ? "🌐" : "📚"}
                               </div>
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="break-words text-base font-black leading-tight tracking-tight text-slate-950 sm:text-lg lg:text-xl">
+                                  <h3 className="min-w-0 truncate text-sm font-black leading-tight tracking-tight text-slate-950 sm:text-lg lg:text-xl">
                                     {mapel.namaMapel}
                                   </h3>
 
                                   <span
-                                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px] ${
+                                    className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px] ${
                                       isMapelOnline
-                                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                                        : "border-blue-300 bg-blue-50 text-blue-800"
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-blue-600 bg-blue-600 text-white"
                                     }`}
                                   >
                                     {isMapelOnline
@@ -3950,17 +3950,17 @@ function DashboardGuruContent() {
                                   </span>
                                 </div>
 
-                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
                                   {mapel.kelas && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
-                                      🎓 <span>Kelas {mapel.kelas}</span>
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
+                                      🎓 <span>{mapel.kelas}</span>
                                     </span>
                                   )}
-                                  <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                  <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
                                     👥 <span>{totalSiswaDisplay} Siswa</span>
                                   </span>
                                   {totalPertemuanDisplay > 0 && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-800 shadow-sm">
                                       🗓️{" "}
                                       <span>
                                         {totalPertemuanDisplay} Pertemuan
@@ -3968,8 +3968,8 @@ function DashboardGuruContent() {
                                     </span>
                                   )}
                                   {isMapelOnline && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-800 shadow-sm">
-                                      ⚡ <span>Upload Tugas Aktif</span>
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-600 px-2 py-0.5 text-[9px] font-black text-white shadow-sm">
+                                      ⚡ <span>Upload Tugas</span>
                                     </span>
                                   )}
                                 </div>
@@ -3977,10 +3977,10 @@ function DashboardGuruContent() {
                             </div>
 
                             <span
-                              className={`inline-flex max-w-[46%] shrink-0 items-center justify-center rounded-lg border px-2 py-1.5 text-[8px] leading-tight font-black uppercase tracking-wide text-center shadow-sm sm:max-w-none sm:rounded-xl sm:px-3 sm:py-2 sm:text-[10px] ${
+                              className={`inline-flex shrink-0 whitespace-nowrap items-center justify-center rounded-lg border px-2 py-1 text-[7px] leading-tight font-black uppercase tracking-wide text-center shadow-sm sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-[10px] ${
                                 isMapelOnline
-                                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                                  : "border-blue-300 bg-blue-50 text-blue-800"
+                                  ? "border-emerald-600 bg-emerald-600 text-white"
+                                  : "border-blue-600 bg-blue-600 text-white"
                               }`}
                             >
                               {isMapelOnline
@@ -3993,9 +3993,7 @@ function DashboardGuruContent() {
                         {/* BODY GRADIENT */}
                         <div
                           className={`p-3 sm:p-4 lg:p-5 ${
-                            isMapelOnline
-                              ? "bg-emerald-100/70"
-                              : "bg-sky-100/70"
+                            isMapelOnline ? "bg-emerald-100" : "bg-sky-100"
                           }`}
                         >
                           {/* INFORMASI TAMBAHAN */}
@@ -4530,59 +4528,48 @@ function DashboardGuruContent() {
                     return (
                       <article
                         key={wali.idWali}
-                        className="group relative overflow-hidden rounded-[1.75rem] border-2 border-yellow-300/80 bg-gradient-to-br from-emerald-50 via-white to-teal-100 shadow-[0_12px_35px_rgba(15,23,42,0.10)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(15,23,42,0.14)]"
+                        className="group relative overflow-hidden rounded-2xl border-2 border-teal-300/80 bg-emerald-100 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.12)]"
                       >
-                        {/* HEADER KUNING TEBAL */}
-                        <div className="relative overflow-hidden border-b-2 border-yellow-500/40 bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 px-4 py-4 sm:px-5 sm:py-5">
-                          <div className="absolute inset-y-0 right-0 w-32 bg-white/20 blur-2xl" />
-                          <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-yellow-500/40 bg-white/80 text-2xl shadow-sm backdrop-blur-sm">
+                        {/* HEADER HIJAU WALI KELAS */}
+                        <div className="relative overflow-hidden border-b-2 border-teal-800/40 bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 px-3 py-3 sm:px-4 sm:py-3.5">
+                          <div className="absolute inset-y-0 right-0 w-32 bg-white/10 blur-2xl" />
+                          <div className="relative flex items-center justify-between gap-2 sm:gap-3">
+                            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-xl shadow-sm backdrop-blur-sm sm:h-11 sm:w-11 sm:rounded-2xl sm:text-2xl">
                                 🏫
                               </div>
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="break-words text-lg font-black leading-tight tracking-tight text-slate-950 sm:text-xl lg:text-2xl">
+                                  <h3 className="min-w-0 truncate text-base font-black leading-tight tracking-tight text-white sm:text-xl lg:text-2xl">
                                     {wali.namaKelas}
                                   </h3>
-                                  <span className="inline-flex items-center rounded-full border border-teal-300 bg-teal-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-teal-800 shadow-sm">
+                                  <span className="inline-flex shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-sm">
                                     🏫 WALI KELAS
                                   </span>
                                 </div>
 
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {wali.kelas && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
-                                      🎓 <span>Kelas {wali.kelas}</span>
-                                    </span>
-                                  )}
-                                  <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 rounded-lg border border-white/25 bg-white/15 px-2 py-0.5 text-[9px] font-black whitespace-nowrap text-white shadow-sm">
                                     👥 <span>{totalSiswaDisplay} Siswa</span>
                                   </span>
                                   {totalSesiDisplay > 0 && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/85 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+                                    <span className="inline-flex items-center gap-1 rounded-lg border border-white/25 bg-white/15 px-2 py-0.5 text-[9px] font-black whitespace-nowrap text-white shadow-sm">
                                       🗓️ <span>{totalSesiDisplay} Sesi</span>
-                                    </span>
-                                  )}
-                                  {petugas?.namaSiswa && (
-                                    <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 shadow-sm">
-                                      ⭐{" "}
-                                      <span>Petugas: {petugas.namaSiswa}</span>
                                     </span>
                                   )}
                                 </div>
                               </div>
                             </div>
 
-                            <span className="inline-flex w-fit shrink-0 items-center rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-teal-800 shadow-sm">
+                            <span className="hidden sm:inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-xl border border-white/25 bg-white/15 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm sm:px-3 sm:text-[10px]">
                               Pengelolaan Siswa &amp; Bimbingan
                             </span>
                           </div>
                         </div>
 
                         {/* BODY GRADIENT */}
-                        <div className="bg-gradient-to-br from-emerald-50/95 via-white/95 to-teal-50/95 p-4 sm:p-5 lg:p-6">
+                        <div className="bg-emerald-100 p-3 sm:p-4 lg:p-5">
                           {/* KETERANGAN */}
                           {(cleanText || petugas?.namaSiswa) && (
                             <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
