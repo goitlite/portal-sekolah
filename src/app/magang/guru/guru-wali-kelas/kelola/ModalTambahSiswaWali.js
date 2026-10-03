@@ -75,6 +75,8 @@ export default function ModalTambahSiswaWali({
   guru,
   wali,
   onSiswaAdded,
+  onTambahStart,
+  onTambahSelesai,
 }) {
   const [kandidatSiswa, setKandidatSiswa] = useState([]);
   const [loadingKandidat, setLoadingKandidat] = useState(false);
@@ -176,6 +178,7 @@ export default function ModalTambahSiswaWali({
   async function tambahSiswaKeWali(siswa) {
     if (!guru || !wali) return;
     setMenambahId(siswa.idSiswa);
+    if (typeof onTambahStart === "function") onTambahStart(siswa.idSiswa);
     try {
       const result = await simpanSiswaWaliKelas({
         idGuru: guru.id,
@@ -198,6 +201,7 @@ export default function ModalTambahSiswaWali({
       alert("Terjadi kesalahan saat menambahkan siswa.");
     } finally {
       setMenambahId(null);
+      if (typeof onTambahSelesai === "function") onTambahSelesai();
     }
   }
 

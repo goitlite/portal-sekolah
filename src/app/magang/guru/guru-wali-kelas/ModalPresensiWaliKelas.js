@@ -124,6 +124,7 @@ export default function ModalPresensiWaliKelas({
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [menghapusId, setMenghapusId] = useState(null);
+  const [menambahId, setMenambahId] = useState(null); // loading saat tambah siswa
   const [cetakLoading, setCetakLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   // true bila ada perubahan yang BERHASIL tersimpan ke server (simpan presensi,
@@ -954,6 +955,16 @@ export default function ModalPresensiWaliKelas({
         </div>
       )}
 
+      {/* TOAST LOADING: hapus / tambah siswa */}
+      {(menghapusId || menambahId) && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[260] flex items-center gap-3 bg-slate-900/90 backdrop-blur text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-2xl animate-fadeIn pointer-events-none">
+          <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin flex-shrink-0" />
+          <span>
+            {menghapusId ? "Menghapus siswa dari kelas..." : "Menambahkan siswa ke kelas..."}
+          </span>
+        </div>
+      )}
+
       {/* MODAL TAMBAH SISWA KE KELAS WALI */}
       {showTambahModal && (
         <ModalTambahSiswaWali
@@ -961,7 +972,10 @@ export default function ModalPresensiWaliKelas({
           onClose={() => setShowTambahModal(false)}
           guru={guru}
           wali={wali}
+          onTambahStart={(idSiswa) => setMenambahId(idSiswa)}
+          onTambahSelesai={() => setMenambahId(null)}
           onSiswaAdded={() => {
+            setMenambahId(null);
             didChangeRef.current = true;
             loadGrid();
           }}

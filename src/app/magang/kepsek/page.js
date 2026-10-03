@@ -184,6 +184,7 @@ export default function DashboardKepalaSekolah() {
   const [loadedPkl, setLoadedPkl] = useState(false);
   const [searchPkl, setSearchPkl] = useState("");
   const [filterPklStatus, setFilterPklStatus] = useState("semua"); // "semua" | "sudah_jurnal" | "belum_jurnal"
+  const [sortPkl, setSortPkl] = useState("terbaru"); // "terbaru" | "terbanyak" | "nama"
   const [selectedGuruPkl, setSelectedGuruPkl] = useState(null); // Detail modal
 
   // =========================================================
@@ -195,6 +196,7 @@ export default function DashboardKepalaSekolah() {
   const [loadedWali, setLoadedWali] = useState(false);
   const [searchWali, setSearchWali] = useState("");
   const [filterWaliStatus, setFilterWaliStatus] = useState("semua");
+  const [sortWali, setSortWali] = useState("terbaru"); // "terbaru" | "terbanyak" | "nama"
   const [selectedGuruWali, setSelectedGuruWali] = useState(null); // Detail modal
 
   // =========================================================
@@ -205,7 +207,10 @@ export default function DashboardKepalaSekolah() {
   const [errorMapel, setErrorMapel] = useState("");
   const [loadedMapel, setLoadedMapel] = useState(false);
   const [searchMapel, setSearchMapel] = useState("");
+  const [filterMapelJenis, setFilterMapelJenis] = useState("semua"); // "semua" | "online" | "reguler"
+  const [sortMapel, setSortMapel] = useState("terbaru"); // "terbaru" | "mapel_terbanyak" | "siswa_terbanyak" | "nama"
   const [selectedGuruMapel, setSelectedGuruMapel] = useState(null); // Detail modal
+  const [selectedPertemuanMapel, setSelectedPertemuanMapel] = useState({}); // { [idMapel]: pertemuanKe }
 
   // =========================================================
   // 4. STATE & DATA TAB: WALI KELAS
@@ -218,6 +223,8 @@ export default function DashboardKepalaSekolah() {
   const [errorWaliKelas, setErrorWaliKelas] = useState("");
   const [loadedWaliKelas, setLoadedWaliKelas] = useState(false);
   const [searchWaliKelas, setSearchWaliKelas] = useState("");
+  const [filterWaliKelasStatus, setFilterWaliKelasStatus] = useState("semua"); // "semua" | "sudah_presensi" | "belum_presensi"
+  const [sortWaliKelas, setSortWaliKelas] = useState("terbaru"); // "terbaru" | "kehadiran" | "siswa" | "nama"
   const [selectedWaliKelas, setSelectedWaliKelas] = useState(null); // Detail modal
   const [isAllPresensiModalOpen, setIsAllPresensiModalOpen] = useState(false); // Modal seluruh presensi
   const [selectedPresensiKelasModal, setSelectedPresensiKelasModal] =
@@ -719,92 +726,210 @@ export default function DashboardKepalaSekolah() {
   // 1. Filter Pembimbing PKL
   const filteredCardsPkl = useMemo(() => {
     const list = dataPkl.cards || [];
-    return list.filter((g) => {
-      // Guru yang 0 siswa seharusnya tidak ada card
-      const siswaList = getSiswaPklList(g);
-      if (!siswaList || siswaList.length === 0) return false;
+    return list
+      .filter((g) => {
+        const siswaList = getSiswaPklList(g);
+        if (!siswaList || siswaList.length === 0) return false;
 
-      const matchSearch =
-        !searchPkl ||
-        (g.namaGuru || "").toLowerCase().includes(searchPkl.toLowerCase()) ||
-        (g.idGuru || "").toLowerCase().includes(searchPkl.toLowerCase()) ||
-        (g.daftarTempat || []).some((t) =>
-          t.toLowerCase().includes(searchPkl.toLowerCase()),
-        ) ||
-        siswaList.some((s) =>
-          (s.nama || "").toLowerCase().includes(searchPkl.toLowerCase()),
-        );
+        const matchSearch =
+          !searchPkl ||
+          (g.namaGuru || "").toLowerCase().includes(searchPkl.toLowerCase()) ||
+          (g.idGuru || "").toLowerCase().includes(searchPkl.toLowerCase()) ||
+          (g.daftarTempat || []).some((t) =>
+            t.toLowerCase().includes(searchPkl.toLowerCase()),
+          ) ||
+          siswaList.some((s) =>
+            (s.nama || "").toLowerCase().includes(searchPkl.toLowerCase()),
+          );
 
-      let matchStatus = true;
-      if (filterPklStatus === "sudah_jurnal") {
-        matchStatus = g.sudahIsiJurnal;
-      } else if (filterPklStatus === "belum_jurnal") {
-        matchStatus = !g.sudahIsiJurnal;
-      }
+        let matchStatus = true;
+        if (filterPklStatus === "sudah_jurnal") {
+          matchStatus = g.sudahIsiJurnal;
+        } else if (filterPklStatus === "belum_jurnal") {
+          matchStatus = !g.sudahIsiJurnal;
+        }
 
-      return matchSearch && matchStatus;
-    });
-  }, [dataPkl.cards, searchPkl, filterPklStatus, getSiswaPklList]);
+        return matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        if (sortPkl === "terbaru") {
+          const dateA = a.jurnalTerakhir?.tanggal || a.riwayatJurnal?.[0]?.tanggal || "";
+          const dateB = b.jurnalTerakhir?.tanggal || b.riwayatJurnal?.[0]?.tanggal || "";
+          if (dateA && dateB) return dateB.localeCompare(dateA);
+          if (dateA) return -1;
+          if (dateB) return 1;
+          return (b.jumlahSiswa || 0) - (a.jumlahSiswa || 0);
+        }
+        if (sortPkl === "terbanyak") {
+          return (b.jumlahSiswa || 0) - (a.jumlahSiswa || 0);
+        }
+        if (sortPkl === "nama") {
+          return (a.namaGuru || "").localeCompare(b.namaGuru || "");
+        }
+        return 0;
+      });
+  }, [dataPkl.cards, searchPkl, filterPklStatus, sortPkl, getSiswaPklList]);
 
   // 2. Filter Guru Wali
   const filteredCardsWali = useMemo(() => {
     const list = dataWali.cards || [];
-    return list.filter((g) => {
-      const matchSearch =
-        !searchWali ||
-        (g.namaGuru || "").toLowerCase().includes(searchWali.toLowerCase()) ||
-        (g.idGuru || "").toLowerCase().includes(searchWali.toLowerCase()) ||
-        (g.daftarSiswa || []).some((s) =>
-          (s.nama || "").toLowerCase().includes(searchWali.toLowerCase()),
-        );
+    return list
+      .filter((g) => {
+        const matchSearch =
+          !searchWali ||
+          (g.namaGuru || "").toLowerCase().includes(searchWali.toLowerCase()) ||
+          (g.idGuru || "").toLowerCase().includes(searchWali.toLowerCase()) ||
+          (g.daftarSiswa || []).some((s) =>
+            (s.nama || "").toLowerCase().includes(searchWali.toLowerCase()),
+          );
 
-      let matchStatus = true;
-      if (filterWaliStatus === "sudah_jurnal") {
-        matchStatus = g.sudahIsiJurnal;
-      } else if (filterWaliStatus === "belum_jurnal") {
-        matchStatus = !g.sudahIsiJurnal;
-      }
+        let matchStatus = true;
+        if (filterWaliStatus === "sudah_jurnal") {
+          matchStatus = g.sudahIsiJurnal;
+        } else if (filterWaliStatus === "belum_jurnal") {
+          matchStatus = !g.sudahIsiJurnal;
+        }
 
-      return matchSearch && matchStatus;
-    });
-  }, [dataWali.cards, searchWali, filterWaliStatus]);
+        return matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        if (sortWali === "terbaru") {
+          const dateA = a.jurnalTerakhir?.tanggal || a.riwayatJurnal?.[0]?.tanggal || "";
+          const dateB = b.jurnalTerakhir?.tanggal || b.riwayatJurnal?.[0]?.tanggal || "";
+          if (dateA && dateB) return dateB.localeCompare(dateA);
+          if (dateA) return -1;
+          if (dateB) return 1;
+          return (b.totalPertemuan || 0) - (a.totalPertemuan || 0);
+        }
+        if (sortWali === "terbanyak") {
+          return (b.jumlahSiswa || 0) - (a.jumlahSiswa || 0);
+        }
+        if (sortWali === "nama") {
+          return (a.namaGuru || "").localeCompare(b.namaGuru || "");
+        }
+        return 0;
+      });
+  }, [dataWali.cards, searchWali, filterWaliStatus, sortWali]);
 
   // 3. Filter Guru Mapel
   const filteredCardsMapel = useMemo(() => {
     const list = dataMapel.cards || [];
-    return list.filter((g) => {
-      return (
-        !searchMapel ||
-        (g.namaGuru || "").toLowerCase().includes(searchMapel.toLowerCase()) ||
-        (g.daftarMapel || []).some(
-          (m) =>
-            (m.namaMapel || "")
-              .toLowerCase()
-              .includes(searchMapel.toLowerCase()) ||
-            (m.kelas || "").toLowerCase().includes(searchMapel.toLowerCase()),
-        )
-      );
-    });
-  }, [dataMapel.cards, searchMapel]);
+    return list
+      .filter((g) => {
+        const matchSearch =
+          !searchMapel ||
+          (g.namaGuru || "").toLowerCase().includes(searchMapel.toLowerCase()) ||
+          (g.daftarMapel || []).some(
+            (m) =>
+              (m.namaMapel || "")
+                .toLowerCase()
+                .includes(searchMapel.toLowerCase()) ||
+              (m.kelas || "").toLowerCase().includes(searchMapel.toLowerCase()),
+          );
+
+        let matchJenis = true;
+        if (filterMapelJenis === "online") {
+          matchJenis = (g.daftarMapel || []).some(
+            (m) =>
+              m.isOnline ||
+              String(m.keterangan || "").toUpperCase().includes("ONLINE") ||
+              String(m.namaMapel || "").toUpperCase().includes("ONLINE"),
+          );
+        } else if (filterMapelJenis === "reguler") {
+          matchJenis = (g.daftarMapel || []).some(
+            (m) =>
+              !m.isOnline &&
+              !String(m.keterangan || "").toUpperCase().includes("ONLINE") &&
+              !String(m.namaMapel || "").toUpperCase().includes("ONLINE"),
+          );
+        }
+
+        return matchSearch && matchJenis;
+      })
+      .sort((a, b) => {
+        if (sortMapel === "terbaru") {
+          const getLatestDate = (item) => {
+            let latest = item.jurnalTerakhir?.tanggal || item.riwayatJurnal?.[0]?.tanggal || "";
+            (item.daftarMapel || []).forEach((m) => {
+              (m.presensiPertemuan || []).forEach((pt) => {
+                if (pt.tanggal && pt.tanggal > latest) latest = pt.tanggal;
+              });
+            });
+            return latest;
+          };
+          const dateA = getLatestDate(a);
+          const dateB = getLatestDate(b);
+          if (dateA && dateB) return dateB.localeCompare(dateA);
+          if (dateA) return -1;
+          if (dateB) return 1;
+          return (b.jumlahMapel || 0) - (a.jumlahMapel || 0);
+        }
+        if (sortMapel === "mapel_terbanyak") {
+          return (b.jumlahMapel || 0) - (a.jumlahMapel || 0);
+        }
+        if (sortMapel === "siswa_terbanyak") {
+          return (b.totalSiswa || 0) - (a.totalSiswa || 0);
+        }
+        if (sortMapel === "nama") {
+          return (a.namaGuru || "").localeCompare(b.namaGuru || "");
+        }
+        return 0;
+      });
+  }, [dataMapel.cards, searchMapel, filterMapelJenis, sortMapel]);
 
   // 4. Filter Wali Kelas
   const filteredCardsWaliKelas = useMemo(() => {
     const list = dataWaliKelas.cards || [];
-    return list.filter((w) => {
-      return (
-        !searchWaliKelas ||
-        (w.namaGuru || "")
-          .toLowerCase()
-          .includes(searchWaliKelas.toLowerCase()) ||
-        (w.namaKelas || "")
-          .toLowerCase()
-          .includes(searchWaliKelas.toLowerCase()) ||
-        (w.keterangan || "")
-          .toLowerCase()
-          .includes(searchWaliKelas.toLowerCase())
-      );
-    });
-  }, [dataWaliKelas.cards, searchWaliKelas]);
+    return list
+      .filter((w) => {
+        const matchSearch =
+          !searchWaliKelas ||
+          (w.namaGuru || "")
+            .toLowerCase()
+            .includes(searchWaliKelas.toLowerCase()) ||
+          (w.namaKelas || "")
+            .toLowerCase()
+            .includes(searchWaliKelas.toLowerCase()) ||
+          (w.keterangan || "")
+            .toLowerCase()
+            .includes(searchWaliKelas.toLowerCase());
+
+        let matchStatus = true;
+        const hasTodayAbsen =
+          (w.presensiHariIni?.hadir || 0) +
+            (w.presensiHariIni?.sakit || 0) +
+            (w.presensiHariIni?.izin || 0) +
+            (w.presensiHariIni?.alfa || 0) >
+          0;
+        if (filterWaliKelasStatus === "sudah_presensi") {
+          matchStatus = hasTodayAbsen;
+        } else if (filterWaliKelasStatus === "belum_presensi") {
+          matchStatus = !hasTodayAbsen;
+        }
+
+        return matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        if (sortWaliKelas === "terbaru") {
+          const dateA = a.presensiHariIni?.tanggal || a.presensi?.latestDate || a.createdAt || "";
+          const dateB = b.presensiHariIni?.tanggal || b.presensi?.latestDate || b.createdAt || "";
+          if (dateA && dateB) return dateB.localeCompare(dateA);
+          if (dateA) return -1;
+          if (dateB) return 1;
+          return (b.jumlahSiswa || 0) - (a.jumlahSiswa || 0);
+        }
+        if (sortWaliKelas === "kehadiran") {
+          return (b.presensiHariIni?.persenHadir || 0) - (a.presensiHariIni?.persenHadir || 0);
+        }
+        if (sortWaliKelas === "siswa") {
+          return (b.jumlahSiswa || 0) - (a.jumlahSiswa || 0);
+        }
+        if (sortWaliKelas === "nama") {
+          return (a.namaKelas || "").localeCompare(b.namaKelas || "");
+        }
+        return 0;
+      });
+  }, [dataWaliKelas.cards, searchWaliKelas, filterWaliKelasStatus, sortWaliKelas]);
 
   // Filter Seluruh Presensi Wali Kelas untuk Modal Master
   const filteredAllPresensi = useMemo(() => {
@@ -1512,6 +1637,16 @@ export default function DashboardKepalaSekolah() {
                   <option value="sudah_jurnal">✅ Sudah Isi Jurnal</option>
                   <option value="belum_jurnal">⚠️ Belum Isi Jurnal</option>
                 </select>
+
+                <select
+                  value={sortPkl}
+                  onChange={(e) => setSortPkl(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="terbaru">⚡ Urutkan: Data Terbaru</option>
+                  <option value="terbanyak">👥 Siswa Terbanyak</option>
+                  <option value="nama">🔤 Nama Guru (A-Z)</option>
+                </select>
               </div>
             </div>
 
@@ -1831,6 +1966,16 @@ export default function DashboardKepalaSekolah() {
                   <option value="sudah_jurnal">✅ Sudah Ada Pertemuan</option>
                   <option value="belum_jurnal">⚠️ Belum Ada Pertemuan</option>
                 </select>
+
+                <select
+                  value={sortWali}
+                  onChange={(e) => setSortWali(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="terbaru">⚡ Urutkan: Data Terbaru</option>
+                  <option value="terbanyak">👥 Siswa Terbanyak</option>
+                  <option value="nama">🔤 Nama Guru (A-Z)</option>
+                </select>
               </div>
             </div>
 
@@ -2060,17 +2205,40 @@ export default function DashboardKepalaSekolah() {
                 </span>
               </div>
 
-              <div className="relative flex-1 sm:w-64">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
-                  🔍
-                </span>
-                <input
-                  type="text"
-                  value={searchMapel}
-                  onChange={(e) => setSearchMapel(e.target.value)}
-                  placeholder="Cari guru, mata pelajaran, kelas..."
-                  className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-medium"
-                />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="relative flex-1 sm:w-60">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    value={searchMapel}
+                    onChange={(e) => setSearchMapel(e.target.value)}
+                    placeholder="Cari guru, mata pelajaran, kelas..."
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-medium"
+                  />
+                </div>
+
+                <select
+                  value={filterMapelJenis}
+                  onChange={(e) => setFilterMapelJenis(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="semua">Semua Tipe Mapel</option>
+                  <option value="online">🌐 Mapel Online</option>
+                  <option value="reguler">📚 Mapel Reguler</option>
+                </select>
+
+                <select
+                  value={sortMapel}
+                  onChange={(e) => setSortMapel(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="terbaru">⚡ Urutkan: Data Terbaru</option>
+                  <option value="mapel_terbanyak">📚 Mapel Terbanyak</option>
+                  <option value="siswa_terbanyak">👥 Siswa Terbanyak</option>
+                  <option value="nama">🔤 Nama Guru (A-Z)</option>
+                </select>
               </div>
             </div>
 
@@ -2127,17 +2295,32 @@ export default function DashboardKepalaSekolah() {
                       ]}
                       extra={
                         <div className="flex flex-wrap gap-1.5">
-                          {(guru.daftarMapel || []).slice(0, 3).map((m, i) => (
-                            <span
-                              key={i}
-                              className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[11px] font-semibold border border-white/20"
-                            >
-                              {m.namaMapel} ({m.kelas})
-                            </span>
-                          ))}
-                          {(guru.daftarMapel || []).length > 3 && (
+                          {(guru.daftarMapel || []).slice(0, 4).map((m, i) => {
+                            const isOnline = m.isOnline ||
+                              String(m.keterangan || "").toUpperCase().includes("ONLINE") ||
+                              String(m.namaMapel || "").toUpperCase().includes("ONLINE");
+                            return (
+                              <span
+                                key={i}
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 ${
+                                  isOnline
+                                    ? "bg-teal-900/60 text-teal-200 border-teal-500/40"
+                                    : "bg-white/10 text-white border-white/20"
+                                }`}
+                              >
+                                <span>{isOnline ? "🌐" : "📚"}</span>
+                                <span>{m.namaMapel} ({m.kelas || "-"})</span>
+                                {m.totalTugasDikumpulkan > 0 && (
+                                  <span className="text-[9px] bg-emerald-500/30 text-emerald-200 px-1 rounded font-bold">
+                                    📎 {m.totalTugasDikumpulkan}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
+                          {(guru.daftarMapel || []).length > 4 && (
                             <span className="px-2 py-0.5 rounded-md bg-white/5 text-blue-200 text-[11px] font-bold">
-                              +{guru.daftarMapel.length - 3} lainnya
+                              +{(guru.daftarMapel || []).length - 4} lainnya
                             </span>
                           )}
                         </div>
@@ -2190,23 +2373,58 @@ export default function DashboardKepalaSekolah() {
                         </div>
 
                         {/* Daftar Mata Pelajaran Diampu */}
-                        <div className="mt-4 space-y-1.5">
-                          <p className="text-[10px] font-bold text-blue-300/80 uppercase">
-                            Mata Pelajaran & Kelas:
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {guru.daftarMapel.slice(0, 3).map((m, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[11px] font-semibold border border-white/20"
-                              >
-                                {m.namaMapel} ({m.kelas})
-                              </span>
-                            ))}
-                            {guru.daftarMapel.length > 3 && (
-                              <span className="px-2 py-0.5 rounded-md bg-white/5 text-blue-200 text-[11px] font-bold">
-                                +{guru.daftarMapel.length - 3} lainnya
-                              </span>
+                        <div className="mt-4 space-y-2">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-blue-300/80 uppercase">
+                            <span>Mata Pelajaran & Kelas:</span>
+                            <span>{guru.daftarMapel?.length || 0} Mapel</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {(guru.daftarMapel || []).slice(0, 3).map((m, idx) => {
+                              const isOnline = m.isOnline ||
+                                String(m.keterangan || "").toUpperCase().includes("ONLINE") ||
+                                String(m.namaMapel || "").toUpperCase().includes("ONLINE");
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                                    isOnline
+                                      ? "bg-teal-950/60 border-teal-500/40 text-teal-100"
+                                      : "bg-blue-900/40 border-blue-600/40 text-blue-100"
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs">{isOnline ? "🌐" : "📚"}</span>
+                                      <span className="font-bold text-xs truncate text-white">{m.namaMapel}</span>
+                                      {isOnline && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-400/20 text-teal-300 border border-teal-400/30">
+                                          ONLINE
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-blue-300/70 mt-0.5">
+                                      {m.kelas ? `Kelas ${m.kelas}` : "Semua Kelas"} • 👥 {m.siswaCount || 0} Siswa
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                    {m.presensiPertemuan?.length > 0 && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white border border-white/20">
+                                        📅 {m.presensiPertemuan.length} Sesi
+                                      </span>
+                                    )}
+                                    {m.totalTugasDikumpulkan > 0 && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                                        📎 {m.totalTugasDikumpulkan} Tugas
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {(guru.daftarMapel || []).length > 3 && (
+                              <p className="text-center text-[10px] font-bold text-amber-300/90 py-1 bg-white/5 rounded-lg border border-white/10">
+                                +{(guru.daftarMapel || []).length - 3} mata pelajaran lainnya
+                              </p>
                             )}
                           </div>
                         </div>
@@ -2365,17 +2583,40 @@ export default function DashboardKepalaSekolah() {
                 </div>
               </div>
 
-              <div className="relative flex-1 sm:w-72">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
-                  🔍
-                </span>
-                <input
-                  type="text"
-                  value={searchWaliKelas}
-                  onChange={(e) => setSearchWaliKelas(e.target.value)}
-                  placeholder="Cari kelas, nama guru wali..."
-                  className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-teal-500 outline-none font-medium transition-all"
-                />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="relative flex-1 sm:w-60">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    value={searchWaliKelas}
+                    onChange={(e) => setSearchWaliKelas(e.target.value)}
+                    placeholder="Cari kelas, nama guru wali..."
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-teal-500 outline-none font-medium transition-all"
+                  />
+                </div>
+
+                <select
+                  value={filterWaliKelasStatus}
+                  onChange={(e) => setFilterWaliKelasStatus(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="semua">Semua Status Presensi</option>
+                  <option value="sudah_presensi">✅ Sudah Presensi Hari Ini</option>
+                  <option value="belum_presensi">⚠️ Belum Presensi Hari Ini</option>
+                </select>
+
+                <select
+                  value={sortWaliKelas}
+                  onChange={(e) => setSortWaliKelas(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none"
+                >
+                  <option value="terbaru">⚡ Urutkan: Data Terbaru</option>
+                  <option value="kehadiran">📊 % Kehadiran Hari Ini</option>
+                  <option value="siswa">👥 Siswa Terbanyak</option>
+                  <option value="nama">🔤 Nama Kelas (A-Z)</option>
+                </select>
               </div>
             </div>
 

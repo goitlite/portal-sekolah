@@ -79,6 +79,8 @@ export default function ModalTambahSiswa({
   guru,
   mapel,
   onSiswaAdded,
+  onTambahStart,
+  onTambahSelesai,
 }) {
   const [kandidatSiswa, setKandidatSiswa] = useState([]);
   const [loadingKandidat, setLoadingKandidat] = useState(false);
@@ -175,6 +177,7 @@ export default function ModalTambahSiswa({
 
   async function tambahSiswaKeMapel(siswa) {
     setMenambahId(siswa.idSiswa);
+    if (typeof onTambahStart === "function") onTambahStart(siswa.idSiswa);
     try {
       const result = await simpanSiswaMapel({
         idGuru: guru.id,
@@ -197,6 +200,7 @@ export default function ModalTambahSiswa({
       alert("Terjadi kesalahan saat menambahkan siswa.");
     } finally {
       setMenambahId(null);
+      if (typeof onTambahSelesai === "function") onTambahSelesai();
     }
   }
 

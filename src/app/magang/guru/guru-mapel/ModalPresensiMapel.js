@@ -42,6 +42,7 @@ function warnaStatus(status) {
 
 export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0); // progress bar saat memuat
   const [siswaList, setSiswaList] = useState([]);
   const [grid, setGrid] = useState({});
   const [tanggalPertemuan, setTanggalPertemuan] = useState({});
@@ -49,10 +50,20 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [menghapusId, setMenghapusId] = useState(null);
+  const [menambahId, setMenambahId] = useState(null); // loading saat tambah siswa
   const [cetakLoading, setCetakLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showTambahModal, setShowTambahModal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Bar merayap pelan (maks 88%) selama menunggu server
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => {
+      setLoadProgress((p) => (p < 88 ? p + (88 - p) * 0.06 : p));
+    }, 300);
+    return () => clearInterval(t);
+  }, [loading]);
 
   // State khusus Mapel Online
   const isMapelOnline = String(mapel?.keterangan || "").startsWith("[ONLINE]");
@@ -76,7 +87,9 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   async function loadGrid() {
     try {
       setLoading(true);
+      setLoadProgress(8);
       const result = await getPresensiMapelGrid(guru.id, mapel.idMapel);
+      setLoadProgress(65);
       const data = result.success ? result.data : { siswa: [], presensi: [] };
 
       const daftarSiswa = (data.siswa || [])
@@ -135,6 +148,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
       console.error("ERROR LOAD GRID PRESENSI MAPEL:", err);
       alert("Gagal memuat data presensi mapel.");
     } finally {
+      setLoadProgress(100);
       setLoading(false);
     }
   }
@@ -424,7 +438,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
     if (hasUnsavedChanges) {
       setShowCloseConfirm(true);
     } else {
-      onClose();
+      onClose(false); // tidak ada perubahan — jangan refresh kartu
     }
   }
 
@@ -580,11 +594,21 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
           {/* BODY: TABEL PRESENSI PADAT & RESPONSIF */}
           <div className="flex-1 overflow-hidden p-2 sm:p-3 bg-slate-50 flex flex-col min-h-0">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-                <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-xs sm:text-sm font-bold text-slate-500">
-                  Memuat tabel presensi & nilai siswa...
-                </p>
+              <div className="py-20 flex items-center justify-center p-6">
+                <div className="w-full max-w-xs text-center">
+                  <p className="mb-4 text-base font-bold text-slate-600 tracking-wide">
+                    Memuat presensi & nilai {mapel?.namaMapel || ""}...
+                  </p>
+                  <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ease-out ${isMapelOnline ? "bg-gradient-to-r from-teal-400 to-emerald-500" : "bg-gradient-to-r from-blue-500 to-indigo-600"}`}
+                      style={{ width: `${loadProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-black text-slate-400">
+                    {Math.round(loadProgress)}%
+                  </p>
+                </div>
               </div>
             ) : siswaList.length === 0 ? (
               <div className="rounded-2xl bg-white border border-dashed border-slate-300 p-8 sm:p-12 text-center shadow-xs my-auto">
@@ -1048,6 +1072,15 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
           </div>
         </div>
       </div>
+      {/* TOAST LOADING: hapus / tambah siswa */}
+      {(menghapusId || menambahId) && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[260] flex items-center gap-3 bg-slate-900/90 backdrop-blur text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-2xl animate-fadeIn pointer-events-none">
+          <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin flex-shrink-0" />
+          <span>
+            {menghapusId ? "Menghapus siswa dari mapel..." : "Menambahkan siswa ke mapel..."}
+          </span>
+        </div>
+      )}
 
       {/* MODAL TAMBAH SISWA KE MAPEL */}
       {showTambahModal && (
@@ -1057,7 +1090,10 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
           onClose={() => setShowTambahModal(false)}
           guru={guru}
           mapel={mapel}
+          onTambahStart={(idSiswa) => setMenambahId(idSiswa)}
+          onTambahSelesai={() => setMenambahId(null)}
           onSiswaAdded={() => {
+            setMenambahId(null);
             loadGrid();
           }}
         />
@@ -1081,7 +1117,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                 onClick={async () => {
                   setShowCloseConfirm(false);
                   await handleSimpanPresensi();
-                  onClose();
+                  onClose(true); // ada perubahan — refresh kartu
                 }}
                 className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 text-white text-xs font-black py-2.5 shadow-md active:scale-98 transition-all"
               >
@@ -1091,7 +1127,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                 type="button"
                 onClick={() => {
                   setShowCloseConfirm(false);
-                  onClose();
+                  onClose(false); // buang perubahan — jangan refresh kartu
                 }}
                 className="w-full rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black py-2 hover:bg-rose-100 active:scale-98 transition-all"
               >
