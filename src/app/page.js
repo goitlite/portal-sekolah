@@ -309,6 +309,89 @@ function HomeContent() {
                     </div>
                   </div>
                 </div>
+
+                {/* BADGE ELEGAN EMAS: MASUK PORTAL SMKN 1 TELUK KUANTAN */}
+                <a
+                  href="/magang/login"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    router.push("/magang/login");
+                  }}
+                  className="
+                    group relative mt-4 sm:mt-5 w-full block
+                    bg-gradient-to-r from-amber-400 via-yellow-300 to-yellow-500
+                    p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl
+                    border-2 border-yellow-200/90
+                    shadow-[0_10px_25px_-5px_rgba(245,158,11,0.45),0_8px_10px_-6px_rgba(245,158,11,0.2)]
+                    hover:shadow-[0_15px_30px_-5px_rgba(245,158,11,0.6)]
+                    hover:scale-[1.02] active:scale-[0.98]
+                    transition-all duration-300
+                    overflow-hidden select-none cursor-pointer
+                  "
+                >
+                  {/* Efek Kilau Cahaya (Shimmer / Glass overlay) */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/45 via-white/10 to-transparent pointer-events-none"></div>
+                  <div className="absolute -top-12 -left-12 w-36 h-36 bg-white/35 blur-xl rounded-full pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
+                  <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-amber-600/20 blur-lg rounded-full pointer-events-none"></div>
+
+                  <div className="relative z-10 flex items-center justify-between gap-3 sm:gap-4">
+                    {/* LOGO ELEGAN BESAR DAN MENCOLOK */}
+                    <div className="relative shrink-0">
+                      {/* Glow halo keemasan di belakang logo */}
+                      <div className="absolute inset-0 bg-amber-500/40 blur-md rounded-2xl group-hover:blur-lg transition-all"></div>
+
+                      <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl sm:rounded-[1.25rem] p-1.5 sm:p-2 border-2 border-amber-300/80 shadow-md flex items-center justify-center transition-transform duration-300 group-hover:scale-105 group-hover:rotate-1">
+                        <Image
+                          src="/logo.png"
+                          alt="Logo SMKN 1 Teluk Kuantan"
+                          width={80}
+                          height={80}
+                          className="object-contain w-full h-full drop-shadow-sm"
+                          priority
+                        />
+                      </div>
+                    </div>
+
+                    {/* TULISAN: MASUK PORTAL & SMKN 1 TELUK KUANTAN */}
+                    <div className="flex-1 min-w-0 text-left">
+                      {/* Tag pill kecil di atas */}
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-950/15 border border-amber-950/20 mb-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-amber-950">
+                          Gerbang Masuk
+                        </span>
+                      </div>
+
+                      {/* Tulisan Utama: MASUK PORTAL */}
+                      <h2 className="text-xl sm:text-2xl font-black text-amber-950 tracking-tight leading-tight drop-shadow-sm">
+                        MASUK PORTAL
+                      </h2>
+
+                      {/* Tulisan di bawahnya: SMKN 1 TELUK KUANTAN */}
+                      <p className="text-xs sm:text-sm font-extrabold text-amber-900 tracking-wider uppercase truncate mt-0.5 drop-shadow-sm">
+                        SMKN 1 TELUK KUANTAN
+                      </p>
+                    </div>
+
+                    {/* Tombol Panah Indikator Aksi Masuk */}
+                    <div className="shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-950/15 group-hover:bg-amber-950 group-hover:text-yellow-300 text-amber-950 flex items-center justify-center transition-all duration-300 shadow-sm border border-amber-950/20">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2.5}
+                        stroke="currentColor"
+                        className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </a>
               </div>
 
               {/* Right Column: Carousel */}
@@ -324,7 +407,7 @@ function HomeContent() {
         </section>
 
         {/* SERVICES SECTION */}
-        <section className="px-4 sm:px-6 py-4 sm:py-6">
+        <section id="layanan-section" className="px-4 sm:px-6 py-4 sm:py-6 scroll-mt-20">
           <div className="max-w-7xl mx-auto">
             {/* Header Section Layanan */}
             <div className="flex items-center justify-between mb-4 border-b border-amber-200/50 pb-2">
