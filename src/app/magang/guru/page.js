@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, {
   useEffect,
@@ -2460,46 +2460,46 @@ function DashboardGuruContent() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 space-y-6 pb-12 relative">
+    <main className="min-h-screen bg-slate-50 space-y-4 sm:space-y-6 pb-12 relative">
       {/* NAVBAR */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
-        <div className="mx-auto max-w-7xl flex items-center justify-between px-4 sm:px-6 py-3">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 p-1 rounded-xl border border-white/20">
+        <div className="mx-auto max-w-7xl flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="bg-white/10 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-white/20 backdrop-blur-sm shadow-inner">
               <Image
                 src="/logo.png"
                 alt="Logo"
-                width={38}
-                height={38}
-                className="object-contain"
+                width={32}
+                height={32}
+                className="object-contain sm:w-9 sm:h-9"
               />
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
+              <h1 className="text-xs sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
                 PORTAL AKADEMIK
               </h1>
-              <p className="text-[10px] sm:text-xs font-medium text-blue-300">
+              <p className="text-[9px] sm:text-xs font-medium text-blue-300">
                 SMKN 1 TELUK KUANTAN
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setShowPesanKepsek(true)}
-              className="relative rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-black text-white border border-sky-300/50 shadow-lg hover:brightness-110 active:scale-95 transition-all duration-300"
+              className="relative rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-sm font-black text-white border border-sky-300/50 shadow-md hover:brightness-110 active:scale-95 transition-all duration-300"
             >
               ✉️ PESAN
               {jumlahPesanBaru > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border border-white shadow">
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center border border-white shadow">
                   {jumlahPesanBaru}
                 </span>
               )}
             </button>
             <button
               onClick={handleLogout}
-              className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-3 sm:px-5 py-1.5 sm:py-2 text-[11px] sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-md hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
             >
               ❌ LOGOUT
             </button>
@@ -2507,20 +2507,21 @@ function DashboardGuruContent() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 space-y-8">
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 space-y-4 sm:space-y-6">
         {/* HERO */}
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-md border border-blue-800">
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-4 border border-amber-400/30">
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-4 sm:p-7 text-white shadow-xl border border-blue-800">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-amber-400 opacity-15 rounded-full blur-2xl pointer-events-none" />
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-xs font-bold uppercase tracking-wider mb-2.5 sm:mb-4 border border-amber-400/30">
               ✨ Workspace Guru Pembimbing
             </div>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+            <h2 className="text-xl sm:text-3xl font-black tracking-tight">
               Selamat Datang,
             </h2>
-            <h3 className="mt-1 text-xl sm:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100">
+            <h3 className="mt-0.5 text-lg sm:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-yellow-100">
               {user?.nama}
             </h3>
-            <p className="mt-2 text-sm text-blue-200 max-w-md font-medium">
+            <p className="mt-1.5 text-xs sm:text-sm text-blue-200 max-w-md font-medium leading-relaxed">
               Sistem kendali monitoring, verifikasi, dan rekapitulasi data
               aktivitas Murid
             </p>
@@ -2530,22 +2531,22 @@ function DashboardGuruContent() {
         {/* ======================================================= */}
         {/* STATISTIK AKUN SISWA (SEMUA KELAS) - DI ATAS PILIH JENIS PEMBIMBING */}
         {/* ======================================================= */}
-        <div className="space-y-3">
+        <div className="space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between px-1 gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">📊</span>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-lg sm:text-xl">📊</span>
               <div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider">
                   Statistik Akun Siswa
                 </h3>
-                <p className="text-[11px] font-medium text-slate-500">
+                <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 line-clamp-1 sm:line-clamp-none">
                   Data real-time seluruh Akun siswa yang terdaftar, Akun Siswa
                   dibuat Oleh Guru Pembimbing PKL/Guru Wali/Guru Mapel/Guru
                   Walas
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <span className="hidden sm:inline-block text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
                 💡 Klik kartu untuk melihat daftar siswa
               </span>
@@ -2554,7 +2555,7 @@ function DashboardGuruContent() {
                 onClick={() => loadMasterSiswa(true)}
                 disabled={loadingMasterSiswa}
                 title="Segarkan statistik akun siswa"
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
               >
                 <span
                   className={
@@ -2567,7 +2568,7 @@ function DashboardGuruContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <StatCard
               title="Seluruh Siswa (Akun)"
               value={loadingMasterSiswa ? "..." : statsSiswa.totalAkun || "--"}
@@ -2630,26 +2631,26 @@ function DashboardGuruContent() {
         </div>
 
         {/* MENU TAMPILAN UTAMA - DIBUNGKUS BACKGROUND GRADIENT HEADER & TAB EMAS */}
-        <div className="relative mt-2 space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2.5 shadow-md sm:p-5">
+        <div className="relative mt-1 sm:mt-2 space-y-2.5 sm:space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2 sm:p-5 shadow-md">
           {/* Ornamen Glow Emas */}
 
           {/* TAMBAHKAN KODE GARIS EMAS DI SINI */}
-          <div className="flex items-center gap-3 my-1 w-full px-1">
+          <div className="flex items-center gap-2 sm:gap-3 my-0.5 sm:my-1 w-full px-1">
             <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-amber-400 to-yellow-300 rounded-full opacity-80"></div>
-            <h3 className="text-xs sm:text-sm font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-100 uppercase whitespace-nowrap drop-shadow-sm">
+            <h3 className="text-[11px] sm:text-sm font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-100 uppercase whitespace-nowrap drop-shadow-sm">
               PILIH JENIS PEMBIMBING
             </h3>
             <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-amber-400 to-yellow-300 rounded-full opacity-80"></div>
           </div>
 
           {/* 1. CONTAINER TAB DENGAN LENGKUNGAN EMAS */}
-          <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-1 shadow-inner">
-            <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-12 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent sm:w-16"></div>
+          <div className="relative flex overflow-hidden rounded-xl border border-amber-400/30 bg-blue-950/70 p-0.5 sm:p-1 shadow-inner">
+            <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-0 w-8 sm:w-16 rounded-r-xl bg-gradient-to-l from-amber-400/50 via-yellow-400/20 to-transparent"></div>
 
             {/* Tab: Pembimbing PKL */}
             <button
               onClick={() => setActiveMenuTab("pembimbing")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-1 sm:px-2 py-2 sm:py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "pembimbing"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
@@ -2660,11 +2661,11 @@ function DashboardGuruContent() {
                   activeMenuTab === "pembimbing" ? "opacity-10" : "opacity-20"
                 }`}
               >
-                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                <span className="text-4xl sm:text-8xl scale-125 rotate-12">
                   👔
                 </span>
               </div>
-              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+              <span className="relative z-10 text-[10px] sm:text-xs md:text-sm font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm truncate">
                 Pembimbing PKL
               </span>
             </button>
@@ -2672,7 +2673,7 @@ function DashboardGuruContent() {
             {/* Tab: Guru Wali */}
             <button
               onClick={() => setActiveMenuTab("wali")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-1 sm:px-2 py-2 sm:py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "wali"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
@@ -2683,11 +2684,11 @@ function DashboardGuruContent() {
                   activeMenuTab === "wali" ? "opacity-10" : "opacity-20"
                 }`}
               >
-                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                <span className="text-4xl sm:text-8xl scale-125 rotate-12">
                   👨‍🏫
                 </span>
               </div>
-              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+              <span className="relative z-10 text-[10px] sm:text-xs md:text-sm font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm truncate">
                 Guru Wali
               </span>
             </button>
@@ -2695,7 +2696,7 @@ function DashboardGuruContent() {
             {/* Tab: Guru Mapel */}
             <button
               onClick={() => setActiveMenuTab("mapel")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-1 sm:px-2 py-2 sm:py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "mapel"
                   ? "scale-[1.01] border border-[#FBF5B7] bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 shadow-md"
                   : "border border-transparent text-amber-200/90 hover:bg-amber-400/15 hover:text-amber-100"
@@ -2706,11 +2707,11 @@ function DashboardGuruContent() {
                   activeMenuTab === "mapel" ? "opacity-10" : "opacity-20"
                 }`}
               >
-                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                <span className="text-4xl sm:text-8xl scale-125 rotate-12">
                   📚
                 </span>
               </div>
-              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+              <span className="relative z-10 text-[10px] sm:text-xs md:text-sm font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm truncate">
                 Guru Mapel
               </span>
             </button>
@@ -2718,7 +2719,7 @@ function DashboardGuruContent() {
             {/* Tab: Guru Wali Kelas */}
             <button
               onClick={() => setActiveMenuTab("walikelas")}
-              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-2 py-3 transition-all duration-300 overflow-hidden ${
+              className={`relative z-10 flex-1 flex items-center justify-center rounded-lg px-1 sm:px-2 py-2 sm:py-3 transition-all duration-300 overflow-hidden ${
                 activeMenuTab === "walikelas"
                   ? "scale-[1.01] border border-teal-300 bg-gradient-to-r from-teal-700 via-teal-500 to-emerald-600 text-white shadow-md"
                   : "border border-transparent text-amber-200/90 hover:bg-teal-400/15 hover:text-teal-100"
@@ -2729,11 +2730,11 @@ function DashboardGuruContent() {
                   activeMenuTab === "walikelas" ? "opacity-10" : "opacity-20"
                 }`}
               >
-                <span className="text-7xl sm:text-8xl scale-125 rotate-12">
+                <span className="text-4xl sm:text-8xl scale-125 rotate-12">
                   🏫
                 </span>
               </div>
-              <span className="relative z-10 text-[12px] font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm sm:text-sm">
+              <span className="relative z-10 text-[10px] sm:text-xs md:text-sm font-extrabold uppercase leading-tight tracking-wide drop-shadow-sm truncate">
                 Wali Kelas
               </span>
             </button>
@@ -6641,10 +6642,10 @@ function Card({ title, value, accentColor, textColor, icon, onClick }) {
       onClick={onClick}
       className={`
         group relative overflow-hidden
-        rounded-3xl
+        rounded-2xl sm:rounded-3xl
         bg-gradient-to-br ${bg}
         text-white
-        p-4
+        p-3 sm:p-4
         w-full
         shadow-md
         active:scale-95
@@ -6653,31 +6654,31 @@ function Card({ title, value, accentColor, textColor, icon, onClick }) {
     >
       {/* Icon + Arrow */}
       <div className="relative flex items-start justify-between">
-        <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-xl shadow">
+        <div className="h-8 w-8 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-sm sm:text-xl shadow">
           {icon}
         </div>
 
-        <div className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold border border-white/20">
-          Detail
-          <span className="group-hover:translate-x-1 transition-transform">
+        <div className="rounded-full bg-white/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
+          <span>Detail</span>
+          <span className="group-hover:translate-x-1 transition-transform ml-0.5">
             →
           </span>
         </div>
       </div>
 
       {/* Title */}
-      <div className="relative mt-5">
-        <p className="text-[10px] sm:text-xs uppercase tracking-[2px] text-white/80 font-bold">
+      <div className="relative mt-2.5 sm:mt-5 text-left">
+        <p className="text-[9px] sm:text-xs uppercase tracking-wider sm:tracking-[2px] text-white/80 font-bold truncate">
           {title}
         </p>
 
-        <h2 className="mt-1 text-3xl sm:text-4xl font-black leading-none">
+        <h2 className="mt-0.5 sm:mt-1 text-2xl sm:text-4xl font-black leading-none">
           {value}
         </h2>
       </div>
 
       {/* Garis */}
-      <div className="relative mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
+      <div className="relative mt-2.5 sm:mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
         <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
       </div>
     </button>
@@ -6704,10 +6705,10 @@ function StatCard({ title, value, accentColor, icon, onClick }) {
       onClick={onClick}
       className={`
         group relative overflow-hidden
-        rounded-2xl
+        rounded-xl sm:rounded-2xl
         bg-gradient-to-br ${bg}
         text-white
-        p-3 sm:p-4
+        p-2.5 sm:p-4
         w-full
         shadow-md
         active:scale-95
@@ -6717,28 +6718,28 @@ function StatCard({ title, value, accentColor, icon, onClick }) {
       `}
     >
       <div className="relative flex items-center justify-between">
-        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-white/20 border border-white/20 flex items-center justify-center text-sm sm:text-base shadow-xs">
+        <div className="h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-white/20 border border-white/20 flex items-center justify-center text-xs sm:text-base shadow-xs">
           {icon}
         </div>
 
-        <div className="rounded-full bg-white/20 px-2 py-0.5 text-[9px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
+        <div className="rounded-full bg-white/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
           <span>Detail</span>
-          <span className="group-hover:translate-x-0.5 transition-transform text-[10px]">
+          <span className="group-hover:translate-x-0.5 transition-transform text-[8px] sm:text-[10px]">
             →
           </span>
         </div>
       </div>
 
-      <div className="relative mt-2.5 sm:mt-3">
-        <p className="text-[9px] sm:text-[11px] uppercase tracking-wider text-white/90 font-bold truncate">
+      <div className="relative mt-2 sm:mt-3">
+        <p className="text-[8px] sm:text-[11px] uppercase tracking-wider text-white/90 font-bold truncate">
           {title}
         </p>
-        <h2 className="mt-0.5 text-xl sm:text-2xl lg:text-3xl font-black leading-tight drop-shadow-sm">
+        <h2 className="mt-0.5 text-lg sm:text-2xl lg:text-3xl font-black leading-tight drop-shadow-sm">
           {value}
         </h2>
       </div>
 
-      <div className="relative mt-2.5 h-0.5 rounded-full bg-white/20 overflow-hidden">
+      <div className="relative mt-2 sm:mt-2.5 h-0.5 rounded-full bg-white/20 overflow-hidden">
         <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
       </div>
     </button>
@@ -6749,16 +6750,16 @@ function MenuCard({ title, subtitle, icon, bgGrad, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${bgGrad} text-white shadow-lg flex flex-col justify-between h-32 transition-all active:scale-[0.96] active:brightness-95 focus:outline-none border border-white/10`}
+      className={`w-full text-left p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-br ${bgGrad} text-white shadow-lg flex flex-col justify-between h-28 sm:h-32 transition-all active:scale-[0.96] active:brightness-95 focus:outline-none border border-white/10`}
     >
-      <div className="text-2xl sm:text-3xl bg-white/15 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-white/20 shadow-inner">
+      <div className="text-xl sm:text-3xl bg-white/15 w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl border border-white/20 shadow-inner">
         {icon}
       </div>
       <div>
-        <h2 className="text-sm sm:text-base font-black tracking-tight leading-snug">
+        <h2 className="text-xs sm:text-base font-black tracking-tight leading-snug truncate">
           {title}
         </h2>
-        <p className="text-[10px] sm:text-xs text-white/80 font-medium line-clamp-1 mt-0.5">
+        <p className="text-[9px] sm:text-xs text-white/80 font-medium line-clamp-1 mt-0.5">
           {subtitle}
         </p>
       </div>
@@ -6784,7 +6785,7 @@ function SolidCompactCard({
         return (
           <span
             key={index}
-            className="inline-block px-1.5 py-0.5 mx-0.5 rounded bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-amber-950 font-black shadow-sm border border-amber-200/60 leading-none"
+            className="inline-block px-1 sm:px-1.5 py-0.5 mx-0.5 rounded bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-amber-950 font-black shadow-xs border border-amber-200/60 leading-none text-[8px] sm:text-[10px]"
           >
             {part}
           </span>
@@ -6799,23 +6800,23 @@ function SolidCompactCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`group relative flex flex-col justify-center min-h-[76px] rounded-xl p-3 text-left transition-all duration-300 overflow-hidden shadow-lg ${
+      className={`group relative flex flex-col justify-center min-h-[64px] sm:min-h-[76px] rounded-xl p-2.5 sm:p-3 text-left transition-all duration-300 overflow-hidden shadow-md ${
         disabled
           ? "opacity-60 cursor-not-allowed bg-slate-800 text-slate-400 border border-slate-700"
           : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
       }`}
     >
       <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:rotate-6">
-        <span className="text-5xl sm:text-6xl rotate-12 select-none">
+        <span className="text-4xl sm:text-6xl rotate-12 select-none">
           {icon}
         </span>
       </div>
 
       <div className="relative z-10 w-full space-y-0.5">
-        <h4 className="text-xs font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-sm flex flex-wrap items-center">
+        <h4 className="text-[11px] font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-sm flex flex-wrap items-center">
           {formatTitleWithBadge(title)}
         </h4>
-        <p className="text-[10px] text-white/80 leading-tight sm:text-xs font-medium">
+        <p className="text-[9px] text-white/80 leading-tight sm:text-xs font-medium line-clamp-1 sm:line-clamp-2">
           {desc}
         </p>
       </div>
