@@ -850,8 +850,8 @@ export default function DashboardSiswa() {
           value={
             petugasWaliData
               ? "⭐ Kamu (Ditunjuk)"
-              : parseKeteranganWali(statistikKelas?.keterangan)
-                  .petugasNama || "Belum Ditunjuk"
+              : parseKeteranganWali(statistikKelas?.keterangan).petugasNama ||
+                "Belum Ditunjuk"
           }
           textColor={petugasWaliData ? "text-amber-600" : "text-teal-900"}
         />
@@ -1025,8 +1025,8 @@ export default function DashboardSiswa() {
             <div className="grid gap-2 sm:gap-3 grid-cols-2">
               {/* TUGAS & KEHADIRAN MAPEL */}
               <MenuCard
-                title="Tugas & Mapel"
-                subtitle="Upload tugas & presensi mapel"
+                title="Kehadiran Mapel"
+                subtitle="Lihat Kehadiran dan Nilai Harian"
                 icon="📚"
                 bgGrad="from-blue-600 via-indigo-600 to-indigo-800 shadow-indigo-500/20 border-indigo-300/40"
                 badge="Mapel"
@@ -1180,7 +1180,9 @@ export default function DashboardSiswa() {
                 Tugas Daring &amp; Pembelajaran Mandiri
               </h3>
               <p className="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
-                Akses lembar tugas daring dari guru mata pelajaran, unduh modul materi, dan kumpulkan berkas jawaban tugas kamu secara online kapan saja.
+                Akses lembar tugas daring dari guru mata pelajaran, unduh modul
+                materi, dan kumpulkan berkas jawaban tugas kamu secara online
+                kapan saja.
               </p>
               <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[9px] sm:text-xs text-teal-200">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-white/15 font-bold">

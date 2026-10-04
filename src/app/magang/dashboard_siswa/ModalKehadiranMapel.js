@@ -48,7 +48,12 @@ function formatTanggalMapel(tglStr) {
   }
 }
 
-export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
+export default function ModalKehadiranMapel({
+  isOpen,
+  onClose,
+  user,
+  fokusDaring = false,
+}) {
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStageText, setLoadingStageText] = useState("");
@@ -133,7 +138,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
           );
 
           if (isEnrolled) {
-            const isOnline = checkIsOnlineMapel(m);
+            const isOnline = checkIsOnlineMapel(m) || fokusDaring;
             const presensiSemua = resGrid.data.presensi || [];
             const presensiSaya = presensiSemua.filter(
               (p) => String(p.idSiswa).trim() === String(user.id).trim(),
@@ -232,8 +237,10 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
       });
       setLastSync(syncTime);
 
-      // Load tugas guru & jawaban siswa untuk mapel online
-      const onlineMapels = mapelSiswaDitemukan.filter((m) => checkIsOnlineMapel(m));
+      // Load tugas guru & jawaban siswa untuk mapel online (atau semua jika fokusDaring)
+      const onlineMapels = fokusDaring
+        ? mapelSiswaDitemukan
+        : mapelSiswaDitemukan.filter((m) => checkIsOnlineMapel(m));
       await Promise.all(
         onlineMapels.map(async (m) => {
           try {
@@ -319,7 +326,7 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
         setLoading(false);
       }, 350);
     }
-  }, [user?.id, user?.nama, CACHE_KEY, selectedMapelId]);
+  }, [user, CACHE_KEY, selectedMapelId, fokusDaring]);
 
   useEffect(() => {
     if (isOpen && user?.id) {
@@ -328,18 +335,22 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed?.data)) {
-            setMapelList(parsed.data);
-            setLastSync(parsed.syncTime || null);
-            if (parsed.data.length > 0) {
-              setSelectedMapelId(parsed.data[0].idMapel);
-            }
+            setTimeout(() => {
+              setMapelList(parsed.data);
+              setLastSync(parsed.syncTime || null);
+              if (parsed.data.length > 0) {
+                setSelectedMapelId(parsed.data[0].idMapel);
+              }
+            }, 0);
           }
         }
       } catch (e) {}
 
-      loadDataMapel();
+      setTimeout(() => {
+        loadDataMapel();
+      }, 0);
     }
-  }, [isOpen, user?.id]);
+  }, [isOpen, user?.id, CACHE_KEY, loadDataMapel]);
 
   // Handler upload jawaban siswa
   const handleUploadJawaban = async (mapelId, pertemuanKe, idTugas) => {
@@ -412,37 +423,48 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
     mapelList.find((m) => m.idMapel === selectedMapelId) || mapelList[0];
 
   // Deteksi apakah mapel aktif adalah mapel online
-  const isMapelOnline = checkIsOnlineMapel(mapelAktif);
+  const isMapelOnline = checkIsOnlineMapel(mapelAktif) || fokusDaring;
   const keteranganBersih = String(mapelAktif?.keterangan || "")
     .replace(/^\[ONLINE\]\s*/i, "")
     .trim();
 
   return (
     <div
-      className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 p-2.5 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+      <div className="flex max-h-[94vh] sm:max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
         {/* HEADER */}
-        <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 px-5 py-4 sm:px-6 sm:py-5 text-white">
+        <div
+          className={`relative shrink-0 overflow-hidden ${
+            fokusDaring
+              ? "bg-gradient-to-r from-teal-950 via-teal-900 to-cyan-950"
+              : "bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950"
+          } px-4 py-3 sm:px-6 sm:py-5 text-white`}
+        >
           <div className="absolute top-0 right-0 -mr-8 -mt-8 h-32 w-32 rounded-full bg-amber-400 opacity-10 blur-xl pointer-events-none" />
           <div className="flex items-center justify-between gap-3 relative z-10">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 border border-white/20 text-2xl shadow-inner">
-                📚
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/20 text-xl sm:text-2xl shadow-inner">
+                {fokusDaring ? "💻" : "📚"}
               </div>
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider mb-1 border border-amber-400/30">
-                  Akademik &middot; Kehadiran Mapel
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-[10px] font-black uppercase tracking-wider mb-0.5 sm:mb-1 border border-amber-400/30">
+                  {fokusDaring
+                    ? "E-Learning · Tugas Daring"
+                    : "Akademik · Kehadiran Mapel"}
                 </div>
-                <h3 className="text-base sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-100">
-                  Presensi &amp; Nilai Mata Pelajaran
+                <h3 className="text-sm sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-100">
+                  {fokusDaring
+                    ? "Tugas Daring & Pembelajaran Mandiri"
+                    : "Presensi & Nilai Mata Pelajaran"}
                 </h3>
-                <p className="text-[11px] sm:text-xs text-blue-200 font-medium">
-                  Pantau kehadiran dan nilai tiap pertemuan yang tercatat oleh
-                  Guru Mapel
+                <p className="text-[10px] sm:text-xs text-blue-200 font-medium line-clamp-1 sm:line-clamp-none">
+                  {fokusDaring
+                    ? "Akses lembar kerja guru, unduh modul materi, dan kumpulkan berkas jawaban tugas daring"
+                    : "Pantau kehadiran dan nilai tiap pertemuan yang tercatat oleh Guru Mapel"}
                 </p>
               </div>
             </div>
@@ -575,9 +597,9 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
               </button>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-3.5 sm:space-y-4">
               {/* PILIHAN MAPEL (CHIPS/TABS) */}
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+              <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
                 {mapelList.map((m) => {
                   const isSelected = m.idMapel === mapelAktif?.idMapel;
                   const mIsOnline = checkIsOnlineMapel(m);
@@ -585,24 +607,24 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                     <button
                       key={m.idMapel}
                       onClick={() => setSelectedMapelId(m.idMapel)}
-                      className={`shrink-0 rounded-2xl px-4 py-2.5 text-left transition-all border ${
+                      className={`shrink-0 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-left transition-all border ${
                         isSelected
-                          ? "bg-gradient-to-r from-blue-700 to-indigo-800 text-white border-blue-600 shadow-md scale-[1.02]"
+                          ? "bg-gradient-to-r from-blue-700 to-indigo-800 text-white border-blue-600 shadow-xs scale-[1.01]"
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{mIsOnline ? "🌐" : "📖"}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{mIsOnline ? "🌐" : "📖"}</span>
                         <div>
-                          <div className="text-xs sm:text-sm font-black leading-tight">
+                          <div className="text-[11px] sm:text-xs font-black leading-tight">
                             {m.namaMapel}
                           </div>
                           <div
-                            className={`text-[10px] font-medium mt-0.5 flex items-center gap-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}
+                            className={`text-[9px] font-medium mt-0.5 flex items-center gap-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}
                           >
-                            {m.namaGuru} &middot; {m.kelas || "Semua"}
+                            <span className="truncate max-w-[100px] sm:max-w-none">{m.namaGuru}</span>
                             {mIsOnline && (
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${isSelected ? "bg-emerald-400/30 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>
+                              <span className={`text-[8px] font-black px-1 py-0.2 rounded ${isSelected ? "bg-emerald-400/30 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>
                                 ONLINE
                               </span>
                             )}
@@ -616,44 +638,37 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
 
               {/* CARD DETAIL MAPEL AKTIF */}
               {mapelAktif && (
-                <div className="rounded-3xl bg-white border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-                  {/* HEADER MAPEL */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h4 className="text-lg sm:text-xl font-black text-slate-800">
+                <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200 p-3 sm:p-4.5 shadow-xs space-y-3">
+                  {/* HEADER MAPEL & RATA-RATA NILAI (RINGKAS & PADAT) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/90 border border-slate-200 rounded-xl p-2.5 sm:p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">
                           {mapelAktif.namaMapel}
                         </h4>
-                        <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider">
+                        <span className="px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[9px] font-black uppercase tracking-wider">
                           Kelas {mapelAktif.kelas || "-"}
                         </span>
                         {isMapelOnline && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
-                            🌐 Mapel Online
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-100 border border-emerald-300 text-emerald-800 text-[9px] font-black uppercase tracking-wider">
+                            🌐 Online
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 font-medium">
-                        Guru Pengampu:{" "}
-                        <strong className="text-slate-700">
-                          {mapelAktif.namaGuru}
-                        </strong>
+                      <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+                        Guru Pengampu: <strong className="text-slate-700">{mapelAktif.namaGuru}</strong>
+                        {keteranganBersih ? ` · ${keteranganBersih}` : ""}
                       </p>
-                      {keteranganBersih && (
-                        <p className="text-[11px] text-slate-400 italic mt-0.5">
-                          {keteranganBersih}
-                        </p>
-                      )}
                     </div>
 
-                    {/* RATA-RATA NILAI */}
-                    <div className="flex items-center gap-3 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3 sm:px-4 sm:py-2.5 shrink-0">
-                      <div className="text-2xl">🏆</div>
-                      <div>
-                        <span className="block text-[10px] font-black uppercase tracking-wider text-amber-700">
+                    {/* RATA-RATA NILAI BADGE COMPACT */}
+                    <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl px-2.5 py-1 shrink-0 self-start sm:self-auto shadow-2xs">
+                      <span className="text-sm sm:text-base">🏆</span>
+                      <div className="text-left sm:text-right">
+                        <span className="text-[8px] font-black uppercase text-amber-700 block leading-none">
                           Rata-rata Nilai
                         </span>
-                        <span className="text-lg sm:text-xl font-black text-amber-900">
+                        <span className="text-xs sm:text-sm font-black text-amber-900 leading-tight">
                           {mapelAktif.rataRataNilai !== null
                             ? mapelAktif.rataRataNilai
                             : "--"}
@@ -662,23 +677,55 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                     </div>
                   </div>
 
-                  {/* GRID STATISTIK KEHADIRAN MAPEL */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
-                    {[
-                      { label: "Hadir", val: mapelAktif.hadir, cls: "emerald" },
-                      { label: "Sakit", val: mapelAktif.sakit, cls: "blue" },
-                      { label: "Izin", val: mapelAktif.izin, cls: "amber" },
-                      { label: "Alfa", val: mapelAktif.alfa, cls: "rose" },
-                      { label: "Cabut", val: mapelAktif.cabut, cls: "purple" },
-                    ].map(({ label, val, cls }) => (
-                      <div key={label} className={`rounded-2xl bg-${cls}-50 border border-${cls}-200 p-3 text-center`}>
-                        <span className={`text-[10px] font-black uppercase tracking-wider text-${cls}-700 block mb-0.5`}>{label}</span>
-                        <span className={`text-xl font-black text-${cls}-800`}>{val}</span>
-                      </div>
-                    ))}
-                    <div className="rounded-2xl bg-indigo-50 border border-indigo-200 p-3 text-center col-span-2 sm:col-span-1">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 block mb-0.5">% Kehadiran</span>
-                      <span className="text-xl font-black text-indigo-800">{mapelAktif.persentaseHadir}%</span>
+                  {/* MINI BADGE STRIP PRESENSI MAPEL (KOMPAK & PADAT) */}
+                  <div className="grid grid-cols-6 gap-1 sm:gap-1.5">
+                    <div className="rounded-lg bg-emerald-50/90 border border-emerald-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-emerald-700 block leading-none mb-0.5">
+                        Hadir
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-emerald-900 leading-none">
+                        {mapelAktif.hadir}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-blue-50/90 border border-blue-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-blue-700 block leading-none mb-0.5">
+                        Sakit
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-blue-900 leading-none">
+                        {mapelAktif.sakit}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-amber-50/90 border border-amber-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-amber-700 block leading-none mb-0.5">
+                        Izin
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-amber-900 leading-none">
+                        {mapelAktif.izin}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-rose-50/90 border border-rose-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-rose-700 block leading-none mb-0.5">
+                        Alfa
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-rose-900 leading-none">
+                        {mapelAktif.alfa}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-purple-50/90 border border-purple-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-purple-700 block leading-none mb-0.5">
+                        Cabut
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-purple-900 leading-none">
+                        {mapelAktif.cabut}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-indigo-50/90 border border-indigo-200 py-1 px-0.5 text-center">
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-indigo-700 block leading-none mb-0.5">
+                        % Hadir
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-indigo-900 leading-none">
+                        {mapelAktif.persentaseHadir}%
+                      </span>
                     </div>
                   </div>
 
@@ -686,26 +733,26 @@ export default function ModalKehadiranMapel({ isOpen, onClose, user }) {
                   {/* PANEL UTAMA: UPLOAD TUGAS SISWA (MAPEL ONLINE)           */}
                   {/* ======================================================== */}
                   {isMapelOnline && (
-                    <div className="rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-blue-50 border-2 border-emerald-300 p-4 sm:p-6 shadow-md space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white text-xl shadow-sm">
+                    <div className="rounded-2xl bg-gradient-to-br from-emerald-50/90 via-teal-50/80 to-blue-50/80 border border-emerald-300 p-3 sm:p-4 shadow-2xs space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white text-base shadow-xs">
                             📤
                           </div>
                           <div>
-                            <h5 className="text-sm sm:text-base font-black text-emerald-950 uppercase tracking-wide flex items-center gap-2">
+                            <h5 className="text-xs sm:text-sm font-black text-emerald-950 uppercase tracking-wide flex items-center gap-1.5">
                               <span>Upload &amp; Pengumpulan Tugas</span>
-                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">ONLINE</span>
+                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800">ONLINE</span>
                             </h5>
-                            <p className="text-[11px] text-emerald-700 font-medium">
+                            <p className="text-[10px] text-emerald-700 font-medium">
                               Kirimkan berkas tugas/jawaban Anda langsung ke Guru Mapel
                             </p>
                           </div>
                         </div>
 
                         {/* PILIH PERTEMUAN */}
-                        <div className="flex items-center gap-1.5 shrink-0 bg-white/90 border border-emerald-300 rounded-xl px-2.5 py-1">
-                          <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 shrink-0 bg-white/90 border border-emerald-300 rounded-lg px-2 py-1 self-start sm:self-auto">
+                          <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
                             Pertemuan:
                           </span>
                           <select
