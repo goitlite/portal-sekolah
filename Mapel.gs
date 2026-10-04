@@ -475,7 +475,19 @@ function addMapel(params) {
     appendRowMapel_(MAPEL_SHEETS.MAPEL, obj);
 
     let jumlahSiswaOtomatis = 0;
-    if (!isEmpty(kelas)) {
+    if (Array.isArray(params.idSiswaList) && params.idSiswaList.length > 0) {
+      params.idSiswaList.forEach(function (sid) {
+        if (!isEmpty(sid)) {
+          const enrollObj = {};
+          enrollObj[MAPEL_COLUMNS.SISWA_MAPEL.ID_GURU] = params.idGuru;
+          enrollObj[MAPEL_COLUMNS.SISWA_MAPEL.ID_MAPEL] = idMapel;
+          enrollObj[MAPEL_COLUMNS.SISWA_MAPEL.ID_SISWA] = sid;
+          enrollObj[MAPEL_COLUMNS.SISWA_MAPEL.CREATED_AT] = new Date();
+          appendRowMapel_(MAPEL_SHEETS.SISWA_MAPEL, enrollObj);
+          jumlahSiswaOtomatis++;
+        }
+      });
+    } else if (!isEmpty(kelas)) {
       const daftarSiswaKelas = getSiswaByKelasMapel(kelas);
       daftarSiswaKelas.forEach(function (s) {
         const enrollObj = {};

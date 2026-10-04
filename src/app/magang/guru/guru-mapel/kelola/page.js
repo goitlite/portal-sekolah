@@ -7,6 +7,7 @@ import {
   forwardRef,
   useImperativeHandle,
   useCallback,
+  useMemo,
 } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, isLoggedIn } from "../../../lib/auth";
@@ -23,6 +24,7 @@ import {
   hapusSiswaMapel,
   savePresensiMapel,
   addSiswa,
+  getSiswa,
   uploadTugasMapel,
   getTugasMapel,
   getJawabanSiswa,
@@ -336,6 +338,12 @@ export default function KelolaMapelPage() {
   const [namaMapel, setNamaMapel] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [kelasDipilih, setKelasDipilih] = useState("");
+  const [namaKelasManual, setNamaKelasManual] = useState("");
+  const [selectedSiswaManual, setSelectedSiswaManual] = useState([]);
+  const [searchSiswaManual, setSearchSiswaManual] = useState("");
+  const [filterKelasManual, setFilterKelasManual] = useState("");
+  const [semuaSiswaManual, setSemuaSiswaManual] = useState([]);
+  const [loadingSemuaSiswaManual, setLoadingSemuaSiswaManual] = useState(false);
   const [jenisMapel, setJenisMapel] = useState("biasa"); // "biasa" | "online"
   const [saving, setSaving] = useState(false);
 
@@ -425,10 +433,47 @@ export default function KelolaMapelPage() {
     }
   }
 
+  async function loadDaftarSiswaManual() {
+    if (semuaSiswaManual.length > 0) return;
+    try {
+      setLoadingSemuaSiswaManual(true);
+      const res = await getSiswa();
+      if (res?.success && Array.isArray(res.data)) {
+        const parsed = res.data
+          .map((item) => {
+            const idSiswa = String(
+              item.ID || item.id || item.ID_SISWA || item.idSiswa || "",
+            ).trim();
+            const rawNama = String(
+              item.NAMA || item.nama || item.NAMA_SISWA || "",
+            ).trim();
+            const match = rawNama.match(/^(.*?)\s*\[(.*?)\]$/);
+            const nama = match ? match[1].trim() : rawNama;
+            const kelas = match
+              ? match[2].trim()
+              : String(item.KELAS || item.kelas || "").trim();
+            return { idSiswa, nama, kelas, rawNama };
+          })
+          .filter((s) => s.idSiswa && s.nama)
+          .sort((a, b) => a.nama.localeCompare(b.nama));
+        setSemuaSiswaManual(parsed);
+      }
+    } catch (err) {
+      console.error("Gagal load siswa manual:", err);
+    } finally {
+      setLoadingSemuaSiswaManual(false);
+    }
+  }
+
   async function handlePilihKelas(kelas) {
     setKelasDipilih(kelas);
     if (!kelas) {
       setPreviewSiswa([]);
+      return;
+    }
+    if (kelas === "__MANUAL__") {
+      setPreviewSiswa([]);
+      await loadDaftarSiswaManual();
       return;
     }
     try {
@@ -443,11 +488,66 @@ export default function KelolaMapelPage() {
     }
   }
 
+  const uniqueClassesManual = useMemo(() => {
+    return Array.from(
+      new Set(
+        semuaSiswaManual
+          .map((s) => (s.kelas || "").trim())
+          .filter(Boolean),
+      ),
+    ).sort();
+  }, [semuaSiswaManual]);
+
+  const filteredSiswaManual = useMemo(() => {
+    return semuaSiswaManual.filter((s) => {
+      const q = searchSiswaManual.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        s.nama.toLowerCase().includes(q) ||
+        (s.kelas && s.kelas.toLowerCase().includes(q)) ||
+        s.idSiswa.includes(q);
+      const matchKelas =
+        !filterKelasManual || s.kelas === filterKelasManual;
+      return matchSearch && matchKelas;
+    });
+  }, [semuaSiswaManual, searchSiswaManual, filterKelasManual]);
+
+  const toggleSiswaManual = (id) => {
+    setSelectedSiswaManual((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const idsToAdd = filteredSiswaManual.map((s) => s.idSiswa);
+    setSelectedSiswaManual((prev) =>
+      Array.from(new Set([...prev, ...idsToAdd])),
+    );
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedSiswaManual([]);
+  };
+
   async function handleTambahMapel(e) {
     e.preventDefault();
     if (!namaMapel.trim()) {
       alert("Nama mapel wajib diisi.");
       return;
+    }
+
+    const isManual = kelasDipilih === "__MANUAL__";
+    if (isManual) {
+      if (!namaKelasManual.trim()) {
+        alert("Nama kelas manual wajib diisi.");
+        return;
+      }
+      if (selectedSiswaManual.length === 0) {
+        const konfirmasi = window.confirm(
+          "Belum ada siswa yang dipilih dari checklist.\nApakah Anda yakin ingin membuat kelas manual ini tanpa siswa terlebih dahulu?",
+        );
+        if (!konfirmasi) return;
+      }
     }
 
     setSaving(true);
@@ -458,27 +558,76 @@ export default function KelolaMapelPage() {
           ? `[ONLINE]${keterangan.trim() ? " " + keterangan.trim() : ""}`
           : keterangan.trim();
 
+      const finalKelas = isManual
+        ? namaKelasManual.trim()
+        : (kelasDipilih || "");
+
       const result = await addMapel({
         idGuru: guru.id,
         namaMapel: namaMapel.trim(),
-        kelas: kelasDipilih || "",
+        kelas: finalKelas,
         keterangan: keteranganFinal,
+        idSiswaList: isManual ? selectedSiswaManual : undefined,
       });
 
       if (result.success) {
-        const jumlah = result.data?.jumlahSiswaOtomatis || 0;
-        if (kelasDipilih) {
+        const newIdMapel = result.data?.idMapel;
+        let jumlahBerhasil = result.data?.jumlahSiswaOtomatis || 0;
+
+        // Jika kelas manual dan ada siswa yang dipilih, daftarkan siswa ke mapel jika backend belum otomatis memasukkannya
+        if (
+          isManual &&
+          newIdMapel &&
+          selectedSiswaManual.length > 0 &&
+          jumlahBerhasil === 0
+        ) {
+          const chunkSize = 5;
+          for (let i = 0; i < selectedSiswaManual.length; i += chunkSize) {
+            const chunk = selectedSiswaManual.slice(i, i + chunkSize);
+            await Promise.all(
+              chunk.map(async (idSiswa) => {
+                try {
+                  await simpanSiswaMapel({
+                    idGuru: guru.id,
+                    idMapel: newIdMapel,
+                    idSiswa,
+                  });
+                  jumlahBerhasil++;
+                } catch (err) {
+                  console.error("Gagal simpan siswa mapel:", err);
+                }
+              }),
+            );
+          }
+        }
+
+        if (isManual) {
           alert(
-            `✅ Mapel "${namaMapel.trim()}" berhasil dibuat untuk kelas ${kelasDipilih}.\n\n` +
-              `${jumlah} siswa dari kelas tersebut otomatis dimasukkan ke mapel ini.` +
+            `✅ Mapel "${namaMapel.trim()}" (Kelas: ${finalKelas}) berhasil dibuat.\n\n` +
+              `${selectedSiswaManual.length} siswa berhasil didaftarkan ke kelas manual ini.` +
               (jenisMapel === "online"
                 ? "\n\n🌐 Mapel ini dikonfigurasi sebagai Mapel Online."
                 : ""),
           );
+        } else if (kelasDipilih) {
+          alert(
+            `✅ Mapel "${namaMapel.trim()}" berhasil dibuat untuk kelas ${kelasDipilih}.\n\n` +
+              `${jumlahBerhasil} siswa dari kelas tersebut otomatis dimasukkan ke mapel ini.` +
+              (jenisMapel === "online"
+                ? "\n\n🌐 Mapel ini dikonfigurasi sebagai Mapel Online."
+                : ""),
+          );
+        } else {
+          alert(`✅ Mapel "${namaMapel.trim()}" berhasil dibuat.`);
         }
+
         setNamaMapel("");
         setKeterangan("");
         setKelasDipilih("");
+        setNamaKelasManual("");
+        setSelectedSiswaManual([]);
+        setSearchSiswaManual("");
+        setFilterKelasManual("");
         setJenisMapel("biasa");
         setPreviewSiswa([]);
         setIsFormMapelOpen(false); // Tutup form setelah berhasil
@@ -697,7 +846,7 @@ export default function KelolaMapelPage() {
 
                   <label className="block">
                     <span className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
-                      Kelas{" "}
+                      Pilihan Kelas{" "}
                       <span className="normal-case font-medium text-slate-500">
                         (opsional)
                       </span>
@@ -711,12 +860,160 @@ export default function KelolaMapelPage() {
                       <option value="">
                         {loadingKelas
                           ? "Memuat daftar kelas..."
-                          : "-- Tanpa kelas (manual) --"}
+                          : "-- Tanpa kelas / Pilih kelas --"}
+                      </option>
+                      <option
+                        value="__MANUAL__"
+                        className="font-bold text-emerald-700 bg-emerald-50"
+                      >
+                        ✏️ Kelas Manual (Input Nama & Seleksi Checklist Siswa)
                       </option>
                       {KELAS_OPTIONS}
                     </select>
                   </label>
                 </div>
+
+                {/* KONFIGURASI KELAS MANUAL JIKA DIPILIH */}
+                {kelasDipilih === "__MANUAL__" && (
+                  <div className="rounded-2xl border-2 border-emerald-400 bg-white p-4 sm:p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-100 pb-3">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                          <span>✏️</span> Konfigurasi Kelas Manual
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Tentukan nama kelas dan pilih siswa secara manual menggunakan checklist di bawah.
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
+                        <span>✓</span>
+                        <span>{selectedSiswaManual.length} Siswa Dipilih</span>
+                      </div>
+                    </div>
+
+                    {/* INPUT NAMA KELAS MANUAL */}
+                    <div>
+                      <label className="block">
+                        <span className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                          Nama Kelas Manual <span className="text-rose-500">*</span>
+                        </span>
+                        <input
+                          type="text"
+                          value={namaKelasManual}
+                          onChange={(e) => setNamaKelasManual(e.target.value)}
+                          placeholder="Contoh: Kelas Binaan / X TJKT Gabungan / XII Remedial"
+                          required
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-xs"
+                        />
+                      </label>
+                    </div>
+
+                    {/* SELEKSI SISWA CHECKLIST */}
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold uppercase text-slate-700">
+                          Pilih Siswa Manual (Checklist)
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllFiltered}
+                            disabled={filteredSiswaManual.length === 0}
+                            className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            ☑️ Pilih Semua ({filteredSiswaManual.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeselectAll}
+                            disabled={selectedSiswaManual.length === 0}
+                            className="text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            ⏹️ Kosongkan Pilihan
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* FILTER & PENCARIAN SISWA */}
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">
+                            🔍
+                          </span>
+                          <input
+                            type="text"
+                            value={searchSiswaManual}
+                            onChange={(e) => setSearchSiswaManual(e.target.value)}
+                            placeholder="Cari nama atau kelas siswa..."
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-2 text-xs font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-all"
+                          />
+                        </div>
+                        <select
+                          value={filterKelasManual}
+                          onChange={(e) => setFilterKelasManual(e.target.value)}
+                          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-all cursor-pointer"
+                        >
+                          <option value="">-- Semua Kelas ({uniqueClassesManual.length}) --</option>
+                          {uniqueClassesManual.map((k) => (
+                            <option key={k} value={k}>
+                              Kelas {k}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* LIST SISWA CHECKLIST */}
+                      {loadingSemuaSiswaManual ? (
+                        <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
+                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mb-2" />
+                          <p className="text-xs font-bold text-slate-500">Memuat data seluruh siswa...</p>
+                        </div>
+                      ) : filteredSiswaManual.length === 0 ? (
+                        <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs font-medium">
+                          Tidak ada siswa ditemukan yang cocok dengan pencarian / filter.
+                        </div>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto space-y-1.5 p-1 bg-slate-50/70 rounded-xl border border-slate-200 custom-scrollbar">
+                          {filteredSiswaManual.map((s, idx) => {
+                            const isSelected = selectedSiswaManual.includes(s.idSiswa);
+                            return (
+                              <label
+                                key={s.idSiswa || idx}
+                                className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                                  isSelected
+                                    ? "bg-emerald-50/90 border-emerald-300 text-emerald-950 shadow-xs"
+                                    : "bg-white border-slate-200/80 hover:bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSiswaManual(s.idSiswa)}
+                                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 shrink-0"
+                                />
+                                <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className={`text-xs truncate ${isSelected ? "font-black text-emerald-950" : "font-bold text-slate-800"}`}>
+                                      {s.nama}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">
+                                      ID: {s.idSiswa}
+                                    </p>
+                                  </div>
+                                  {s.kelas && (
+                                    <span className="shrink-0 rounded-md bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 text-[10px] font-bold">
+                                      {s.kelas}
+                                    </span>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <label className="block">
                   <span className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
@@ -780,7 +1077,7 @@ export default function KelolaMapelPage() {
                   </div>
                 </div>
 
-                {kelasDipilih && (
+                {kelasDipilih && kelasDipilih !== "__MANUAL__" && (
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-200 mt-2">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-1.5">
@@ -821,13 +1118,33 @@ export default function KelolaMapelPage() {
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full sm:w-auto rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black px-8 py-3.5 shadow-md transition-all disabled:opacity-60"
-                >
-                  {saving ? "Menyimpan..." : "💾 SIMPAN MAPEL"}
-                </button>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="w-full sm:w-auto rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black px-8 py-3.5 shadow-md transition-all disabled:opacity-60 active:scale-95"
+                  >
+                    {saving ? "Menyimpan..." : "💾 SIMPAN MAPEL"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFormMapelOpen(false);
+                      setNamaMapel("");
+                      setKeterangan("");
+                      setKelasDipilih("");
+                      setNamaKelasManual("");
+                      setSelectedSiswaManual([]);
+                      setSearchSiswaManual("");
+                      setFilterKelasManual("");
+                      setJenisMapel("biasa");
+                      setPreviewSiswa([]);
+                    }}
+                    className="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold px-6 py-3.5 transition-all active:scale-95"
+                  >
+                    Batal
+                  </button>
+                </div>
               </form>
             </div>
           )}
