@@ -34,38 +34,50 @@ export async function sendPushNotification({
   data = {},
 }) {
   const { getWebPush } = await import("@/lib/webpush");
+  const { getSupabaseServerClient } = await import("@/lib/supabaseServer");
 
-  // -------------------------------------------------------
-  // TODO: Ambil subscription dari database Anda.
-  //
-  // Contoh (Supabase):
-  //   const supabase = createClient(...);
-  //   let query = supabase.from("push_subscriptions").select("*");
-  //   if (targetUserId) query = query.eq("user_id", targetUserId);
-  //   else if (targetRole) query = query.eq("role", targetRole);
-  //   const { data: rows } = await query;
-  //   const subscriptions = rows.map(r => ({
-  //     endpoint: r.endpoint,
-  //     keys: { p256dh: r.p256dh, auth: r.auth },
-  //   }));
-  // -------------------------------------------------------
+  let subscriptions = [];
+  const supabase = getSupabaseServerClient();
 
-  // Fallback: baca dari file JSON (dev only)
-  const fs = await import("fs/promises");
-  let allSubs = [];
-  try {
-    allSubs = JSON.parse(
-      await fs.readFile("./push_subscriptions.json", "utf-8"),
-    );
-  } catch {
-    /* file belum ada */
+  if (supabase) {
+    try {
+      let query = supabase.from("push_subscriptions").select("*");
+      if (targetUserId) {
+        query = query.eq("user_id", String(targetUserId).trim());
+      } else if (targetRole) {
+        query = query.eq("role", String(targetRole).trim());
+      }
+      const { data: rows, error } = await query;
+      if (!error && Array.isArray(rows)) {
+        subscriptions = rows.map((r) => ({
+          endpoint: r.endpoint,
+          keys: { p256dh: r.p256dh, auth: r.auth },
+        }));
+      }
+    } catch (e) {
+      console.error("[sendPushNotification] Supabase query error:", e);
+    }
   }
 
-  let subscriptions = allSubs;
-  if (targetUserId)
-    subscriptions = allSubs.filter((s) => s.userId === targetUserId);
-  else if (targetRole)
-    subscriptions = allSubs.filter((s) => s.role === targetRole);
+  // Fallback dev jika file JSON ada
+  if (subscriptions.length === 0) {
+    try {
+      const fs = await import("fs/promises");
+      const raw = await fs.readFile("./push_subscriptions.json", "utf-8");
+      const localSubs = JSON.parse(raw);
+      if (Array.isArray(localSubs)) {
+        let filtered = localSubs;
+        if (targetUserId) filtered = localSubs.filter((s) => s.userId === targetUserId);
+        else if (targetRole) filtered = localSubs.filter((s) => s.role === targetRole);
+        subscriptions = filtered.map((s) => ({
+          endpoint: s.endpoint,
+          keys: s.keys || { p256dh: s.p256dh, auth: s.auth },
+        }));
+      }
+    } catch {
+      /* fallback dev json */
+    }
+  }
 
   if (subscriptions.length === 0) return { ok: true, sent: 0, failed: 0 };
 

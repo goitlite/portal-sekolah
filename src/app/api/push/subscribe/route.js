@@ -2,13 +2,9 @@
 // Simpan PushSubscription dari browser (menggunakan Supabase)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 
-// Inisialisasi Supabase Client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-);
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/push/subscribe
@@ -16,6 +12,13 @@ const supabase = createClient(
  */
 export async function POST(request) {
   try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Layanan database notifikasi (Supabase) belum terkonfigurasi." },
+        { status: 503 },
+      );
+    }
     const { subscription, userId, role } = await request.json();
 
     if (!subscription?.endpoint || !userId || !role) {

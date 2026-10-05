@@ -3,13 +3,9 @@
 
 import { NextResponse } from "next/server";
 import { getWebPush } from "@/lib/webpush";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 
-// Inisialisasi Supabase Client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-);
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/push/send
@@ -22,6 +18,13 @@ const supabase = createClient(
  */
 export async function POST(request) {
   try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Layanan database notifikasi (Supabase) belum terkonfigurasi." },
+        { status: 503 },
+      );
+    }
     const {
       title,
       body: notifBody,
