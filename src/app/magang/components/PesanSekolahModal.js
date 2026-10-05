@@ -688,7 +688,7 @@ export default function PesanSekolahModal({
           {/* ---------------- PANEL KIRI: DAFTAR KONTAK / INBOX ---------------- */}
           <div
             className={`w-full md:w-80 lg:w-96 border-r border-slate-200 flex flex-col bg-slate-50/70 shrink-0 ${
-              activePartner ? "hidden md:flex" : "flex"
+              activePartner || isBroadcastMode ? "hidden md:flex" : "flex"
             }`}
           >
             {/* Search & Tabs */}
