@@ -423,13 +423,29 @@ function prosesFotoMapel_(fotoUrl, namaFile) {
 // 1. KELOLA MAPEL (CRUD daftar mata pelajaran)
 // ============================================
 function getMapelByGuru(idGuru) {
-  if (isEmpty(idGuru)) return [];
   try {
-    const list = findAllDataMapelByColumn_(MAPEL_SHEETS.MAPEL, MAPEL_COLUMNS.MAPEL.ID_GURU, idGuru);
+    const list = (isEmpty(idGuru) || String(idGuru).toUpperCase() === 'ALL')
+      ? getAllDataMapel_(MAPEL_SHEETS.MAPEL)
+      : findAllDataMapelByColumn_(MAPEL_SHEETS.MAPEL, MAPEL_COLUMNS.MAPEL.ID_GURU, idGuru);
+
+    const guruMap = {};
+    try {
+      const semuaGuru = getGuru();
+      if (Array.isArray(semuaGuru)) {
+        semuaGuru.forEach(function (g) {
+          const gId = g[COLUMNS.ADMIN_GURU.ID] || g.ID || g.id;
+          const gNama = g[COLUMNS.ADMIN_GURU.NAMA_GURU] || g.NAMA_GURU || g.nama;
+          if (gId) guruMap[String(gId)] = gNama || '';
+        });
+      }
+    } catch (eG) {}
+
     return list.map(function (m) {
+      const gId = String(m[MAPEL_COLUMNS.MAPEL.ID_GURU]);
       return {
         idMapel: m[MAPEL_COLUMNS.MAPEL.ID_MAPEL],
-        idGuru: m[MAPEL_COLUMNS.MAPEL.ID_GURU],
+        idGuru: gId,
+        namaGuru: guruMap[gId] || '',
         namaMapel: m[MAPEL_COLUMNS.MAPEL.NAMA_MAPEL],
         kelas: m[MAPEL_COLUMNS.MAPEL.KELAS] || '',
         keterangan: m[MAPEL_COLUMNS.MAPEL.KETERANGAN] || ''

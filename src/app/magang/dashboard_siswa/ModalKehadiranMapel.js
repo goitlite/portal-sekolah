@@ -57,6 +57,7 @@ export default function ModalKehadiranMapel({
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStageText, setLoadingStageText] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
   const [mapelList, setMapelList] = useState([]);
   const [selectedMapelId, setSelectedMapelId] = useState(null);
   const [error, setError] = useState("");
@@ -68,52 +69,327 @@ export default function ModalKehadiranMapel({
   const [pDipilihUpload, setPDipilihUpload] = useState(1);
   const fileInputRefs = useRef({});
 
-  const CACHE_KEY = `cache_mapel_siswa_${user?.id}`;
+  const CACHE_KEY = `cache_mapel_siswa_${user?.id}_${fokusDaring ? "daring" : "reguler"}`;
+  const DISCOVER_CACHE_KEY = `cache_discovered_mapels_${user?.id}_${fokusDaring ? "daring" : "reguler"}`;
 
-  const loadDataMapel = useCallback(async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    setLoadingProgress(15);
-    setLoadingStageText("Menghubungkan ke server akademik...");
-    setError("");
+  // Refs untuk mencegah stale closure saat auto-update background
+  const mapelListRef = useRef(mapelList);
+  mapelListRef.current = mapelList;
 
-    try {
-      const resGuru = await getGuru();
-      setLoadingProgress(32);
-      setLoadingStageText("Mencocokkan daftar guru mata pelajaran...");
-      const daftarGuru =
-        resGuru?.success && Array.isArray(resGuru.data) ? resGuru.data : [];
+  const selectedMapelIdRef = useRef(selectedMapelId);
+  selectedMapelIdRef.current = selectedMapelId;
 
-      if (daftarGuru.length === 0) {
-        setMapelList([]);
-        setLoadingProgress(100);
-        setTimeout(() => setLoading(false), 250);
-        return;
+  const tugasPerMapelRef = useRef(tugasPerMapel);
+  tugasPerMapelRef.current = tugasPerMapel;
+
+  const uploadStateRef = useRef(uploadState);
+  uploadStateRef.current = uploadState;
+
+  // Helper simpan ke localStorage
+  const saveCurrentStateToCache = useCallback(
+    (customSyncTime, overrideMapel, overrideTugas, overrideUpload) => {
+      try {
+        const syncTime =
+          customSyncTime ||
+          new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        const payload = {
+          data: overrideMapel || mapelListRef.current,
+          tugasPerMapel: overrideTugas || tugasPerMapelRef.current,
+          uploadState: overrideUpload || uploadStateRef.current,
+          syncTime,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      } catch (e) {}
+    },
+    [CACHE_KEY]
+  );
+
+  // Ambil data detail (tugas, jawaban, presensi) untuk 1 mapel
+  const enrichSingleMapel = useCallback(
+    async (m) => {
+      if (!m?.idMapel || !user?.id) return m;
+      try {
+        const [resTugas, resJwb, resGrid] = await Promise.all([
+          getTugasMapel(m.idMapel, "").catch(() => null),
+          getJawabanSiswa(m.idMapel, "", user.id).catch(() => null),
+          m.idGuru
+            ? getPresensiMapelGrid(m.idGuru, m.idMapel).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        let newTugasMap = null;
+        let newUploadMap = {};
+        let tambahanPertemuan = [];
+
+        // 1. Tugas dari Guru
+        if (resTugas?.success && Array.isArray(resTugas.data)) {
+          newTugasMap = {};
+          resTugas.data.forEach((t) => {
+            const pKe = String(t.pertemuanKe || "1");
+            if (!newTugasMap[pKe]) newTugasMap[pKe] = [];
+            newTugasMap[pKe].push(t);
+          });
+
+          const currentP = new Set(
+            (m.pertemuanList || []).map((p) => Number(p.pertemuanKe))
+          );
+          resTugas.data.forEach((t) => {
+            const pKe = Number(t.pertemuanKe);
+            if (pKe && !currentP.has(pKe)) {
+              currentP.add(pKe);
+              tambahanPertemuan.push({
+                pertemuanKe: pKe,
+                tanggal: t.createdAt ? t.createdAt.substring(0, 10) : "",
+                status: "Ada Tugas",
+                nilai: null,
+              });
+            }
+          });
+
+          setTugasPerMapel((prev) => ({ ...prev, [m.idMapel]: newTugasMap }));
+        }
+
+        // 2. Jawaban Siswa
+        if (resJwb?.success && Array.isArray(resJwb.data)) {
+          resJwb.data.forEach((j) => {
+            const key = `${m.idMapel}_${j.pertemuanKe}`;
+            newUploadMap[key] = {
+              sukses: true,
+              fileUrl: j.fileUrl,
+              namaFile: j.namaFile || "Berkas Terkirim",
+              keterangan: j.keterangan || "",
+              waktu: j.createdAt || "",
+            };
+          });
+          setUploadState((prev) => ({ ...prev, ...newUploadMap }));
+        }
+
+        // 3. Presensi & Nilai
+        let updatedPertemuanList = [
+          ...(m.pertemuanList || []),
+          ...tambahanPertemuan,
+        ];
+        let hadir = m.hadir || 0,
+          sakit = m.sakit || 0,
+          izin = m.izin || 0,
+          alfa = m.alfa || 0,
+          cabut = m.cabut || 0;
+        let totalNilai = 0,
+          jumlahNilaiAda = 0;
+
+        if (resGrid?.success && resGrid.data) {
+          const presensiSemua = resGrid.data.presensi || [];
+          const presensiSaya = presensiSemua.filter(
+            (p) => String(p.idSiswa).trim() === String(user.id).trim()
+          );
+
+          hadir = 0;
+          sakit = 0;
+          izin = 0;
+          alfa = 0;
+          cabut = 0;
+          const pMap = {};
+          presensiSaya.forEach((p) => {
+            const pKe = Number(p.pertemuanKe);
+            if (pKe) {
+              pMap[pKe] = {
+                pertemuanKe: pKe,
+                tanggal: p.tanggal || "",
+                status: p.status || "-",
+                nilai:
+                  p.nilai !== undefined && p.nilai !== "" ? p.nilai : null,
+              };
+              if (p.status === "Hadir") hadir++;
+              else if (p.status === "Sakit") sakit++;
+              else if (p.status === "Izin") izin++;
+              else if (p.status === "Alfa") alfa++;
+              else if (p.status === "Cabut") cabut++;
+
+              if (p.nilai !== null && p.nilai !== undefined && p.nilai !== "") {
+                const val = Number(p.nilai);
+                if (!isNaN(val)) {
+                  totalNilai += val;
+                  jumlahNilaiAda++;
+                }
+              }
+            }
+          });
+
+          // Gabungkan pertemuan lama dan baru
+          const existingMap = {};
+          updatedPertemuanList.forEach((p) => {
+            existingMap[p.pertemuanKe] = p;
+          });
+          Object.values(pMap).forEach((p) => {
+            existingMap[p.pertemuanKe] = {
+              ...(existingMap[p.pertemuanKe] || {}),
+              ...p,
+            };
+          });
+          updatedPertemuanList = Object.values(existingMap).sort(
+            (a, b) => a.pertemuanKe - b.pertemuanKe
+          );
+        }
+
+        const totalPertemuan = updatedPertemuanList.length;
+        const persentaseHadir =
+          totalPertemuan > 0 ? Math.round((hadir / totalPertemuan) * 100) : 0;
+        const rataRataNilai =
+          jumlahNilaiAda > 0
+            ? Math.round((totalNilai / jumlahNilaiAda) * 10) / 10
+            : m.rataRataNilai || null;
+
+        const existingMapel = mapelListRef.current?.find(
+          (item) => item.idMapel === m.idMapel
+        );
+        const namaGuruFinal =
+          m.namaGuru || existingMapel?.namaGuru || "Guru Mapel";
+
+        const enrichedMapel = {
+          ...m,
+          namaGuru: namaGuruFinal,
+          hadir,
+          sakit,
+          izin,
+          alfa,
+          cabut,
+          totalPertemuan,
+          persentaseHadir,
+          rataRataNilai,
+          pertemuanList: updatedPertemuanList,
+        };
+
+        setMapelList((prevList) =>
+          prevList.map((item) =>
+            item.idMapel === m.idMapel ? enrichedMapel : item
+          )
+        );
+
+        return enrichedMapel;
+      } catch (e) {
+        console.error("enrichSingleMapel error:", m.idMapel, e);
+        return m;
+      }
+    },
+    [user?.id]
+  );
+
+  // Pindai daftar mata pelajaran siswa dari server (Super Fast)
+  const discoverMapelSiswa = useCallback(
+    async (isSilent = false) => {
+      // 1. Cek cache daftar mapel yang pernah ditemukan sebelumnya untuk mempercepat (0 ms)
+      try {
+        const cached = localStorage.getItem(DISCOVER_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Pastikan cache memiliki namaGuru yang valid
+            const adaNamaGuruKosong = parsed.some(
+              (m) => !m.namaGuru || m.namaGuru === "Guru Mapel"
+            );
+            if (!adaNamaGuruKosong) {
+              return parsed;
+            }
+          }
+        }
+      } catch (e) {}
+
+      if (!isSilent) {
+        setLoadingProgress(40);
+        setLoadingStageText("Mengambil kurikulum mata pelajaran...");
+      }
+
+      // 2. Ambil master guru untuk mapping ID_GURU -> NAMA_GURU
+      let guruMap = {};
+      try {
+        const cachedGuru = localStorage.getItem("cache_daftar_guru_map");
+        if (cachedGuru) {
+          guruMap = JSON.parse(cachedGuru);
+        }
+      } catch (e) {}
+
+      let daftarGuru = [];
+      if (Object.keys(guruMap).length === 0) {
+        try {
+          const resGuru = await getGuru();
+          if (resGuru?.success && Array.isArray(resGuru.data)) {
+            daftarGuru = resGuru.data;
+            resGuru.data.forEach((g) => {
+              const gId = String(g.ID || g.id || g.idGuru || "").trim();
+              const gNama = g.NAMA_GURU || g.nama || "";
+              if (gId) guruMap[gId] = gNama;
+            });
+            try {
+              localStorage.setItem(
+                "cache_daftar_guru_map",
+                JSON.stringify(guruMap)
+              );
+            } catch (e) {}
+          }
+        } catch (e) {}
       }
 
       const namaMentah = String(user?.nama || "");
       const matchKelas = namaMentah.match(/\[(.*?)\]/);
       const kelasSiswa = matchKelas ? matchKelas[1].trim().toLowerCase() : "";
 
-      const mapelPromises = daftarGuru.map(async (g) => {
-        try {
-          const res = await getMapelByGuru(g.ID || g.id || g.idGuru);
-          if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
-            return res.data.map((m) => ({
+      let allMapels = [];
+
+      // Coba ambil SEMUA mapel sekolah dalam 1 request cepat lewat getMapelByGuru("ALL")
+      try {
+        const resAll = await getMapelByGuru("ALL");
+        if (resAll?.success && Array.isArray(resAll.data) && resAll.data.length > 0) {
+          allMapels = resAll.data.map((m) => {
+            const gId = String(m.idGuru || "").trim();
+            return {
               ...m,
-              namaGuru: g.NAMA_GURU || g.nama || "Guru Mapel",
-              idGuru: g.ID || g.id || g.idGuru,
-            }));
-          }
-        } catch (e) {}
-        return [];
-      });
+              namaGuru: m.namaGuru || guruMap[gId] || "Guru Mapel",
+            };
+          });
+        }
+      } catch (e) {}
 
-      const hasilSemuaMapel = (await Promise.all(mapelPromises)).flat();
-      setLoadingProgress(55);
-      setLoadingStageText("Memeriksa rombel & kurikulum mata pelajaran...");
+      // Fallback: Jika belum ada endpoint ALL, ambil lewat daftar guru
+      if (allMapels.length === 0) {
+        if (!isSilent) {
+          setLoadingProgress(48);
+          setLoadingStageText("Mencocokkan data guru mapel...");
+        }
+        if (daftarGuru.length === 0) {
+          const resGuru = await getGuru();
+          daftarGuru =
+            resGuru?.success && Array.isArray(resGuru.data) ? resGuru.data : [];
+        }
+        if (daftarGuru.length === 0) return [];
 
-      const mapelKandidat = hasilSemuaMapel.filter((m) => {
+        const mapelPromises = daftarGuru.map(async (g) => {
+          try {
+            const gId = String(g.ID || g.id || g.idGuru || "").trim();
+            const gNama = g.NAMA_GURU || g.nama || guruMap[gId] || "Guru Mapel";
+            const res = await getMapelByGuru(gId);
+            if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
+              return res.data.map((m) => ({
+                ...m,
+                namaGuru: m.namaGuru || gNama,
+                idGuru: gId,
+              }));
+            }
+          } catch (e) {}
+          return [];
+        });
+        allMapels = (await Promise.all(mapelPromises)).flat();
+      }
+
+      if (!isSilent) {
+        setLoadingProgress(58);
+        setLoadingStageText("Menyesuaikan rombel kelas siswa...");
+      }
+
+      const mapelKandidat = allMapels.filter((m) => {
         if (!kelasSiswa) return true;
         const kelasMapel = String(m.kelas || "").trim().toLowerCase();
         return (
@@ -124,233 +400,235 @@ export default function ModalKehadiranMapel({
         );
       });
 
-      const targetMapelList =
-        mapelKandidat.length > 0 ? mapelKandidat : hasilSemuaMapel;
+      const targetList = mapelKandidat.length > 0 ? mapelKandidat : allMapels;
 
-      const gridPromises = targetMapelList.map(async (m) => {
-        try {
-          const resGrid = await getPresensiMapelGrid(m.idGuru, m.idMapel);
-          if (!resGrid?.success || !resGrid.data) return null;
-
-          const daftarSiswa = resGrid.data.siswa || [];
-          const isEnrolled = daftarSiswa.some(
-            (s) => String(s.idSiswa).trim() === String(user.id).trim(),
-          );
-
-          if (isEnrolled) {
-            const isOnline = checkIsOnlineMapel(m) || fokusDaring;
-            const presensiSemua = resGrid.data.presensi || [];
-            const presensiSaya = presensiSemua.filter(
-              (p) => String(p.idSiswa).trim() === String(user.id).trim(),
-            );
-
-            let hadir = 0, sakit = 0, izin = 0, alfa = 0, cabut = 0;
-            let totalNilai = 0, jumlahNilaiAda = 0;
-            const pertemuanMap = {};
-
-            presensiSaya.forEach((p) => {
-              const pKe = Number(p.pertemuanKe);
-              if (pKe) {
-                pertemuanMap[pKe] = {
-                  pertemuanKe: pKe,
-                  tanggal: p.tanggal || "",
-                  status: p.status || "-",
-                  nilai: p.nilai !== undefined && p.nilai !== "" ? p.nilai : null,
-                };
-
-                if (p.status === "Hadir") hadir++;
-                else if (p.status === "Sakit") sakit++;
-                else if (p.status === "Izin") izin++;
-                else if (p.status === "Alfa") alfa++;
-                else if (p.status === "Cabut") cabut++;
-
-                if (p.nilai !== null && p.nilai !== undefined && p.nilai !== "") {
-                  const val = Number(p.nilai);
-                  if (!isNaN(val)) { totalNilai += val; jumlahNilaiAda++; }
-                }
-              }
-            });
-
-            // Untuk Mapel Online: gabungkan pertemuan dari presensi semua siswa
-            if (isOnline) {
-              presensiSemua.forEach((p) => {
-                const pKe = Number(p.pertemuanKe);
-                if (pKe && !pertemuanMap[pKe]) {
-                  pertemuanMap[pKe] = {
-                    pertemuanKe: pKe,
-                    tanggal: p.tanggal || "",
-                    status: "Belum Tercatat",
-                    nilai: null,
-                  };
-                }
-              });
-
-              // Jika tetap kosong (guru belum input presensi), buat minimal Pertemuan 1 agar siswa langsung bisa upload tugas
-              if (Object.keys(pertemuanMap).length === 0) {
-                pertemuanMap[1] = {
-                  pertemuanKe: 1,
-                  tanggal: new Date().toLocaleDateString("en-CA"),
-                  status: "Online",
-                  nilai: null,
-                };
-              }
-            }
-
-            const pertemuanList = Object.values(pertemuanMap).sort(
-              (a, b) => a.pertemuanKe - b.pertemuanKe,
-            );
-
-            const totalPertemuan = pertemuanList.length;
-            const persentaseHadir = totalPertemuan > 0
-              ? Math.round((hadir / totalPertemuan) * 100) : 0;
-            const rataRataNilai = jumlahNilaiAda > 0
-              ? Math.round((totalNilai / jumlahNilaiAda) * 10) / 10 : null;
-
-            return {
-              ...m,
-              isOnline,
-              totalPertemuan, hadir, sakit, izin, alfa, cabut,
-              persentaseHadir, rataRataNilai, pertemuanList,
-            };
-          }
-        } catch (e) {
-          console.error("Error cek mapel grid:", m.idMapel, e);
-        }
-        return null;
-      });
-
-      setLoadingProgress(76);
-      setLoadingStageText("Mengambil riwayat kehadiran & nilai siswa...");
-
-      const mapelSiswaDitemukan = (await Promise.all(gridPromises)).filter(Boolean);
-
-      setLoadingProgress(88);
-      setLoadingStageText("Menyiapkan materi tugas & riwayat upload online...");
-
-      setMapelList(mapelSiswaDitemukan);
-      if (mapelSiswaDitemukan.length > 0 && !selectedMapelId) {
-        setSelectedMapelId(mapelSiswaDitemukan[0].idMapel);
+      if (!isSilent) {
+        setLoadingProgress(68);
+        setLoadingStageText("Memvalidasi rombel siswa...");
       }
 
-      const syncTime = new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit", minute: "2-digit",
-      });
-      setLastSync(syncTime);
-
-      // Load tugas guru & jawaban siswa untuk mapel online (atau semua jika fokusDaring)
-      const onlineMapels = fokusDaring
-        ? mapelSiswaDitemukan
-        : mapelSiswaDitemukan.filter((m) => checkIsOnlineMapel(m));
-      await Promise.all(
-        onlineMapels.map(async (m) => {
+      // Cek enrollment siswa secara paralel cepat
+      const enrolledResults = await Promise.all(
+        targetList.map(async (m) => {
           try {
-            // 1. Ambil tugas dari guru
-            const resTugas = await getTugasMapel(m.idMapel, "");
-            if (resTugas?.success && Array.isArray(resTugas.data)) {
-              const tugasMap = {};
-              resTugas.data.forEach((t) => {
-                const pKe = String(t.pertemuanKe || "1");
-                if (!tugasMap[pKe]) tugasMap[pKe] = [];
-                tugasMap[pKe].push(t);
-              });
-              setTugasPerMapel((prev) => ({ ...prev, [m.idMapel]: tugasMap }));
+            const resGrid = await getPresensiMapelGrid(m.idGuru, m.idMapel);
+            const kelasMapel = String(m.kelas || "").trim().toLowerCase();
+            const matchesExactClass =
+              kelasSiswa &&
+              kelasMapel &&
+              (kelasMapel === kelasSiswa || kelasSiswa.includes(kelasMapel));
 
-              // Pastikan jika ada tugas pertemuan yang belum ada di pertemuanList, tambahkan
-              setMapelList((prevList) =>
-                prevList.map((mapelItem) => {
-                  if (mapelItem.idMapel === m.idMapel) {
-                    const existingP = new Set(
-                      (mapelItem.pertemuanList || []).map((p) => Number(p.pertemuanKe))
-                    );
-                    const tambahan = [];
-                    resTugas.data.forEach((t) => {
-                      const pKe = Number(t.pertemuanKe);
-                      if (pKe && !existingP.has(pKe)) {
-                        existingP.add(pKe);
-                        tambahan.push({
-                          pertemuanKe: pKe,
-                          tanggal: t.createdAt ? t.createdAt.substring(0, 10) : "",
-                          status: "Ada Tugas",
-                          nilai: null,
-                        });
-                      }
-                    });
-                    if (tambahan.length > 0) {
-                      const baru = [...(mapelItem.pertemuanList || []), ...tambahan].sort(
-                        (a, b) => a.pertemuanKe - b.pertemuanKe
-                      );
-                      return { ...mapelItem, pertemuanList: baru };
-                    }
-                  }
-                  return mapelItem;
-                })
-              );
-            }
+            const gId = String(m.idGuru || "").trim();
+            const namaGuruFinal = m.namaGuru || guruMap[gId] || "Guru Mapel";
 
-            // 2. Ambil riwayat upload jawaban siswa dari server
-            const resJwb = await getJawabanSiswa(m.idMapel, "", user.id);
-            if (resJwb?.success && Array.isArray(resJwb.data)) {
-              const jMap = {};
-              resJwb.data.forEach((j) => {
-                const key = `${m.idMapel}_${j.pertemuanKe}`;
-                jMap[key] = {
-                  sukses: true,
-                  fileUrl: j.fileUrl,
-                  namaFile: j.namaFile || "Berkas Terkirim",
-                  keterangan: j.keterangan || "",
-                  waktu: j.createdAt || "",
+            if (!resGrid?.success || !resGrid.data) {
+              // Jika grid belum diisi guru tapi kelas rombel cocok, tetap masukkan
+              if (matchesExactClass) {
+                return {
+                  ...m,
+                  namaGuru: namaGuruFinal,
+                  isOnline: checkIsOnlineMapel(m) || fokusDaring,
+                  totalPertemuan: 0,
+                  hadir: 0,
+                  sakit: 0,
+                  izin: 0,
+                  alfa: 0,
+                  cabut: 0,
+                  persentaseHadir: 0,
+                  rataRataNilai: null,
+                  pertemuanList: [],
                 };
-              });
-              setUploadState((prev) => ({ ...prev, ...jMap }));
+              }
+              return null;
             }
-          } catch (e) {
-            console.error("Error load tugas/jawaban online siswa:", e);
-          }
+
+            const daftarSiswa = resGrid.data.siswa || [];
+            const isEnrolled = daftarSiswa.some(
+              (s) => String(s.idSiswa).trim() === String(user.id).trim()
+            );
+
+            if (isEnrolled || matchesExactClass) {
+              return {
+                ...m,
+                namaGuru: namaGuruFinal,
+                isOnline: checkIsOnlineMapel(m) || fokusDaring,
+                totalPertemuan: 0,
+                hadir: 0,
+                sakit: 0,
+                izin: 0,
+                alfa: 0,
+                cabut: 0,
+                persentaseHadir: 0,
+                rataRataNilai: null,
+                pertemuanList: [],
+              };
+            }
+          } catch (e) {}
+          return null;
         })
       );
 
-      setLoadingProgress(100);
-      setLoadingStageText("Data mata pelajaran siap!");
+      const enrolledMapels = enrolledResults.filter(Boolean);
 
+      // Simpan ke discover cache agar pembukaan selanjutnya 0 detik
       try {
-        localStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({ data: mapelSiswaDitemukan, syncTime }),
-        );
-      } catch (err) {}
-    } catch (err) {
-      console.error("Gagal memuat mapel siswa:", err);
-      setError("Gagal menyinkronkan data mata pelajaran dari server.");
-    } finally {
-      setTimeout(() => {
-        setLoading(false);
-      }, 350);
-    }
-  }, [user, CACHE_KEY, selectedMapelId, fokusDaring]);
-
-  useEffect(() => {
-    if (isOpen && user?.id) {
-      try {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed?.data)) {
-            setTimeout(() => {
-              setMapelList(parsed.data);
-              setLastSync(parsed.syncTime || null);
-              if (parsed.data.length > 0) {
-                setSelectedMapelId(parsed.data[0].idMapel);
-              }
-            }, 0);
-          }
+        if (enrolledMapels.length > 0) {
+          localStorage.setItem(
+            DISCOVER_CACHE_KEY,
+            JSON.stringify(enrolledMapels)
+          );
         }
       } catch (e) {}
 
-      setTimeout(() => {
-        loadDataMapel();
-      }, 0);
+      return enrolledMapels;
+    },
+    [user?.id, user?.nama, fokusDaring, DISCOVER_CACHE_KEY]
+  );
+
+  // Fungsi sinkronisasi data utama (Cepat & Auto-Update)
+  const refreshData = useCallback(
+    async ({ fullScan = false, silent = false } = {}) => {
+      if (!user?.id) return;
+
+      if (!silent) {
+        setLoading(true);
+        setLoadingProgress(15);
+        setLoadingStageText("Menghubungkan ke server akademik...");
+      }
+      setIsSyncing(true);
+      setError("");
+
+      try {
+        let baseList = mapelListRef.current;
+
+        // Jika belum ada mapel sama sekali atau diminta fullScan
+        if (!baseList || baseList.length === 0 || fullScan) {
+          if (!silent) {
+            setLoadingProgress(35);
+            setLoadingStageText("Memeriksa rombel mata pelajaran...");
+          }
+          baseList = await discoverMapelSiswa(silent);
+          if (baseList.length === 0) {
+            setMapelList([]);
+            if (!silent) setLoading(false);
+            setIsSyncing(false);
+            return;
+          }
+          setMapelList(baseList);
+        }
+
+        // Tentukan mapel aktif
+        const currentSelectedId =
+          selectedMapelIdRef.current || baseList[0]?.idMapel;
+        if (!selectedMapelIdRef.current && baseList[0]?.idMapel) {
+          setSelectedMapelId(baseList[0].idMapel);
+        }
+
+        const activeMapel =
+          baseList.find((m) => m.idMapel === currentSelectedId) || baseList[0];
+        const otherMapels = baseList.filter(
+          (m) => m.idMapel !== activeMapel?.idMapel
+        );
+
+        if (!silent) {
+          setLoadingProgress(75);
+          setLoadingStageText(`Mengambil tugas terbaru ${activeMapel?.namaMapel || ""}...`);
+        }
+
+        // 1. PRIORITAS UTAMA: Sinkronkan mapel yang sedang aktif dibuka siswa (Selesai ~1-2 detik!)
+        if (activeMapel) {
+          await enrichSingleMapel(activeMapel);
+        }
+
+        // 2. Sinkronkan sisa mapel lainnya dalam chunk 3 mapel sekaligus
+        if (!silent) {
+          setLoadingProgress(90);
+          setLoadingStageText("Memperbarui seluruh mata pelajaran...");
+        }
+
+        for (let i = 0; i < otherMapels.length; i += 3) {
+          const chunk = otherMapels.slice(i, i + 3);
+          await Promise.all(chunk.map((m) => enrichSingleMapel(m)));
+        }
+
+        const syncTime = new Date().toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        setLastSync(syncTime);
+        saveCurrentStateToCache(syncTime);
+
+        if (!silent) {
+          setLoadingProgress(100);
+          setLoadingStageText("Data mata pelajaran siap!");
+        }
+      } catch (err) {
+        console.error("Gagal refresh data mapel:", err);
+        if (!silent) {
+          setError("Gagal menyinkronkan data mata pelajaran dari server.");
+        }
+      } finally {
+        setIsSyncing(false);
+        if (!silent) {
+          setTimeout(() => setLoading(false), 200);
+        }
+      }
+    },
+    [user?.id, discoverMapelSiswa, enrichSingleMapel, saveCurrentStateToCache]
+  );
+
+  // Hook pembuka modal: INSTAN dari cache + AUTO-UPDATE di background
+  useEffect(() => {
+    if (!isOpen || !user?.id) return;
+
+    // 1. Tampilkan cache lokal secara INSTAN (0 ms latency)
+    let hasCache = false;
+    let cacheMissingGuru = false;
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed?.data) && parsed.data.length > 0) {
+          hasCache = true;
+
+          let guruMapCached = {};
+          try {
+            const rawG = localStorage.getItem("cache_daftar_guru_map");
+            if (rawG) guruMapCached = JSON.parse(rawG);
+          } catch (e) {}
+
+          const dataWithGuru = parsed.data.map((m) => {
+            const gId = String(m.idGuru || "").trim();
+            const gNama = m.namaGuru || guruMapCached[gId] || "";
+            if (!gNama || gNama === "Guru Mapel") cacheMissingGuru = true;
+            return {
+              ...m,
+              namaGuru: gNama || "Guru Mapel",
+            };
+          });
+
+          setMapelList(dataWithGuru);
+          if (parsed.tugasPerMapel) setTugasPerMapel(parsed.tugasPerMapel);
+          if (parsed.uploadState) setUploadState(parsed.uploadState);
+          setLastSync(parsed.syncTime || null);
+          setSelectedMapelId((prev) => {
+            if (prev && dataWithGuru.some((m) => m.idMapel === prev)) return prev;
+            return dataWithGuru[0].idMapel;
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Error membaca cache:", e);
     }
-  }, [isOpen, user?.id, CACHE_KEY, loadDataMapel]);
+
+    // 2. AUTO-UPDATE: Selalu periksa data baru dari server di background!
+    // Jika cache ada tapi nama guru kosong, lakukan scan ulang silent agar nama guru langsung ditarik
+    if (hasCache) {
+      refreshData({ fullScan: cacheMissingGuru, silent: true });
+    } else {
+      refreshData({ fullScan: true, silent: false });
+    }
+  }, [isOpen, user?.id, CACHE_KEY, refreshData]);
 
   // Handler upload jawaban siswa
   const handleUploadJawaban = async (mapelId, pertemuanKe, idTugas) => {
@@ -386,18 +664,28 @@ export default function ModalKehadiranMapel({
       });
 
       if (result?.success) {
-        setUploadState((prev) => ({
-          ...prev,
-          [stateKey]: {
-            ...current,
-            loading: false,
-            sukses: true,
-            file: null,
-            keterangan: "",
-            namaFile: file.name,
-            fileUrl: result.data?.fileUrl || "",
-          },
-        }));
+        const updatedEntry = {
+          ...current,
+          loading: false,
+          sukses: true,
+          file: null,
+          keterangan: "",
+          namaFile: file.name,
+          fileUrl: result.data?.fileUrl || "",
+          waktu: new Date().toISOString(),
+        };
+        setUploadState((prev) => {
+          const next = { ...prev, [stateKey]: updatedEntry };
+          try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              parsed.uploadState = next;
+              localStorage.setItem(CACHE_KEY, JSON.stringify(parsed));
+            }
+          } catch (e) {}
+          return next;
+        });
       } else {
         setUploadState((prev) => ({
           ...prev,
@@ -477,19 +765,21 @@ export default function ModalKehadiranMapel({
                 </div>
               )}
               <button
-                onClick={loadDataMapel}
-                disabled={loading}
+                onClick={() => refreshData({ fullScan: false, silent: false })}
+                disabled={loading || isSyncing}
                 title="Sinkronkan data terbaru"
-                className="shrink-0 rounded-xl bg-white/10 hover:bg-white/25 px-3 py-1.5 text-xs font-bold text-white transition-all flex items-center gap-1.5 border border-white/20 disabled:opacity-50"
+                className="shrink-0 rounded-xl bg-white/10 hover:bg-white/25 px-3 py-1.5 text-xs font-bold text-white transition-all flex items-center gap-1.5 border border-white/20 disabled:opacity-50 cursor-pointer"
               >
-                <span className={loading ? "animate-spin inline-block" : ""}>
+                <span className={loading || isSyncing ? "animate-spin inline-block" : ""}>
                   🔄
                 </span>
-                <span className="hidden sm:inline">Refresh</span>
+                <span className="hidden sm:inline">
+                  {isSyncing ? "Menyinkronkan..." : "Refresh"}
+                </span>
               </button>
               <button
                 onClick={onClose}
-                className="shrink-0 rounded-full bg-white/10 hover:bg-white/25 w-8 h-8 flex items-center justify-center text-xs font-black text-white transition-colors"
+                className="shrink-0 rounded-full bg-white/10 hover:bg-white/25 w-8 h-8 flex items-center justify-center text-xs font-black text-white transition-colors cursor-pointer"
               >
                 ✕
               </button>
@@ -508,6 +798,12 @@ export default function ModalKehadiranMapel({
                 &middot; Terakhir disinkronkan pukul {lastSync} WIB
               </span>
             )}
+            {isSyncing && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping"></span>
+                <span>Auto Update</span>
+              </span>
+            )}
           </div>
           {loading && (
             <div className="flex items-center gap-2 text-xs text-blue-700 font-black">
@@ -522,14 +818,18 @@ export default function ModalKehadiranMapel({
         </div>
 
         {/* PROGRESS BAR PERSENTASE DI ATAS KONTEN */}
-        {loading && (
+        {loading ? (
           <div className="shrink-0 w-full bg-slate-200/90 h-2 overflow-hidden border-b border-slate-300 shadow-inner">
             <div
               className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 transition-all duration-300 ease-out"
               style={{ width: `${Math.min(loadingProgress, 100)}%` }}
             />
           </div>
-        )}
+        ) : isSyncing ? (
+          <div className="shrink-0 w-full bg-blue-100 h-1 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-400 animate-pulse w-full" />
+          </div>
+        ) : null}
 
         {/* KONTEN UTAMA */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-5">
@@ -590,8 +890,8 @@ export default function ModalKehadiranMapel({
                 pelajaran mereka, atau belum ada jadwal presensi yang dibuka.
               </p>
               <button
-                onClick={loadDataMapel}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md transition-all active:scale-95"
+                onClick={() => refreshData({ fullScan: true, silent: false })}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 🔄 Periksa Ulang Sekarang
               </button>
@@ -622,7 +922,7 @@ export default function ModalKehadiranMapel({
                           <div
                             className={`text-[9px] font-medium mt-0.5 flex items-center gap-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}
                           >
-                            <span className="truncate max-w-[100px] sm:max-w-none">{m.namaGuru}</span>
+                            <span className="truncate max-w-[100px] sm:max-w-none">{m.namaGuru || "Guru Mapel"}</span>
                             {mIsOnline && (
                               <span className={`text-[8px] font-black px-1 py-0.2 rounded ${isSelected ? "bg-emerald-400/30 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>
                                 ONLINE
@@ -656,7 +956,7 @@ export default function ModalKehadiranMapel({
                         )}
                       </div>
                       <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-0.5 truncate">
-                        Guru Pengampu: <strong className="text-slate-700">{mapelAktif.namaGuru}</strong>
+                        Guru Pengampu: <strong className="text-slate-700">{mapelAktif.namaGuru || "Guru Mapel"}</strong>
                         {keteranganBersih ? ` · ${keteranganBersih}` : ""}
                       </p>
                     </div>

@@ -754,23 +754,24 @@ export default function DashboardSiswa() {
     </div>
   );
 
-  // Helper render statistik kehadiran kelas / rombel (dipadatkan)
+  // Helper render statistik kehadiran kelas / rombel (warna cerah kuning emas)
   const renderStatistikKelas = () => (
-    <div className="rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#F0FDF4] via-[#ECFDF5] to-[#CCFBF1] border border-[#99F6E4] shadow-sm p-3 sm:p-5 space-y-3 sm:space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-teal-200/80 pb-2.5 sm:pb-3 gap-2">
+    <div className="rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-50 via-yellow-100/80 to-amber-200/60 border-2 border-amber-400 shadow-[0_8px_30px_rgba(245,158,11,0.22)] p-3 sm:p-5 space-y-3 sm:space-y-4 relative overflow-hidden">
+      <div className="absolute top-0 right-0 -mr-12 -mt-12 h-40 w-40 rounded-full bg-yellow-300/30 blur-2xl pointer-events-none" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-amber-300/80 pb-2.5 sm:pb-3 gap-2 relative z-10">
         <div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <h2 className="text-sm sm:text-lg font-black text-slate-800 flex items-center gap-1.5 flex-wrap">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-300/70 animate-pulse"></span>
+            <h2 className="text-sm sm:text-lg font-black text-amber-950 flex items-center gap-1.5 flex-wrap">
               <span>🏫 Statistik Kehadiran Kelas</span>
-              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 border border-teal-300 font-extrabold">
+              <span className="text-[9px] sm:text-[10px] px-2.5 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-yellow-400 text-amber-950 border border-amber-500 font-extrabold shadow-2xs">
                 {statistikKelas?.namaKelas || user?.kelas || "Rombel"}
               </span>
             </h2>
           </div>
-          <p className="text-[10px] sm:text-xs text-slate-600 font-medium mt-0.5">
+          <p className="text-[10px] sm:text-xs text-amber-900/80 font-medium mt-0.5">
             Rekapitulasi kehadiran teman sekelas hari ini • Wali Kelas:{" "}
-            <strong>
+            <strong className="text-amber-950">
               {statistikKelas?.namaGuru || guruWali || "Guru Wali Kelas"}
             </strong>
           </p>
@@ -780,13 +781,13 @@ export default function DashboardSiswa() {
           {petugasWaliData ? (
             <button
               onClick={() => setShowModalPresensiPetugas(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-xs font-black shadow-2xs hover:shadow-sm transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-amber-400"
             >
               <span>📋</span>
               <span>Isi Presensi Kelas</span>
             </button>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/95 border border-teal-300 text-teal-800 text-[10px] sm:text-xs font-bold shadow-2xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/95 border border-amber-300 text-amber-900 text-[10px] sm:text-xs font-bold shadow-2xs">
               <span>👥</span>
               <span>{statistikKelas?.jumlahSiswa || 0} Siswa Rombel</span>
             </span>
@@ -794,14 +795,14 @@ export default function DashboardSiswa() {
         </div>
       </div>
 
-      <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4 relative z-10">
         <Card
           title="Hadir Hari Ini"
           value={statistikKelas?.presensiHariIni?.hadir ?? 0}
           accentColor="border-emerald-500"
           textColor="text-emerald-700"
           icon="🟢"
-          borderColor="border-teal-200/60"
+          borderColor="border-amber-200"
         />
         <Card
           title="Sakit"
@@ -809,7 +810,7 @@ export default function DashboardSiswa() {
           accentColor="border-sky-500"
           textColor="text-sky-700"
           icon="🤒"
-          borderColor="border-teal-200/60"
+          borderColor="border-amber-200"
         />
         <Card
           title="Izin"
@@ -817,33 +818,33 @@ export default function DashboardSiswa() {
           accentColor="border-amber-500"
           textColor="text-amber-700"
           icon="📝"
-          borderColor="border-teal-200/60"
+          borderColor="border-amber-200"
         />
         <Card
           title="Kehadiran Kelas"
           value={`${statistikKelas?.presensiHariIni?.persenHadir ?? 0}%`}
-          accentColor="border-teal-500"
-          textColor="text-teal-700"
+          accentColor="border-yellow-500"
+          textColor="text-amber-600"
           icon="📊"
-          borderColor="border-teal-200/60"
+          borderColor="border-amber-200"
         />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 bg-white/95 p-2.5 sm:p-3.5 rounded-xl border border-teal-200/80 shadow-2xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 bg-white/95 p-2.5 sm:p-3.5 rounded-xl border border-amber-300/80 shadow-2xs relative z-10">
         <Info
           label="Nama Kelas"
           value={statistikKelas?.namaKelas || user?.kelas || "-"}
-          textColor="text-teal-900"
+          textColor="text-amber-950"
         />
         <Info
           label="Guru Wali Kelas"
           value={statistikKelas?.namaGuru || guruWali || "-"}
-          textColor="text-teal-900"
+          textColor="text-amber-950"
         />
         <Info
           label="Total Siswa Rombel"
           value={`${statistikKelas?.jumlahSiswa || 0} Siswa`}
-          textColor="text-teal-900"
+          textColor="text-amber-950"
         />
         <Info
           label="Petugas Presensi"
@@ -853,7 +854,7 @@ export default function DashboardSiswa() {
               : parseKeteranganWali(statistikKelas?.keterangan).petugasNama ||
                 "Belum Ditunjuk"
           }
-          textColor={petugasWaliData ? "text-amber-600" : "text-teal-900"}
+          textColor={petugasWaliData ? "text-amber-600 font-bold" : "text-amber-950"}
         />
       </div>
     </div>
