@@ -27,6 +27,8 @@ import {
   pesanTandaiDibaca,
   pesanKirimMassal,
 } from "../lib/api";
+import PesanSekolahModal from "../components/PesanSekolahModal";
+import { getJumlahPesanUnread } from "../lib/pesanApi";
 
 export const PESAN_MAX_LENGTH = 500;
 const STORAGE_CHAT_PREFIX = "portal_pesan_chat_";
@@ -193,13 +195,24 @@ export function useJumlahPesanBaru({
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
-    if (role === "guru" && !idGuru) return;
+    const targetId = role === "guru" ? idGuru : "202026";
+    if (!targetId) return;
     try {
+      // 1. Cek unread dari Supabase
+      const countSupabase = await getJumlahPesanUnread(targetId);
+      if (typeof countSupabase === "number" && countSupabase > 0) {
+        setJumlah(countSupabase);
+        return;
+      }
+
+      // 2. Fallback cek sistem lama jika di Supabase 0
       if (role === "guru") {
         const res = await pesanGet(idGuru);
         if (res?.success && res.data) {
           updateCacheSatu("guru", idGuru, res.data);
           setJumlah(res.data.pesanKepsek && !res.data.dibacaGuru ? 1 : 0);
+        } else {
+          setJumlah(countSupabase || 0);
         }
       } else {
         const res = await pesanGetDaftar();
@@ -209,12 +222,15 @@ export function useJumlahPesanBaru({
             map[String(row.idGuru)] = row;
           });
           tulisCachePesan("kepsek", map);
-          setJumlah(
-            res.data.filter((row) => row.pesanGuru && !row.dibacaKepsek).length,
-          );
+          const legacyUnread = res.data.filter((row) => row.pesanGuru && !row.dibacaKepsek).length;
+          setJumlah(legacyUnread > 0 ? legacyUnread : (countSupabase || 0));
+        } else {
+          setJumlah(countSupabase || 0);
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      // fallback silent
+    }
   }, [role, idGuru, enabled]);
 
   // Badge langsung diperbarui saat push masuk
@@ -875,20 +891,22 @@ function ChatPanel({
 // =========================================================
 // SISI GURU: Modal Chat Kepala Sekolah
 // =========================================================
-export function PesanGuruModal({ isOpen, onClose, user, onChanged }) {
-  if (!isOpen || !user?.id) return null;
+export function PesanGuruModal(props) {
+  if (!props.isOpen) return null;
+  const idUser = String(
+    props.user?.id || props.user?.idGuru || props.guru?.idGuru || props.guru?.id || "",
+  ).trim();
+  const namaUser = String(
+    props.user?.nama || props.user?.namaGuru || props.guru?.namaGuru || props.guru?.nama || "Guru",
+  ).trim();
+
   return (
-    <PesanShell onClose={onClose} maxWidth="max-w-xl">
-      <ChatPanel
-        key={String(user.id)}
-        mode="guru"
-        guru={{ idGuru: String(user.id), namaGuru: user.nama || "" }}
-        initialData={bacaCachePesan("guru").byGuru[String(user.id)] || null}
-        idPengirim={String(user.id)}
-        onChanged={onChanged}
-        onClose={onClose}
-      />
-    </PesanShell>
+    <PesanSekolahModal
+      isOpen={props.isOpen}
+      onClose={props.onClose}
+      currentUser={{ id: idUser, nama: namaUser, role: "guru" }}
+      initialTarget={props.initialTarget || null}
+    />
   );
 }
 
@@ -1508,5 +1526,16 @@ function KepsekInbox({ onClose, initialGuru, user, onChanged }) {
 
 export function PesanKepsekModal(props) {
   if (!props.isOpen) return null;
-  return <KepsekInbox {...props} />;
+  return (
+    <PesanSekolahModal
+      isOpen={props.isOpen}
+      onClose={props.onClose}
+      currentUser={{
+        id: "202026",
+        nama: "HURDISMAN, S.Pd",
+        role: "kepsek",
+      }}
+      initialTarget={props.initialTarget || null}
+    />
+  );
 }

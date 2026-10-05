@@ -24,6 +24,10 @@ import RuangBelajarTKA from "./RuangBelajarTKA";
 import ModalKehadiranMapel from "./ModalKehadiranMapel";
 import ModalCatatanWali from "./ModalCatatanWali";
 import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
+import PesanSekolahModal, {
+  useJumlahPesanSekolah,
+} from "../components/PesanSekolahModal";
+import { autoDiscoverMapelForStudent } from "../lib/mapelDiscovery";
 import {
   findPetugasWaliKelasForSiswa,
   parseKeteranganWali,
@@ -193,6 +197,18 @@ export default function DashboardSiswa() {
   const [showModalTugasDaring, setShowModalTugasDaring] = useState(false);
   const [showModalPresensiPetugas, setShowModalPresensiPetugas] =
     useState(false);
+  const [showModalPesan, setShowModalPesan] = useState(false);
+  const [unreadPesanCount, refreshPesanCount] = useJumlahPesanSekolah({
+    userId: user?.id,
+    enabled: !!user?.id,
+  });
+
+  // Pra-muat (prefetch) daftar mapel dan guru mapel di latar belakang agar kontak langsung siap instan tanpa harus buka modal mapel
+  useEffect(() => {
+    if (user?.id) {
+      autoDiscoverMapelForStudent(user).catch(() => {});
+    }
+  }, [user?.id]);
 
   // Status Petugas Presensi Kelas & Statistik Kehadiran Kelas
   const [petugasWaliData, setPetugasWaliData] = useState(null);
@@ -885,12 +901,26 @@ export default function DashboardSiswa() {
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-3 sm:px-5 py-1.5 sm:py-2 text-[11px] sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-md hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-200"
-          >
-            ❌ LOGOUT
-          </button>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setShowModalPesan(true)}
+              className="relative rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-sm font-black text-white border border-sky-300/50 shadow-md hover:brightness-110 active:scale-95 transition-all duration-300 flex items-center gap-1.5"
+            >
+              <span>💬 PESAN</span>
+              {unreadPesanCount > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border border-white shadow">
+                  {unreadPesanCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-3 sm:px-5 py-1.5 sm:py-2 text-[11px] sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-md hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-200"
+            >
+              ❌ LOGOUT
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1371,6 +1401,33 @@ export default function DashboardSiswa() {
           }}
         />
       )}
+
+      <PesanSekolahModal
+        isOpen={showModalPesan}
+        onClose={() => {
+          setShowModalPesan(false);
+          refreshPesanCount();
+        }}
+        currentUser={{
+          id: user?.id,
+          nama: user?.nama,
+          kelas: user?.kelas || statistikKelas?.namaKelas || "",
+          role: "siswa",
+          idGuru: user?.idGuru,
+          namaGuru: user?.namaGuru,
+          guruWali:
+            guruWali && guruWali !== "-" && guruWali !== "Tanpa Guru Wali"
+              ? { nama: guruWali }
+              : null,
+          waliKelas: statistikKelas?.namaGuru
+            ? {
+                id: statistikKelas.idGuru,
+                nama: statistikKelas.namaGuru,
+                kelas: statistikKelas.namaKelas,
+              }
+            : null,
+        }}
+      />
     </main>
   );
 }
