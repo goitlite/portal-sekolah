@@ -37,6 +37,7 @@ export async function sendPushNotification({
   const { getSupabaseServerClient } = await import("@/lib/supabaseServer");
 
   let subscriptions = [];
+  let rawRows = [];
   const supabase = getSupabaseServerClient();
 
   if (supabase) {
@@ -49,13 +50,19 @@ export async function sendPushNotification({
       }
       const { data: rows, error } = await query;
       if (!error && Array.isArray(rows)) {
+        rawRows = rows;
         subscriptions = rows.map((r) => ({
           endpoint: r.endpoint,
           keys: { p256dh: r.p256dh, auth: r.auth },
         }));
+        console.log(
+          `[sendPushNotification] Target: userId="${targetUserId || "-"}" role="${targetRole || "-"}" → ${rows.length} subscription ditemukan di Supabase.`
+        );
+      } else if (error) {
+        console.error("[sendPushNotification] Supabase query error:", error);
       }
     } catch (e) {
-      console.error("[sendPushNotification] Supabase query error:", e);
+      console.error("[sendPushNotification] Supabase query exception:", e);
     }
   }
 
@@ -79,10 +86,16 @@ export async function sendPushNotification({
     }
   }
 
-  if (subscriptions.length === 0) return { ok: true, sent: 0, failed: 0 };
+  if (subscriptions.length === 0) {
+    console.warn(
+      `[sendPushNotification] Tidak ada subscriber untuk userId="${targetUserId || "-"}" role="${targetRole || "-"}". Push dibatalkan.`
+    );
+    return { ok: true, sent: 0, failed: 0 };
+  }
 
   const wp = getWebPush();
-  const payload = JSON.stringify({ title, body, url, data });
+  // Sertakan icon agar konsisten dengan /api/push/send
+  const payload = JSON.stringify({ title, body, url, icon: "/logo.png", data });
 
   const results = await Promise.allSettled(
     subscriptions.map(({ endpoint, keys }) =>
@@ -92,6 +105,32 @@ export async function sendPushNotification({
 
   const sent = results.filter((r) => r.status === "fulfilled").length;
   const failed = results.filter((r) => r.status === "rejected").length;
+
+  console.log(`[sendPushNotification] Terkirim: ${sent}, Gagal: ${failed}`);
+
+  // Auto-cleanup: hapus subscription yang sudah tidak valid (HTTP 410 = browser cabut izin)
+  if (supabase && rawRows.length > 0) {
+    const toDeleteEndpoints = [];
+    results.forEach((r, i) => {
+      if (r.status === "rejected" && r.reason?.statusCode === 410) {
+        toDeleteEndpoints.push(subscriptions[i].endpoint);
+        console.warn(
+          "[sendPushNotification] Hapus subscription kadaluarsa (410) dari Supabase:",
+          rawRows[i]?.user_id
+        );
+      }
+    });
+    if (toDeleteEndpoints.length > 0) {
+      try {
+        await supabase
+          .from("push_subscriptions")
+          .delete()
+          .in("endpoint", toDeleteEndpoints);
+      } catch (e) {
+        console.warn("[sendPushNotification] Gagal hapus expired subs:", e);
+      }
+    }
+  }
 
   return { ok: true, sent, failed };
 }

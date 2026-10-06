@@ -1,6 +1,8 @@
 // src/app/api/pesan/broadcast/route.js
-// Endpoint Broadcast Pesan Massal dari Kepala Sekolah ke Semua Guru
-// Menggunakan Supabase Cloud (0 Byte di Vercel) + Web Push Notification ke Semua Guru
+// Endpoint Broadcast Pesan Massal:
+//   - Kepala Sekolah → Semua / Pilihan Guru
+//   - Guru → Siswa Bimbingannya (PKL, Wali, Wali Kelas, Mapel)
+// Menggunakan Supabase Cloud (0 Byte di Vercel) + Web Push Notification
 
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
@@ -21,10 +23,10 @@ export async function POST(request) {
     const body = await request.json();
     const {
       idPengirim,
-      namaPengirim = "HURDISMAN, S.Pd",
+      namaPengirim = "Pengirim",
       rolePengirim = "kepsek",
       pesan,
-      targetList = [], // Array dari { id, nama } guru
+      targetList = [], // Array dari { id, nama } penerima
     } = body;
 
     if (!idPengirim || !pesan || !pesan.trim()) {
@@ -34,34 +36,49 @@ export async function POST(request) {
       );
     }
 
-    if (String(rolePengirim).toLowerCase() !== "kepsek") {
+    const rPengirim = String(rolePengirim).toLowerCase().trim();
+
+    // Hanya kepsek dan guru yang boleh broadcast
+    if (rPengirim !== "kepsek" && rPengirim !== "guru") {
       return NextResponse.json(
-        { error: "Hanya Kepala Sekolah yang memiliki wewenang mengirim broadcast." },
+        { error: "Hanya Kepala Sekolah atau Guru yang memiliki wewenang mengirim broadcast." },
         { status: 403 },
       );
     }
 
     if (!Array.isArray(targetList) || targetList.length === 0) {
       return NextResponse.json(
-        { error: "Daftar guru penerima broadcast tidak boleh kosong." },
+        { error: "Daftar penerima broadcast tidak boleh kosong." },
         { status: 400 },
       );
     }
 
     const cleanTeks = pesan.trim();
 
+    // Tentukan role penerima berdasarkan pengirim:
+    //   kepsek → broadcast ke guru
+    //   guru   → broadcast ke siswa
+    const rolePenerima = rPengirim === "kepsek" ? "guru" : "siswa";
+
     // Buat batch insert rows untuk Supabase
-    const rows = targetList.map((guru) => ({
+    const rows = targetList.map((target) => ({
       id_pengirim: String(idPengirim).trim(),
-      nama_pengirim: String(namaPengirim || "HURDISMAN, S.Pd").trim(),
-      role_pengirim: "kepsek",
-      subrole_pengirim: "kepala_sekolah",
-      id_penerima: String(guru.id || guru.idGuru).trim(),
-      nama_penerima: String(guru.nama || guru.namaGuru || "Guru").trim(),
-      role_penerima: "guru",
+      nama_pengirim: String(namaPengirim || "Pengirim").trim(),
+      role_pengirim: rPengirim,
+      subrole_pengirim: rPengirim === "kepsek" ? "kepala_sekolah" : "guru",
+      id_penerima: String(target.id || target.idSiswa || target.idGuru || "").trim(),
+      nama_penerima: String(target.nama || target.namaSiswa || target.namaGuru || "Penerima").trim(),
+      role_penerima: rolePenerima,
       pesan: cleanTeks,
       dibaca: false,
-    }));
+    })).filter((r) => r.id_penerima); // buang row tanpa id penerima
+
+    if (rows.length === 0) {
+      return NextResponse.json(
+        { error: "Tidak ada penerima valid dalam daftar broadcast." },
+        { status: 400 },
+      );
+    }
 
     const { data, error } = await supabase
       .from("pesan_sekolah")
@@ -73,14 +90,20 @@ export async function POST(request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Kirim Web Push Notification ke seluruh guru
+    // Kirim Web Push Notification ke penerima
     try {
       const ringkasanPesan = cleanTeks.length > 90 ? cleanTeks.slice(0, 90) + "..." : cleanTeks;
+      const pushTitle =
+        rPengirim === "kepsek"
+          ? `📢 Pengumuman Kepala Sekolah (${namaPengirim})`
+          : `📣 Pesan dari Guru (${namaPengirim})`;
+      const pushUrl = rolePenerima === "siswa" ? "/magang/dashboard_siswa" : "/magang/guru";
+
       await sendPushNotification({
-        title: `📢 Pengumuman Kepala Sekolah (${namaPengirim})`,
+        title: pushTitle,
         body: ringkasanPesan,
-        url: "/magang/guru",
-        targetRole: "guru",
+        url: pushUrl,
+        targetRole: rolePenerima,
       });
     } catch (pushErr) {
       console.warn("[api/pesan/broadcast] Push notification notice:", pushErr?.message);

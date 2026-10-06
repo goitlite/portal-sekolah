@@ -25,10 +25,16 @@ import {
 import {
   getGuru,
   getSiswa,
+  getSiswaByGuru,
+  getDataSiswaWali,
+  getWaliKelasByGuru,
+  getSiswaWaliKelas,
+  getSiswaMapel,
   getDashboardKepsekWaliKelas,
   getMapelByGuru,
 } from "../lib/api";
 import { autoDiscoverMapelForStudent } from "../lib/mapelDiscovery";
+import { subscribeToPush } from "@/components/pwa/RegisterSW";
 
 const STORAGE_CHAT_KEY = "portal_pesan_v3_";
 
@@ -159,6 +165,19 @@ export default function PesanSekolahModal({
   const [broadcastSelectedIds, setBroadcastSelectedIds] = useState(() => new Set());
   const [broadcastSending, setBroadcastSending] = useState(false);
   const [broadcastStatus, setBroadcastStatus] = useState({ tipe: "", teks: "" });
+
+  // Broadcast mode untuk Guru
+  const [isGuruBroadcastMode, setIsGuruBroadcastMode] = useState(false);
+  // Tipe: "pkl" | "wali" | "walikelas_{idWali}" | "mapel_{idMapel}"
+  const [guruBroadcastTipe, setGuruBroadcastTipe] = useState(null);
+  const [guruBroadcastPesan, setGuruBroadcastPesan] = useState("");
+  const [guruBroadcastSending, setGuruBroadcastSending] = useState(false);
+  const [guruBroadcastStatus, setGuruBroadcastStatus] = useState({ tipe: "", teks: "" });
+  const [guruBroadcastTargets, setGuruBroadcastTargets] = useState([]); // [{ id, nama }]
+  const [guruBroadcastLoading, setGuruBroadcastLoading] = useState(false);
+  // Data profil tugas guru
+  const [guruTugasInfo, setGuruTugasInfo] = useState(null);
+  // { hasPKL: bool, hasWali: bool, daftarMapel: [], daftarWaliKelas: [] }
 
   const chatBottomRef = useRef(null);
 
@@ -404,10 +423,74 @@ export default function PesanSekolahModal({
   }, [myId]);
 
   // Inisialisasi saat modal terbuka
+  // Muat profil tugas guru (PKL, Wali, Wali Kelas, Mapel) untuk fitur broadcast
+  const muatTugasGuru = useCallback(async () => {
+    if (myRole !== "guru" || !myId || guruTugasInfo) return;
+    try {
+      const [resMapel, resSiswaWali, resWaliKelas] = await Promise.allSettled([
+        getMapelByGuru(myId),
+        getDataSiswaWali(myId),
+        getWaliKelasByGuru(myId),
+      ]);
+
+      const daftarMapel = [];
+      if (resMapel.status === "fulfilled" && resMapel.value?.success) {
+        const rawMapel = resMapel.value.data || resMapel.value.mapel || resMapel.value;
+        if (Array.isArray(rawMapel)) {
+          rawMapel.forEach((m) => {
+            const idMapel = String(m.idMapel || m.ID_MAPEL || m.id || "").trim();
+            const namaMapel = String(m.namaMapel || m.NAMA_MAPEL || m.nama || "Mapel").trim();
+            if (idMapel) daftarMapel.push({ idMapel, namaMapel });
+          });
+        }
+      }
+
+      const daftarWaliKelas = [];
+      if (resWaliKelas.status === "fulfilled" && resWaliKelas.value?.success) {
+        const rawWK = resWaliKelas.value.data || resWaliKelas.value.waliKelas || resWaliKelas.value;
+        if (Array.isArray(rawWK)) {
+          rawWK.forEach((wk) => {
+            const idWali = String(wk.idWali || wk.ID_WALI || wk.id || "").trim();
+            const namaKelas = String(wk.namaKelas || wk.NAMA_KELAS || wk.kelas || "Kelas").trim();
+            if (idWali) daftarWaliKelas.push({ idWali, namaKelas });
+          });
+        }
+      }
+
+      const siswaWaliList = [];
+      if (resSiswaWali.status === "fulfilled" && resSiswaWali.value?.success) {
+        const rawWali = resSiswaWali.value.data || resSiswaWali.value.siswa || resSiswaWali.value;
+        if (Array.isArray(rawWali)) {
+          rawWali.forEach((s) => {
+            const sid = String(s.idSiswa || s.ID_SISWA || s.id || s.NISN || "").trim();
+            if (sid) siswaWaliList.push(sid);
+          });
+        }
+      }
+
+      // Cek apakah guru bertugas sebagai guru PKL (ada siswa magang bimbingannya)
+      let hasPKL = false;
+      try {
+        const resPKL = await getSiswaByGuru(myId);
+        hasPKL = resPKL?.success && Array.isArray(resPKL.data) && resPKL.data.length > 0;
+      } catch {}
+
+      setGuruTugasInfo({
+        hasPKL,
+        hasWali: siswaWaliList.length > 0,
+        daftarMapel,
+        daftarWaliKelas,
+      });
+    } catch (err) {
+      console.error("[Pesan] Gagal muat info tugas guru:", err);
+    }
+  }, [myRole, myId, guruTugasInfo]);
+
   useEffect(() => {
     if (isOpen && myId) {
       muatInbox();
       muatDaftarKontak();
+      if (myRole === "guru") muatTugasGuru();
 
       if (initialTarget && initialTarget.id) {
         setActivePartner({
@@ -417,8 +500,18 @@ export default function PesanSekolahModal({
           subLabel: initialTarget.subLabel || "",
         });
       }
+
+      // Auto re-subscribe Web Push agar notifikasi tetap aktif
+      // (subscription bisa expired jika browser lama tidak dibuka)
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.ready
+          .then((reg) => {
+            subscribeToPush(reg, { userId: myId, role: myRole }).catch(() => {});
+          })
+          .catch(() => {});
+      }
     }
-  }, [isOpen, myId, initialTarget, muatInbox, muatDaftarKontak]);
+  }, [isOpen, myId, initialTarget, muatInbox, muatDaftarKontak, muatTugasGuru, myRole]);
 
   // Muat Riwayat Chat saat activePartner berganti
   const muatPercakapan = useCallback(
@@ -678,6 +771,134 @@ export default function PesanSekolahModal({
     }
   };
 
+  // ─── BROADCAST GURU ────────────────────────────────────────────────────────
+  // Muat daftar penerima berdasarkan tipe broadcast yang dipilih guru
+  const handleGuruBroadcastPilihTipe = async (tipe) => {
+    setGuruBroadcastTipe(tipe);
+    setGuruBroadcastTargets([]);
+    setGuruBroadcastStatus({ tipe: "", teks: "" });
+    setGuruBroadcastPesan("");
+    setGuruBroadcastLoading(true);
+
+    try {
+      let targets = [];
+
+      if (tipe === "pkl") {
+        // Broadcast ke siswa PKL bimbingan guru ini
+        // getSiswaByGuru mengembalikan field ID (uppercase) dan NAMA (uppercase)
+        const res = await getSiswaByGuru(myId);
+        if (res?.success && Array.isArray(res.data)) {
+          res.data.forEach((s) => {
+            const sid = String(s.idSiswa || s.ID_SISWA || s.id || s.ID || s.NISN || s.nisn || "").trim();
+            const rawNama = String(s.namaSiswa || s.NAMA_SISWA || s.nama || s.NAMA || "").trim();
+            // Nama siswa mungkin mengandung [kelas] — strip bracket
+            const snama = rawNama.replace(/\s*\[.*?\]\s*$/, "").trim() || rawNama;
+            if (sid && snama) targets.push({ id: sid, nama: snama });
+          });
+        }
+      } else if (tipe === "wali") {
+        // Broadcast ke siswa binaan Guru Wali
+        const res = await getDataSiswaWali(myId);
+        const rawWali = Array.isArray(res?.data) ? res.data : Array.isArray(res?.siswa) ? res.siswa : [];
+        rawWali.forEach((s) => {
+          const sid = String(s.idSiswa || s.ID_SISWA || s.id || s.ID || s.NISN || s.nisn || "").trim();
+          const rawNama = String(s.namaSiswa || s.NAMA_SISWA || s.nama || s.NAMA || "").trim();
+          const snama = rawNama.replace(/\s*\[.*?\]\s*$/, "").trim() || rawNama;
+          if (sid && snama) targets.push({ id: sid, nama: snama });
+        });
+      } else if (tipe.startsWith("walikelas_")) {
+        // Broadcast ke siswa di kelas wali tertentu
+        const idWali = tipe.replace("walikelas_", "");
+        const res = await getSiswaWaliKelas(myId, idWali);
+        const rawSiswa = Array.isArray(res?.data) ? res.data : Array.isArray(res?.siswa) ? res.siswa : [];
+        rawSiswa.forEach((s) => {
+          const sid = String(s.idSiswa || s.ID_SISWA || s.id || s.ID || s.NISN || s.nisn || "").trim();
+          const rawNama = String(s.namaSiswa || s.NAMA_SISWA || s.nama || s.NAMA || "").trim();
+          const snama = rawNama.replace(/\s*\[.*?\]\s*$/, "").trim() || rawNama;
+          if (sid && snama) targets.push({ id: sid, nama: snama });
+        });
+      } else if (tipe.startsWith("mapel_")) {
+        // Broadcast ke siswa peserta mapel tertentu
+        const idMapel = tipe.replace("mapel_", "");
+        const res = await getSiswaMapel(myId, idMapel);
+        const rawSiswa = Array.isArray(res?.data) ? res.data : Array.isArray(res?.siswa) ? res.siswa : [];
+        rawSiswa.forEach((s) => {
+          const sid = String(s.idSiswa || s.ID_SISWA || s.id || s.ID || s.NISN || s.nisn || "").trim();
+          const rawNama = String(s.namaSiswa || s.NAMA_SISWA || s.nama || s.NAMA || "").trim();
+          const snama = rawNama.replace(/\s*\[.*?\]\s*$/, "").trim() || rawNama;
+          if (sid && snama) targets.push({ id: sid, nama: snama });
+        });
+      }
+
+      // Deduplikasi
+      const seen = new Set();
+      targets = targets.filter((t) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
+
+      setGuruBroadcastTargets(targets);
+      if (targets.length === 0) {
+        setGuruBroadcastStatus({ tipe: "info", teks: "Tidak ada siswa terdaftar untuk kategori ini." });
+      }
+    } catch (err) {
+      console.error("[Pesan] Gagal muat target broadcast guru:", err);
+      setGuruBroadcastStatus({ tipe: "error", teks: "Gagal memuat daftar penerima." });
+    } finally {
+      setGuruBroadcastLoading(false);
+    }
+  };
+
+  const handleKirimGuruBroadcast = async () => {
+    setGuruBroadcastStatus({ tipe: "", teks: "" });
+    const cleanTeks = guruBroadcastPesan.trim();
+    if (!cleanTeks) {
+      setGuruBroadcastStatus({ tipe: "error", teks: "Pesan broadcast tidak boleh kosong." });
+      return;
+    }
+    if (guruBroadcastTargets.length === 0) {
+      setGuruBroadcastStatus({ tipe: "error", teks: "Tidak ada penerima untuk broadcast ini." });
+      return;
+    }
+
+    const konfirmasi = window.confirm(
+      `Kirim pesan broadcast ke ${guruBroadcastTargets.length} siswa sekarang?\n\nPesan akan langsung masuk ke obrolan masing-masing siswa.`
+    );
+    if (!konfirmasi) return;
+
+    setGuruBroadcastSending(true);
+    setGuruBroadcastStatus({ tipe: "info", teks: "Sedang menyiarkan pesan ke siswa..." });
+
+    try {
+      const res = await kirimBroadcastSekolah({
+        idPengirim: myId,
+        namaPengirim: myNama,
+        rolePengirim: "guru",
+        pesan: cleanTeks,
+        targetList: guruBroadcastTargets,
+      });
+
+      if (res?.success) {
+        setGuruBroadcastStatus({
+          tipe: "success",
+          teks: `✅ Pesan berhasil dikirim ke ${res.terkirim || guruBroadcastTargets.length} siswa!`,
+        });
+        setGuruBroadcastPesan("");
+        muatInbox();
+      } else {
+        setGuruBroadcastStatus({
+          tipe: "error",
+          teks: res?.error || "Gagal menyiarkan pesan broadcast.",
+        });
+      }
+    } catch {
+      setGuruBroadcastStatus({ tipe: "error", teks: "Gagal terhubung ke server." });
+    } finally {
+      setGuruBroadcastSending(false);
+    }
+  };
+
   // Filter daftar kontak / inbox
   const filteredList = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -733,13 +954,52 @@ export default function PesanSekolahModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white/90 font-bold transition-all"
-            title="Tutup Modal"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Tombol Tes Notif — daftarkan ulang push subscription */}
+            <button
+              type="button"
+              title="Aktifkan / Tes Notifikasi HP"
+              onClick={async () => {
+                if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+                  alert("Browser Anda tidak mendukung notifikasi push.");
+                  return;
+                }
+                try {
+                  let perm = Notification.permission;
+                  if (perm === "denied") {
+                    alert("⛔ Izin notifikasi DIBLOKIR.\n\nSilakan buka:\nPengaturan HP → Aplikasi → Chrome/Browser → Notifikasi → Izinkan.");
+                    return;
+                  }
+                  if (perm === "default") {
+                    perm = await Notification.requestPermission();
+                  }
+                  if (perm !== "granted") {
+                    alert("Izin notifikasi belum diberikan (" + perm + ").");
+                    return;
+                  }
+                  const reg = await navigator.serviceWorker.ready;
+                  await subscribeToPush(reg, { userId: myId, role: myRole });
+                  await reg.showNotification("🔔 Notifikasi Aktif!", {
+                    body: "Notifikasi pesan sekolah sudah terdaftar dan aktif di HP ini.",
+                    icon: "/logo.png",
+                    badge: "/logo.png",
+                  });
+                } catch (err) {
+                  alert("Gagal mengaktifkan notifikasi: " + err.message);
+                }
+              }}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 active:scale-95 flex items-center justify-center text-white/90 transition-all text-sm"
+            >
+              🔔
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white/90 font-bold transition-all"
+              title="Tutup Modal"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* ========================================================= */}
@@ -750,7 +1010,7 @@ export default function PesanSekolahModal({
           {/* ---------------- PANEL KIRI: DAFTAR KONTAK / INBOX ---------------- */}
           <div
             className={`w-full md:w-80 lg:w-96 border-r border-slate-200 flex flex-col bg-slate-50/70 shrink-0 ${
-              activePartner || isBroadcastMode ? "hidden md:flex" : "flex"
+              activePartner || isBroadcastMode || isGuruBroadcastMode ? "hidden md:flex" : "flex"
             }`}
           >
             {/* Search & Tabs */}
@@ -760,6 +1020,7 @@ export default function PesanSekolahModal({
                   type="button"
                   onClick={() => {
                     setIsBroadcastMode(true);
+                    setIsGuruBroadcastMode(false);
                     setActivePartner(null);
                     setBroadcastStatus({ tipe: "", teks: "" });
                   }}
@@ -774,6 +1035,38 @@ export default function PesanSekolahModal({
                     <span>Broadcast Pesan ke Guru</span>
                   </div>
                   <span className="text-[10px] bg-amber-200/90 text-amber-950 px-2 py-0.5 rounded-full font-bold">
+                    Massal
+                  </span>
+                </button>
+              )}
+
+              {/* Tombol Broadcast Guru — muncul hanya jika guru memiliki tugas */}
+              {myRole === "guru" && guruTugasInfo &&
+                (guruTugasInfo.hasPKL || guruTugasInfo.hasWali ||
+                  guruTugasInfo.daftarMapel.length > 0 ||
+                  guruTugasInfo.daftarWaliKelas.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGuruBroadcastMode(true);
+                    setIsBroadcastMode(false);
+                    setActivePartner(null);
+                    setGuruBroadcastTipe(null);
+                    setGuruBroadcastTargets([]);
+                    setGuruBroadcastStatus({ tipe: "", teks: "" });
+                    setGuruBroadcastPesan("");
+                  }}
+                  className={`w-full py-2.5 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-between shadow-xs cursor-pointer ${
+                    isGuruBroadcastMode
+                      ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-400"
+                      : "bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 text-emerald-950 hover:bg-emerald-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">📣</span>
+                    <span>Broadcast Pesan ke Siswa</span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-200/90 text-emerald-950 px-2 py-0.5 rounded-full font-bold">
                     Massal
                   </span>
                 </button>
@@ -961,10 +1254,235 @@ export default function PesanSekolahModal({
           {/* ---------------- PANEL KANAN: RUANG CHAT / BROADCAST ---------------- */}
           <div
             className={`flex-1 flex flex-col bg-slate-100 ${
-              !activePartner && !isBroadcastMode ? "hidden md:flex" : "flex"
+              !activePartner && !isBroadcastMode && !isGuruBroadcastMode ? "hidden md:flex" : "flex"
             }`}
           >
-            {isBroadcastMode ? (
+            {isGuruBroadcastMode ? (
+              /* ─── UI BROADCAST GURU ─── */
+              <div className="flex-1 flex flex-col bg-white overflow-y-auto">
+                {/* Header */}
+                <div className="px-4 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-600 text-white flex items-center justify-between shrink-0 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsGuruBroadcastMode(false)}
+                      className="md:hidden p-1.5 -ml-1 text-white hover:bg-white/20 rounded-lg cursor-pointer"
+                    >
+                      ⬅️
+                    </button>
+                    <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-xl shrink-0">
+                      📣
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black truncate leading-tight">Siaran Pesan ke Siswa</h3>
+                      <p className="text-[11px] text-emerald-100 font-medium">Guru: {myNama}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsGuruBroadcastMode(false)}
+                    className="text-xs font-bold bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-xl cursor-pointer transition-all"
+                  >
+                    Tutup
+                  </button>
+                </div>
+
+                {/* Konten */}
+                <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto w-full flex-1">
+                  {/* Info Banner */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs text-emerald-900 leading-relaxed flex items-start gap-2.5 shadow-2xs">
+                    <span className="text-base shrink-0">💡</span>
+                    <div>
+                      <p className="font-bold">Pilih kategori siswa yang ingin Anda kirimi pesan</p>
+                      <p className="text-[11px] text-emerald-800/90 mt-0.5">
+                        Pilihan muncul sesuai tugas yang Anda emban. Pesan langsung masuk ke obrolan setiap siswa secara personal.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Langkah 1: Pilih Kategori */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                      Langkah 1 — Pilih Kategori Penerima:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {/* PKL */}
+                      {guruTugasInfo?.hasPKL && (
+                        <button
+                          type="button"
+                          onClick={() => handleGuruBroadcastPilihTipe("pkl")}
+                          className={`p-3 rounded-xl border-2 text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                            guruBroadcastTipe === "pkl"
+                              ? "border-emerald-500 bg-emerald-50/90 text-emerald-950 shadow-xs"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xl shrink-0">🏭</span>
+                          <div>
+                            <div className="font-extrabold">Siswa PKL</div>
+                            <div className="text-[10px] text-slate-500 font-medium">Siswa magang bimbingan Anda</div>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Guru Wali */}
+                      {guruTugasInfo?.hasWali && (
+                        <button
+                          type="button"
+                          onClick={() => handleGuruBroadcastPilihTipe("wali")}
+                          className={`p-3 rounded-xl border-2 text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                            guruBroadcastTipe === "wali"
+                              ? "border-emerald-500 bg-emerald-50/90 text-emerald-950 shadow-xs"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xl shrink-0">🤝</span>
+                          <div>
+                            <div className="font-extrabold">Siswa Guru Wali</div>
+                            <div className="text-[10px] text-slate-500 font-medium">Siswa binaan Guru Wali Anda</div>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Wali Kelas (satu tombol per kelas) */}
+                      {guruTugasInfo?.daftarWaliKelas.map((wk) => (
+                        <button
+                          key={`walikelas_${wk.idWali}`}
+                          type="button"
+                          onClick={() => handleGuruBroadcastPilihTipe(`walikelas_${wk.idWali}`)}
+                          className={`p-3 rounded-xl border-2 text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                            guruBroadcastTipe === `walikelas_${wk.idWali}`
+                              ? "border-emerald-500 bg-emerald-50/90 text-emerald-950 shadow-xs"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xl shrink-0">🏫</span>
+                          <div>
+                            <div className="font-extrabold">Wali Kelas</div>
+                            <div className="text-[10px] text-slate-500 font-medium truncate">{wk.namaKelas}</div>
+                          </div>
+                        </button>
+                      ))}
+
+                      {/* Mapel (satu tombol per mapel) */}
+                      {guruTugasInfo?.daftarMapel.map((mp) => (
+                        <button
+                          key={`mapel_${mp.idMapel}`}
+                          type="button"
+                          onClick={() => handleGuruBroadcastPilihTipe(`mapel_${mp.idMapel}`)}
+                          className={`p-3 rounded-xl border-2 text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                            guruBroadcastTipe === `mapel_${mp.idMapel}`
+                              ? "border-emerald-500 bg-emerald-50/90 text-emerald-950 shadow-xs"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xl shrink-0">📚</span>
+                          <div>
+                            <div className="font-extrabold">Mapel</div>
+                            <div className="text-[10px] text-slate-500 font-medium truncate">{mp.namaMapel}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Langkah 2: Preview Penerima */}
+                  {guruBroadcastTipe && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                        Langkah 2 — Penerima:
+                      </label>
+                      <div className="border border-slate-200 rounded-2xl bg-slate-50 shadow-2xs overflow-hidden">
+                        {guruBroadcastLoading ? (
+                          <div className="py-6 text-center text-xs text-slate-400 animate-pulse">
+                            Memuat daftar siswa...
+                          </div>
+                        ) : guruBroadcastTargets.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-slate-400">
+                            Tidak ada siswa terdaftar pada kategori ini.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-white">
+                              <span className="text-xs font-bold text-slate-600">{guruBroadcastTargets.length} siswa akan menerima pesan</span>
+                              <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">✓ Siap kirim</span>
+                            </div>
+                            <div className="max-h-36 overflow-y-auto divide-y divide-slate-100">
+                              {guruBroadcastTargets.map((t) => (
+                                <div key={t.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700">
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                                    {t.nama?.charAt(0)?.toUpperCase() || "S"}
+                                  </div>
+                                  <span className="truncate">{t.nama}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Langkah 3: Tulis Pesan */}
+                  {guruBroadcastTipe && guruBroadcastTargets.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                          Langkah 3 — Tulis Pesan:
+                        </label>
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {guruBroadcastPesan.length}/500
+                        </span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        maxLength={500}
+                        value={guruBroadcastPesan}
+                        onChange={(e) => setGuruBroadcastPesan(e.target.value)}
+                        placeholder="Tuliskan pesan pengumuman, tugas, atau informasi penting untuk siswa di sini..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition-all resize-none font-medium leading-relaxed"
+                      />
+                    </div>
+                  )}
+
+                  {/* Status Banner */}
+                  {guruBroadcastStatus.teks && (
+                    <div
+                      className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between ${
+                        guruBroadcastStatus.tipe === "success"
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          : guruBroadcastStatus.tipe === "info"
+                          ? "bg-blue-50 text-blue-800 border border-blue-200"
+                          : "bg-rose-50 text-rose-800 border border-rose-200"
+                      }`}
+                    >
+                      <span>{guruBroadcastStatus.teks}</span>
+                      <button
+                        type="button"
+                        onClick={() => setGuruBroadcastStatus({ tipe: "", teks: "" })}
+                        className="text-xs font-black opacity-60 hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Tombol Kirim */}
+                  {guruBroadcastTipe && guruBroadcastTargets.length > 0 && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={handleKirimGuruBroadcast}
+                        disabled={guruBroadcastSending || !guruBroadcastPesan.trim()}
+                        className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 disabled:opacity-50 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>{guruBroadcastSending ? "⏳ Sedang Menyiarkan..." : `📣 Kirim ke ${guruBroadcastTargets.length} Siswa Sekarang`}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : isBroadcastMode ? (
               <div className="flex-1 flex flex-col bg-white overflow-y-auto">
                 {/* Header Broadcast */}
                 <div className="px-4 py-3.5 bg-gradient-to-r from-amber-600 via-amber-700 to-yellow-600 text-white flex items-center justify-between shrink-0 shadow-md">
