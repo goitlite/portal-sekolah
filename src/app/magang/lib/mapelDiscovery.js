@@ -17,37 +17,18 @@ export async function autoDiscoverMapelForStudent(user) {
 
   const userId = String(user.id).trim();
 
-  // 1. Cek cache localStorage dari SEMUA kunci (reguler & daring)
+  const ENROLLED_CACHE_KEY = `cache_enrolled_mapels_v4_${userId}`;
+
+  // 1. Cek cache terverifikasi untuk siswa ini (Kecepatan 0 ms)
   if (typeof window !== "undefined") {
     try {
-      const cacheKeys = [
-        `cache_discovered_mapels_${userId}_reguler`,
-        `cache_discovered_mapels_${userId}_daring`,
-        `cache_mapel_siswa_${userId}_reguler`,
-        `cache_mapel_siswa_${userId}_daring`,
-      ];
-
-      const mergedMapels = new Map();
-      for (const k of cacheKeys) {
-        const raw = localStorage.getItem(k);
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            const list = Array.isArray(parsed) ? parsed : parsed?.data;
-            if (Array.isArray(list)) {
-              list.forEach((m) => {
-                if (m && m.idMapel && m.namaGuru && m.namaGuru !== "Guru Mapel") {
-                  mergedMapels.set(String(m.idMapel), m);
-                }
-              });
-            }
-          } catch (_) {}
+      const cached = localStorage.getItem(ENROLLED_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.every((m) => m && m.namaGuru && m.namaGuru !== "Guru Mapel");
+          if (valid) return parsed;
         }
-      }
-
-      // Jika dari cache sudah ada minimal 2 mapel atau mapel valid, kembalikan instan
-      if (mergedMapels.size >= 2) {
-        return Array.from(mergedMapels.values());
       }
     } catch (e) {}
   }
@@ -162,22 +143,24 @@ export async function autoDiscoverMapelForStudent(user) {
         const namaGuruFinal = m.namaGuru || guruMap[gId] || "Guru Mapel";
 
         const resGrid = await getPresensiMapelGrid(m.idGuru, m.idMapel);
-        if (!resGrid?.success || !resGrid.data) {
-          if (matchesClass) {
-            return {
-              ...m,
-              namaGuru: namaGuruFinal,
-            };
-          }
-          return null;
-        }
-
-        const daftarSiswa = resGrid.data.siswa || [];
+        const daftarSiswa = resGrid?.data?.siswa || [];
         const isEnrolled = daftarSiswa.some(
           (s) => String(s.idSiswa).trim() === userId,
         );
 
-        if (isEnrolled || matchesClass) {
+        // Aturan ketat:
+        // 1. Jika guru sudah menginput daftar siswa di grid, siswa WAJIB terdaftar (isEnrolled)
+        // 2. Jika grid belum memiliki daftar siswa sama sekali, hanya cocokkan jika kelas sama persis
+        let siswaTerdaftar = false;
+        if (daftarSiswa.length > 0) {
+          siswaTerdaftar = isEnrolled;
+        } else if (!resGrid?.success || !resGrid?.data) {
+          siswaTerdaftar = kSiswaNorm && kmNorm && (kmNorm === kSiswaNorm);
+        } else {
+          siswaTerdaftar = false;
+        }
+
+        if (siswaTerdaftar) {
           return {
             ...m,
             namaGuru: namaGuruFinal,
@@ -190,16 +173,28 @@ export async function autoDiscoverMapelForStudent(user) {
 
   const enrolledMapels = enrolledResults.filter(Boolean);
 
-  // 7. Simpan ke SEMUA cache localStorage agar tombol Kehadiran Mapel & Daring langsung sinkron
-  if (typeof window !== "undefined" && enrolledMapels.length > 0) {
+  // 7. Simpan ke cache terpisah: Daring hanya untuk online, Reguler hanya untuk biasa
+  if (typeof window !== "undefined") {
     try {
+      localStorage.setItem(ENROLLED_CACHE_KEY, JSON.stringify(enrolledMapels));
+
+      const isOnlineCheck = (m) => {
+        const ket = String(m?.keterangan || "").toUpperCase();
+        const jns = String(m?.jenisMapel || "").toUpperCase();
+        const nama = String(m?.namaMapel || "").toUpperCase();
+        return ket.includes("ONLINE") || jns.includes("ONLINE") || nama.includes("ONLINE");
+      };
+
+      const mapelOnline = enrolledMapels.filter(isOnlineCheck);
+      const mapelReguler = enrolledMapels.filter((m) => !isOnlineCheck(m));
+
       localStorage.setItem(
         `cache_discovered_mapels_${userId}_reguler`,
-        JSON.stringify(enrolledMapels),
+        JSON.stringify(mapelReguler),
       );
       localStorage.setItem(
         `cache_discovered_mapels_${userId}_daring`,
-        JSON.stringify(enrolledMapels),
+        JSON.stringify(mapelOnline),
       );
     } catch (e) {}
   }

@@ -281,33 +281,21 @@ export default function ModalKehadiranMapel({
   // Pindai daftar mata pelajaran siswa dari server (Super Fast)
   const discoverMapelSiswa = useCallback(
     async (isSilent = false) => {
-      // 1. Cek cache daftar mapel yang pernah ditemukan (gabungkan reguler & daring untuk kelengkapan)
+      // 1. Cek cache daftar mapel khusus sesuai jenis modal (reguler vs daring)
       try {
-        const cacheKeys = [
-          `cache_discovered_mapels_${user?.id}_reguler`,
-          `cache_discovered_mapels_${user?.id}_daring`,
-          DISCOVER_CACHE_KEY,
-        ];
-        const mapelMap = new Map();
-        for (const k of cacheKeys) {
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            try {
-              const parsed = JSON.parse(raw);
-              const list = Array.isArray(parsed) ? parsed : parsed?.data;
-              if (Array.isArray(list)) {
-                list.forEach((m) => {
-                  if (m && m.idMapel && m.namaGuru && m.namaGuru !== "Guru Mapel") {
-                    mapelMap.set(String(m.idMapel), m);
-                  }
-                });
-              }
-            } catch (_) {}
+        const raw = localStorage.getItem(DISCOVER_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const list = Array.isArray(parsed) ? parsed : parsed?.data;
+          if (Array.isArray(list) && list.length > 0) {
+            const filtered = list.filter((m) =>
+              fokusDaring ? checkIsOnlineMapel(m) : !checkIsOnlineMapel(m)
+            );
+            const valid = filtered.every((m) => m && m.namaGuru && m.namaGuru !== "Guru Mapel");
+            if (valid && filtered.length > 0) {
+              return filtered;
+            }
           }
-        }
-
-        if (mapelMap.size >= 2) {
-          return Array.from(mapelMap.values());
         }
       } catch (e) {}
 
@@ -453,50 +441,49 @@ export default function ModalKehadiranMapel({
 
             const gId = String(m.idGuru || "").trim();
             const namaGuruFinal = m.namaGuru || guruMap[gId] || "Guru Mapel";
-            const isOnline = checkIsOnlineMapel(m) || fokusDaring;
+            const isOnline = checkIsOnlineMapel(m);
 
-            if (!resGrid?.success || !resGrid.data) {
-              // Jika grid belum diisi guru tapi kelas rombel cocok, tetap masukkan
-              if (matchesExactClass) {
-                return {
-                  ...m,
-                  namaGuru: namaGuruFinal,
-                  isOnline,
-                  totalPertemuan: 0,
-                  hadir: 0,
-                  sakit: 0,
-                  izin: 0,
-                  alfa: 0,
-                  cabut: 0,
-                  persentaseHadir: 0,
-                  rataRataNilai: null,
-                  pertemuanList: [],
-                };
-              }
-              return null;
-            }
+            // Saring ketat jenis mapel sesuai modal:
+            // Tombol "Ruang Pembelajaran Online" (fokusDaring = true) HANYA untuk mapel online!
+            // Tombol "Kehadiran Mapel" (fokusDaring = false) HANYA untuk mapel reguler biasa!
+            if (fokusDaring && !isOnline) return null;
+            if (!fokusDaring && isOnline) return null;
 
-            const daftarSiswa = resGrid.data.siswa || [];
+            const daftarSiswa = resGrid?.data?.siswa || [];
             const isEnrolled = daftarSiswa.some(
               (s) => String(s.idSiswa).trim() === String(user.id).trim()
             );
 
-            if (isEnrolled || matchesExactClass) {
-              return {
-                ...m,
-                namaGuru: namaGuruFinal,
-                isOnline,
-                totalPertemuan: 0,
-                hadir: 0,
-                sakit: 0,
-                izin: 0,
-                alfa: 0,
-                cabut: 0,
-                persentaseHadir: 0,
-                rataRataNilai: null,
-                pertemuanList: [],
-              };
+            // Aturan pendaftaran:
+            // 1. Jika guru sudah menginput daftar siswa, siswa WAJIB terdaftar (isEnrolled)
+            // 2. Jika grid belum ada daftar siswa sama sekali, hanya lolos jika kelasnya cocok persis
+            let siswaValid = false;
+            if (daftarSiswa.length > 0) {
+              siswaValid = isEnrolled;
+            } else if (!resGrid?.success || !resGrid?.data) {
+              siswaValid = kSiswaNorm && kmNorm && (kmNorm === kSiswaNorm);
+            } else {
+              siswaValid = false;
             }
+
+            if (!siswaValid) {
+              return null;
+            }
+
+            return {
+              ...m,
+              namaGuru: namaGuruFinal,
+              isOnline,
+              totalPertemuan: 0,
+              hadir: 0,
+              sakit: 0,
+              izin: 0,
+              alfa: 0,
+              cabut: 0,
+              persentaseHadir: 0,
+              rataRataNilai: null,
+              pertemuanList: [],
+            };
           } catch (e) {}
           return null;
         })
@@ -504,19 +491,11 @@ export default function ModalKehadiranMapel({
 
       const enrolledMapels = enrolledResults.filter(Boolean);
 
-      // Simpan ke SEMUA discover cache agar tombol Kehadiran Mapel & Ruang Online sinkron 100%
+      // Simpan ke discover cache khusus untuk modal ini (reguler atau daring terpisah)
       try {
         if (enrolledMapels.length > 0) {
           localStorage.setItem(
             DISCOVER_CACHE_KEY,
-            JSON.stringify(enrolledMapels)
-          );
-          localStorage.setItem(
-            `cache_discovered_mapels_${user?.id}_reguler`,
-            JSON.stringify(enrolledMapels)
-          );
-          localStorage.setItem(
-            `cache_discovered_mapels_${user?.id}_daring`,
             JSON.stringify(enrolledMapels)
           );
         }
@@ -627,61 +606,41 @@ export default function ModalKehadiranMapel({
     let hasCache = false;
     let cacheMissingGuru = false;
     try {
-      // Coba baca dari cache yang sedang aktif maupun cache pasangannya (reguler/daring)
-      const cCurrent = localStorage.getItem(CACHE_KEY);
-      const cAlt = localStorage.getItem(
-        `cache_mapel_siswa_${user?.id}_${fokusDaring ? "reguler" : "daring"}`
-      );
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const list = Array.isArray(parsed?.data) ? parsed.data : [];
+        const filteredList = list.filter((m) =>
+          fokusDaring ? checkIsOnlineMapel(m) : !checkIsOnlineMapel(m)
+        );
 
-      let pCurrent = null;
-      let pAlt = null;
-      try { if (cCurrent) pCurrent = JSON.parse(cCurrent); } catch (e) {}
-      try { if (cAlt) pAlt = JSON.parse(cAlt); } catch (e) {}
+        if (filteredList.length > 0) {
+          hasCache = true;
+          let guruMapCached = {};
+          try {
+            const rawG = localStorage.getItem("cache_daftar_guru_map");
+            if (rawG) guruMapCached = JSON.parse(rawG);
+          } catch (e) {}
 
-      // Gabungkan mapel dari kedua cache agar jika salah satu punya mapel lain (misal daring punya 2 mapel), semuanya ikut tampil
-      const mergedMapelMap = new Map();
-      let combinedTugas = {};
-      let combinedUpload = {};
-      let bestSyncTime = null;
-
-      [pAlt, pCurrent].forEach((p) => {
-        if (p && Array.isArray(p.data)) {
-          p.data.forEach((m) => {
-            if (m && m.idMapel) mergedMapelMap.set(String(m.idMapel), m);
+          const dataWithGuru = filteredList.map((m) => {
+            const gId = String(m.idGuru || "").trim();
+            const gNama = m.namaGuru || guruMapCached[gId] || "";
+            if (!gNama || gNama === "Guru Mapel") cacheMissingGuru = true;
+            return {
+              ...m,
+              namaGuru: gNama || "Guru Mapel",
+            };
           });
-          if (p.tugasPerMapel) combinedTugas = { ...combinedTugas, ...p.tugasPerMapel };
-          if (p.uploadState) combinedUpload = { ...combinedUpload, ...p.uploadState };
-          if (p.syncTime) bestSyncTime = p.syncTime;
+
+          setMapelList(dataWithGuru);
+          if (parsed.tugasPerMapel) setTugasPerMapel(parsed.tugasPerMapel);
+          if (parsed.uploadState) setUploadState(parsed.uploadState);
+          setLastSync(parsed.syncTime || null);
+          setSelectedMapelId((prev) => {
+            if (prev && dataWithGuru.some((m) => m.idMapel === prev)) return prev;
+            return dataWithGuru[0]?.idMapel || null;
+          });
         }
-      });
-
-      const mergedList = Array.from(mergedMapelMap.values());
-      if (mergedList.length > 0) {
-        hasCache = true;
-        let guruMapCached = {};
-        try {
-          const rawG = localStorage.getItem("cache_daftar_guru_map");
-          if (rawG) guruMapCached = JSON.parse(rawG);
-        } catch (e) {}
-
-        const dataWithGuru = mergedList.map((m) => {
-          const gId = String(m.idGuru || "").trim();
-          const gNama = m.namaGuru || guruMapCached[gId] || "";
-          if (!gNama || gNama === "Guru Mapel") cacheMissingGuru = true;
-          return {
-            ...m,
-            namaGuru: gNama || "Guru Mapel",
-          };
-        });
-
-        setMapelList(dataWithGuru);
-        if (Object.keys(combinedTugas).length > 0) setTugasPerMapel(combinedTugas);
-        if (Object.keys(combinedUpload).length > 0) setUploadState(combinedUpload);
-        setLastSync(bestSyncTime || null);
-        setSelectedMapelId((prev) => {
-          if (prev && dataWithGuru.some((m) => m.idMapel === prev)) return prev;
-          return dataWithGuru[0]?.idMapel || null;
-        });
       }
     } catch (e) {
       console.error("Error membaca cache:", e);
@@ -947,13 +906,16 @@ export default function ModalKehadiranMapel({
             </div>
           ) : mapelList.length === 0 ? (
             <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-8 sm:p-12 text-center shadow-sm">
-              <div className="text-5xl mb-3">📖</div>
+              <div className="text-5xl mb-3">{fokusDaring ? "💻" : "📖"}</div>
               <h4 className="text-base font-black text-slate-800 mb-1">
-                Belum Terdaftar di Mata Pelajaran
+                {fokusDaring
+                  ? "Belum Ada Pembelajaran Online"
+                  : "Belum Terdaftar di Mata Pelajaran Reguler"}
               </h4>
               <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto leading-relaxed mb-4">
-                Guru Mapel belum menambahkan kamu ke dalam daftar rombel mata
-                pelajaran mereka, atau belum ada jadwal presensi yang dibuka.
+                {fokusDaring
+                  ? "Kamu saat ini belum memiliki mata pelajaran online/daring yang aktif dari guru mapel."
+                  : "Guru Mapel belum menambahkan kamu ke dalam daftar rombel mata pelajaran reguler mereka, atau belum ada jadwal presensi yang dibuka."}
               </p>
               <button
                 onClick={() => refreshData({ fullScan: true, silent: false })}
