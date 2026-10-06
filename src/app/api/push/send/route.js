@@ -84,13 +84,16 @@ export async function POST(request) {
     );
 
     if (targets.length === 0) {
-      const daftarDiServer = (allSubs || [])
-        .map((s) => `${s.role}:${s.user_id}`)
-        .join(", ");
+      const totalDiServer = (allSubs || []).length;
+      // Log detail hanya di server (tidak dikirim ke browser)
+      console.log(
+        `[Push Send] Tidak cocok. Total perangkat terdaftar: ${totalDiServer}. ` +
+        (allSubs || []).map((s) => `${s.role}:${s.user_id}`).join(", ")
+      );
       return NextResponse.json({
         ok: false,
         sent: 0,
-        message: `Tidak ada subscriber yang cocok untuk ID "${cleanTargetId}" atau Role "${cleanTargetRole}". Di server ada ${(allSubs || []).length} perangkat terdaftar: [${daftarDiServer || "Kosong"}]. Silakan tekan tombol Tes Notif di HP agar HP Anda terdaftar.`,
+        message: `HP belum terdaftar untuk menerima notifikasi. Ada ${totalDiServer} perangkat aktif di server. Silakan tekan tombol 🔔 di modal pesan untuk mendaftarkan HP ini.`,
       });
     }
 

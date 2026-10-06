@@ -955,7 +955,7 @@ export default function PesanSekolahModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Tombol Tes Notif — daftarkan ulang push subscription + diagnostik */}
+            {/* Tombol Tes Notif — pola langsung sama dengan PesanKepsekGuru yang sudah terbukti */}
             <button
               type="button"
               title="Aktifkan / Tes Notifikasi HP"
@@ -967,59 +967,97 @@ export default function PesanSekolahModal({
                 const isSecure =
                   window.isSecureContext || window.location.hostname === "localhost";
                 if (!isSecure) {
-                  alert(
-                    "⚠️ Web Push membutuhkan HTTPS.\n\nBuka portal via domain Vercel (HTTPS), bukan via IP LAN."
-                  );
+                  alert("⚠️ Web Push membutuhkan HTTPS.\n\nBuka portal via domain Vercel, bukan via IP LAN.");
+                  return;
+                }
+                if (Notification.permission === "denied") {
+                  alert("⛔ Izin notifikasi DIBLOKIR.\n\nSilakan buka:\nPengaturan HP → Aplikasi → Chrome → Notifikasi → Izinkan.");
+                  return;
                 }
                 try {
-                  let perm = Notification.permission;
-                  if (perm === "denied") {
-                    alert(
-                      "⛔ Izin notifikasi DIBLOKIR.\n\nSilakan buka:\nPengaturan HP → Aplikasi → Chrome → Notifikasi → Izinkan."
-                    );
-                    return;
-                  }
-                  if (perm === "default") {
-                    perm = await Notification.requestPermission();
-                  }
+                  const perm = await Notification.requestPermission();
                   if (perm !== "granted") {
                     alert("Izin notifikasi belum diberikan (" + perm + ").");
                     return;
                   }
                   const reg = await navigator.serviceWorker.ready;
 
-                  // Force fresh: unsubscribe dulu agar token diperbaharui
-                  const oldSub = await reg.pushManager.getSubscription();
-                  if (oldSub) await oldSub.unsubscribe();
+                  // Ambil VAPID key (sama persis dengan PesanKepsekGuru yang bekerja)
+                  const vapidKey =
+                    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+                    "BD68J66JpkZS7Xe6-03zP6rlSRQ6f0WN00t4ycbyLIDNVmI9DfpqM-paeYaNoj14ujRNcgQojx2fTtZ-PzpWBTE";
 
-                  // Subscribe ulang dengan token baru
-                  await subscribeToPush(reg, { userId: myId, role: myRole });
+                  // Helper konversi base64url
+                  function urlBase64ToUint8Array(base64String) {
+                    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+                    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+                    const rawData = window.atob(base64);
+                    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+                  }
 
-                  // Tampilkan notifikasi lokal
-                  await reg.showNotification("🔔 Token Notifikasi Diperbarui!", {
-                    body: "HP ini terdaftar ulang. Notifikasi pesan sekolah siap masuk.",
+                  let subscription = null;
+                  let tokenStatus = "Belum terdaftar";
+
+                  if ("PushManager" in window) {
+                    try {
+                      // Ambil existing atau buat baru (TIDAK unsubscribe dulu)
+                      subscription = await reg.pushManager.getSubscription();
+                      if (!subscription) {
+                        subscription = await reg.pushManager.subscribe({
+                          userVisibleOnly: true,
+                          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+                        });
+                      }
+
+                      if (subscription) {
+                        // POST langsung ke server (pola yang sama dengan PesanKepsekGuru)
+                        const subRes = await fetch("/api/push/subscribe", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            subscription,
+                            userId: String(myId).trim(),
+                            role: String(myRole).trim(),
+                          }),
+                        });
+                        const subData = await subRes.json();
+                        if (subRes.ok && subData.ok) {
+                          tokenStatus = `✅ Berhasil terdaftar di server`;
+                        } else {
+                          tokenStatus = `⚠️ Gagal simpan: ${subData.error || subRes.statusText}`;
+                        }
+                      }
+                    } catch (subErr) {
+                      tokenStatus = `⚠️ Gagal: ${subErr.message}`;
+                      console.warn("[Push] Gagal subscribe:", subErr);
+                    }
+                  }
+
+                  // Notifikasi lokal konfirmasi
+                  await reg.showNotification("🔔 Notifikasi Portal Sekolah", {
+                    body: "HP ini terdaftar. Pesan dari guru/sekolah akan muncul di sini.",
                     icon: "/logo.png",
                     badge: "/logo.png",
                     vibrate: [200, 100, 200],
                   });
 
-                  // Test push dari server & tampilkan diagnostik
+                  // Tes push dari server
                   const testRes = await fetch("/api/push/send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       title: "🔔 Push Server Aktif!",
                       body: "Notifikasi dari server berhasil sampai ke HP ini.",
-                      targetUserId: myId,
-                      targetRole: myRole,
+                      targetUserId: String(myId).trim(),
+                      targetRole: String(myRole).trim(),
                     }),
                   });
                   const testData = await testRes.json();
                   alert(
                     `🔔 HASIL TES NOTIFIKASI:\n\n` +
                     `1. Izin HP: DISETUJUI\n` +
-                    `2. Token HP: Terdaftar sebagai ${myRole} (${myId})\n` +
-                    `3. Push Server: ${testData.ok ? "✅ Sukses (" + testData.sent + " device)" : "⚠️ " + (testData.message || testData.error || "Gagal")}`
+                    `2. Token HP: ${tokenStatus}\n` +
+                    `3. Push Server: ${testData.ok ? "✅ Sukses (" + testData.sent + " perangkat)" : "⚠️ " + (testData.message || testData.error || "Gagal")}`
                   );
                 } catch (err) {
                   alert("Gagal mengaktifkan notifikasi: " + err.message);
