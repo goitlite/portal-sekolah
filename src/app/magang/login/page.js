@@ -212,6 +212,67 @@ export default function LoginMagang() {
     }
   }, []);
 
+  // Auto-subscribe push notification saat halaman login dibuka
+  // Jika sudah ada session (auto-redirect sedang berjalan), juga pastikan push aktif
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
+
+    const setupPush = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+
+        // Jika izin sudah diberikan → langsung daftarkan ulang ke server
+        if (Notification.permission === "granted") {
+          const vapidKey =
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+            "BD68J66JpkZS7Xe6-03zP6rlSRQ6f0WN00t4ycbyLIDNVmI9DfpqM-paeYaNoj14ujRNcgQojx2fTtZ-PzpWBTE";
+
+          function urlBase64ToUint8Array(base64String) {
+            const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+            const rawData = window.atob(base64);
+            return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+          }
+
+          let subscription = await reg.pushManager.getSubscription();
+          if (!subscription) {
+            subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(vapidKey),
+            });
+          }
+
+          // Jika ada session aktif, daftarkan dengan userId yang sudah login
+          if (subscription && isLoggedIn()) {
+            const sess = getSession();
+            const userId = String(sess?.id || "").trim();
+            const role = String(sess?.role || "").trim();
+            if (userId && role) {
+              fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subscription, userId, role }),
+              }).catch(() => {});
+            }
+          }
+        } else if (Notification.permission === "default") {
+          // Minta izin secara halus setelah 2 detik (agar user sudah melihat halaman)
+          await new Promise((r) => setTimeout(r, 2000));
+          const perm = await Notification.requestPermission();
+          if (perm === "granted") {
+            // Langsung setup push setelah izin diberikan
+            setupPush();
+          }
+        }
+        // Jika "denied" → tidak lakukan apa-apa
+      } catch (err) {
+        console.warn("[Push Login] Gagal setup push:", err);
+      }
+    };
+
+    setupPush();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleLogin(e) {
     e.preventDefault();
 
@@ -279,11 +340,42 @@ export default function LoginMagang() {
       // Simpan hanya data user
       saveSession(result.data);
 
-      // Aktifkan Web Push Notification langsung setelah login
-      initPushAfterLogin({
-        userId: String(result.data.id || ""),
-        role: String(result.data.role || ""),
-      });
+      // Aktifkan Web Push Notification langsung setelah login (pola langsung)
+      const userId = String(result.data.id || "").trim();
+      const role = String(result.data.role || "").trim();
+      if (userId && role && "serviceWorker" in navigator && "Notification" in window) {
+        navigator.serviceWorker.ready.then(async (reg) => {
+          try {
+            if (Notification.permission !== "granted") return;
+            const vapidKey =
+              process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+              "BD68J66JpkZS7Xe6-03zP6rlSRQ6f0WN00t4ycbyLIDNVmI9DfpqM-paeYaNoj14ujRNcgQojx2fTtZ-PzpWBTE";
+
+            function urlBase64ToUint8Array(b) {
+              const pad = "=".repeat((4 - (b.length % 4)) % 4);
+              const base64 = (b + pad).replace(/-/g, "+").replace(/_/g, "/");
+              return Uint8Array.from([...window.atob(base64)].map((c) => c.charCodeAt(0)));
+            }
+
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+              sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidKey),
+              });
+            }
+            if (sub) {
+              fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subscription: sub, userId, role }),
+              }).catch(() => {});
+            }
+          } catch (e) {
+            console.warn("[Push] Gagal subscribe setelah login:", e);
+          }
+        }).catch(() => {});
+      }
 
       // Redirect sesuai role
       switch (result.data.role) {
