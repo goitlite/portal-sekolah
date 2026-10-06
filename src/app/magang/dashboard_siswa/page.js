@@ -33,6 +33,7 @@ import {
   parseKeteranganWali,
   cachePetugasLocal,
 } from "../lib/petugasPresensiHelper";
+import { initPushAfterLogin } from "@/components/pwa/RegisterSW";
 
 // --- HELPER FORMAT WAKTU & TANGGAL ---
 function formatWaktu(timestamp) {
@@ -349,6 +350,13 @@ export default function DashboardSiswa() {
 
       // Cek apakah siswa merupakan petugas presensi kelas & ambil statistik kelas
       loadDataKelasSiswa(session);
+
+      // Auto subscribe Web Push agar notifikasi dari guru bisa masuk ke HP siswa
+      // Dipanggil setiap kali dashboard dibuka agar subscription tetap aktif di Supabase
+      initPushAfterLogin({
+        userId: String(session.id || "").trim(),
+        role: "siswa",
+      }).catch(() => {});
     }
 
     // Cek preference lokal tanggal presensi hari ini

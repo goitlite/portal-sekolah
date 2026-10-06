@@ -955,7 +955,7 @@ export default function PesanSekolahModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Tombol Tes Notif — daftarkan ulang push subscription */}
+            {/* Tombol Tes Notif — daftarkan ulang push subscription + diagnostik */}
             <button
               type="button"
               title="Aktifkan / Tes Notifikasi HP"
@@ -964,10 +964,19 @@ export default function PesanSekolahModal({
                   alert("Browser Anda tidak mendukung notifikasi push.");
                   return;
                 }
+                const isSecure =
+                  window.isSecureContext || window.location.hostname === "localhost";
+                if (!isSecure) {
+                  alert(
+                    "⚠️ Web Push membutuhkan HTTPS.\n\nBuka portal via domain Vercel (HTTPS), bukan via IP LAN."
+                  );
+                }
                 try {
                   let perm = Notification.permission;
                   if (perm === "denied") {
-                    alert("⛔ Izin notifikasi DIBLOKIR.\n\nSilakan buka:\nPengaturan HP → Aplikasi → Chrome/Browser → Notifikasi → Izinkan.");
+                    alert(
+                      "⛔ Izin notifikasi DIBLOKIR.\n\nSilakan buka:\nPengaturan HP → Aplikasi → Chrome → Notifikasi → Izinkan."
+                    );
                     return;
                   }
                   if (perm === "default") {
@@ -978,12 +987,40 @@ export default function PesanSekolahModal({
                     return;
                   }
                   const reg = await navigator.serviceWorker.ready;
+
+                  // Force fresh: unsubscribe dulu agar token diperbaharui
+                  const oldSub = await reg.pushManager.getSubscription();
+                  if (oldSub) await oldSub.unsubscribe();
+
+                  // Subscribe ulang dengan token baru
                   await subscribeToPush(reg, { userId: myId, role: myRole });
-                  await reg.showNotification("🔔 Notifikasi Aktif!", {
-                    body: "Notifikasi pesan sekolah sudah terdaftar dan aktif di HP ini.",
+
+                  // Tampilkan notifikasi lokal
+                  await reg.showNotification("🔔 Token Notifikasi Diperbarui!", {
+                    body: "HP ini terdaftar ulang. Notifikasi pesan sekolah siap masuk.",
                     icon: "/logo.png",
                     badge: "/logo.png",
+                    vibrate: [200, 100, 200],
                   });
+
+                  // Test push dari server & tampilkan diagnostik
+                  const testRes = await fetch("/api/push/send", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      title: "🔔 Push Server Aktif!",
+                      body: "Notifikasi dari server berhasil sampai ke HP ini.",
+                      targetUserId: myId,
+                      targetRole: myRole,
+                    }),
+                  });
+                  const testData = await testRes.json();
+                  alert(
+                    `🔔 HASIL TES NOTIFIKASI:\n\n` +
+                    `1. Izin HP: DISETUJUI\n` +
+                    `2. Token HP: Terdaftar sebagai ${myRole} (${myId})\n` +
+                    `3. Push Server: ${testData.ok ? "✅ Sukses (" + testData.sent + " device)" : "⚠️ " + (testData.message || testData.error || "Gagal")}`
+                  );
                 } catch (err) {
                   alert("Gagal mengaktifkan notifikasi: " + err.message);
                 }
