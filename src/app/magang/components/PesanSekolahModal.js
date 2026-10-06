@@ -19,6 +19,8 @@ import {
   getInboxSekolah,
   tandaiPesanDibaca,
   getJumlahPesanUnread,
+  hapusSatuPesan,
+  hapusPercakapan,
 } from "../lib/pesanApi";
 import {
   getGuru,
@@ -468,6 +470,66 @@ export default function PesanSekolahModal({
     scrollToBottom(false);
   }, [messages]);
 
+  // Hapus seluruh obrolan per nama (thread percakapan)
+  const handleHapusPercakapan = async (partnerId, partnerNama) => {
+    if (!myId || !partnerId) return;
+    const konfirmasi = window.confirm(
+      `Hapus seluruh riwayat obrolan dengan ${partnerNama || "kontak ini"}?\n\nPesan yang dihapus akan dibersihkan secara permanen.`
+    );
+    if (!konfirmasi) return;
+
+    try {
+      // Optimistic update daftar inbox
+      setInboxList((prev) =>
+        prev.filter((item) => String(item.lawanId).trim() !== String(partnerId).trim())
+      );
+
+      // Jika chat ini yang sedang aktif dibuka, bersihkan pesan di layar
+      if (activePartner && String(activePartner.id).trim() === String(partnerId).trim()) {
+        setMessages([]);
+        try {
+          localStorage.removeItem(STORAGE_CHAT_KEY + partnerId);
+        } catch {}
+      }
+
+      const res = await hapusPercakapan(myId, partnerId);
+      if (!res?.ok) {
+        alert(res?.error || "Gagal menghapus obrolan.");
+        muatInbox();
+      } else {
+        muatInbox();
+      }
+    } catch (err) {
+      console.error("[Pesan] Gagal hapus percakapan:", err);
+      alert("Terjadi kendala saat menghapus percakapan.");
+      muatInbox();
+    }
+  };
+
+  // Hapus satu pesan dalam isi obrolan
+  const handleHapusSatuPesan = async (messageId) => {
+    if (!messageId) return;
+    const konfirmasi = window.confirm("Hapus pesan ini?");
+    if (!konfirmasi) return;
+
+    try {
+      // Optimistic update pesan di layar
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+      const res = await hapusSatuPesan(messageId);
+      if (!res?.ok) {
+        alert(res?.error || "Gagal menghapus pesan.");
+        muatPercakapan(false);
+      } else {
+        muatInbox();
+      }
+    } catch (err) {
+      console.error("[Pesan] Gagal hapus pesan:", err);
+      alert("Terjadi kendala saat menghapus pesan.");
+      muatPercakapan(false);
+    }
+  };
+
   // Kirim Pesan
   const handleKirim = async (e) => {
     e?.preventDefault();
@@ -812,64 +874,84 @@ export default function PesanSekolahModal({
                     : `kontak_${item.id}_${item.subLabel || ""}_${idx}`;
 
                   return (
-                    <button
+                    <div
                       key={itemUniqueKey}
-                      type="button"
-                      onClick={() => {
-                        setIsBroadcastMode(false);
-                        setActivePartner({
-                          id: targetId,
-                          nama: targetNama,
-                          role: targetRole,
-                          subLabel: item.subLabel || "",
-                        });
-                      }}
-                      className={`w-full text-left p-3 flex items-center gap-3 transition-colors ${
+                      className={`group w-full p-2.5 sm:p-3 flex items-center justify-between gap-2 transition-colors ${
                         isSelected
                           ? "bg-blue-50/90 border-l-4 border-blue-600"
                           : "hover:bg-white bg-transparent"
                       }`}
                     >
-                      {/* Avatar */}
-                      <div
-                        className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${
-                          targetRole === "kepsek"
-                            ? "from-amber-500 to-yellow-600"
-                            : targetRole === "siswa"
-                            ? "from-emerald-500 to-teal-600"
-                            : "from-blue-600 to-indigo-600"
-                        } text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs`}
+                      {/* Area Klik untuk Buka Obrolan */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBroadcastMode(false);
+                          setActivePartner({
+                            id: targetId,
+                            nama: targetNama,
+                            role: targetRole,
+                            subLabel: item.subLabel || "",
+                          });
+                        }}
+                        className="flex-1 min-w-0 flex items-center gap-3 text-left"
                       >
-                        {targetNama?.charAt(0)?.toUpperCase() || "U"}
-                      </div>
-
-                      {/* Info Kontak */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <p className="text-xs font-bold text-slate-900 truncate">
-                            {targetNama}
-                          </p>
-                          {isInboxItem && item.waktuTerakhir && (
-                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                              {formatTanggalSingkat(item.waktuTerakhir)}
-                            </span>
-                          )}
+                        {/* Avatar */}
+                        <div
+                          className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${
+                            targetRole === "kepsek"
+                              ? "from-amber-500 to-yellow-600"
+                              : targetRole === "siswa"
+                              ? "from-emerald-500 to-teal-600"
+                              : "from-blue-600 to-indigo-600"
+                          } text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs`}
+                        >
+                          {targetNama?.charAt(0)?.toUpperCase() || "U"}
                         </div>
 
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {isInboxItem
-                              ? (item.pengirimTerakhir === "saya" ? "Anda: " : "") + item.pesanTerakhir
-                              : item.subLabel || targetRole?.toUpperCase()}
-                          </p>
-                          {isInboxItem && item.unreadCount > 0 && (
-                            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                              {item.unreadCount}
-                            </span>
-                          )}
+                        {/* Info Kontak */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {targetNama}
+                            </p>
+                            {isInboxItem && item.waktuTerakhir && (
+                              <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                                {formatTanggalSingkat(item.waktuTerakhir)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-[11px] text-slate-500 truncate">
+                              {isInboxItem
+                                ? (item.pengirimTerakhir === "saya" ? "Anda: " : "") + item.pesanTerakhir
+                                : item.subLabel || targetRole?.toUpperCase()}
+                            </p>
+                            {isInboxItem && item.unreadCount > 0 && (
+                              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {item.unreadCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      {/* Tombol Hapus Obrolan per Nama (khusus tab inbox / obrolan yang ada riwayat) */}
+                      {isInboxItem && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleHapusPercakapan(targetId, targetNama);
+                          }}
+                          className="p-1.5 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs transition-opacity shrink-0"
+                          title={`Hapus seluruh obrolan dengan ${targetNama}`}
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   );
                 })
               )}
@@ -1107,13 +1189,24 @@ export default function PesanSekolahModal({
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => muatPercakapan(false)}
-                    className="p-1.5 text-xs text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100"
-                    title="Segarkan Pesan"
-                  >
-                    🔄
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleHapusPercakapan(activePartner.id, activePartner.nama)}
+                      className="p-1.5 text-xs text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                      title="Hapus Seluruh Obrolan"
+                    >
+                      🗑️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => muatPercakapan(false)}
+                      className="p-1.5 text-xs text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100"
+                      title="Segarkan Pesan"
+                    >
+                      🔄
+                    </button>
+                  </div>
                 </div>
 
                 {/* Chat Messages Stream */}
@@ -1140,7 +1233,7 @@ export default function PesanSekolahModal({
                       return (
                         <div
                           key={m.id || idx}
-                          className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                          className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
                         >
                           <div
                             className={`max-w-[82%] sm:max-w-[70%] rounded-2xl px-3.5 py-2.5 shadow-xs relative text-xs sm:text-[13px] leading-relaxed break-words ${
@@ -1156,7 +1249,7 @@ export default function PesanSekolahModal({
                             )}
                             <p className="whitespace-pre-wrap">{m.pesan}</p>
                             <div
-                              className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
+                              className={`flex items-center justify-end gap-1.5 mt-1 text-[9px] ${
                                 isMe ? "text-blue-100" : "text-slate-400"
                               }`}
                             >
@@ -1168,6 +1261,23 @@ export default function PesanSekolahModal({
                                 >
                                   {m.dibaca ? "✓✓" : "✓"}
                                 </span>
+                              )}
+                              {m.id && !m.isTemp && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleHapusSatuPesan(m.id);
+                                  }}
+                                  className={`ml-1 text-[11px] opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:scale-110 cursor-pointer ${
+                                    isMe
+                                      ? "text-white/70 hover:text-white"
+                                      : "text-slate-400 hover:text-rose-600"
+                                  }`}
+                                  title="Hapus pesan ini"
+                                >
+                                  🗑️
+                                </button>
                               )}
                             </div>
                           </div>

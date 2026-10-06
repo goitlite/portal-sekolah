@@ -109,3 +109,36 @@ export async function kirimBroadcastSekolah({
   }
 }
 
+/**
+ * Hapus satu pesan spesifik
+ */
+export async function hapusSatuPesan(messageId) {
+  try {
+    const res = await fetch("/api/pesan/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "single", messageId }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("[pesanApi] hapusSatuPesan error:", err);
+    return { ok: false, error: err?.message || "Gagal menghapus pesan." };
+  }
+}
+
+/**
+ * Hapus seluruh percakapan antara 2 user (obrolan per nama / thread)
+ */
+export async function hapusPercakapan(user1, user2) {
+  try {
+    const res = await fetch("/api/pesan/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "percakapan", user1, user2 }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("[pesanApi] hapusPercakapan error:", err);
+    return { ok: false, error: err?.message || "Gagal menghapus percakapan." };
+  }
+}
