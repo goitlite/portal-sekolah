@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, {
   useEffect,
@@ -25,6 +25,7 @@ import {
   PesanKepsekModal,
   useJumlahPesanBaru,
 } from "../kepsek/PesanKepsekGuru";
+import { autoPushSubscribe, runPesanCleanupBackground } from "../lib/pushHelper";
 
 // --- OPTIMASI FOTO GOOGLE DRIVE / USER CONTENT ---
 function optimizeFotoUrl(url, size = 300) {
@@ -257,6 +258,15 @@ export default function DashboardKepalaSekolah() {
     const timer = setTimeout(() => {
       setUser(session);
       setIsReady(true);
+
+      // Auto subscribe push notification (dipanggil setelah session OK)
+      autoPushSubscribe({
+        userId: String(session.id || "").trim(),
+        role: String(session.role || "kepsek").trim(),
+      }).catch(() => {});
+
+      // Auto cleanup pesan lama (background, max 1x per 6 jam)
+      runPesanCleanupBackground();
     }, 0);
     return () => clearTimeout(timer);
   }, [router]);

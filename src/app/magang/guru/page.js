@@ -54,7 +54,7 @@ import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
 import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
 import { PesanGuruModal, useJumlahPesanBaru } from "../kepsek/PesanKepsekGuru";
-import { initPushAfterLogin } from "@/components/pwa/RegisterSW";
+import { autoPushSubscribe, runPesanCleanupBackground } from "../lib/pushHelper";
 
 // Daftar kelas statis (sama dengan kelola/page.js) — tidak bergantung pada API
 const KELAS_OPTIONS = (
@@ -1022,11 +1022,12 @@ function DashboardGuruContent() {
         setLoadFailedMessage("");
         if (forceRefresh) setLoadProgress(8);
 
-        // Auto subscribe Web Push agar notifikasi dari siswa/kepsek bisa masuk
-        initPushAfterLogin({
+        // Auto subscribe push notification + cleanup pesan lama
+        autoPushSubscribe({
           userId: String(session.id || "").trim(),
           role: "guru",
         }).catch(() => {});
+        runPesanCleanupBackground();
       }
 
       // Cache dashboard per-GURU.
