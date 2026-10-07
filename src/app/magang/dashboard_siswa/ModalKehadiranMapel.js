@@ -928,37 +928,37 @@ export default function ModalKehadiranMapel({
             fokusDaring
               ? "bg-gradient-to-r from-teal-950 via-teal-900 to-cyan-950"
               : "bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950"
-          } px-4 py-3 sm:px-6 sm:py-5 text-white`}
+          } px-3.5 py-2.5 sm:px-6 sm:py-4 text-white`}
         >
           <div className="absolute top-0 right-0 -mr-8 -mt-8 h-32 w-32 rounded-full bg-amber-400 opacity-10 blur-xl pointer-events-none" />
-          <div className="flex items-center justify-between gap-3 relative z-10">
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/20 text-xl sm:text-2xl shadow-inner">
+          <div className="flex items-center justify-between gap-2.5 relative z-10">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 border border-white/20 text-lg sm:text-xl shadow-inner">
                 {fokusDaring ? "💻" : "📚"}
               </div>
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-[10px] font-black uppercase tracking-wider mb-0.5 sm:mb-1 border border-amber-400/30">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full bg-amber-400/20 text-amber-300 text-[8px] sm:text-[9px] font-black uppercase tracking-wider mb-0.5 border border-amber-400/30">
                   {fokusDaring
                     ? "E-Learning · Tugas Daring"
                     : "Akademik · Kehadiran Mapel"}
                 </div>
-                <h3 className="text-sm sm:text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-100">
+                <h3 className="text-xs sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-100 truncate">
                   {fokusDaring
                     ? "Tugas Daring & Pembelajaran Mandiri"
                     : "Presensi & Nilai Mata Pelajaran"}
                 </h3>
-                <p className="text-[10px] sm:text-xs text-blue-200 font-medium line-clamp-1 sm:line-clamp-none">
+                <p className="text-[9px] sm:text-xs text-blue-200 font-medium truncate">
                   {fokusDaring
-                    ? "Akses lembar kerja guru, unduh modul materi, dan kumpulkan berkas jawaban tugas daring"
-                    : "Pantau kehadiran dan nilai tiap pertemuan yang tercatat oleh Guru Mapel"}
+                    ? "Akses modul, tugas online, dan kumpulkan jawaban langsung ke guru"
+                    : "Pantau rekap presensi dan nilai tiap pertemuan pelajaran reguler"}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               {loading && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/25 border border-amber-400/40 text-amber-300 text-[11px] font-black shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/25 border border-amber-400/40 text-amber-300 text-[10px] font-black shadow-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" />
                   <span>{loadingProgress}%</span>
                 </div>
               )}
@@ -966,18 +966,18 @@ export default function ModalKehadiranMapel({
                 onClick={() => refreshData({ fullScan: false, silent: false })}
                 disabled={loading || isSyncing}
                 title="Sinkronkan data terbaru"
-                className="shrink-0 rounded-xl bg-white/10 hover:bg-white/25 px-3 py-1.5 text-xs font-bold text-white transition-all flex items-center gap-1.5 border border-white/20 disabled:opacity-50 cursor-pointer"
+                className="shrink-0 rounded-xl bg-white/10 hover:bg-white/25 px-2.5 py-1 text-xs font-bold text-white transition-all flex items-center gap-1 border border-white/20 disabled:opacity-50 cursor-pointer"
               >
-                <span className={loading || isSyncing ? "animate-spin inline-block" : ""}>
+                <span className={loading || isSyncing ? "animate-spin inline-block text-xs" : "text-xs"}>
                   🔄
                 </span>
-                <span className="hidden sm:inline">
-                  {isSyncing ? "Menyinkronkan..." : "Refresh"}
+                <span className="hidden sm:inline text-xs">
+                  {isSyncing ? "Sync..." : "Refresh"}
                 </span>
               </button>
               <button
                 onClick={onClose}
-                className="shrink-0 rounded-full bg-white/10 hover:bg-white/25 w-8 h-8 flex items-center justify-center text-xs font-black text-white transition-colors cursor-pointer"
+                className="shrink-0 rounded-full bg-white/10 hover:bg-white/25 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-black text-white transition-colors cursor-pointer"
               >
                 ✕
               </button>
@@ -986,29 +986,29 @@ export default function ModalKehadiranMapel({
         </div>
 
         {/* SUBHEADER: STATUS & TABS */}
-        <div className="shrink-0 bg-slate-100/90 border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium overflow-x-auto py-1">
+        <div className="shrink-0 bg-slate-100/90 border-b border-slate-200 px-3.5 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-600 font-medium overflow-x-auto py-0.5">
             <span className="font-bold text-slate-700 whitespace-nowrap">
               Mapel Diikuti: ({mapelList.length})
             </span>
             {lastSync && (
               <span className="text-[10px] text-slate-400 whitespace-nowrap hidden sm:inline">
-                &middot; Terakhir disinkronkan pukul {lastSync} WIB
+                &middot; Terakhir sync {lastSync} WIB
               </span>
             )}
             {isSyncing && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping"></span>
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded-full border border-blue-200">
+                <span className="w-1 h-1 rounded-full bg-blue-600 animate-ping"></span>
                 <span>Auto Update</span>
               </span>
             )}
           </div>
           {loading && (
-            <div className="flex items-center gap-2 text-xs text-blue-700 font-black">
-              <span className="truncate max-w-[180px] hidden md:inline text-[11px] font-bold text-slate-500">
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-blue-700 font-black">
+              <span className="truncate max-w-[140px] hidden md:inline text-[10px] font-bold text-slate-500">
                 {loadingStageText}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200">
+              <span className="px-1.5 py-0.2 rounded-full bg-blue-100 border border-blue-200">
                 {loadingProgress}%
               </span>
             </div>
@@ -1017,7 +1017,7 @@ export default function ModalKehadiranMapel({
 
         {/* PROGRESS BAR PERSENTASE DI ATAS KONTEN */}
         {loading ? (
-          <div className="shrink-0 w-full bg-slate-200/90 h-2 overflow-hidden border-b border-slate-300 shadow-inner">
+          <div className="shrink-0 w-full bg-slate-200/90 h-1.5 overflow-hidden border-b border-slate-300 shadow-inner">
             <div
               className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 transition-all duration-300 ease-out"
               style={{ width: `${Math.min(loadingProgress, 100)}%` }}
@@ -1030,7 +1030,7 @@ export default function ModalKehadiranMapel({
         ) : null}
 
         {/* KONTEN UTAMA */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-5">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-slate-50 space-y-3 sm:space-y-4">
           {error && (
             <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3.5 text-xs font-bold text-rose-700 flex items-center gap-2">
               <span>⚠️</span>
@@ -1442,134 +1442,118 @@ export default function ModalKehadiranMapel({
                         const upState = uploadState[stateKey] || {};
 
                         return (
-                          <div className="space-y-3">
-                            {/* JIKA ADA VIDEO YOUTUBE DARI GURU -> TAMPILKAN DI ATAS DENGAN EMBED PLAYER RESPONSIF */}
-                            {ytInfo && (
-                              <div className="rounded-2xl overflow-hidden bg-slate-900 border-2 border-red-500/60 shadow-md p-3 sm:p-4 text-white space-y-2.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white font-black text-xs shadow-xs">
-                                      ▶
-                                    </span>
-                                    <div className="min-w-0">
-                                      <h6 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5 truncate">
-                                        <span>Video Pembelajaran</span>
-                                        <span className="text-[8px] sm:text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/30 text-red-200 border border-red-500/40">
-                                          YouTube · Pertemuan {pAktif}
-                                        </span>
-                                      </h6>
-                                      <p className="text-[10px] text-slate-300 font-medium truncate">
-                                        {ytInfo.tugas?.judulTugas || "Simak video penjelasan materi di bawah ini"}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <a
-                                    href={ytInfo.sourceUrl || `https://www.youtube.com/watch?v=${ytInfo.videoId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="shrink-0 px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black transition-all flex items-center gap-1 shadow-xs active:scale-95"
-                                  >
-                                    <span>Tonton di YouTube</span>
-                                    <span>↗</span>
-                                  </a>
-                                </div>
-
-                                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-inner border border-white/10">
-                                  <iframe
-                                    src={`https://www.youtube.com/embed/${ytInfo.videoId}?rel=0`}
-                                    title={`Video Materi Pertemuan ${pAktif}`}
-                                    className="w-full h-full border-0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                    allowFullScreen
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {/* MODUL / LEMBAR KERJA DARI GURU */}
-                            {tugasList.length > 0 ? (
-                              <div className="rounded-2xl bg-white border border-blue-200 p-3 sm:p-3.5 space-y-2.5 shadow-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                                    <span>📋</span>
-                                    <span>Modul / Lembar Kerja Guru (Pertemuan {pAktif})</span>
-                                  </span>
-                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                                    {tugasList.length} Tugas
-                                  </span>
-                                </div>
-                                 {tugasList.map((t, ti) => {
-                                  const { ytId, downloadUrl, linkEksternal, deskripsiBersih } = parseTugasData(t);
-
-                                  return (
-                                    <div key={ti} className="flex flex-col gap-2 bg-blue-50/70 p-2.5 sm:p-3 rounded-xl border border-blue-100">
-                                      <div className="min-w-0">
-                                        <p className="text-xs sm:text-sm font-black text-slate-800 leading-snug">
-                                          {t.judulTugas || `Tugas Pertemuan ${pAktif}`}
-                                        </p>
-                                        {deskripsiBersih && (
-                                          <p className="text-[10px] sm:text-[11px] text-slate-600 mt-0.5 font-medium leading-relaxed whitespace-pre-line">
-                                            {deskripsiBersih}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        {/* Tombol YouTube */}
-                                        {ytId && (
-                                          <a
-                                            href={`https://www.youtube.com/watch?v=${ytId}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
-                                          >
-                                            <span>▶️</span>
-                                            <span>Tonton Video</span>
-                                          </a>
-                                        )}
-                                        {/* Tombol Link Eksternal (Website, Quiz, Drive, Google Form, dll) */}
-                                        {linkEksternal && (
-                                          <a
-                                            href={linkEksternal}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
-                                          >
-                                            <span>🔗</span>
-                                            <span>Buka Link Tugas</span>
-                                          </a>
-                                        )}
-                                        {/* Tombol Unduh Lampiran Modul/Berkas jika beda dari linkEksternal */}
-                                        {downloadUrl && downloadUrl !== linkEksternal && (
-                                          <a
-                                            href={downloadUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
-                                          >
-                                            <span>📥</span>
-                                            <span>Unduh Modul</span>
-                                          </a>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                          <div className="space-y-2.5">
+                            {/* JIKA MEMILIH TUGAS TERBARU: HINDARI DUPLIKASI MATERI KARENA SUDAH LENGKAP DI ATAS */}
+                            {latestTaskInfo && pAktif === latestTaskInfo.pertemuanKe ? (
+                              <div className="rounded-xl bg-emerald-100/70 border border-emerald-300/80 px-3 py-1.5 flex items-center justify-between text-xs">
+                                <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                                  <span>📎</span>
+                                  <span>Pengumpulan Tugas Pertemuan {pAktif} (Materi Lengkap di Atas)</span>
+                                </span>
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-emerald-200 text-emerald-800">
+                                  Tugas Terbaru
+                                </span>
                               </div>
                             ) : (
-                              <div className="rounded-xl bg-white/70 border border-slate-200 px-3 py-2 text-[10px] sm:text-[11px] text-slate-500 font-medium italic flex items-center gap-1.5">
-                                <span>ℹ️</span>
-                                <span>Guru belum melampirkan modul tugas untuk Pertemuan {pAktif}. Anda tetap dapat mengunggah berkas tugas di bawah ini.</span>
+                              /* JIKA MEMILIH PERTEMUAN LAMA: TAMPILKAN MATERI LAMA SECARA KOMPAK */
+                              <div className="space-y-2">
+                                {ytInfo && (
+                                  <div className="rounded-xl overflow-hidden bg-slate-900 border border-red-500/40 p-2 text-white space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2 px-1">
+                                      <span className="text-[11px] font-black text-white flex items-center gap-1 truncate">
+                                        <span>▶️</span> Video Pembelajaran P-{pAktif}
+                                      </span>
+                                      <a
+                                        href={ytInfo.sourceUrl || `https://www.youtube.com/watch?v=${ytInfo.videoId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2 py-0.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-[9px] font-black shrink-0"
+                                      >
+                                        Tonton ↗
+                                      </a>
+                                    </div>
+                                    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+                                      <iframe
+                                        src={`https://www.youtube.com/embed/${ytInfo.videoId}?rel=0`}
+                                        title={`Video Materi P-${pAktif}`}
+                                        className="w-full h-full border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowFullScreen
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {tugasList.length > 0 ? (
+                                  <div className="rounded-xl bg-white border border-blue-200 p-2.5 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center justify-between text-[10px] font-black text-blue-700 uppercase">
+                                      <span>📋 Modul Guru (Pertemuan {pAktif})</span>
+                                      <span className="px-1.5 py-0.2 rounded-full bg-blue-100">{tugasList.length} Tugas</span>
+                                    </div>
+                                    {tugasList.map((t, ti) => {
+                                      const { ytId, downloadUrl, linkEksternal, deskripsiBersih } = parseTugasData(t);
+                                      return (
+                                        <div key={ti} className="bg-blue-50/70 p-2 rounded-lg border border-blue-100 space-y-1">
+                                          <p className="text-xs font-bold text-slate-800 leading-snug">
+                                            {t.judulTugas || `Tugas P-${pAktif}`}
+                                          </p>
+                                          {deskripsiBersih && (
+                                            <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-line">
+                                              {deskripsiBersih}
+                                            </p>
+                                          )}
+                                          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                            {ytId && (
+                                              <a
+                                                href={`https://www.youtube.com/watch?v=${ytId}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2 py-0.5 rounded-md bg-red-600 text-white text-[9px] font-black shadow-2xs"
+                                              >
+                                                ▶ Video
+                                              </a>
+                                            )}
+                                            {linkEksternal && (
+                                              <a
+                                                href={linkEksternal}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2 py-0.5 rounded-md bg-teal-600 text-white text-[9px] font-black shadow-2xs"
+                                              >
+                                                🔗 Buka Link
+                                              </a>
+                                            )}
+                                            {downloadUrl && downloadUrl !== linkEksternal && (
+                                              <a
+                                                href={downloadUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[9px] font-black shadow-2xs"
+                                              >
+                                                📥 Unduh Modul
+                                              </a>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-lg bg-white/70 border border-slate-200 px-2.5 py-1.5 text-[10px] text-slate-500 italic">
+                                    ℹ️ Belum ada lampiran modul khusus untuk Pertemuan {pAktif}. Anda dapat langsung mengunggah berkas jawaban di bawah.
+                                  </div>
+                                )}
                               </div>
                             )}
 
-                            {/* STATUS & FORM UPLOAD JAWABAN SISWA */}
+                            {/* STATUS & FORM UPLOAD JAWABAN SISWA (KOMPAK & RESPONSIF) */}
                             {upState.sukses ? (
-                              <div className="rounded-2xl bg-emerald-100 border border-emerald-300 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="text-2xl">✅</span>
+                              <div className="rounded-xl bg-emerald-100 border border-emerald-300 p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xl">✅</span>
                                   <div>
-                                    <p className="text-xs font-black text-emerald-900">
-                                      Tugas Pertemuan {pDipilihUpload} Berhasil Dikirim!
+                                    <p className="text-xs font-black text-emerald-900 leading-tight">
+                                      Tugas Pertemuan {pAktif} Berhasil Dikirim!
                                     </p>
                                     <p className="text-[10px] text-emerald-700 font-medium">
                                       Berkas: <strong>{upState.namaFile || "Berkas Jawaban"}</strong>
@@ -1577,13 +1561,13 @@ export default function ModalKehadiranMapel({
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   {upState.fileUrl && (
                                     <a
                                       href={upState.fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-3 py-1.5 rounded-xl bg-white border border-emerald-400 text-emerald-800 text-[10px] font-black hover:bg-emerald-50 transition-all shadow-xs"
+                                      className="px-2.5 py-1 rounded-lg bg-white border border-emerald-400 text-emerald-800 text-[10px] font-black hover:bg-emerald-50 transition-all shadow-2xs"
                                     >
                                       📄 Buka Berkas
                                     </a>
@@ -1591,28 +1575,26 @@ export default function ModalKehadiranMapel({
                                   <button
                                     type="button"
                                     onClick={() => setUploadState((prev) => ({ ...prev, [stateKey]: {} }))}
-                                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black transition-all shadow-xs active:scale-95"
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black transition-all shadow-2xs active:scale-95 cursor-pointer"
                                   >
                                     🔄 Ganti Berkas
                                   </button>
                                 </div>
                               </div>
                             ) : (
-                              <div className="rounded-2xl bg-white border border-emerald-200 p-3.5 sm:p-4 space-y-3 shadow-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                              <div className="rounded-xl bg-white border border-emerald-200 p-2.5 sm:p-3 space-y-2 shadow-2xs">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-slate-800 flex items-center gap-1">
                                     <span>📎</span>
-                                    <span>Pilih Berkas Jawaban (Pertemuan {pDipilihUpload})</span>
+                                    <span>Pilih Berkas Jawaban (P-{pAktif})</span>
                                   </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    PDF, DOC, Gambar, ZIP (Maks 10MB)
-                                  </span>
+                                  <span className="text-[9px] sm:text-[10px] text-slate-400">PDF, DOC, Gambar, ZIP (Maks 10MB)</span>
                                 </div>
 
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   <label className="cursor-pointer block">
                                     <div
-                                      className={`rounded-xl border-2 border-dashed p-3 text-center transition-all ${
+                                      className={`rounded-xl border-2 border-dashed p-2 sm:p-2.5 text-center transition-all ${
                                         upState.file
                                           ? "border-emerald-500 bg-emerald-50/80 text-emerald-800"
                                           : "border-slate-300 bg-slate-50 hover:border-emerald-400 text-slate-600"
@@ -1623,7 +1605,7 @@ export default function ModalKehadiranMapel({
                                           📄 {upState.file.name}
                                         </div>
                                       ) : (
-                                        <div className="text-xs font-bold text-slate-500">
+                                        <div className="text-[11px] sm:text-xs font-bold text-slate-500">
                                           📂 Klik untuk memilih berkas...
                                         </div>
                                       )}
@@ -1633,18 +1615,17 @@ export default function ModalKehadiranMapel({
                                       className="hidden"
                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
                                       onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) {
-                                          setUploadState((prev) => ({
-                                            ...prev,
-                                            [stateKey]: {
-                                              ...prev[stateKey],
-                                              file: f,
-                                              error: "",
-                                              sukses: false,
-                                            },
-                                          }));
-                                        }
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setUploadState((prev) => ({
+                                          ...prev,
+                                          [stateKey]: {
+                                            ...prev[stateKey],
+                                            file,
+                                            error: "",
+                                            sukses: false,
+                                          },
+                                        }));
                                       }}
                                     />
                                   </label>
@@ -1662,14 +1643,12 @@ export default function ModalKehadiranMapel({
                                       }))
                                     }
                                     placeholder="Catatan pengerjaan (opsional)..."
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500"
                                   />
                                 </div>
 
                                 {upState.error && (
-                                  <p className="text-xs font-bold text-rose-600">
-                                    ⚠️ {upState.error}
-                                  </p>
+                                  <p className="text-[11px] font-bold text-rose-600">⚠️ {upState.error}</p>
                                 )}
 
                                 <button
@@ -1677,18 +1656,18 @@ export default function ModalKehadiranMapel({
                                   onClick={() =>
                                     handleUploadJawaban(
                                       mapelAktif.idMapel,
-                                      pDipilihUpload,
+                                      pAktif,
                                       tugasList[0]?.idTugas || ""
                                     )
                                   }
                                   disabled={!upState.file || upState.loading}
-                                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-98 text-white font-black text-xs py-2.5 shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-98 text-white font-black text-xs py-2 shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                   <span>{upState.loading ? "⏳" : "📤"}</span>
                                   <span>
                                     {upState.loading
                                       ? "Sedang Mengirim Berkas ke Server..."
-                                      : `Kirim Tugas Pertemuan ${pDipilihUpload}`}
+                                      : `Kirim Tugas Pertemuan ${pAktif}`}
                                   </span>
                                 </button>
                               </div>
@@ -1699,99 +1678,110 @@ export default function ModalKehadiranMapel({
                     </div>
                   )}
 
-                  {/* DAFTAR PERTEMUAN */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider">
-                        📅 Riwayat Pertemuan (
-                        {mapelAktif.pertemuanList?.length || 0})
-                      </h5>
-                      {isMapelOnline && (
-                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                          🌐 Kelas Online — Upload Tugas Tersedia
-                        </span>
-                      )}
-                    </div>
+                  {/* DAFTAR PERTEMUAN (TANPA DUPLIKAT TUGAS TERBARU) */}
+                  {(() => {
+                    // Saring agar pertemuan tugas terbaru TIDAK diduplikasi pada riwayat
+                    const riwayatPertemuan = (mapelAktif.pertemuanList || []).filter(
+                      (item) => !latestTaskInfo || item.pertemuanKe !== latestTaskInfo.pertemuanKe
+                    );
 
-                    {!mapelAktif.pertemuanList ||
-                    mapelAktif.pertemuanList.length === 0 ? (
-                      <div className="rounded-2xl bg-slate-50 border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 font-medium">
-                        Belum ada pertemuan presensi yang tercatat untuk mapel
-                        ini.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {mapelAktif.pertemuanList.map((item) => {
-                          const stateKey = `${mapelAktif.idMapel}_${item.pertemuanKe}`;
-                          const upState = uploadState[stateKey] || {};
-                          const tugasGuru = tugasPerMapel[mapelAktif.idMapel]?.[String(item.pertemuanKe)] || [];
+                    return (
+                      <div className="space-y-2.5 pt-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h5 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>📅</span>
+                            <span>
+                              {latestTaskInfo
+                                ? "Riwayat Pertemuan Sebelumnya"
+                                : "Riwayat Presensi & Pertemuan"}
+                              {" "}({riwayatPertemuan.length})
+                            </span>
+                          </h5>
+                          {latestTaskInfo && (
+                            <span className="text-[10px] text-slate-400 font-semibold hidden sm:inline">
+                              Tugas P-{latestTaskInfo.pertemuanKe} aktif di atas
+                            </span>
+                          )}
+                        </div>
 
-                          return (
-                            <div
-                              key={item.pertemuanKe}
-                              className={`rounded-2xl border transition-colors ${
-                                isMapelOnline
-                                  ? "bg-slate-50/80 border-emerald-100"
-                                  : "bg-slate-50/80 border-slate-200"
-                              }`}
-                            >
-                              {/* Baris utama presensi */}
-                              <div className="flex items-center justify-between gap-3 p-3">
-                                <div className="flex items-center gap-3">
-                                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-black text-slate-700 shadow-sm ${isMapelOnline ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200"}`}>
-                                    P{item.pertemuanKe}
-                                  </div>
-                                  <div>
-                                    <div className="text-xs font-bold text-slate-800">
-                                      Pertemuan {item.pertemuanKe}
+                        {riwayatPertemuan.length === 0 ? (
+                          <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 font-medium">
+                            {latestTaskInfo
+                              ? `Pertemuan ${latestTaskInfo.pertemuanKe} adalah materi/tugas aktif saat ini dan ditampilkan di bagian atas.`
+                              : "Belum ada riwayat pertemuan yang tercatat untuk mata pelajaran ini."}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {riwayatPertemuan.map((item) => {
+                              const stateKey = `${mapelAktif.idMapel}_${item.pertemuanKe}`;
+                              const upState = uploadState[stateKey] || {};
+                              const tugasGuru = tugasPerMapel[mapelAktif.idMapel]?.[String(item.pertemuanKe)] || [];
+
+                              return (
+                                <div
+                                  key={item.pertemuanKe}
+                                  className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3 shadow-2xs hover:border-slate-300 transition-all space-y-2"
+                                >
+                                  {/* Baris utama: Pertemuan, Tanggal, Nilai, Status Presensi */}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs font-black shadow-2xs ${isMapelOnline ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-slate-100 border-slate-200 text-slate-700"}`}>
+                                        P{item.pertemuanKe}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 truncate">
+                                          <span>Pertemuan {item.pertemuanKe}</span>
+                                          {tugasGuru.length > 0 && (
+                                            <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 uppercase">
+                                              Ada Tugas
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 font-medium">
+                                          {formatTanggalMapel(item.tanggal)}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 font-medium">
-                                      {formatTanggalMapel(item.tanggal)}
+
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {item.nilai !== null && item.nilai !== undefined && (
+                                        <span className="px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-black shadow-2xs">
+                                          ⭐ {item.nilai}
+                                        </span>
+                                      )}
+                                      <span className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black border shadow-2xs ${warnaStatus(item.status)}`}>
+                                        {item.status}
+                                      </span>
                                     </div>
                                   </div>
-                                </div>
 
-                                <div className="flex items-center gap-2">
-                                  {item.nilai !== null && item.nilai !== undefined && (
-                                    <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-black shadow-xs">
-                                      ⭐ {item.nilai}
-                                    </span>
-                                  )}
-                                  <span className={`px-2.5 py-1 rounded-xl text-[11px] font-black border shadow-xs ${warnaStatus(item.status)}`}>
-                                    {item.status}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* AREA UPLOAD TUGAS (hanya untuk mapel online) */}
-                              {isMapelOnline && (
-                                <div className="px-3 pb-3 space-y-2">
-                                  {/* Tugas dari guru */}
-                                  {tugasGuru.length > 0 ? (
-                                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-2.5 sm:p-3 space-y-2">
-                                      <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                                        <span>📋</span>
-                                        <span>Tugas &amp; Materi Guru</span>
-                                      </p>
-                                       {tugasGuru.map((t, ti) => {
+                                  {/* Jika ada materi / tugas di pertemuan lama ini */}
+                                  {tugasGuru.length > 0 && (
+                                    <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-2 space-y-1.5 text-xs">
+                                      {tugasGuru.map((t, ti) => {
                                         const { ytId, downloadUrl, linkEksternal, deskripsiBersih } = parseTugasData(t);
-
                                         return (
-                                          <div key={ti} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/80 p-2 sm:p-2.5 rounded-lg border border-blue-100">
+                                          <div key={ti} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                                             <div className="min-w-0 flex-1">
-                                              <p className="text-xs font-bold text-slate-800">{t.judulTugas || `Tugas P-${item.pertemuanKe}`}</p>
-                                              {deskripsiBersih && <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{deskripsiBersih}</p>}
+                                              <span className="text-[11px] font-bold text-slate-700 line-clamp-1">
+                                                📝 {t.judulTugas || `Tugas P-${item.pertemuanKe}`}
+                                              </span>
+                                              {deskripsiBersih && (
+                                                <p className="text-[10px] text-slate-500 line-clamp-1">
+                                                  {deskripsiBersih}
+                                                </p>
+                                              )}
                                             </div>
-                                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                            <div className="flex items-center gap-1 shrink-0 flex-wrap">
                                               {ytId && (
                                                 <a
                                                   href={`https://www.youtube.com/watch?v=${ytId}`}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="shrink-0 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                  className="px-2 py-0.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-[9px] font-black shadow-2xs flex items-center gap-0.5"
                                                 >
-                                                  <span>▶️</span>
-                                                  <span>YouTube</span>
+                                                  <span>▶</span>
+                                                  <span>Video</span>
                                                 </a>
                                               )}
                                               {linkEksternal && (
@@ -1799,10 +1789,10 @@ export default function ModalKehadiranMapel({
                                                   href={linkEksternal}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="shrink-0 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                  className="px-2 py-0.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[9px] font-black shadow-2xs flex items-center gap-0.5"
                                                 >
                                                   <span>🔗</span>
-                                                  <span>Tautan</span>
+                                                  <span>Link</span>
                                                 </a>
                                               )}
                                               {downloadUrl && downloadUrl !== linkEksternal && (
@@ -1810,7 +1800,7 @@ export default function ModalKehadiranMapel({
                                                   href={downloadUrl}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                  className="px-2 py-0.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black shadow-2xs flex items-center gap-0.5"
                                                 >
                                                   <span>📥</span>
                                                   <span>Modul</span>
@@ -1821,93 +1811,54 @@ export default function ModalKehadiranMapel({
                                         );
                                       })}
                                     </div>
-                                  ) : (
-                                    <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 text-[10px] text-slate-400 font-medium italic">
-                                      📋 Belum ada tugas dari guru untuk pertemuan ini
-                                    </div>
                                   )}
 
-                                  {/* Area upload jawaban siswa */}
-                                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2">
-                                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-                                      📤 Upload Jawaban / Tugas Kamu
-                                    </p>
-
-                                    {upState.sukses ? (
-                                      <div className="flex items-center gap-2 bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2">
-                                        <span className="text-emerald-600 text-base">✅</span>
-                                        <div>
-                                          <p className="text-xs font-black text-emerald-800">Berhasil dikirim!</p>
-                                          {upState.namaFile && <p className="text-[10px] text-emerald-600">{upState.namaFile}</p>}
+                                  {/* Status Pengumpulan Jawaban di Pertemuan Lama (Khusus Mapel Online) */}
+                                  {isMapelOnline && (
+                                    <div className="flex items-center justify-between gap-2 pt-0.5 text-[10px]">
+                                      {upState.sukses ? (
+                                        <div className="flex items-center gap-1.5 text-emerald-700 font-bold truncate">
+                                          <span>✅</span>
+                                          <span className="truncate">Terkirim: {upState.namaFile || "Berkas Jawaban"}</span>
                                           {upState.fileUrl && (
-                                            <a href={upState.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 underline font-bold">Lihat file</a>
+                                            <a
+                                              href={upState.fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 underline font-semibold ml-1 shrink-0"
+                                            >
+                                              Lihat
+                                            </a>
                                           )}
                                         </div>
-                                        <button
-                                          onClick={() => setUploadState((prev) => ({ ...prev, [stateKey]: {} }))}
-                                          className="ml-auto text-[10px] text-slate-500 hover:text-slate-700 font-bold underline"
-                                        >
-                                          Upload ulang
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        <div className="flex items-center gap-2">
-                                          <label className="flex-1 cursor-pointer">
-                                            <div className={`rounded-lg border-2 border-dashed px-3 py-2 text-center transition-all ${upState.file ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white hover:border-emerald-300"}`}>
-                                              {upState.file ? (
-                                                <div className="text-[10px] font-bold text-emerald-700 truncate">📎 {upState.file.name}</div>
-                                              ) : (
-                                                <div className="text-[10px] text-slate-400 font-medium">📎 Pilih file (PDF, DOC, gambar...)</div>
-                                              )}
-                                            </div>
-                                            <input
-                                              type="file"
-                                              className="hidden"
-                                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
-                                              onChange={(e) => {
-                                                const f = e.target.files?.[0];
-                                                if (f) {
-                                                  setUploadState((prev) => ({
-                                                    ...prev,
-                                                    [stateKey]: { ...prev[stateKey], file: f, error: "", sukses: false },
-                                                  }));
-                                                }
-                                              }}
-                                            />
-                                          </label>
-                                          <button
-                                            onClick={() => handleUploadJawaban(mapelAktif.idMapel, item.pertemuanKe, tugasGuru[0]?.idTugas || "")}
-                                            disabled={!upState.file || upState.loading}
-                                            className="shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-2 shadow-sm transition-all disabled:opacity-50 active:scale-95"
-                                          >
-                                            {upState.loading ? "⏳ Mengirim..." : "📤 Kirim"}
-                                          </button>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 text-slate-400">
+                                          <span>⚪</span>
+                                          <span>Belum dikumpulkan</span>
                                         </div>
-                                        <input
-                                          type="text"
-                                          value={upState.keterangan || ""}
-                                          onChange={(e) => setUploadState((prev) => ({
-                                            ...prev,
-                                            [stateKey]: { ...prev[stateKey], keterangan: e.target.value },
-                                          }))}
-                                          placeholder="Keterangan (opsional)"
-                                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] outline-none focus:border-emerald-400 transition-all"
-                                        />
-                                        {upState.error && (
-                                          <p className="text-[10px] text-rose-600 font-bold">⚠️ {upState.error}</p>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setPDipilihUpload(item.pertemuanKe);
+                                          const el = document.getElementById("panel-upload-tugas-siswa");
+                                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                        }}
+                                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 font-black text-[9px] transition-all cursor-pointer shrink-0"
+                                      >
+                                        {upState.sukses ? "🔄 Upload Ulang" : "📤 Kumpulkan Susulan"}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
