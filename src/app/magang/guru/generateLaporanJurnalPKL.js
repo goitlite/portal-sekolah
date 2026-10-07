@@ -49,19 +49,51 @@ export const generateLaporanJurnalPKL = async ({ data, namaGuru }) => {
   );
 
   // Menyusun baris tabel secara berurutan agar mengalir ke bawah hingga halaman penuh
-  const body = data.map((item, i) => [
-    i + 1,
-    item.mingguKe || "-",
-    formatTanggalWIB(item.waktu || item.tanggal),
-    item.namaSiswa || "-",
-    item.kelas || "-",
-    item.tempatPkl || "-",
-    item.materi || "-",
-    item.permasalahan || "-",
-    item.tindakLanjut || "-",
-    "", // Paraf Siswa
-    "", // Barcode Foto
-  ]);
+  const body = data.map((item, i) => {
+    // Format nama siswa dengan penanda titik (bullet) di setiap nama
+    const listNama = (item.namaSiswa || "-")
+      .split(/\s*[\/|\n]\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const namaSiswaFormat =
+      listNama.length > 0
+        ? listNama.map((nama) => `• ${nama}`).join("\n")
+        : "-";
+
+    // Format kelas jika ada beberapa kelas
+    const listKelas = (item.kelas || "-")
+      .split(/\s*,\s*|\s*[\/|\n]\s*/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const kelasFormat =
+      listKelas.length > 1
+        ? listKelas.map((k) => `• ${k}`).join("\n")
+        : (listKelas[0] || "-");
+
+    // Format tempat PKL jika ada beberapa tempat magang (dipisah '/')
+    const listTempat = (item.tempatPkl || "-")
+      .split(/\s*[\/|\n]\s*/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const tempatPklFormat =
+      listTempat.length > 1
+        ? listTempat.map((tp) => `• ${tp}`).join("\n")
+        : (listTempat[0] || "-");
+
+    return [
+      i + 1,
+      item.mingguKe || "-",
+      formatTanggalWIB(item.waktu || item.tanggal),
+      namaSiswaFormat,
+      kelasFormat,
+      tempatPklFormat,
+      item.materi || "-",
+      item.permasalahan || "-",
+      item.tindakLanjut || "-",
+      "", // Paraf Siswa
+      "", // Barcode Foto
+    ];
+  });
 
   const BARCODE_COL_INDEX = 10;
 

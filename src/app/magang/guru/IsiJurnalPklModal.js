@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getSiswaByGuru, getJurnalPKL, saveJurnalPKL } from "../lib/api";
+import { getSiswaByGuru, getJurnalPKL, saveJurnalPKL, deleteJurnalPKL } from "../lib/api";
+import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
 const OPSI_MATERI = [
   "Pengenalan lingkungan kerja, tata tertib, disiplin dan budaya kerja",
@@ -65,19 +66,32 @@ const NAMA_BULAN = [
   "Desember",
 ];
 
+const JADWAL_BULAN_PKL = [
+  { bulan: "Juli", maxMinggu: 4 },
+  { bulan: "Agustus", maxMinggu: 4 },
+  { bulan: "September", maxMinggu: 4 },
+  { bulan: "Oktober", maxMinggu: 4 },
+  { bulan: "November", maxMinggu: 4 },
+  { bulan: "Desember", maxMinggu: 2 },
+];
+
 function buildOpsiMingguKe() {
   const now = new Date();
+  // Semester ganjil PKL (Juli - Desember):
+  // Jika saat ini bulan Juli (index 6) s/d Desember (index 11), gunakan tahun sekarang.
+  // Jika saat ini Januari s/d Juni, gunakan tahun sebelumnya.
+  const tahun =
+    now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+
   const opsi = [];
-  for (let offset = -1; offset <= 4; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const bulan = NAMA_BULAN[d.getMonth()];
-    const tahun = d.getFullYear();
-    for (let minggu = 1; minggu <= 5; minggu++) {
-      opsi.push(`Minggu ke-${minggu} ${bulan} ${tahun}`);
+  for (const item of JADWAL_BULAN_PKL) {
+    for (let m = 1; m <= item.maxMinggu; m++) {
+      opsi.push(`Minggu ke-${m} ${item.bulan} ${tahun}`);
     }
   }
   return opsi;
 }
+
 
 function formatWaktu(tanggalISO) {
   if (!tanggalISO) return "";
@@ -130,10 +144,8 @@ function buatBarisBaru() {
     key: `row-${Date.now()}-${rowUid}`,
     mingguKe: "",
     tanggal: "",
-    idSiswa: "",
-    namaSiswa: "",
+    idSiswaList: [], // Array of {idSiswa, nama, kelas, tempatPkl}
     kelas: "",
-    tempatPkl: "",
     materiPilih: "",
     materiManual: "",
     masalahPilih: "",
@@ -166,8 +178,29 @@ export default function IsiJurnalPklModal({
   const [filterMinggu, setFilterMinggu] = useState("");
   const [previewFotoUrl, setPreviewFotoUrl] = useState(null);
 
+  // State multi-select checklist siswa
+  const [openDropdownKey, setOpenDropdownKey] = useState(null);
+  const [siswaSearchMap, setSiswaSearchMap] = useState({});
+
+  // State hapus baris riwayat jurnal
+  const [deletingJurnalId, setDeletingJurnalId] = useState(null);
+  const [printingPdf, setPrintingPdf] = useState(false);
+
+
   const watermarkCanvasRef = useRef(null);
-  const opsiMingguKe = useMemo(() => buildOpsiMingguKe(), []);
+
+  const opsiMingguKe = useMemo(() => {
+    const list = buildOpsiMingguKe();
+    if (Array.isArray(savedJurnalList)) {
+      savedJurnalList.forEach((j) => {
+        if (j.mingguKe && !list.includes(j.mingguKe)) {
+          list.push(j.mingguKe);
+        }
+      });
+    }
+    return list;
+  }, [savedJurnalList]);
+
   const daftarKelas = useMemo(() => {
     const set = new Set(
       siswaList.map((s) => String(s.kelas || "").trim()).filter(Boolean),
@@ -228,19 +261,25 @@ export default function IsiJurnalPklModal({
   }
 
   function handlePilihKelas(key, kelas) {
-    updateRow(key, { kelas, idSiswa: "", namaSiswa: "", tempatPkl: "" });
+    updateRow(key, { kelas, idSiswaList: [] });
+    setSiswaSearchMap((prev) => ({ ...prev, [key]: "" }));
   }
 
-  function handlePilihSiswa(key, idSiswa) {
-    const data = siswaList.find(
-      (s) => String(s.idSiswa).trim() === String(idSiswa).trim(),
+  function handleToggleSiswa(key, siswa) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r;
+        const exists = r.idSiswaList.some(
+          (s) => String(s.idSiswa) === String(siswa.idSiswa),
+        );
+        const newList = exists
+          ? r.idSiswaList.filter(
+              (s) => String(s.idSiswa) !== String(siswa.idSiswa),
+            )
+          : [...r.idSiswaList, siswa];
+        return { ...r, idSiswaList: newList };
+      }),
     );
-    updateRow(key, {
-      idSiswa,
-      namaSiswa: data ? data.nama : "",
-      kelas: data ? data.kelas : "",
-      tempatPkl: data ? data.tempatPkl : "",
-    });
   }
 
   function addWatermark(imageData, row) {
@@ -314,10 +353,20 @@ export default function IsiJurnalPklModal({
       return;
     }
     const row = rows.find((r) => r.key === key);
+    // Buat row dengan namaSiswa gabungan untuk watermark
+    const rowForWatermark = {
+      ...(row || {}),
+      namaSiswa: (row?.idSiswaList || []).map((s) => s.nama).join(", "),
+      kelas: [
+        ...new Set(
+          (row?.idSiswaList || []).map((s) => s.kelas).filter(Boolean),
+        ),
+      ].join(", "),
+    };
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64Data = event.target.result;
-      const watermarked = await addWatermark(base64Data, row || {});
+      const watermarked = await addWatermark(base64Data, rowForWatermark);
       updateRow(key, { foto: watermarked });
     };
     reader.readAsDataURL(file);
@@ -344,7 +393,7 @@ export default function IsiJurnalPklModal({
       const kosong =
         !r.mingguKe &&
         !r.tanggal &&
-        !r.idSiswa &&
+        (!r.idSiswaList || r.idSiswaList.length === 0) &&
         !materi &&
         !masalah &&
         !tindak;
@@ -352,17 +401,38 @@ export default function IsiJurnalPklModal({
 
       if (!r.mingguKe) return showErr(`Baris ${i + 1}: pilih Minggu ke.`);
       if (!r.tanggal) return showErr(`Baris ${i + 1}: pilih tanggal.`);
-      if (!r.idSiswa) return showErr(`Baris ${i + 1}: pilih nama siswa.`);
+      if (!r.idSiswaList || r.idSiswaList.length === 0)
+        return showErr(`Baris ${i + 1}: pilih minimal 1 siswa.`);
       if (!materi) return showErr(`Baris ${i + 1}: isi materi bimbingan.`);
       if (!masalah) return showErr(`Baris ${i + 1}: isi permasalahan.`);
       if (!tindak) return showErr(`Baris ${i + 1}: isi tindak lanjut.`);
 
+      // Gabungkan semua siswa yang dipilih menjadi satu baris jurnal
+      const namaSiswaGabung = r.idSiswaList.map((s) => s.nama).join(" / ");
+      const kelasList = [
+        ...new Set(r.idSiswaList.map((s) => s.kelas).filter(Boolean)),
+      ];
+      const kelasGabung = kelasList.join(", ");
+
+      // Gabungkan semua tempat PKL dari siswa yang dipilih (jika ada tempat berbeda)
+      const tempatPklList = [
+        ...new Set(
+          r.idSiswaList
+            .map((s) => String(s.tempatPkl || "").trim())
+            .filter((t) => t && t !== "-"),
+        ),
+      ];
+      const tempatPklGabung =
+        tempatPklList.length > 0 ? tempatPklList.join(" / ") : "-";
+
+      const idSiswaPertama = r.idSiswaList[0]?.idSiswa || "";
+
       dataValid.push({
         idGuru,
-        idSiswa: r.idSiswa,
-        namaSiswa: r.namaSiswa,
-        kelas: r.kelas,
-        tempatPkl: r.tempatPkl,
+        idSiswa: idSiswaPertama,
+        namaSiswa: namaSiswaGabung,
+        kelas: kelasGabung,
+        tempatPkl: tempatPklGabung,
         mingguKe: r.mingguKe,
         tanggal: r.tanggal,
         waktu: formatWaktu(r.tanggal),
@@ -401,12 +471,75 @@ export default function IsiJurnalPklModal({
     }
   }
 
+
   function showErr(msg) {
     setMessage(msg);
     setMessageType("error");
   }
 
-  // Filter Data Jurnal Tersimpan
+  async function handleHapusJurnalPkl(idJurnal) {
+    if (!idJurnal) return;
+    const konfirmasi = window.confirm(
+      "Hapus baris jurnal PKL ini?\n\nTindakan ini tidak dapat dibatalkan.",
+    );
+    if (!konfirmasi) return;
+
+    setDeletingJurnalId(idJurnal);
+    try {
+      let res;
+      if (typeof deleteJurnalPKL === "function") {
+        res = await deleteJurnalPKL({ idGuru, idJurnal });
+      } else {
+        // Fallback jika cache Turbopack HMR di browser belum me-refresh export api.js
+        const API_ENDPOINT =
+          "https://script.google.com/macros/s/AKfycbwL6gJ9rVKps7EmqKO0o928iwbFlqk-xQDY4za0PcIPh0f-kkRTyu5XCavvZ-9bsZA/exec";
+        const response = await fetch(API_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8",
+          },
+          body: JSON.stringify({
+            action: "deleteJurnalPKL",
+            params: { idGuru, idJurnal },
+          }),
+        });
+        res = await response.json();
+      }
+
+      if (res?.success) {
+        setSavedJurnalList((prev) =>
+          prev.filter((j) => j.idJurnal !== idJurnal),
+        );
+      } else {
+        alert(res?.message || "Gagal menghapus jurnal PKL.");
+      }
+    } catch (err) {
+      console.error("Gagal menghapus jurnal PKL:", err);
+      alert("Terjadi kesalahan saat menghapus jurnal PKL.");
+    } finally {
+      setDeletingJurnalId(null);
+    }
+  }
+
+  async function handleCetakJurnalPDF() {
+    if (!filteredJurnal || filteredJurnal.length === 0) {
+      alert("Tidak ada data jurnal untuk dicetak.");
+      return;
+    }
+    try {
+      setPrintingPdf(true);
+      await generateLaporanJurnalPKL({
+        data: filteredJurnal,
+        namaGuru: namaGuru || "Guru Pembimbing",
+      });
+    } catch (err) {
+      console.error("Gagal mencetak jurnal PKL:", err);
+      alert("Gagal mencetak PDF: " + (err?.message || "Terjadi kesalahan"));
+    } finally {
+      setPrintingPdf(false);
+    }
+  }
+
   const filteredJurnal = useMemo(() => {
     return savedJurnalList.filter((item) => {
       const matchSearch =
@@ -434,25 +567,26 @@ export default function IsiJurnalPklModal({
         position: "fixed",
         inset: 0,
         zIndex: 60,
-        background: "rgba(15,23,42,0.65)",
+        background: "rgba(15,23,42,0.75)",
         backdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "16px",
+        padding: "8px",
       }}
     >
       <div
         style={{
-          background: "white",
-          borderRadius: "20px",
+          background: "#ffffff",
+          color: "#0f172a",
+          borderRadius: "16px",
           width: "100%",
           maxWidth: "1400px",
-          maxHeight: "92vh",
+          maxHeight: "96vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4)",
         }}
       >
         {/* HEADER MODAL + TOMBOL NAVIGASI MODE */}
@@ -460,58 +594,59 @@ export default function IsiJurnalPklModal({
           style={{
             background:
               "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)",
-            color: "white",
-            padding: "16px 24px",
+            color: "#ffffff",
+            padding: "10px 16px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "12px",
+            gap: "8px",
           }}
         >
           <div>
             <h3
               style={{
                 margin: 0,
-                fontSize: "19px",
+                fontSize: "15px",
                 fontWeight: 800,
-                letterSpacing: "-0.3px",
+                color: "#ffffff",
+                letterSpacing: "-0.2px",
               }}
             >
-              📝 Modul Jurnal PKL — Format Pembimbingan Individual
+              📝 Modul Jurnal PKL — Format Pembimbingan
             </h3>
-            <p style={{ margin: "4px 0 0", fontSize: "12px", opacity: 0.85 }}>
-              Guru Pembimbing: <strong>{namaGuru || "-"}</strong>
+            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#e0e7ff" }}>
+              Guru Pembimbing: <strong style={{ color: "#ffffff" }}>{namaGuru || "-"}</strong>
             </p>
           </div>
 
           {/* TOMBOL TOGGLE NAVIGASI */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div
               style={{
                 background: "rgba(255,255,255,0.12)",
-                padding: "4px",
-                borderRadius: "12px",
+                padding: "3px",
+                borderRadius: "10px",
                 display: "flex",
-                gap: "4px",
+                gap: "3px",
               }}
             >
               <button
                 type="button"
                 onClick={() => setActiveTab("form")}
                 style={{
-                  padding: "8px 16px",
-                  borderRadius: "9px",
+                  padding: "6px 12px",
+                  borderRadius: "8px",
                   border: "none",
                   background: activeTab === "form" ? "#ffffff" : "transparent",
                   color: activeTab === "form" ? "#312e81" : "#ffffff",
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: "12px",
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  transition: "all 0.15s ease",
                   boxShadow:
                     activeTab === "form"
-                      ? "0 2px 8px rgba(0,0,0,0.15)"
+                      ? "0 2px 6px rgba(0,0,0,0.15)"
                       : "none",
                 }}
               >
@@ -522,23 +657,23 @@ export default function IsiJurnalPklModal({
                 type="button"
                 onClick={() => setActiveTab("riwayat")}
                 style={{
-                  padding: "8px 16px",
-                  borderRadius: "9px",
+                  padding: "6px 12px",
+                  borderRadius: "8px",
                   border: "none",
                   background:
                     activeTab === "riwayat" ? "#ffffff" : "transparent",
                   color: activeTab === "riwayat" ? "#312e81" : "#ffffff",
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: "12px",
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  transition: "all 0.15s ease",
                   boxShadow:
                     activeTab === "riwayat"
-                      ? "0 2px 8px rgba(0,0,0,0.15)"
+                      ? "0 2px 6px rgba(0,0,0,0.15)"
                       : "none",
                 }}
               >
-                📊 Lihat Semua Data Jurnal ({savedJurnalList.length})
+                📊 Semua Jurnal ({savedJurnalList.length})
               </button>
             </div>
 
@@ -547,12 +682,12 @@ export default function IsiJurnalPklModal({
               style={{
                 background: "rgba(255,255,255,0.18)",
                 border: "none",
-                color: "white",
-                width: "36px",
-                height: "36px",
+                color: "#ffffff",
+                width: "32px",
+                height: "32px",
                 borderRadius: "50%",
                 cursor: "pointer",
-                fontSize: "16px",
+                fontSize: "15px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -566,10 +701,11 @@ export default function IsiJurnalPklModal({
         {/* BODY MODAL */}
         <div
           style={{
-            padding: "20px 24px",
+            padding: "12px 14px",
             overflow: "auto",
             flex: 1,
             background: "#f8fafc",
+            color: "#0f172a",
           }}
         >
           {loadingData && (
@@ -628,7 +764,7 @@ export default function IsiJurnalPklModal({
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {rows.map((r, index) => {
                   const siswaKelasIni = r.kelas
                     ? siswaList.filter(
@@ -637,18 +773,30 @@ export default function IsiJurnalPklModal({
                       )
                     : siswaList;
 
+                  const uniqueTempatPkl = [
+                    ...new Set(
+                      r.idSiswaList
+                        .map((s) => String(s.tempatPkl || "").trim())
+                        .filter((t) => t && t !== "-"),
+                    ),
+                  ];
+
                   return (
                     <div
                       key={r.key}
-                      className="relative bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-4"
+                      className="relative rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm hover:shadow-md transition-all space-y-3"
+                      style={{ background: "#ffffff", color: "#0f172a" }}
                     >
                       {/* Header Baris / Nomor & Tombol Hapus */}
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="flex items-center justify-center w-7 h-7 bg-indigo-100 text-indigo-700 font-black rounded-lg text-xs">
+                          <span className="flex items-center justify-center w-6 h-6 bg-indigo-100 text-indigo-700 font-black rounded-lg text-xs">
                             #{index + 1}
                           </span>
-                          <h4 className="font-extrabold text-sm text-slate-800">
+                          <h4
+                            className="font-extrabold text-sm"
+                            style={{ color: "#0f172a" }}
+                          >
                             Baris Bimbingan Jurnal
                           </h4>
                         </div>
@@ -656,7 +804,7 @@ export default function IsiJurnalPklModal({
                           <button
                             type="button"
                             onClick={() => hapusBaris(r.key)}
-                            className="text-xs font-bold text-red-600 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors border border-red-200"
+                            className="text-xs font-bold text-red-600 hover:bg-red-50 px-2 py-0.5 rounded-lg transition-colors border border-red-200"
                           >
                             ✕ Hapus Baris
                           </button>
@@ -664,10 +812,13 @@ export default function IsiJurnalPklModal({
                       </div>
 
                       {/* Grid Input Utama: 1 Kolom (HP) & Multi Kolom (Tablet/Desktop) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                         {/* MINGGU KE */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Minggu Ke
                           </label>
                           <select
@@ -675,11 +826,17 @@ export default function IsiJurnalPklModal({
                             onChange={(e) =>
                               updateRow(r.key, { mingguKe: e.target.value })
                             }
-                            style={selectStyle}
+                            style={{ ...selectStyle, background: "#ffffff", color: "#0f172a" }}
                           >
-                            <option value="">Pilih minggu</option>
+                            <option value="" style={{ background: "#ffffff", color: "#0f172a" }}>
+                              Pilih minggu
+                            </option>
                             {opsiMingguKe.map((opt) => (
-                              <option key={opt} value={opt}>
+                              <option
+                                key={opt}
+                                value={opt}
+                                style={{ background: "#ffffff", color: "#0f172a" }}
+                              >
                                 {opt}
                               </option>
                             ))}
@@ -688,7 +845,10 @@ export default function IsiJurnalPklModal({
 
                         {/* TANGGAL */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Tanggal Bimbingan
                           </label>
                           <input
@@ -697,13 +857,16 @@ export default function IsiJurnalPklModal({
                             onChange={(e) =>
                               updateRow(r.key, { tanggal: e.target.value })
                             }
-                            style={selectStyle}
+                            style={{ ...selectStyle, background: "#ffffff", color: "#0f172a" }}
                           />
                         </div>
 
                         {/* FILTER KELAS */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Kelas
                           </label>
                           <select
@@ -711,44 +874,497 @@ export default function IsiJurnalPklModal({
                             onChange={(e) =>
                               handlePilihKelas(r.key, e.target.value)
                             }
-                            style={selectStyle}
+                            style={{ ...selectStyle, background: "#ffffff", color: "#0f172a" }}
                           >
-                            <option value="">Semua kelas</option>
+                            <option value="" style={{ background: "#ffffff", color: "#0f172a" }}>
+                              Semua kelas
+                            </option>
                             {daftarKelas.map((k) => (
-                              <option key={k} value={k}>
+                              <option
+                                key={k}
+                                value={k}
+                                style={{ background: "#ffffff", color: "#0f172a" }}
+                              >
                                 {k}
                               </option>
                             ))}
                           </select>
                         </div>
 
-                        {/* NAMA SISWA */}
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                            Nama Siswa
-                          </label>
-                          <select
-                            value={r.idSiswa}
-                            onChange={(e) =>
-                              handlePilihSiswa(r.key, e.target.value)
-                            }
-                            style={selectStyle}
+                        {/* NAMA SISWA — Multi-select checklist */}
+                        <div style={{ position: "relative" }}>
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
                           >
-                            <option value="">Pilih siswa</option>
-                            {siswaKelasIni.map((s) => (
-                              <option key={s.idSiswa} value={s.idSiswa}>
-                                {s.nama}
-                              </option>
-                            ))}
-                          </select>
+                            Nama Siswa{" "}
+                            {r.idSiswaList.length > 0 && (
+                              <span
+                                style={{
+                                  background: "#4f46e5",
+                                  color: "#ffffff",
+                                  borderRadius: "999px",
+                                  padding: "0 6px",
+                                  fontSize: "10px",
+                                  fontWeight: 800,
+                                  marginLeft: "4px",
+                                }}
+                              >
+                                {r.idSiswaList.length}
+                              </span>
+                            )}
+                          </label>
+
+                          {/* Tombol trigger dropdown */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenDropdownKey(
+                                openDropdownKey === r.key ? null : r.key,
+                              )
+                            }
+                            style={{
+                              ...selectStyle,
+                              textAlign: "left",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "4px",
+                              cursor: "pointer",
+                              background:
+                                r.idSiswaList.length > 0 ? "#eef2ff" : "#ffffff",
+                              borderColor:
+                                r.idSiswaList.length > 0 ? "#818cf8" : "#cbd5e1",
+                            }}
+                          >
+                            <span
+                              style={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                flex: 1,
+                                color:
+                                  r.idSiswaList.length === 0
+                                    ? "#94a3b8"
+                                    : "#1e1b4b",
+                                fontWeight: r.idSiswaList.length > 0 ? 600 : 400,
+                              }}
+                            >
+                              {r.idSiswaList.length === 0
+                                ? "Pilih siswa..."
+                                : r.idSiswaList.length === 1
+                                  ? r.idSiswaList[0].nama
+                                  : `${r.idSiswaList.length} siswa dipilih`}
+                            </span>
+                            <span style={{ fontSize: "9px", opacity: 0.6, color: "#475569" }}>
+                              ▼
+                            </span>
+                          </button>
+
+                          {/* Dropdown checklist */}
+                          {openDropdownKey === r.key && (
+                            <>
+                              {/* Overlay untuk menutup dropdown */}
+                              <div
+                                style={{
+                                  position: "fixed",
+                                  inset: 0,
+                                  zIndex: 40,
+                                }}
+                                onClick={() => setOpenDropdownKey(null)}
+                              />
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  zIndex: 50,
+                                  top: "100%",
+                                  left: 0,
+                                  right: 0,
+                                  background: "#ffffff",
+                                  color: "#0f172a",
+                                  border: "1px solid #818cf8",
+                                  borderRadius: "10px",
+                                  boxShadow:
+                                    "0 8px 24px rgba(79,70,229,0.2)",
+                                  marginTop: "4px",
+                                  overflow: "hidden",
+                                  minWidth: "260px",
+                                }}
+                              >
+                                {/* Search bar */}
+                                <div
+                                  style={{
+                                    padding: "6px",
+                                    borderBottom: "1px solid #e2e8f0",
+                                    background: "#f8fafc",
+                                  }}
+                                >
+                                  <input
+                                    type="text"
+                                    placeholder="🔍 Cari nama siswa..."
+                                    value={siswaSearchMap[r.key] || ""}
+                                    onChange={(e) =>
+                                      setSiswaSearchMap((prev) => ({
+                                        ...prev,
+                                        [r.key]: e.target.value,
+                                      }))
+                                    }
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      ...selectStyle,
+                                      padding: "5px 8px",
+                                      fontSize: "11px",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Opsi Pilih Semua */}
+                                {siswaKelasIni.length > 0 && (
+                                  <label
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "5px 10px",
+                                      cursor: "pointer",
+                                      borderBottom: "1px solid #e2e8f0",
+                                      background: "#f1f5f9",
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      color: "#334155",
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const filteredSiswa = siswaKelasIni.filter(
+                                        (s) =>
+                                          !(siswaSearchMap[r.key] || "") ||
+                                          s.nama
+                                            .toLowerCase()
+                                            .includes(
+                                              (
+                                                siswaSearchMap[r.key] || ""
+                                              ).toLowerCase(),
+                                            ),
+                                      );
+                                      const allChecked = filteredSiswa.every(
+                                        (s) =>
+                                          r.idSiswaList.some(
+                                            (sel) =>
+                                              String(sel.idSiswa) ===
+                                              String(s.idSiswa),
+                                          ),
+                                      );
+                                      if (allChecked) {
+                                        const idsFiltered = new Set(
+                                          filteredSiswa.map((s) =>
+                                            String(s.idSiswa),
+                                          ),
+                                        );
+                                        updateRow(r.key, {
+                                          idSiswaList: r.idSiswaList.filter(
+                                            (s) =>
+                                              !idsFiltered.has(
+                                                String(s.idSiswa),
+                                              ),
+                                          ),
+                                        });
+                                      } else {
+                                        const existing = new Set(
+                                          r.idSiswaList.map((s) =>
+                                            String(s.idSiswa),
+                                          ),
+                                        );
+                                        const toAdd = filteredSiswa.filter(
+                                          (s) =>
+                                            !existing.has(String(s.idSiswa)),
+                                        );
+                                        updateRow(r.key, {
+                                          idSiswaList: [
+                                            ...r.idSiswaList,
+                                            ...toAdd,
+                                          ],
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    ☑ Pilih Semua
+                                  </label>
+                                )}
+
+                                {/* List siswa */}
+                                <div
+                                  style={{ maxHeight: "180px", overflowY: "auto" }}
+                                >
+                                  {siswaKelasIni
+                                    .filter(
+                                      (s) =>
+                                        !(siswaSearchMap[r.key] || "") ||
+                                        s.nama
+                                          .toLowerCase()
+                                          .includes(
+                                            (
+                                              siswaSearchMap[r.key] || ""
+                                            ).toLowerCase(),
+                                          ),
+                                    )
+                                    .map((s) => {
+                                      const isChecked = r.idSiswaList.some(
+                                        (sel) =>
+                                          String(sel.idSiswa) ===
+                                          String(s.idSiswa),
+                                      );
+                                      return (
+                                        <label
+                                          key={s.idSiswa}
+                                          onClick={(e) => e.stopPropagation()}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            padding: "5px 10px",
+                                            cursor: "pointer",
+                                            background: isChecked
+                                              ? "#eef2ff"
+                                              : "#ffffff",
+                                            fontSize: "11px",
+                                            fontWeight: isChecked ? 700 : 500,
+                                            color: isChecked
+                                              ? "#3730a3"
+                                              : "#0f172a",
+                                            borderBottom: "1px solid #f1f5f9",
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() =>
+                                              handleToggleSiswa(r.key, s)
+                                            }
+                                            style={{
+                                              accentColor: "#4f46e5",
+                                              cursor: "pointer",
+                                            }}
+                                          />
+                                          <span style={{ flex: 1, color: isChecked ? "#3730a3" : "#0f172a" }}>
+                                            {s.nama}
+                                          </span>
+                                          {s.kelas && (
+                                            <span
+                                              style={{
+                                                fontSize: "10px",
+                                                color: "#475569",
+                                                background: "#f1f5f9",
+                                                padding: "1px 5px",
+                                                borderRadius: "4px",
+                                              }}
+                                            >
+                                              {s.kelas}
+                                            </span>
+                                          )}
+                                          {s.tempatPkl && (
+                                            <span
+                                              style={{
+                                                fontSize: "9px",
+                                                color: "#15803d",
+                                                background: "#dcfce7",
+                                                padding: "1px 5px",
+                                                borderRadius: "4px",
+                                                maxWidth: "110px",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                                border: "1px solid #bbf7d0",
+                                              }}
+                                              title={s.tempatPkl}
+                                            >
+                                              🏢 {s.tempatPkl}
+                                            </span>
+                                          )}
+                                        </label>
+                                      );
+                                    })}
+                                  {siswaKelasIni.filter(
+                                    (s) =>
+                                      !(siswaSearchMap[r.key] || "") ||
+                                      s.nama
+                                        .toLowerCase()
+                                        .includes(
+                                          (
+                                            siswaSearchMap[r.key] || ""
+                                          ).toLowerCase(),
+                                        ),
+                                  ).length === 0 && (
+                                    <div
+                                      style={{
+                                        padding: "12px",
+                                        textAlign: "center",
+                                        color: "#94a3b8",
+                                        fontSize: "11px",
+                                      }}
+                                    >
+                                      Tidak ada siswa ditemukan
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Footer tombol selesai */}
+                                <div
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderTop: "1px solid #e2e8f0",
+                                    background: "#f8fafc",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "10px",
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    {r.idSiswaList.length} dipilih
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenDropdownKey(null)}
+                                    style={{
+                                      padding: "3px 9px",
+                                      background: "#4f46e5",
+                                      color: "#ffffff",
+                                      border: "none",
+                                      borderRadius: "6px",
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    ✓ Selesai
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Chip siswa terpilih */}
+                          {r.idSiswaList.length > 0 && (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "3px",
+                              }}
+                            >
+                              {r.idSiswaList.map((s) => (
+                                <span
+                                  key={s.idSiswa}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    background: "#e0e7ff",
+                                    color: "#3730a3",
+                                    borderRadius: "999px",
+                                    padding: "2px 7px 2px 6px",
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {s.nama}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleToggleSiswa(r.key, s)
+                                    }
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      color: "#6366f1",
+                                      fontWeight: 800,
+                                      padding: 0,
+                                      fontSize: "11px",
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Preview Tempat PKL yang otomatis mengikuti siswa */}
+                          {r.idSiswaList.length > 0 && (
+                            <div
+                              style={{
+                                marginTop: "5px",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "4px 8px",
+                                background: "#f0fdf4",
+                                border: "1px solid #bbf7d0",
+                                borderRadius: "6px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  color: "#166534",
+                                }}
+                              >
+                                🏢 Tempat PKL:
+                              </span>
+                              {uniqueTempatPkl.length > 0 ? (
+                                uniqueTempatPkl.map((tp, idx) => (
+                                  <span
+                                    key={idx}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      background: "#dcfce7",
+                                      color: "#15803d",
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      border: "1px solid #86efac",
+                                    }}
+                                  >
+                                    {tp}
+                                  </span>
+                                ))
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    color: "#94a3b8",
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  (Belum ada data tempat PKL di master siswa)
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Grid Isian Teks Panjang (Materi, Masalah, Tindak Lanjut) */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
                         {/* MATERI */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Materi Bimbingan
                           </label>
                           <ComboDropdown
@@ -766,7 +1382,10 @@ export default function IsiJurnalPklModal({
 
                         {/* PERMASALAHAN */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Permasalahan
                           </label>
                           <ComboDropdown
@@ -784,7 +1403,10 @@ export default function IsiJurnalPklModal({
 
                         {/* TINDAK LANJUT */}
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                          <label
+                            className="block text-[11px] font-bold mb-1"
+                            style={{ color: "#334155" }}
+                          >
                             Tindak Lanjut
                           </label>
                           <ComboDropdown
@@ -803,7 +1425,10 @@ export default function IsiJurnalPklModal({
 
                       {/* Area Upload Foto */}
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-500">
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: "#475569" }}
+                        >
                           Bukti Foto (Opsional)
                         </span>
                         {!r.foto ? (
@@ -847,17 +1472,18 @@ export default function IsiJurnalPklModal({
              ============================================================ */}
           {activeTab === "riwayat" && (
             <div>
-              {/* FILTER & KARTU STATISTIK */}
+              {/* FILTER & KARTU STATISTIK + TOMBOL CETAK */}
               <div
                 style={{
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: "12px",
-                  marginBottom: "18px",
-                  background: "white",
-                  padding: "16px 20px",
+                  gap: "10px",
+                  marginBottom: "14px",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  padding: "12px 16px",
                   borderRadius: "14px",
                   border: "1px solid #e2e8f0",
                   boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
@@ -868,7 +1494,7 @@ export default function IsiJurnalPklModal({
                   style={{
                     display: "flex",
                     flexWrap: "wrap",
-                    gap: "10px",
+                    gap: "8px",
                     flex: 1,
                   }}
                 >
@@ -878,11 +1504,13 @@ export default function IsiJurnalPklModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     style={{
-                      padding: "9px 14px",
-                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      borderRadius: "9px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "13px",
-                      minWidth: "260px",
+                      fontSize: "12px",
+                      background: "#ffffff",
+                      color: "#0f172a",
+                      minWidth: "200px",
                       flex: 1,
                       outline: "none",
                     }}
@@ -892,50 +1520,92 @@ export default function IsiJurnalPklModal({
                     value={filterMinggu}
                     onChange={(e) => setFilterMinggu(e.target.value)}
                     style={{
-                      padding: "9px 14px",
-                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      borderRadius: "9px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "13px",
-                      background: "white",
+                      fontSize: "12px",
+                      background: "#ffffff",
+                      color: "#0f172a",
                       outline: "none",
                     }}
                   >
-                    <option value="">📅 Semua Minggu Ke</option>
+                    <option value="" style={{ background: "#ffffff", color: "#0f172a" }}>
+                      📅 Semua Minggu Ke
+                    </option>
                     {opsiMingguKe.map((m) => (
-                      <option key={m} value={m}>
+                      <option
+                        key={m}
+                        value={m}
+                        style={{ background: "#ffffff", color: "#0f172a" }}
+                      >
                         {m}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Badge Statistik */}
-                <div style={{ display: "flex", gap: "10px" }}>
+                {/* Badge Statistik & Tombol Cetak PDF */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
                   <div
                     style={{
                       background: "#e0e7ff",
                       color: "#3730a3",
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      fontSize: "12px",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      fontSize: "11px",
                       fontWeight: 700,
                     }}
                   >
-                    📋 Total: {filteredJurnal.length} Jurnal
+                    📋 Total: {filteredJurnal.length}
                   </div>
                   <div
                     style={{
                       background: "#dcfce7",
                       color: "#166534",
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      fontSize: "12px",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      fontSize: "11px",
                       fontWeight: 700,
                     }}
                   >
-                    🎓 Siswa:{" "}
-                    {new Set(filteredJurnal.map((i) => i.idSiswa)).size} Orang
+                    🎓 Siswa: {new Set(filteredJurnal.map((i) => i.idSiswa)).size}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCetakJurnalPDF}
+                    disabled={printingPdf || filteredJurnal.length === 0}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background:
+                        printingPdf || filteredJurnal.length === 0
+                          ? "#94a3b8"
+                          : "linear-gradient(135deg, #059669, #047857)",
+                      color: "#ffffff",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor:
+                        printingPdf || filteredJurnal.length === 0
+                          ? "not-allowed"
+                          : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      boxShadow: "0 2px 6px rgba(5,150,105,0.25)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {printingPdf ? "⏳ Menyiapkan PDF..." : "🖨️ Cetak PDF Laporan"}
+                  </button>
                 </div>
               </div>
 
@@ -944,26 +1614,27 @@ export default function IsiJurnalPklModal({
                 <div
                   style={{
                     textAlign: "center",
-                    padding: "48px 20px",
-                    background: "white",
-                    borderRadius: "16px",
+                    padding: "36px 16px",
+                    background: "#ffffff",
+                    borderRadius: "14px",
                     border: "1px solid #e2e8f0",
                     color: "#64748b",
                   }}
                 >
-                  <div style={{ fontSize: "40px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "36px", marginBottom: "6px" }}>
                     📁
                   </div>
                   <h4
                     style={{
                       margin: "0 0 4px",
-                      fontSize: "16px",
+                      fontSize: "15px",
                       color: "#334155",
+                      fontWeight: 700,
                     }}
                   >
                     Belum Ada Data Jurnal
                   </h4>
-                  <p style={{ margin: 0, fontSize: "13px" }}>
+                  <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>
                     {searchTerm || filterMinggu
                       ? "Tidak ada data yang sesuai dengan pencarian atau filter Anda."
                       : "Belum ada jurnal PKL yang disimpan oleh Anda."}
@@ -972,20 +1643,21 @@ export default function IsiJurnalPklModal({
               ) : (
                 <div
                   style={{
-                    background: "white",
-                    borderRadius: "16px",
+                    background: "#ffffff",
+                    borderRadius: "14px",
                     border: "1px solid #e2e8f0",
                     overflow: "hidden",
                     boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)",
                   }}
                 >
-                  <div style={{ overflowX: "auto" }}>
+                  <div style={{ overflowX: "auto", width: "100%" }}>
                     <table
                       style={{
                         width: "100%",
                         borderCollapse: "collapse",
-                        fontSize: "13px",
+                        fontSize: "12px",
                         textAlign: "left",
+                        color: "#0f172a",
                       }}
                     >
                       <thead>
@@ -999,6 +1671,15 @@ export default function IsiJurnalPklModal({
                           <th style={thRiwayatStyle}>Permasalahan</th>
                           <th style={thRiwayatStyle}>Tindak Lanjut</th>
                           <th style={thRiwayatStyle}>Bukti Foto</th>
+                          <th
+                            style={{
+                              ...thRiwayatStyle,
+                              textAlign: "center",
+                              background: "#7f1d1d",
+                            }}
+                          >
+                            Aksi
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1008,6 +1689,7 @@ export default function IsiJurnalPklModal({
                             style={{
                               borderBottom: "1px solid #e2e8f0",
                               background: idx % 2 === 0 ? "#ffffff" : "#f8fafc",
+                              color: "#0f172a",
                             }}
                           >
                             <td style={tdRiwayatStyle}>{idx + 1}</td>
@@ -1017,8 +1699,8 @@ export default function IsiJurnalPklModal({
                               <span
                                 style={{
                                   display: "inline-block",
-                                  padding: "4px 10px",
-                                  borderRadius: "12px",
+                                  padding: "3px 8px",
+                                  borderRadius: "10px",
                                   background: "#e0e7ff",
                                   color: "#3730a3",
                                   fontWeight: 700,
@@ -1032,7 +1714,7 @@ export default function IsiJurnalPklModal({
 
                             {/* Tanggal Waktu */}
                             <td
-                              style={{ ...tdRiwayatStyle, minWidth: "140px" }}
+                              style={{ ...tdRiwayatStyle, minWidth: "130px" }}
                             >
                               <div
                                 style={{ fontWeight: 600, color: "#1e293b" }}
@@ -1045,43 +1727,151 @@ export default function IsiJurnalPklModal({
                             <td
                               style={{ ...tdRiwayatStyle, minWidth: "160px" }}
                             >
-                              <div
-                                style={{ fontWeight: 700, color: "#0f172a" }}
-                              >
-                                {item.namaSiswa || "-"}
-                              </div>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  marginTop: "3px",
-                                  padding: "2px 8px",
-                                  borderRadius: "6px",
-                                  background: "#dcfce7",
-                                  color: "#166534",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {item.kelas || "-"}
-                              </span>
+                              {(() => {
+                                const rawNama = item.namaSiswa || "-";
+                                const listNama = rawNama
+                                  .split(/\s*[\/|\n]\s*/)
+                                  .map((n) => n.trim())
+                                  .filter(Boolean);
+
+                                if (listNama.length === 0) {
+                                  return (
+                                    <div
+                                      style={{
+                                        fontWeight: 700,
+                                        color: "#0f172a",
+                                      }}
+                                    >
+                                      -
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: "4px",
+                                    }}
+                                  >
+                                    {listNama.map((ns, i) => (
+                                      <div
+                                        key={i}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "flex-start",
+                                          gap: "6px",
+                                          lineHeight: 1.35,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            color: "#2563eb",
+                                            fontWeight: 800,
+                                            fontSize: "13px",
+                                            lineHeight: 1.2,
+                                            flexShrink: 0,
+                                            marginTop: "1px",
+                                          }}
+                                        >
+                                          •
+                                        </span>
+                                        <span
+                                          style={{
+                                            fontWeight: 700,
+                                            color: "#0f172a",
+                                            fontSize: "12px",
+                                            flex: 1,
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {ns}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+
+                              {item.kelas && item.kelas !== "-" ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: "3px",
+                                    marginTop: "5px",
+                                  }}
+                                >
+                                  {item.kelas
+                                    .split(/\s*,\s*|\s*[\/|\n]\s*/)
+                                    .filter(Boolean)
+                                    .map((k, ki) => (
+                                      <span
+                                        key={ki}
+                                        style={{
+                                          display: "inline-block",
+                                          padding: "1.5px 6px",
+                                          borderRadius: "4px",
+                                          background: "#dcfce7",
+                                          color: "#166534",
+                                          fontSize: "10.5px",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {k}
+                                      </span>
+                                    ))}
+                                </div>
+                              ) : null}
                             </td>
 
-                            {/* Tempat PKL */}
+                            {/* Tempat PKL — Menampilkan tiap tempat magang bertingkat */}
                             <td
                               style={{ ...tdRiwayatStyle, minWidth: "140px" }}
                             >
-                              <span
-                                style={{ color: "#334155", fontWeight: 500 }}
-                              >
-                                🏢 {item.tempatPkl || "-"}
-                              </span>
+                              {item.tempatPkl && item.tempatPkl !== "-" ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "3px",
+                                  }}
+                                >
+                                  {item.tempatPkl
+                                    .split(/\s*[\/|\n]\s*/)
+                                    .filter(Boolean)
+                                    .map((tp, i) => (
+                                      <span
+                                        key={i}
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                          padding: "2px 6px",
+                                          borderRadius: "6px",
+                                          background: "#f0fdf4",
+                                          color: "#166534",
+                                          border: "1px solid #bbf7d0",
+                                          fontSize: "11px",
+                                          fontWeight: 600,
+                                          lineHeight: 1.25,
+                                        }}
+                                      >
+                                        🏢 {tp}
+                                      </span>
+                                    ))}
+                                </div>
+                              ) : (
+                                <span style={{ color: "#94a3b8" }}>-</span>
+                              )}
                             </td>
 
                             {/* Materi */}
                             <td
                               style={{
                                 ...tdRiwayatStyle,
-                                minWidth: "200px",
+                                minWidth: "180px",
                                 color: "#334155",
                               }}
                             >
@@ -1092,7 +1882,7 @@ export default function IsiJurnalPklModal({
                             <td
                               style={{
                                 ...tdRiwayatStyle,
-                                minWidth: "200px",
+                                minWidth: "180px",
                                 color: "#991b1b",
                               }}
                             >
@@ -1103,7 +1893,7 @@ export default function IsiJurnalPklModal({
                             <td
                               style={{
                                 ...tdRiwayatStyle,
-                                minWidth: "200px",
+                                minWidth: "180px",
                                 color: "#166534",
                               }}
                             >
@@ -1147,6 +1937,63 @@ export default function IsiJurnalPklModal({
                                 </span>
                               )}
                             </td>
+
+                            {/* Tombol Hapus */}
+                            <td
+                              style={{ ...tdRiwayatStyle, textAlign: "center" }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleHapusJurnalPkl(item.idJurnal)
+                                }
+                                disabled={
+                                  deletingJurnalId === item.idJurnal ||
+                                  !item.idJurnal
+                                }
+                                title={
+                                  !item.idJurnal
+                                    ? "ID jurnal tidak tersedia"
+                                    : "Hapus jurnal ini"
+                                }
+                                style={{
+                                  padding: "5px 10px",
+                                  background:
+                                    deletingJurnalId === item.idJurnal
+                                      ? "#94a3b8"
+                                      : !item.idJurnal
+                                        ? "#e2e8f0"
+                                        : "#fee2e2",
+                                  color:
+                                    deletingJurnalId === item.idJurnal
+                                      ? "#ffffff"
+                                      : !item.idJurnal
+                                        ? "#94a3b8"
+                                        : "#dc2626",
+                                  border: "1px solid",
+                                  borderColor:
+                                    deletingJurnalId === item.idJurnal
+                                      ? "#94a3b8"
+                                      : !item.idJurnal
+                                        ? "#cbd5e1"
+                                        : "#fca5a5",
+                                  borderRadius: "8px",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  cursor:
+                                    deletingJurnalId === item.idJurnal ||
+                                    !item.idJurnal
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  whiteSpace: "nowrap",
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                {deletingJurnalId === item.idJurnal
+                                  ? "⏳"
+                                  : "🗑️ Hapus"}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1178,30 +2025,35 @@ export default function IsiJurnalPklModal({
         {/* FOOTER MODAL */}
         <div
           style={{
-            padding: "14px 24px",
+            padding: "10px 16px",
             borderTop: "1px solid #e2e8f0",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: "8px",
             background: "#ffffff",
+            color: "#0f172a",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#64748b" }}>
+          <div style={{ fontSize: "11px", color: "#64748b" }}>
             {activeTab === "form"
               ? `Menampilkan ${rows.length} baris input`
               : `Total ${savedJurnalList.length} jurnal tersimpan`}
           </div>
 
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
             <button
               type="button"
               onClick={onClose}
               style={{
-                padding: "10px 18px",
-                borderRadius: "10px",
+                padding: "8px 14px",
+                borderRadius: "8px",
                 border: "1px solid #cbd5e1",
-                background: "white",
+                background: "#ffffff",
+                color: "#334155",
                 fontWeight: 700,
+                fontSize: "12px",
                 cursor: "pointer",
               }}
             >
@@ -1214,16 +2066,17 @@ export default function IsiJurnalPklModal({
                 onClick={handleSubmit}
                 disabled={saving}
                 style={{
-                  padding: "10px 24px",
-                  borderRadius: "10px",
+                  padding: "8px 18px",
+                  borderRadius: "8px",
                   border: "none",
                   background: saving
                     ? "#94a3b8"
                     : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                  color: "white",
+                  color: "#ffffff",
+                  fontSize: "12px",
                   fontWeight: 700,
                   cursor: saving ? "not-allowed" : "pointer",
-                  boxShadow: "0 4px 12px rgba(37,99,235,0.25)",
+                  boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
                 }}
               >
                 {saving ? "Menyimpan..." : "💾 Simpan Semua Jurnal"}
@@ -1303,15 +2156,26 @@ function ComboDropdown({
       <select
         value={value}
         onChange={(e) => onChangeSelect(e.target.value)}
-        style={selectStyle}
+        style={{ ...selectStyle, background: "#ffffff", color: "#0f172a" }}
       >
-        <option value="">Pilih...</option>
+        <option value="" style={{ background: "#ffffff", color: "#0f172a" }}>
+          Pilih...
+        </option>
         {options.map((opt, i) => (
-          <option key={i} value={opt}>
+          <option
+            key={i}
+            value={opt}
+            style={{ background: "#ffffff", color: "#0f172a" }}
+          >
             {opt.length > 55 ? opt.slice(0, 55) + "..." : opt}
           </option>
         ))}
-        <option value={OPT_LAINNYA}>✏️ Lainnya (isi manual)</option>
+        <option
+          value={OPT_LAINNYA}
+          style={{ background: "#ffffff", color: "#0f172a" }}
+        >
+          ✏️ Lainnya (isi manual)
+        </option>
       </select>
       {value === OPT_LAINNYA && (
         <textarea
@@ -1319,7 +2183,13 @@ function ComboDropdown({
           onChange={(e) => onChangeManual(e.target.value)}
           placeholder="Tulis manual..."
           rows={2}
-          style={{ ...selectStyle, marginTop: "4px", resize: "vertical" }}
+          style={{
+            ...selectStyle,
+            marginTop: "4px",
+            resize: "vertical",
+            background: "#ffffff",
+            color: "#0f172a",
+          }}
         />
       )}
     </div>
@@ -1329,32 +2199,37 @@ function ComboDropdown({
 const tdStyle = {
   borderBottom: "1px solid #e2e8f0",
   borderRight: "1px solid #e2e8f0",
-  padding: "8px",
+  padding: "6px 8px",
   verticalAlign: "top",
+  color: "#0f172a",
 };
 
 const thRiwayatStyle = {
-  padding: "12px 14px",
+  padding: "9px 10px",
   fontWeight: 700,
   fontSize: "12px",
   whiteSpace: "nowrap",
+  color: "#f8fafc",
 };
 
 const tdRiwayatStyle = {
-  padding: "12px 14px",
+  padding: "8px 10px",
   verticalAlign: "middle",
+  color: "#0f172a",
+  fontSize: "12px",
 };
 
 const selectStyle = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "7px 9px",
+  padding: "6px 9px",
   border: "1px solid #cbd5e1",
   borderRadius: "8px",
   fontSize: "12px",
   outline: "none",
   fontFamily: "inherit",
-  background: "white",
+  background: "#ffffff",
+  color: "#0f172a",
 };
 
 function btnBulat(color) {

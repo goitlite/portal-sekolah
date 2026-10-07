@@ -198,6 +198,10 @@ function doPost(e) {
       response = getJurnalPKL(params.idGuru);
     }
 
+    else if (action === 'deleteJurnalPKL') {
+      response = deleteJurnalPKL(params);
+    }
+
     // ============================================
     // PRESENSI OPERATIONS
     // ============================================
@@ -555,7 +559,8 @@ function doGet(e) {
       'uploadTugasMapel', 'getTugasMapel', 'uploadJawabanSiswa', 'getJawabanSiswa',
       'getWaliKelasByGuru', 'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
       'getSiswaWaliKelas', 'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'getSemuaSiswaUntukTambahWali',
-      'sinkronSiswaWaliKelas', 'getPresensiWaliGrid', 'savePresensiWaliKelas', 'saveJurnalWaliKelas', 'getJurnalWaliKelas'
+      'sinkronSiswaWaliKelas', 'getPresensiWaliGrid', 'savePresensiWaliKelas', 'saveJurnalWaliKelas', 'getJurnalWaliKelas',
+      'saveJurnalPKL', 'getJurnalPKL', 'deleteJurnalPKL'
     ]
   };
   

@@ -463,6 +463,17 @@ export async function getJurnalPKL(idGuru) {
   });
 }
 
+// ---------------------------------------------------------
+// HAPUS SATU BARIS JURNAL PKL
+// ---------------------------------------------------------
+
+export async function deleteJurnalPKL({ idGuru, idJurnal }) {
+  return request("deleteJurnalPKL", {
+    idGuru,
+    idJurnal,
+  });
+}
+
 /**
  * ====================================================================
  * PATCH FINAL UNTUK src/lib/api.js — FITUR GURU MAPEL (v3)
