@@ -408,6 +408,10 @@ function doPost(e) {
       response = savePresensiMapel(params);
     }
 
+    else if (action === 'hapusPertemuanMapel') {
+      response = hapusPertemuanMapel(params);
+    }
+
     else if (action === 'saveJurnalMapel') {
       response = saveJurnalMapel(params);
     }
@@ -547,7 +551,7 @@ function doGet(e) {
       'uploadPhoto', 'uploadPhotoFromUrl',
       'getMapelByGuru', 'addMapel', 'editMapel', 'deleteMapel',
       'getKelasSiswaMapel', 'getSiswaByKelasMapel', 'getSiswaMapel', 'simpanSiswaMapel', 'hapusSiswaMapel',
-      'getSemuaSiswaUntukTambahMapel', 'getPresensiMapelGrid', 'savePresensiMapel', 'saveJurnalMapel', 'getJurnalMapel',
+      'getSemuaSiswaUntukTambahMapel', 'getPresensiMapelGrid', 'savePresensiMapel', 'hapusPertemuanMapel', 'saveJurnalMapel', 'getJurnalMapel',
       'uploadTugasMapel', 'getTugasMapel', 'uploadJawabanSiswa', 'getJawabanSiswa',
       'getWaliKelasByGuru', 'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
       'getSiswaWaliKelas', 'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'getSemuaSiswaUntukTambahWali',

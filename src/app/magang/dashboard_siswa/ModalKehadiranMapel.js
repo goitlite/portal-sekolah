@@ -48,6 +48,105 @@ function formatTanggalMapel(tglStr) {
   }
 }
 
+export function extractYouTubeVideoId(url) {
+  if (!url || typeof url !== "string") return null;
+  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  const match = url.match(regExp);
+  return match ? match[1] : null;
+}
+
+export function parseTugasData(t) {
+  if (!t) {
+    return {
+      ytId: null,
+      ytUrl: null,
+      downloadUrl: null,
+      linkEksternal: null,
+      deskripsiBersih: "",
+    };
+  }
+
+  const rawDeskripsi = String(t.deskripsi || "");
+  let ytId = null;
+  let ytUrl = null;
+  let downloadUrl = null;
+  let linkEksternal = null;
+
+  // 1. Ekstrak dari pola [LINK]: ... di deskripsi
+  let linkFromDeskripsi = "";
+  const tagMatch = rawDeskripsi.match(/\[LINK\]:\s*(https?:\/\/[^\s]+)/i);
+  if (tagMatch) {
+    linkFromDeskripsi = tagMatch[1].trim();
+  }
+
+  // 2. Ekstrak semua URL yang ada di deskripsi
+  const urlsInDeskripsi = rawDeskripsi.match(/https?:\/\/[^\s<>"'\)]+/gi) || [];
+
+  // 3. Kumpulkan semua calon link yang unik
+  const candidatesSet = new Set();
+  if (t.linkUrl && typeof t.linkUrl === "string") candidatesSet.add(t.linkUrl.trim());
+  if (linkFromDeskripsi) candidatesSet.add(linkFromDeskripsi);
+  urlsInDeskripsi.forEach((u) => candidatesSet.add(u.trim()));
+  if (t.fileUrl && typeof t.fileUrl === "string") candidatesSet.add(t.fileUrl.trim());
+
+  const allCandidates = Array.from(candidatesSet);
+
+  // 4. Cari YouTube terlebih dahulu
+  for (const u of allCandidates) {
+    const yId = extractYouTubeVideoId(u);
+    if (yId) {
+      ytId = yId;
+      ytUrl = u.startsWith("http") ? u : `https://www.youtube.com/watch?v=${yId}`;
+      break;
+    }
+  }
+
+  // 5. Cek download file (Google Drive atau berkas fisik)
+  if (t.fileUrl && !extractYouTubeVideoId(t.fileUrl)) {
+    downloadUrl = t.fileUrl;
+  }
+
+  // 6. Cek link eksternal (link apapun yang bukan YouTube)
+  for (const u of allCandidates) {
+    if (!extractYouTubeVideoId(u)) {
+      if (!linkEksternal) {
+        linkEksternal = u;
+      }
+    }
+  }
+
+  // Jika downloadUrl ada tapi linkEksternal belum ada, gunakan downloadUrl
+  if (!linkEksternal && downloadUrl) {
+    linkEksternal = downloadUrl;
+  }
+
+  // 7. Bersihkan teks deskripsi dari tag [LINK] dan url mentah
+  const deskripsiBersih = rawDeskripsi
+    .replace(/\[LINK\]:\s*\S+/gi, "")
+    .replace(/https?:\/\/[^\s]+/gi, "")
+    .trim();
+
+  return {
+    ytId,
+    ytUrl,
+    downloadUrl,
+    linkEksternal,
+    deskripsiBersih,
+  };
+}
+
+export function findYouTubeFromTugas(tugasList) {
+  if (!Array.isArray(tugasList)) return null;
+  for (const t of tugasList) {
+    if (!t) continue;
+    const parsed = parseTugasData(t);
+    if (parsed.ytId) {
+      return { videoId: parsed.ytId, tugas: t, sourceUrl: parsed.ytUrl };
+    }
+  }
+  return null;
+}
+
 export default function ModalKehadiranMapel({
   isOpen,
   onClose,
@@ -68,6 +167,52 @@ export default function ModalKehadiranMapel({
   const [uploadState, setUploadState] = useState({}); // { "idMapel_pKe": { file, keterangan, loading, sukses, error } }
   const [pDipilihUpload, setPDipilihUpload] = useState(1);
   const fileInputRefs = useRef({});
+
+  // ── Auto-pilih pertemuan terbaru yang memiliki tugas ──────────────────────
+  // Saat mapel diganti atau data tugas baru masuk dari server, otomatis loncat
+  // ke pertemuan tertinggi yang punya tugas agar siswa langsung melihat tugas.
+  // Jika pertemuan yang sudah dipilih user sudah punya tugas, tidak di-reset.
+  // ── Auto-pilih pertemuan terbaru yang memiliki tugas ──────────────────────
+  // Saat mapel dibuka/diganti atau data tugas masuk dari server, otomatis pilih
+  // pertemuan tertinggi (terbaru) yang memiliki tugas agar siswa langsung melihat tugas terbaru.
+  useEffect(() => {
+    if (!selectedMapelId) return;
+    const tugasMapelIni = tugasPerMapel[selectedMapelId] || {};
+    const tugasKeys = Object.keys(tugasMapelIni)
+      .map(Number)
+      .filter(
+        (n) =>
+          n > 0 &&
+          Array.isArray(tugasMapelIni[String(n)]) &&
+          tugasMapelIni[String(n)].length > 0,
+      );
+    if (tugasKeys.length > 0) {
+      const maxP = Math.max(...tugasKeys);
+      setPDipilihUpload(maxP);
+    }
+  }, [selectedMapelId]);
+
+  useEffect(() => {
+    if (!selectedMapelId) return;
+    const tugasMapelIni = tugasPerMapel[selectedMapelId] || {};
+    const tugasKeys = Object.keys(tugasMapelIni)
+      .map(Number)
+      .filter(
+        (n) =>
+          n > 0 &&
+          Array.isArray(tugasMapelIni[String(n)]) &&
+          tugasMapelIni[String(n)].length > 0,
+      );
+    if (tugasKeys.length > 0) {
+      const maxP = Math.max(...tugasKeys);
+      setPDipilihUpload((prev) => {
+        // Jika prev belum disetel atau belum ada tugas di prev, gunakan maxP
+        const prevAda = Array.isArray(tugasMapelIni[String(prev)]) && tugasMapelIni[String(prev)].length > 0;
+        return prevAda ? prev : maxP;
+      });
+    }
+  }, [tugasPerMapel]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const CACHE_KEY = `cache_mapel_siswa_${user?.id}_${fokusDaring ? "daring" : "reguler"}`;
   const DISCOVER_CACHE_KEY = `cache_discovered_mapels_${user?.id}_${fokusDaring ? "daring" : "reguler"}`;
@@ -133,23 +278,6 @@ export default function ModalKehadiranMapel({
             if (!newTugasMap[pKe]) newTugasMap[pKe] = [];
             newTugasMap[pKe].push(t);
           });
-
-          const currentP = new Set(
-            (m.pertemuanList || []).map((p) => Number(p.pertemuanKe))
-          );
-          resTugas.data.forEach((t) => {
-            const pKe = Number(t.pertemuanKe);
-            if (pKe && !currentP.has(pKe)) {
-              currentP.add(pKe);
-              tambahanPertemuan.push({
-                pertemuanKe: pKe,
-                tanggal: t.createdAt ? t.createdAt.substring(0, 10) : "",
-                status: "Ada Tugas",
-                nilai: null,
-              });
-            }
-          });
-
           setTugasPerMapel((prev) => ({ ...prev, [m.idMapel]: newTugasMap }));
         }
 
@@ -168,16 +296,13 @@ export default function ModalKehadiranMapel({
           setUploadState((prev) => ({ ...prev, ...newUploadMap }));
         }
 
-        // 3. Presensi & Nilai
-        let updatedPertemuanList = [
-          ...(m.pertemuanList || []),
-          ...tambahanPertemuan,
-        ];
-        let hadir = m.hadir || 0,
-          sakit = m.sakit || 0,
-          izin = m.izin || 0,
-          alfa = m.alfa || 0,
-          cabut = m.cabut || 0;
+        // 3. Presensi & Nilai (Hanya pertemuan yang aktif di server guru)
+        let updatedPertemuanList = [];
+        let hadir = 0,
+          sakit = 0,
+          izin = 0,
+          alfa = 0,
+          cabut = 0;
         let totalNilai = 0,
           jumlahNilaiAda = 0;
 
@@ -187,15 +312,23 @@ export default function ModalKehadiranMapel({
             (p) => String(p.idSiswa).trim() === String(user.id).trim()
           );
 
-          hadir = 0;
-          sakit = 0;
-          izin = 0;
-          alfa = 0;
-          cabut = 0;
+          // Himpunan pertemuan yang AKTIF di server guru (tidak dihapus)
+          const validPertemuanSet = new Set();
+          presensiSemua.forEach((p) => {
+            const pNum = Number(p.pertemuanKe);
+            if (pNum) validPertemuanSet.add(pNum);
+          });
+          if (newTugasMap) {
+            Object.keys(newTugasMap).forEach((pStr) => {
+              const pNum = Number(pStr);
+              if (pNum) validPertemuanSet.add(pNum);
+            });
+          }
+
           const pMap = {};
           presensiSaya.forEach((p) => {
             const pKe = Number(p.pertemuanKe);
-            if (pKe) {
+            if (pKe && validPertemuanSet.has(pKe)) {
               pMap[pKe] = {
                 pertemuanKe: pKe,
                 tanggal: p.tanggal || "",
@@ -219,20 +352,26 @@ export default function ModalKehadiranMapel({
             }
           });
 
-          // Gabungkan pertemuan lama dan baru
-          const existingMap = {};
-          updatedPertemuanList.forEach((p) => {
-            existingMap[p.pertemuanKe] = p;
-          });
-          Object.values(pMap).forEach((p) => {
-            existingMap[p.pertemuanKe] = {
-              ...(existingMap[p.pertemuanKe] || {}),
-              ...p,
+          // Daftar pertemuan resmi: HANYA yang ada di validPertemuanSet, urut terbaru di atas (b - a)!
+          const activeSortedP = Array.from(validPertemuanSet).sort((a, b) => b - a);
+          updatedPertemuanList = activeSortedP.map((pNum) => {
+            if (pMap[pNum]) return pMap[pNum];
+            const sample = presensiSemua.find((p) => Number(p.pertemuanKe) === pNum);
+            return {
+              pertemuanKe: pNum,
+              tanggal: sample?.tanggal || "",
+              status: newTugasMap?.[String(pNum)] ? "Ada Tugas" : "-",
+              nilai: null,
             };
           });
-          updatedPertemuanList = Object.values(existingMap).sort(
-            (a, b) => a.pertemuanKe - b.pertemuanKe
-          );
+        } else {
+          // Fallback jika grid belum termuat
+          updatedPertemuanList = m.pertemuanList || [];
+          hadir = m.hadir || 0;
+          sakit = m.sakit || 0;
+          izin = m.izin || 0;
+          alfa = m.alfa || 0;
+          cabut = m.cabut || 0;
         }
 
         const totalPertemuan = updatedPertemuanList.length;
@@ -741,6 +880,40 @@ export default function ModalKehadiranMapel({
     .replace(/^\[ONLINE\]\s*/i, "")
     .trim();
 
+  // Cari tugas terakhir/terbaru dari guru di mapel aktif
+  const latestTaskInfo = (() => {
+    if (!mapelAktif?.idMapel) return null;
+    const tugasMap = tugasPerMapel[mapelAktif.idMapel] || {};
+    const pKeys = Object.keys(tugasMap)
+      .map(Number)
+      .filter(
+        (p) =>
+          p > 0 &&
+          Array.isArray(tugasMap[String(p)]) &&
+          tugasMap[String(p)].length > 0
+      )
+      .sort((a, b) => b - a);
+
+    if (pKeys.length === 0) return null;
+    const latestP = pKeys[0];
+    const tasksInP = tugasMap[String(latestP)] || [];
+    const primaryTask = tasksInP[0];
+    if (!primaryTask) return null;
+
+    const parsed = parseTugasData(primaryTask);
+    const ytInList = findYouTubeFromTugas(tasksInP);
+
+    return {
+      pertemuanKe: latestP,
+      tasks: tasksInP,
+      primaryTask,
+      parsed,
+      ytInfo:
+        ytInList ||
+        (parsed.ytId ? { videoId: parsed.ytId, sourceUrl: parsed.ytUrl } : null),
+    };
+  })();
+
   return (
     <div
       className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 p-2.5 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
@@ -934,7 +1107,9 @@ export default function ModalKehadiranMapel({
                   return (
                     <button
                       key={m.idMapel}
-                      onClick={() => setSelectedMapelId(m.idMapel)}
+                      onClick={() => {
+                        setSelectedMapelId(m.idMapel);
+                      }}
                       className={`shrink-0 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-left transition-all border ${
                         isSelected
                           ? "bg-gradient-to-r from-blue-700 to-indigo-800 text-white border-blue-600 shadow-xs scale-[1.01]"
@@ -1058,10 +1233,154 @@ export default function ModalKehadiranMapel({
                   </div>
 
                   {/* ======================================================== */}
+                  {/* BANNER / CARD: TUGAS TERAKHIR DARI GURU (TAMPIL DI PALING ATAS) */}
+                  {/* ======================================================== */}
+                  {latestTaskInfo && (
+                    <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 text-white p-3.5 sm:p-4 border border-indigo-400/40 shadow-md space-y-3 relative overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-400 text-slate-950 text-sm font-black shadow-xs shrink-0">
+                            📌
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs sm:text-sm font-black text-white uppercase tracking-wide">
+                                Tugas Terakhir Dari Guru
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                Pertemuan {latestTaskInfo.pertemuanKe} (Terbaru)
+                              </span>
+                            </div>
+                            <p className="text-[10px] sm:text-[11px] text-slate-300 font-medium">
+                              Instruksi dan materi aktif terkini dari {mapelAktif.namaGuru || "Guru Mapel"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isMapelOnline && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPDipilihUpload(latestTaskInfo.pertemuanKe);
+                              const uploadEl = document.getElementById("panel-upload-tugas-siswa");
+                              if (uploadEl) {
+                                uploadEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }
+                            }}
+                            className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+                          >
+                            <span>📤</span>
+                            <span>Kumpulkan Tugas P-{latestTaskInfo.pertemuanKe}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* JIKA ADA VIDEO YOUTUBE PADA TUGAS TERAKHIR: TAMPILKAN DI PALING ATAS! */}
+                      {latestTaskInfo.ytInfo && (
+                        <div className="rounded-xl overflow-hidden bg-black/60 border border-white/15 p-2 sm:p-2.5 space-y-2">
+                          <div className="flex items-center justify-between gap-2 px-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-red-500 text-base">▶️</span>
+                              <span className="text-[11px] font-black text-white uppercase tracking-wider truncate">
+                                Video Pembelajaran · Pertemuan {latestTaskInfo.pertemuanKe}
+                              </span>
+                            </div>
+                            <a
+                              href={latestTaskInfo.ytInfo.sourceUrl || `https://www.youtube.com/watch?v=${latestTaskInfo.ytInfo.videoId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[10px] font-black transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                            >
+                              <span>Tonton di YouTube</span>
+                              <span>↗</span>
+                            </a>
+                          </div>
+                          <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-inner border border-white/10">
+                            <iframe
+                              src={`https://www.youtube.com/embed/${latestTaskInfo.ytInfo.videoId}?rel=0`}
+                              title={`Video Materi Pertemuan ${latestTaskInfo.pertemuanKe}`}
+                              className="w-full h-full border-0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* DAFTAR TUGAS DI PERTEMUAN TERAKHIR */}
+                      <div className="space-y-2">
+                        {latestTaskInfo.tasks.map((t, idx) => {
+                          const parsed = parseTugasData(t);
+                          return (
+                            <div
+                              key={t.idTugas || idx}
+                              className="rounded-xl bg-white/10 border border-white/15 p-3 space-y-2 backdrop-blur-xs"
+                            >
+                              <div className="min-w-0">
+                                <h6 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
+                                  <span>📝</span>
+                                  <span>{t.judulTugas || `Tugas Pertemuan ${latestTaskInfo.pertemuanKe}`}</span>
+                                </h6>
+                                {parsed.deskripsiBersih && (
+                                  <p className="text-[11px] sm:text-xs text-slate-200 mt-1 leading-relaxed whitespace-pre-line font-medium bg-black/25 p-2.5 rounded-lg border border-white/10">
+                                    {parsed.deskripsiBersih}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* TOMBOL-TOMBOL TAUTAN, YOUTUBE, & UNDUHAN */}
+                              <div className="flex items-center gap-2 flex-wrap pt-1">
+                                {parsed.ytId && (
+                                  <a
+                                    href={`https://www.youtube.com/watch?v=${parsed.ytId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                  >
+                                    <span>▶️</span>
+                                    <span>Tonton Video YouTube</span>
+                                    <span>↗</span>
+                                  </a>
+                                )}
+
+                                {parsed.linkEksternal && (
+                                  <a
+                                    href={parsed.linkEksternal}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                  >
+                                    <span>🔗</span>
+                                    <span>Buka Link Tugas / Materi</span>
+                                    <span>↗</span>
+                                  </a>
+                                )}
+
+                                {parsed.downloadUrl && parsed.downloadUrl !== parsed.linkEksternal && (
+                                  <a
+                                    href={parsed.downloadUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                  >
+                                    <span>📥</span>
+                                    <span>Unduh Modul / Lembar Kerja</span>
+                                    <span>↗</span>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ======================================================== */}
                   {/* PANEL UTAMA: UPLOAD TUGAS SISWA (MAPEL ONLINE)           */}
                   {/* ======================================================== */}
                   {isMapelOnline && (
-                    <div className="rounded-2xl bg-gradient-to-br from-emerald-50/90 via-teal-50/80 to-blue-50/80 border border-emerald-300 p-3 sm:p-4 shadow-2xs space-y-3">
+                    <div id="panel-upload-tugas-siswa" className="rounded-2xl bg-gradient-to-br from-emerald-50/90 via-teal-50/80 to-blue-50/80 border border-emerald-300 p-3 sm:p-4 shadow-2xs space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 pb-2.5">
                         <div className="flex items-center gap-2">
                           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white text-base shadow-xs">
@@ -1079,81 +1398,167 @@ export default function ModalKehadiranMapel({
                         </div>
 
                         {/* PILIH PERTEMUAN */}
-                        <div className="flex items-center gap-1.5 shrink-0 bg-white/90 border border-emerald-300 rounded-lg px-2 py-1 self-start sm:self-auto">
-                          <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
-                            Pertemuan:
-                          </span>
-                          <select
-                            value={pDipilihUpload}
-                            onChange={(e) => setPDipilihUpload(Number(e.target.value))}
-                            className="bg-transparent font-black text-xs text-emerald-900 outline-none cursor-pointer"
-                          >
-                            {Array.from(
-                              {
-                                length: Math.max(
-                                  mapelAktif.pertemuanList?.length || 1,
-                                  Object.keys(tugasPerMapel[mapelAktif.idMapel] || {}).length || 1,
-                                  5
-                                ),
-                              },
-                              (_, idx) => idx + 1
-                            ).map((pNum) => (
-                              <option key={pNum} value={pNum}>
-                                Pertemuan {pNum}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        {(() => {
+                          const pListCount = mapelAktif.pertemuanList?.length || 0;
+                          const tugasMapelIni = tugasPerMapel[mapelAktif.idMapel] || {};
+                          const tugasKeys = Object.keys(tugasMapelIni).map(Number).filter(Boolean);
+                          const maxPMapel = Math.max(pListCount, ...tugasKeys, 1);
+                          // Buat array pertemuan dari tertinggi ke terendah (terbaru di atas)
+                          const pertemuanArr = Array.from({ length: maxPMapel }, (_, idx) => maxPMapel - idx);
+                          return (
+                            <div className="flex items-center gap-1.5 shrink-0 bg-white/90 border border-emerald-300 rounded-lg px-2 py-1 self-start sm:self-auto shadow-2xs">
+                              <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
+                                Pertemuan:
+                              </span>
+                              <select
+                                value={Math.min(pDipilihUpload, maxPMapel)}
+                                onChange={(e) => setPDipilihUpload(Number(e.target.value))}
+                                className="bg-transparent font-black text-xs text-emerald-900 outline-none cursor-pointer"
+                              >
+                                {pertemuanArr.map((pNum) => {
+                                  const adaTugas = Array.isArray(tugasMapelIni[String(pNum)]) && tugasMapelIni[String(pNum)].length > 0;
+                                  return (
+                                    <option key={pNum} value={pNum}>
+                                      P-{pNum}{adaTugas ? " 📌" : ""}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* INFO TUGAS DARI GURU UNTUK PERTEMUAN INI */}
                       {(() => {
-                        const tugasList = tugasPerMapel[mapelAktif.idMapel]?.[String(pDipilihUpload)] || [];
-                        const stateKey = `${mapelAktif.idMapel}_${pDipilihUpload}`;
+                        const pListCount = mapelAktif.pertemuanList?.length || 0;
+                        const tugasKeys = Object.keys(tugasPerMapel[mapelAktif.idMapel] || {}).map(Number).filter(Boolean);
+                        const maxPMapel = Math.max(pListCount, ...tugasKeys, 1);
+                        const pAktif = Math.min(Math.max(1, pDipilihUpload), maxPMapel);
+
+                        const tugasList = tugasPerMapel[mapelAktif.idMapel]?.[String(pAktif)] || [];
+                        const ytInfo = findYouTubeFromTugas(tugasList);
+                        const stateKey = `${mapelAktif.idMapel}_${pAktif}`;
                         const upState = uploadState[stateKey] || {};
 
                         return (
                           <div className="space-y-3">
+                            {/* JIKA ADA VIDEO YOUTUBE DARI GURU -> TAMPILKAN DI ATAS DENGAN EMBED PLAYER RESPONSIF */}
+                            {ytInfo && (
+                              <div className="rounded-2xl overflow-hidden bg-slate-900 border-2 border-red-500/60 shadow-md p-3 sm:p-4 text-white space-y-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white font-black text-xs shadow-xs">
+                                      ▶
+                                    </span>
+                                    <div className="min-w-0">
+                                      <h6 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5 truncate">
+                                        <span>Video Pembelajaran</span>
+                                        <span className="text-[8px] sm:text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/30 text-red-200 border border-red-500/40">
+                                          YouTube · Pertemuan {pAktif}
+                                        </span>
+                                      </h6>
+                                      <p className="text-[10px] text-slate-300 font-medium truncate">
+                                        {ytInfo.tugas?.judulTugas || "Simak video penjelasan materi di bawah ini"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <a
+                                    href={ytInfo.sourceUrl || `https://www.youtube.com/watch?v=${ytInfo.videoId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="shrink-0 px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                                  >
+                                    <span>Tonton di YouTube</span>
+                                    <span>↗</span>
+                                  </a>
+                                </div>
+
+                                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-inner border border-white/10">
+                                  <iframe
+                                    src={`https://www.youtube.com/embed/${ytInfo.videoId}?rel=0`}
+                                    title={`Video Materi Pertemuan ${pAktif}`}
+                                    className="w-full h-full border-0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    allowFullScreen
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* MODUL / LEMBAR KERJA DARI GURU */}
                             {tugasList.length > 0 ? (
-                              <div className="rounded-2xl bg-white border border-blue-200 p-3.5 space-y-2 shadow-xs">
+                              <div className="rounded-2xl bg-white border border-blue-200 p-3 sm:p-3.5 space-y-2.5 shadow-xs">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
-                                    📋 Modul / Soal dari Guru (Pertemuan {pDipilihUpload})
+                                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                    <span>📋</span>
+                                    <span>Modul / Lembar Kerja Guru (Pertemuan {pAktif})</span>
                                   </span>
                                   <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
                                     {tugasList.length} Tugas
                                   </span>
                                 </div>
-                                {tugasList.map((t, ti) => (
-                                  <div key={ti} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-black text-slate-800">
-                                        {t.judulTugas || `Tugas Pertemuan ${pDipilihUpload}`}
-                                      </p>
-                                      {t.deskripsi && (
-                                        <p className="text-[10px] text-slate-600 mt-0.5">
-                                          {t.deskripsi}
+                                 {tugasList.map((t, ti) => {
+                                  const { ytId, downloadUrl, linkEksternal, deskripsiBersih } = parseTugasData(t);
+
+                                  return (
+                                    <div key={ti} className="flex flex-col gap-2 bg-blue-50/70 p-2.5 sm:p-3 rounded-xl border border-blue-100">
+                                      <div className="min-w-0">
+                                        <p className="text-xs sm:text-sm font-black text-slate-800 leading-snug">
+                                          {t.judulTugas || `Tugas Pertemuan ${pAktif}`}
                                         </p>
-                                      )}
+                                        {deskripsiBersih && (
+                                          <p className="text-[10px] sm:text-[11px] text-slate-600 mt-0.5 font-medium leading-relaxed whitespace-pre-line">
+                                            {deskripsiBersih}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {/* Tombol YouTube */}
+                                        {ytId && (
+                                          <a
+                                            href={`https://www.youtube.com/watch?v=${ytId}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                          >
+                                            <span>▶️</span>
+                                            <span>Tonton Video</span>
+                                          </a>
+                                        )}
+                                        {/* Tombol Link Eksternal (Website, Quiz, Drive, Google Form, dll) */}
+                                        {linkEksternal && (
+                                          <a
+                                            href={linkEksternal}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                          >
+                                            <span>🔗</span>
+                                            <span>Buka Link Tugas</span>
+                                          </a>
+                                        )}
+                                        {/* Tombol Unduh Lampiran Modul/Berkas jika beda dari linkEksternal */}
+                                        {downloadUrl && downloadUrl !== linkEksternal && (
+                                          <a
+                                            href={downloadUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] sm:text-[11px] font-black shadow-xs transition-all active:scale-95"
+                                          >
+                                            <span>📥</span>
+                                            <span>Unduh Modul</span>
+                                          </a>
+                                        )}
+                                      </div>
                                     </div>
-                                    {t.fileUrl && (
-                                      <a
-                                        href={t.fileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black shadow-xs transition-all shrink-0 active:scale-95"
-                                      >
-                                        <span>📥</span>
-                                        <span>Unduh Lampiran Guru</span>
-                                      </a>
-                                    )}
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ) : (
-                              <div className="rounded-xl bg-white/70 border border-slate-200 px-3 py-2 text-[10px] text-slate-500 font-medium italic flex items-center gap-1.5">
+                              <div className="rounded-xl bg-white/70 border border-slate-200 px-3 py-2 text-[10px] sm:text-[11px] text-slate-500 font-medium italic flex items-center gap-1.5">
                                 <span>ℹ️</span>
-                                <span>Guru belum melampirkan modul tugas untuk Pertemuan {pDipilihUpload}. Anda tetap dapat mengunggah berkas tugas di bawah ini.</span>
+                                <span>Guru belum melampirkan modul tugas untuk Pertemuan {pAktif}. Anda tetap dapat mengunggah berkas tugas di bawah ini.</span>
                               </div>
                             )}
 
@@ -1363,28 +1768,58 @@ export default function ModalKehadiranMapel({
                                 <div className="px-3 pb-3 space-y-2">
                                   {/* Tugas dari guru */}
                                   {tugasGuru.length > 0 ? (
-                                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-1.5">
-                                      <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
-                                        📋 Tugas dari Guru
+                                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-2.5 sm:p-3 space-y-2">
+                                      <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                        <span>📋</span>
+                                        <span>Tugas &amp; Materi Guru</span>
                                       </p>
-                                      {tugasGuru.map((t, ti) => (
-                                        <div key={ti} className="flex items-center justify-between gap-2">
-                                          <div>
-                                            <p className="text-xs font-bold text-slate-800">{t.judulTugas || `Tugas P-${item.pertemuanKe}`}</p>
-                                            {t.deskripsi && <p className="text-[10px] text-slate-500">{t.deskripsi}</p>}
+                                       {tugasGuru.map((t, ti) => {
+                                        const { ytId, downloadUrl, linkEksternal, deskripsiBersih } = parseTugasData(t);
+
+                                        return (
+                                          <div key={ti} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/80 p-2 sm:p-2.5 rounded-lg border border-blue-100">
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-xs font-bold text-slate-800">{t.judulTugas || `Tugas P-${item.pertemuanKe}`}</p>
+                                              {deskripsiBersih && <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{deskripsiBersih}</p>}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                              {ytId && (
+                                                <a
+                                                  href={`https://www.youtube.com/watch?v=${ytId}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="shrink-0 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                >
+                                                  <span>▶️</span>
+                                                  <span>YouTube</span>
+                                                </a>
+                                              )}
+                                              {linkEksternal && (
+                                                <a
+                                                  href={linkEksternal}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="shrink-0 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                >
+                                                  <span>🔗</span>
+                                                  <span>Tautan</span>
+                                                </a>
+                                              )}
+                                              {downloadUrl && downloadUrl !== linkEksternal && (
+                                                <a
+                                                  href={downloadUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-2.5 py-1.5 transition-all flex items-center gap-1 shadow-2xs"
+                                                >
+                                                  <span>📥</span>
+                                                  <span>Modul</span>
+                                                </a>
+                                              )}
+                                            </div>
                                           </div>
-                                          {t.fileUrl && (
-                                            <a
-                                              href={t.fileUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-3 py-1.5 transition-all"
-                                            >
-                                              📥 Unduh
-                                            </a>
-                                          )}
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   ) : (
                                     <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 text-[10px] text-slate-400 font-medium italic">

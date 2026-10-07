@@ -8,6 +8,7 @@ import {
   uploadTugasMapel,
   getTugasMapel,
   getJawabanSiswa,
+  hapusPertemuanMapel,
 } from "../../lib/api";
 import { generateLaporanMapelPDF } from "./generateLaporanMapelPDF";
 import ModalTambahSiswa from "./kelola/ModalTambahSiswa";
@@ -73,8 +74,10 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
   const [targetTugasP, setTargetTugasP] = useState(null);
   const [judulTugasInput, setJudulTugasInput] = useState("");
   const [deskripsiTugasInput, setDeskripsiTugasInput] = useState("");
+  const [linkTugasInput, setLinkTugasInput] = useState("");
   const [fileTugasInput, setFileTugasInput] = useState(null);
   const [uploadingTugas, setUploadingTugas] = useState(false);
+  const [pertemuanDihapusList, setPertemuanDihapusList] = useState([]);
 
   // Muat data saat modal dibuka atau mapel berubah
   useEffect(() => {
@@ -117,6 +120,7 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
       setGrid(gridBaru);
       setTanggalPertemuan(tanggalBaru);
       setJumlahPertemuan(Math.min(PERTEMUAN_MAX, maxP));
+      setPertemuanDihapusList([]);
       setHasUnsavedChanges(false);
 
       // Jika mapel online, muat tugas guru dan jawaban siswa
@@ -157,7 +161,22 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
     setTargetTugasP(p);
     const existing = tugasMapel[p];
     setJudulTugasInput(existing?.judulTugas || `Tugas Pertemuan ${p}`);
-    setDeskripsiTugasInput(existing?.deskripsi || "");
+    
+    // Ekstrak link lama: dari linkUrl, dari [LINK]: di deskripsi, atau fileUrl non-drive
+    const rawDeskripsi = String(existing?.deskripsi || "");
+    let existingLink = existing?.linkUrl || "";
+    if (!existingLink) {
+      const matchLink = rawDeskripsi.match(/\[LINK\]:\s*([^\s\r\n]+)/i);
+      if (matchLink) {
+        existingLink = matchLink[1].trim();
+      } else if (existing?.fileUrl && !existing.fileUrl.includes("drive.google.com")) {
+        existingLink = existing.fileUrl;
+      }
+    }
+    setLinkTugasInput(existingLink || "");
+
+    const deskripsiClean = rawDeskripsi.replace(/\[LINK\]:\s*\S+/gi, "").trim();
+    setDeskripsiTugasInput(deskripsiClean);
     setFileTugasInput(null);
     setModalTugasOpen(true);
   }
@@ -184,27 +203,40 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
         mimeType = fileTugasInput.type || "application/pdf";
       }
       const existing = tugasMapel[targetTugasP];
+      const linkTugasBersih = linkTugasInput.trim();
+
+      // Gabungkan link ke deskripsi agar 100% kompatibel & tersimpan di Sheet
+      let deskripsiFinal = deskripsiTugasInput.trim();
+      if (linkTugasBersih) {
+        deskripsiFinal = deskripsiFinal.replace(/\[LINK\]:\s*\S+/gi, "").trim();
+        deskripsiFinal = deskripsiFinal
+          ? `${deskripsiFinal}\n\n[LINK]: ${linkTugasBersih}`
+          : `[LINK]: ${linkTugasBersih}`;
+      }
+
       const res = await uploadTugasMapel({
         idGuru: guru.id,
         idMapel: mapel.idMapel,
         pertemuanKe: targetTugasP,
         judulTugas: judulTugasInput.trim(),
-        deskripsi: deskripsiTugasInput.trim(),
-        fileUrl: existing?.fileUrl || "",
+        deskripsi: deskripsiFinal,
+        linkUrl: linkTugasBersih,
+        fileUrl: linkTugasBersih && !fileTugasInput ? linkTugasBersih : (existing?.fileUrl || ""),
         fileBase64,
         namaFile,
         mimeType,
       });
 
       if (res?.success) {
-        alert("✅ Tugas berhasil disimpan.");
+        alert("✅ Tugas & materi berhasil disimpan.");
         setTugasMapel((prev) => ({
           ...prev,
           [targetTugasP]: {
             ...prev[targetTugasP],
             judulTugas: judulTugasInput.trim(),
-            deskripsi: deskripsiTugasInput.trim(),
-            fileUrl: res.data?.fileUrl || existing?.fileUrl || "",
+            deskripsi: deskripsiFinal,
+            linkUrl: linkTugasBersih,
+            fileUrl: res.data?.fileUrl || (linkTugasBersih && !fileTugasInput ? linkTugasBersih : existing?.fileUrl || ""),
           },
         }));
         setModalTugasOpen(false);
@@ -272,11 +304,12 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
     if (jumlahPertemuan <= 1) return;
 
     const konfirmasi = window.confirm(
-      `⚠️ Hapus kolom Pertemuan ${jumlahPertemuan}?\n\nData presensi dan nilai pada pertemuan ini akan dihapus dari tabel saat ini. Lanjutkan?`,
+      `⚠️ Hapus kolom Pertemuan ${jumlahPertemuan}?\n\nData presensi dan tugas pada pertemuan ini akan dihapus secara permanen saat Anda menyimpan. Lanjutkan?`,
     );
     if (!konfirmasi) return;
 
     const pDihapus = jumlahPertemuan;
+    setPertemuanDihapusList((prev) => [...prev, pDihapus]);
     setGrid((prev) => {
       const salinan = { ...prev };
       siswaList.forEach((s) => {
@@ -285,6 +318,11 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
       return salinan;
     });
     setTanggalPertemuan((prev) => {
+      const salinan = { ...prev };
+      delete salinan[pDihapus];
+      return salinan;
+    });
+    setTugasMapel((prev) => {
       const salinan = { ...prev };
       delete salinan[pDihapus];
       return salinan;
@@ -341,24 +379,37 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
       });
     });
 
-    if (cells.length === 0) {
+    if (cells.length === 0 && pertemuanDihapusList.length === 0) {
       alert("Belum ada data presensi yang diisi untuk disimpan.");
       return;
     }
 
     setSaving(true);
     try {
+      // 1. Jika ada kolom pertemuan yang dihapus, panggil endpoint penghapusan
+      if (pertemuanDihapusList.length > 0) {
+        await Promise.all(
+          pertemuanDihapusList.map((p) =>
+            hapusPertemuanMapel(guru.id, mapel.idMapel, p).catch(() => null)
+          )
+        );
+      }
+
+      // 2. Simpan presensi saat ini beserta parameter pertemuanDihapus & maxPertemuan
       const result = await savePresensiMapel({
         idGuru: guru.id,
         idMapel: mapel.idMapel,
         cells,
+        pertemuanDihapus: pertemuanDihapusList,
+        maxPertemuan: jumlahPertemuan,
       });
 
       if (result.success) {
+        setPertemuanDihapusList([]);
+        setHasUnsavedChanges(false);
         alert(
           `✅ Presensi & Nilai berhasil disimpan!\nDiperbarui: ${result.data?.diperbarui || 0} • Baris baru: ${result.data?.ditambah || 0}`,
         );
-        setHasUnsavedChanges(false);
       } else {
         alert(result.message || "Gagal menyimpan presensi.");
       }
@@ -1170,8 +1221,29 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                  File Lampiran / Modul (PDF, Doc, Gambar)
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
+                  <span>🔗 Tautan / Link Tugas (YouTube, Drive, Web)</span>
+                  <span className="text-[10px] text-slate-400 font-normal lowercase">opsional</span>
+                </label>
+                <input
+                  type="url"
+                  value={linkTugasInput}
+                  onChange={(e) => setLinkTugasInput(e.target.value)}
+                  placeholder="Contoh: https://youtube.com/watch?v=... atau https://drive.google.com/..."
+                  className="w-full rounded-xl border border-slate-300 p-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
+                />
+                {linkTugasInput && (linkTugasInput.includes("youtube.com") || linkTugasInput.includes("youtu.be")) && (
+                  <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center gap-1 bg-rose-50 border border-rose-200 p-1.5 rounded-lg">
+                    <span>🔴</span>
+                    <span>Link YouTube terdeteksi — Video pembelajaran akan otomatis disematkan & ditampilkan paling atas di dashboard siswa!</span>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
+                  <span>📁 Unggah File Lampiran / Modul (PDF, Doc, Gambar)</span>
+                  <span className="text-[10px] text-slate-400 font-normal lowercase">opsional</span>
                 </label>
                 <input
                   type="file"
@@ -1181,16 +1253,16 @@ export default function ModalPresensiMapel({ isOpen, onClose, guru, mapel }) {
                 />
                 {tugasMapel[targetTugasP]?.fileUrl && !fileTugasInput && (
                   <p className="text-[10px] text-emerald-600 mt-1">
-                    ✓ Sudah ada file tugas terunggah (
+                    ✓ Sudah ada berkas/link terunggah (
                     <a
                       href={tugasMapel[targetTugasP].fileUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline font-bold"
                     >
-                      Buka File
+                      Buka Tautan/Berkas
                     </a>
-                    ). Pilih file baru jika ingin mengganti.
+                    ). Pilih file baru atau ubah link di atas jika ingin mengganti.
                   </p>
                 )}
               </div>

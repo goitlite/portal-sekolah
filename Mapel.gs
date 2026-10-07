@@ -828,17 +828,12 @@ function getPresensiMapelGrid(idGuru, idMapel) {
 function savePresensiMapel(params) {
   if (isEmpty(params.idGuru)) return errorResponse('ID guru tidak boleh kosong');
   if (isEmpty(params.idMapel)) return errorResponse('ID mapel tidak boleh kosong');
-  if (!Array.isArray(params.cells) || params.cells.length === 0) {
-    return successResponse('Tidak ada perubahan untuk disimpan', { diperbarui: 0, ditambah: 0 });
-  }
-
-  const statusValid = ['Hadir', 'Sakit', 'Izin', 'Alfa', 'Cabut'];
 
   try {
     const sheet = getMapelSheet_(MAPEL_SHEETS.PRESENSI_MAPEL);
     const headers = getMapelHeaders_(MAPEL_SHEETS.PRESENSI_MAPEL);
     const numCols = headers.length;
-    const lastRow = sheet.getLastRow();
+    let lastRow = sheet.getLastRow();
 
     const idMapelCol = headers.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.ID_MAPEL);
     const idSiswaCol = headers.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.ID_SISWA);
@@ -851,6 +846,70 @@ function savePresensiMapel(params) {
     const namaSiswaCol = headers.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.NAMA_SISWA);
     const createdAtCol = headers.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.CREATED_AT);
 
+    // 1. Bersihkan baris pertemuan yang dihapus (jika ada list pertemuanDihapus atau maxPertemuan)
+    const listDihapus = Array.isArray(params.pertemuanDihapus) ? params.pertemuanDihapus.map(Number) : [];
+    const maxP = typeof params.maxPertemuan === 'number' && params.maxPertemuan > 0 ? params.maxPertemuan : null;
+
+    if (lastRow > 1 && (listDihapus.length > 0 || maxP !== null)) {
+      const allRows = sheet.getRange(1, 1, lastRow, numCols).getValues();
+      for (let r = allRows.length - 1; r >= 1; r--) {
+        if (String(allRows[r][idMapelCol]) === String(params.idMapel)) {
+          const pVal = Number(allRows[r][pertemuanCol]);
+          if ((listDihapus.length > 0 && listDihapus.indexOf(pVal) !== -1) || (maxP !== null && pVal > maxP)) {
+            sheet.deleteRow(r + 1);
+          }
+        }
+      }
+      lastRow = sheet.getLastRow();
+
+      // Bersihkan juga di TUGAS_MAPEL dan JAWABAN_SISWA untuk pertemuan yang dihapus
+      try {
+        const ss = getMapelSS_();
+        const sheetTugas = ss.getSheetByName('TUGAS_MAPEL');
+        if (sheetTugas && sheetTugas.getLastRow() >= 2) {
+          const hT = sheetTugas.getRange(1, 1, 1, sheetTugas.getLastColumn()).getValues()[0];
+          const cM = hT.indexOf('ID_MAPEL');
+          const cP = hT.indexOf('PERTEMUAN_KE');
+          if (cM !== -1 && cP !== -1) {
+            const dataT = sheetTugas.getDataRange().getValues();
+            for (let t = dataT.length - 1; t >= 1; t--) {
+              if (String(dataT[t][cM]) === String(params.idMapel)) {
+                const pVal = Number(dataT[t][cP]);
+                if ((listDihapus.length > 0 && listDihapus.indexOf(pVal) !== -1) || (maxP !== null && pVal > maxP)) {
+                  sheetTugas.deleteRow(t + 1);
+                }
+              }
+            }
+          }
+        }
+
+        const sheetJwb = ss.getSheetByName('JAWABAN_SISWA');
+        if (sheetJwb && sheetJwb.getLastRow() >= 2) {
+          const hJ = sheetJwb.getRange(1, 1, 1, sheetJwb.getLastColumn()).getValues()[0];
+          const cM = hJ.indexOf('ID_MAPEL');
+          const cP = hJ.indexOf('PERTEMUAN_KE');
+          if (cM !== -1 && cP !== -1) {
+            const dataJ = sheetJwb.getDataRange().getValues();
+            for (let j = dataJ.length - 1; j >= 1; j--) {
+              if (String(dataJ[j][cM]) === String(params.idMapel)) {
+                const pVal = Number(dataJ[j][cP]);
+                if ((listDihapus.length > 0 && listDihapus.indexOf(pVal) !== -1) || (maxP !== null && pVal > maxP)) {
+                  sheetJwb.deleteRow(j + 1);
+                }
+              }
+            }
+          }
+        }
+      } catch (eClean) {
+        Logger.log('Clean tugas/jawaban saat hapus pertemuan error: ' + eClean.message);
+      }
+    }
+
+    if (!Array.isArray(params.cells) || params.cells.length === 0) {
+      return successResponse('Presensi & pertemuan berhasil diperbarui', { diperbarui: 0, ditambah: 0 });
+    }
+
+    const statusValid = ['Hadir', 'Sakit', 'Izin', 'Alfa', 'Cabut'];
     let existingData = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, numCols).getValues() : [];
 
     const indexMap = {};
@@ -909,6 +968,73 @@ function savePresensiMapel(params) {
     });
   } catch (error) {
     return errorResponse('Error: ' + error.message);
+  }
+}
+
+// Fungsi khusus: Hapus satu kolom pertemuan mapel beserta riwayat tugas & presensinya
+function hapusPertemuanMapel(params) {
+  if (isEmpty(params.idMapel)) return errorResponse('ID mapel tidak boleh kosong');
+  if (isEmpty(params.pertemuanKe)) return errorResponse('Pertemuan ke tidak boleh kosong');
+
+  const pTarget = Number(params.pertemuanKe);
+  try {
+    const sheetPresensi = getMapelSheet_(MAPEL_SHEETS.PRESENSI_MAPEL);
+    const headersP = getMapelHeaders_(MAPEL_SHEETS.PRESENSI_MAPEL);
+    const lastRowP = sheetPresensi.getLastRow();
+    const idMapelCol = headersP.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.ID_MAPEL);
+    const pertemuanCol = headersP.indexOf(MAPEL_COLUMNS.PRESENSI_MAPEL.PERTEMUAN_KE);
+
+    let terhapusPresensi = 0;
+    if (lastRowP >= 2) {
+      const dataP = sheetPresensi.getRange(1, 1, lastRowP, headersP.length).getValues();
+      for (let i = dataP.length - 1; i >= 1; i--) {
+        if (String(dataP[i][idMapelCol]) === String(params.idMapel) && Number(dataP[i][pertemuanCol]) === pTarget) {
+          sheetPresensi.deleteRow(i + 1);
+          terhapusPresensi++;
+        }
+      }
+    }
+
+    // Bersihkan juga di TUGAS_MAPEL & JAWABAN_SISWA
+    try {
+      const ss = getMapelSS_();
+      const sheetTugas = ss.getSheetByName('TUGAS_MAPEL');
+      if (sheetTugas && sheetTugas.getLastRow() >= 2) {
+        const hT = sheetTugas.getRange(1, 1, 1, sheetTugas.getLastColumn()).getValues()[0];
+        const cM = hT.indexOf('ID_MAPEL');
+        const cP = hT.indexOf('PERTEMUAN_KE');
+        if (cM !== -1 && cP !== -1) {
+          const dataT = sheetTugas.getDataRange().getValues();
+          for (let t = dataT.length - 1; t >= 1; t--) {
+            if (String(dataT[t][cM]) === String(params.idMapel) && Number(dataT[t][cP]) === pTarget) {
+              sheetTugas.deleteRow(t + 1);
+            }
+          }
+        }
+      }
+
+      const sheetJwb = ss.getSheetByName('JAWABAN_SISWA');
+      if (sheetJwb && sheetJwb.getLastRow() >= 2) {
+        const hJ = sheetJwb.getRange(1, 1, 1, sheetJwb.getLastColumn()).getValues()[0];
+        const cM = hJ.indexOf('ID_MAPEL');
+        const cP = hJ.indexOf('PERTEMUAN_KE');
+        if (cM !== -1 && cP !== -1) {
+          const dataJ = sheetJwb.getDataRange().getValues();
+          for (let j = dataJ.length - 1; j >= 1; j--) {
+            if (String(dataJ[j][cM]) === String(params.idMapel) && Number(dataJ[j][cP]) === pTarget) {
+              sheetJwb.deleteRow(j + 1);
+            }
+          }
+        }
+      }
+    } catch (eSub) {}
+
+    return successResponse('Kolom Pertemuan ' + pTarget + ' berhasil dihapus permanen dari mapel ini', {
+      pertemuanKe: pTarget,
+      barisPresensiTerhapus: terhapusPresensi
+    });
+  } catch (err) {
+    return errorResponse('Gagal menghapus pertemuan: ' + err.message);
   }
 }
 

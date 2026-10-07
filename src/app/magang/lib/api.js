@@ -531,6 +531,16 @@ export async function savePresensiMapel(data) {
     idGuru: data.idGuru,
     idMapel: data.idMapel,
     cells: data.cells || [],
+    pertemuanDihapus: data.pertemuanDihapus || [],
+    maxPertemuan: data.maxPertemuan,
+  });
+}
+
+export async function hapusPertemuanMapel(idGuru, idMapel, pertemuanKe) {
+  return request("hapusPertemuanMapel", {
+    idGuru,
+    idMapel,
+    pertemuanKe,
   });
 }
 
@@ -565,6 +575,7 @@ export async function uploadTugasMapel(data) {
     pertemuanKe: data.pertemuanKe,
     judulTugas: data.judulTugas || "",
     deskripsi: data.deskripsi || "",
+    linkUrl: data.linkUrl || "",
     fileUrl: data.fileUrl || "",
     fileBase64: data.fileBase64 || "",
     namaFile: data.namaFile || "",

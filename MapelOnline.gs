@@ -98,6 +98,7 @@ function uploadTugasMapel_(params) {
     var namaFile = String(params.namaFile || 'tugas').trim();
     var mimeType = String(params.mimeType || 'application/pdf').trim();
     var fileUrlLangsung = String(params.fileUrl || '').trim();
+    var linkUrl = String(params.linkUrl || '').trim();
 
     if (!idGuru || !idMapel || !pertemuanKe) {
       return { success: false, message: 'idGuru, idMapel, dan pertemuanKe wajib diisi.' };
@@ -107,14 +108,41 @@ function uploadTugasMapel_(params) {
     var fileId = '';
 
     // Upload ke Drive jika ada base64
-    if (fileBase64 && !fileUrl) {
+    if (fileBase64) {
       var hasil = uploadFileToDrive_(fileBase64, namaFile, mimeType, 'TugasMapel_' + idMapel);
       fileUrl = hasil.url;
       fileId = hasil.id;
+    } else if (!fileUrl && linkUrl) {
+      fileUrl = linkUrl;
+    }
+
+    // Jika ada linkUrl dan juga file terupload, simpan linkUrl di deskripsi secara terstruktur jika belum ada
+    if (linkUrl && fileUrl !== linkUrl) {
+      if (deskripsi.indexOf(linkUrl) === -1) {
+        deskripsi = deskripsi ? (deskripsi + '\n\n[LINK]: ' + linkUrl) : ('[LINK]: ' + linkUrl);
+      }
     }
 
     var idTugas = 'TGS-' + idMapel + '-P' + pertemuanKe + '-' + new Date().getTime();
     var now = new Date().toISOString();
+
+    // Cek apakah sudah ada tugas untuk pertemuan ini, jika ada timpa/update agar tidak duplikat
+    try {
+      var sheet = getMapelSheet_('TUGAS_MAPEL');
+      var headers = getMapelHeaders_('TUGAS_MAPEL');
+      var lastRow = sheet.getLastRow();
+      var idMapelCol = headers.indexOf('ID_MAPEL');
+      var pCol = headers.indexOf('PERTEMUAN_KE');
+
+      if (lastRow >= 2 && idMapelCol !== -1 && pCol !== -1) {
+        var data = sheet.getRange(1, 1, lastRow, headers.length).getValues();
+        for (var i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][idMapelCol]) === idMapel && String(data[i][pCol]) === pertemuanKe) {
+            sheet.deleteRow(i + 1);
+          }
+        }
+      }
+    } catch (eDel) {}
 
     appendRowMapel_('TUGAS_MAPEL', {
       ID_TUGAS: idTugas,
@@ -131,7 +159,7 @@ function uploadTugasMapel_(params) {
     return {
       success: true,
       message: 'Tugas berhasil disimpan.',
-      data: { idTugas: idTugas, fileUrl: fileUrl }
+      data: { idTugas: idTugas, fileUrl: fileUrl, linkUrl: linkUrl }
     };
   } catch (e) {
     Logger.log('uploadTugasMapel_ error: ' + e.message);
@@ -160,6 +188,17 @@ function getTugasMapel_(params) {
     });
 
     var result = filtered.map(function(t) {
+      var deskripsiText = String(t.DESKRIPSI || '');
+      var extractedLink = String(t.LINK_URL || '').trim();
+      if (!extractedLink) {
+        var linkMatch = deskripsiText.match(/\[LINK\]:\s*(https?:\/\/[^\s]+)/i);
+        if (linkMatch) {
+          extractedLink = linkMatch[1].trim();
+        } else if (t.FILE_URL && String(t.FILE_URL).indexOf('drive.google.com') === -1) {
+          extractedLink = String(t.FILE_URL).trim();
+        }
+      }
+
       return {
         idTugas: t.ID_TUGAS,
         idMapel: t.ID_MAPEL,
@@ -168,6 +207,7 @@ function getTugasMapel_(params) {
         judulTugas: t.JUDUL_TUGAS,
         deskripsi: t.DESKRIPSI,
         fileUrl: t.FILE_URL,
+        linkUrl: extractedLink,
         createdAt: t.CREATED_AT
       };
     });
