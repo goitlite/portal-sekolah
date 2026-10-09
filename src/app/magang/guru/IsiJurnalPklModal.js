@@ -188,6 +188,8 @@ export default function IsiJurnalPklModal({
 
 
   const watermarkCanvasRef = useRef(null);
+  const modalBodyRef = useRef(null);
+  const bottomRiwayatRef = useRef(null);
 
   const opsiMingguKe = useMemo(() => {
     const list = buildOpsiMingguKe();
@@ -456,11 +458,32 @@ export default function IsiJurnalPklModal({
         setMessageType("success");
         setRows([buatBarisBaru()]);
 
+        // Reset filter pencarian & filter minggu agar data yang baru disimpan pasti tampil
+        setSearchTerm("");
+        setFilterMinggu("");
+
         // Memuat ulang data tersimpan
         const jurnalRes = await getJurnalPKL(idGuru);
         if (jurnalRes?.data) setSavedJurnalList(jurnalRes.data);
 
         if (typeof onSaved === "function") onSaved();
+
+        // Arahkan ke tab riwayat (Semua Jurnal) dan gulir ke baris paling bawah yang terakhir diisi
+        setActiveTab("riwayat");
+        setTimeout(() => {
+          if (bottomRiwayatRef.current) {
+            bottomRiwayatRef.current.scrollIntoView({
+              behavior: "smooth",
+              block: "end",
+            });
+          }
+          if (modalBodyRef.current) {
+            modalBodyRef.current.scrollTo({
+              top: modalBodyRef.current.scrollHeight,
+              behavior: "smooth",
+            });
+          }
+        }, 300);
       } else {
         showErr(result?.message || "Jurnal PKL gagal disimpan.");
       }
@@ -700,6 +723,7 @@ export default function IsiJurnalPklModal({
 
         {/* BODY MODAL */}
         <div
+          ref={modalBodyRef}
           style={{
             padding: "12px 14px",
             overflow: "auto",
@@ -1999,6 +2023,8 @@ export default function IsiJurnalPklModal({
                       </tbody>
                     </table>
                   </div>
+                  {/* Penanda batas bawah riwayat untuk auto-scroll */}
+                  <div ref={bottomRiwayatRef} style={{ height: "1px" }} />
                 </div>
               )}
             </div>

@@ -6291,7 +6291,9 @@ function DashboardGuruContent() {
         onClose={() => setShowJurnalPklModal(false)}
         idGuru={user?.id}
         namaGuru={user?.nama}
-        onSaved={() => setShowJurnalPklModal(false)}
+        onSaved={() => {
+          // Jangan langsung tutup modal agar guru bisa melihat hasil penyimpanan di tab Semua Jurnal
+        }}
       />
 
       {/* MODAL CETAK LAPORAN MAPEL */}

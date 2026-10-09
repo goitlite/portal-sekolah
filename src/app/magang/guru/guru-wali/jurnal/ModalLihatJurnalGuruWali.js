@@ -221,12 +221,21 @@ export default function ModalLihatJurnalGuruWali({ isOpen, onClose, guru }) {
                     </p>
                   )}
                   {j.keterangan && (
-                    <p className="text-slate-700">
-                      <span className="font-black text-slate-500">
-                        Keterangan:{" "}
-                      </span>
-                      {j.keterangan}
-                    </p>
+                    <div className="space-y-1">
+                      {j.keterangan.replace(/\[PKL_EXEMPT\]/gi, "").trim() && (
+                        <p className="text-slate-700">
+                          <span className="font-black text-slate-500">
+                            Keterangan:{" "}
+                          </span>
+                          {j.keterangan.replace(/\[PKL_EXEMPT\]/gi, "").trim()}
+                        </p>
+                      )}
+                      {j.keterangan.includes("[PKL_EXEMPT]") && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-black text-amber-800">
+                          🏢 Pengecualian PKL Aktif (Siswa tidak dicentang aman dari pengurangan persentase)
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 

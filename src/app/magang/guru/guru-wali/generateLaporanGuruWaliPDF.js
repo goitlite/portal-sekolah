@@ -125,15 +125,55 @@ const getSesiKelompokKey = (item) => {
 };
 
 // ============================================================
+// HELPER: Cek apakah sesi kelompok memiliki pengecualian PKL
+// ============================================================
+const isSesiPklExempt = (item) => {
+  if (!item) return false;
+  const ket = String(item.keterangan || "").toLowerCase();
+  const topik = String(item.topik || "").toLowerCase();
+  return (
+    ket.includes("[pkl_exempt") ||
+    ket.includes("pengecualian pkl") ||
+    topik.includes("[pkl_exempt") ||
+    topik.includes("pengecualian pkl")
+  );
+};
+
+// ============================================================
+// HELPER: Cek apakah siswa tertentu berstatus Sedang PKL di sesi ini
+// ============================================================
+const isSiswaPklExemptInSesi = (item, idSiswa) => {
+  if (!item) return false;
+  const ket = String(item.keterangan || "");
+  const topik = String(item.topik || "");
+  const text = `${ket} ${topik}`;
+
+  // 1. Cek jika ada daftar ID spesifik: [PKL_EXEMPT_IDS:id1,id2,...]
+  const matchIds = text.match(/\[PKL_EXEMPT_IDS:([^\]]*)\]/i);
+  if (matchIds) {
+    const rawList = matchIds[1];
+    if (!rawList || rawList.toUpperCase() === "NONE") return false;
+    const ids = rawList
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const targetId = String(idSiswa || "").trim().toLowerCase();
+    return ids.includes(targetId);
+  }
+
+  // 2. Fallback untuk data sebelumnya yang menggunakan tag umum [PKL_EXEMPT]
+  if (
+    text.toLowerCase().includes("[pkl_exempt]") ||
+    text.toLowerCase().includes("pengecualian pkl")
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+// ============================================================
 // HELPER: Gabungkan baris jurnal Kelompok jadi SATU baris tabel
-//
-// Backend menyimpan satu baris per SISWA (bahkan untuk pertemuan
-// Kelompok), tapi semua siswa dalam satu pertemuan yang sama
-// berbagi ID_JURNAL yang sama ("SATU PERTEMUAN = SATU ID_JURNAL").
-// Jadi cukup dikelompokkan berdasarkan idJurnal: pertemuan Individu
-// otomatis tetap 1 baris (karena idJurnal-nya unik per siswa),
-// sedangkan pertemuan Kelompok otomatis melebur jadi 1 baris berisi
-// daftar semua nama siswa yang ikut.
 // ============================================================
 const susunBarisLaporanC = (data) => {
   const map = new Map();
@@ -143,12 +183,20 @@ const susunBarisLaporanC = (data) => {
     const key = item.idJurnal || `row-${idx}`;
 
     if (!map.has(key)) {
+      const rawKet = String(item.keterangan || "-").trim();
+      const isExempt = isSesiPklExempt(item);
+      const cleanKet = rawKet.replace(/\[PKL_EXEMPT[^\]]*\]/gi, "").trim();
+      const ketTampil = isExempt
+        ? (cleanKet && cleanKet !== "-" ? `${cleanKet} • ` : "") +
+          "Siswa PKL dikecualikan"
+        : (cleanKet || "-");
+
       map.set(key, {
         tanggal: item.tanggal || "-",
         formatPertemuan: item.formatPertemuan || "-",
         topik: item.topik || "-",
         tindakLanjut: item.tindakLanjut || "-",
-        keterangan: item.keterangan || "-",
+        keterangan: ketTampil,
         fotoUrl: item.fotoUrl || "",
         siswaList: [],
       });
@@ -202,7 +250,8 @@ const tentukanSemesterTahunAjaran = (data) => {
 // HELPER: Susun rekap bulanan per siswa
 // ============================================================
 const susunRekapBulananPerSiswa = (data) => {
-  const totalSesiKelompokPerBulan = new Map();
+  // Catat seluruh sesi kelompok per bulan beserta data item sesinya
+  const totalSesiKelompokPerBulan = new Map(); // bulanKey -> Map(sesiKey -> itemSesi)
 
   data.forEach((item) => {
     if ((item.formatPertemuan || "").toLowerCase() !== "kelompok") return;
@@ -213,9 +262,12 @@ const susunRekapBulananPerSiswa = (data) => {
 
     const bulanKey = `${tgl.year}-${tgl.month}`;
     if (!totalSesiKelompokPerBulan.has(bulanKey)) {
-      totalSesiKelompokPerBulan.set(bulanKey, new Set());
+      totalSesiKelompokPerBulan.set(bulanKey, new Map());
     }
-    totalSesiKelompokPerBulan.get(bulanKey).add(sesiKey);
+    const mapSesi = totalSesiKelompokPerBulan.get(bulanKey);
+    if (!mapSesi.has(sesiKey) || isSesiPklExempt(item)) {
+      mapSesi.set(sesiKey, item);
+    }
   });
 
   const perSiswa = new Map();
@@ -275,9 +327,33 @@ const susunRekapBulananPerSiswa = (data) => {
 
     const baris = daftarBulan.map((b) => {
       const bulanKey = `${b.year}-${b.month}`;
-      const totalSesiBulanIni = totalSesiKelompokPerBulan.get(bulanKey);
-      const sesiTersedia = totalSesiBulanIni ? totalSesiBulanIni.size : 0;
-      const sesiDiikuti = b.sesiKelompokDiikuti.size;
+      const sesiBulanMap = totalSesiKelompokPerBulan.get(bulanKey) || new Map();
+
+      // Hitung sesi kelompok yang relevan bagi siswa ini di bulan ini:
+      // - Sesi yang diikuti: sesiTersedia++, sesiDiikuti++
+      // - Sesi yang TIDAK diikuti TAPI statusnya Sedang PKL (dikecualikan): DIABAIKAN dari sesiTersedia -> persentase TIDAK berkurang!
+      // - Sesi yang TIDAK diikuti dan berstatus TIDAK HADIR (Alpa): sesiTersedia++ -> persentase BERKURANG!
+      let sesiTersedia = 0;
+      let sesiDiikuti = 0;
+
+      sesiBulanMap.forEach((itemSesi, sesiKey) => {
+        const ikut = b.sesiKelompokDiikuti.has(sesiKey);
+        if (ikut) {
+          sesiTersedia++;
+          sesiDiikuti++;
+        } else {
+          const isExempt = isSiswaPklExemptInSesi(
+            itemSesi,
+            siswaEntry.namaSiswa || "",
+          );
+          if (isExempt) {
+            // Siswa berstatus Sedang PKL: tidak mengurangi persentase
+          } else {
+            // Siswa berstatus Tidak Hadir: mengurangi persentase kehadiran
+            sesiTersedia++;
+          }
+        }
+      });
 
       const jumlahPertemuan = b.individu + b.kelompok;
 
@@ -287,10 +363,14 @@ const susunRekapBulananPerSiswa = (data) => {
       totalSesiDiikuti += sesiDiikuti;
       totalSesiTersedia += sesiTersedia;
 
-      const persentase =
-        sesiTersedia > 0
-          ? `${Math.round((sesiDiikuti / sesiTersedia) * 100)}%`
-          : "-";
+      let persentase = "-";
+      if (sesiTersedia > 0) {
+        persentase = `${Math.round((sesiDiikuti / sesiTersedia) * 100)}%`;
+      } else if (sesiBulanMap.size > 0 && b.kelompok === 0) {
+        persentase = "100% (PKL)";
+      } else if (jumlahPertemuan > 0) {
+        persentase = "100%";
+      }
 
       return {
         bulan: `${NAMA_BULAN[b.month]} ${b.year}`,
@@ -303,7 +383,9 @@ const susunRekapBulananPerSiswa = (data) => {
     const persentaseTotal =
       totalSesiTersedia > 0
         ? `${Math.round((totalSesiDiikuti / totalSesiTersedia) * 100)}%`
-        : "-";
+        : totalPertemuan > 0 || data.length > 0
+          ? "100%"
+          : "-";
 
     hasil.push({
       namaSiswa: siswaEntry.namaSiswa,
