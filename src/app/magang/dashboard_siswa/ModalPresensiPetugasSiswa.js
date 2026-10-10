@@ -52,6 +52,7 @@ export default function ModalPresensiPetugasSiswa({
   onClose,
   petugasInfo, // { idWali, idGuru, namaKelas, kelas }
   user, // { id, nama }
+  onOpenScanner,
   onPresensiSubmitted,
 }) {
   const [loading, setLoading] = useState(true);
@@ -432,14 +433,26 @@ export default function ModalPresensiPetugasSiswa({
             </div>
 
             {!isSubmittedToday && (
-              <button
-                type="button"
-                onClick={handleSetSemuaHadir}
-                className="rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-2 text-xs font-black transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
-              >
-                <span>✨</span>
-                <span>Reset Semua Hadir</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {typeof onOpenScanner === "function" && (
+                  <button
+                    type="button"
+                    onClick={onOpenScanner}
+                    className="rounded-xl border border-teal-500 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white px-3.5 py-2 text-xs font-black transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs cursor-pointer"
+                  >
+                    <span>📷</span>
+                    <span>Buka Mode Scan</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSetSemuaHadir}
+                  className="rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-2 text-xs font-black transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <span>✨</span>
+                  <span>Reset Semua Hadir</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

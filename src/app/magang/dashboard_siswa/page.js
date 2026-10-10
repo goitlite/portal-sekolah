@@ -24,6 +24,8 @@ import RuangBelajarTKA from "./RuangBelajarTKA";
 import ModalKehadiranMapel from "./ModalKehadiranMapel";
 import ModalCatatanWali from "./ModalCatatanWali";
 import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
+import ModalKartuBarcodeSiswa from "./ModalKartuBarcodeSiswa";
+import ModalScanPresensiPetugas from "./ModalScanPresensiPetugas";
 import PesanSekolahModal, {
   useJumlahPesanSekolah,
 } from "../components/PesanSekolahModal";
@@ -198,6 +200,8 @@ export default function DashboardSiswa() {
   const [showModalTugasDaring, setShowModalTugasDaring] = useState(false);
   const [showModalPresensiPetugas, setShowModalPresensiPetugas] =
     useState(false);
+  const [showModalKartuBarcode, setShowModalKartuBarcode] = useState(false);
+  const [showModalScanBarcode, setShowModalScanBarcode] = useState(false);
   const [showModalPesan, setShowModalPesan] = useState(false);
   const [unreadPesanCount, refreshPesanCount] = useJumlahPesanSekolah({
     userId: user?.id,
@@ -800,15 +804,37 @@ export default function DashboardSiswa() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Tombol Lihat Barcode Presensi Siswa (Tersedia untuk Semua Siswa) */}
+          <button
+            onClick={() => setShowModalKartuBarcode(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-white/95 hover:bg-amber-100/90 text-amber-950 text-xs font-black shadow-2xs hover:shadow-xs transition-all active:scale-95 cursor-pointer border border-amber-300"
+            title="Lihat & Cetak Kartu Barcode Presensi"
+          >
+            <span>🪪</span>
+            <span>Lihat Barcode Presensi</span>
+          </button>
+
+          {/* Tombol Khusus Petugas Presensi Kelas */}
           {petugasWaliData ? (
-            <button
-              onClick={() => setShowModalPresensiPetugas(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-amber-400"
-            >
-              <span>📋</span>
-              <span>Isi Presensi Kelas</span>
-            </button>
+            <>
+              <button
+                onClick={() => setShowModalScanBarcode(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-teal-500"
+                title="Pindai Kartu Barcode Kertas Siswa"
+              >
+                <span>📷</span>
+                <span>Scan Kehadiran</span>
+              </button>
+              <button
+                onClick={() => setShowModalPresensiPetugas(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-amber-400"
+                title="Isi Presensi Kelas secara Reguler"
+              >
+                <span>📋</span>
+                <span>Isi Presensi Reguler</span>
+              </button>
+            </>
           ) : (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/95 border border-amber-300 text-amber-900 text-[10px] sm:text-xs font-bold shadow-2xs">
               <span>👥</span>
@@ -1159,13 +1185,20 @@ export default function DashboardSiswa() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setShowModalScanBarcode(true)}
+                  className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 hover:brightness-110 active:scale-95 text-teal-950 text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>📷</span>
+                  <span>Scan Barcode Siswa</span>
+                </button>
                 <button
                   onClick={() => setShowModalPresensiPetugas(true)}
                   className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>📋</span>
-                  <span>Isi Presensi Kelas</span>
+                  <span>Isi Presensi Reguler</span>
                 </button>
               </div>
             </div>
@@ -1397,12 +1430,38 @@ export default function DashboardSiswa() {
         fokusDaring={true}
       />
 
+      {/* MODAL KARTU BARCODE PRESENSI SISWA (CETAK & PDF) */}
+      <ModalKartuBarcodeSiswa
+        isOpen={showModalKartuBarcode}
+        onClose={() => setShowModalKartuBarcode(false)}
+        user={user}
+        fotoTerbaru={fotoTerbaru}
+      />
+
+      {/* MODAL SCAN PRESENSI BARCODE UNTUK PETUGAS KELAS */}
+      {petugasWaliData && (
+        <ModalScanPresensiPetugas
+          isOpen={showModalScanBarcode}
+          onClose={() => setShowModalScanBarcode(false)}
+          petugasInfo={petugasWaliData}
+          user={user}
+          onPresensiSubmitted={() => {
+            loadDataKelasSiswa();
+          }}
+        />
+      )}
+
+      {/* MODAL PRESENSI PETUGAS KELAS REGULER */}
       {petugasWaliData && (
         <ModalPresensiPetugasSiswa
           isOpen={showModalPresensiPetugas}
           onClose={() => setShowModalPresensiPetugas(false)}
           petugasInfo={petugasWaliData}
           user={user}
+          onOpenScanner={() => {
+            setShowModalPresensiPetugas(false);
+            setShowModalScanBarcode(true);
+          }}
           onPresensiSubmitted={() => {
             loadDataKelasSiswa();
           }}
