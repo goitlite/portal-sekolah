@@ -7,6 +7,11 @@ import { cleanupResources } from "../lib/navigation";
 import { getSession, isLoggedIn } from "../lib/auth";
 import { savePresensi } from "../lib/api";
 import QRCode from "qrcode";
+import {
+  getLocalPresensiRegulerCount,
+  incrementLocalPresensiReguler,
+  MAX_PRESENSI_REGULER_PER_HARI,
+} from "../lib/presensiRegulerHelper";
 
 const NamaBadge = ({ rawName }) => {
   if (!rawName) return null;
@@ -52,6 +57,7 @@ export default function PresensiPage() {
 
   const [recentPembimbing, setRecentPembimbing] = useState([]);
   const [hasPresensiToday, setHasPresensiToday] = useState(false);
+  const [regulerCount, setRegulerCount] = useState(0);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -354,6 +360,11 @@ export default function PresensiPage() {
   }
 
   async function handleSubmit() {
+    if (regulerCount >= MAX_PRESENSI_REGULER_PER_HARI) {
+      alert("Batas maksimal 2 kali pengisian presensi reguler hari ini telah tercapai.");
+      return;
+    }
+
     if (!photo) {
       alert("Silakan ambil foto terlebih dahulu.");
       return;
@@ -435,8 +446,8 @@ export default function PresensiPage() {
           JSON.stringify({ status, pembimbing }),
         );
 
-        const todayStr = new Date().toLocaleDateString("id-ID");
-        localStorage.setItem("magang_last_presensi_date", todayStr);
+        // Tambahkan hitungan presensi reguler hari ini (maks 2x sehari)
+        incrementLocalPresensiReguler(user.id);
 
         router.replace("/magang/dashboard_siswa");
       } else {
@@ -477,13 +488,10 @@ export default function PresensiPage() {
       if (pref.status) setStatus(pref.status);
       if (pref.pembimbing) setPembimbing(pref.pembimbing);
 
-      const lastPresensiDate = localStorage.getItem(
-        "magang_last_presensi_date",
-      );
-      const todayStr = new Date().toLocaleDateString("id-ID");
-      if (lastPresensiDate === todayStr) {
-        setHasPresensiToday(true);
-      }
+      // Baca hitungan presensi reguler hari ini untuk siswa ini
+      const count = getLocalPresensiRegulerCount(session.id);
+      setRegulerCount(count);
+      setHasPresensiToday(count >= MAX_PRESENSI_REGULER_PER_HARI);
 
       setLoading(false);
     }
@@ -617,20 +625,32 @@ export default function PresensiPage() {
           </div>
         </div>
 
-        {hasPresensiToday ? (
-          <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 p-5 shadow-sm transition-all duration-300">
-            <p className="text-lg font-black text-emerald-600 flex items-center gap-2">
-              ✅ Hebat! Anda Sudah Melakukan Presensi Hari Ini
+        {regulerCount >= MAX_PRESENSI_REGULER_PER_HARI ? (
+          <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300 p-5 shadow-sm transition-all duration-300">
+            <p className="text-base sm:text-lg font-black text-amber-800 flex items-center gap-2">
+              ⛔ Batas Presensi Reguler Tercapai (2/2 Hari Ini)
             </p>
-            <p className="text-xs text-emerald-600/80 font-bold mt-1.5 ml-8">
-              Tetap semangat! Anda dapat mengisi form lagi jika perlu melaporkan
-              kegiatan tambahan.
+            <p className="text-xs text-amber-800/90 font-medium mt-1.5 ml-7 leading-relaxed">
+              Anda telah menyelesaikan batas maksimal 2 kali pengisian presensi reguler hari ini.
+              Kuota presensi reguler Anda untuk hari ini telah terpenuhi.
+            </p>
+          </div>
+        ) : regulerCount === 1 ? (
+          <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-300 p-5 shadow-sm transition-all duration-300">
+            <p className="text-base sm:text-lg font-black text-blue-800 flex items-center gap-2">
+              ℹ️ Pengisian Presensi Reguler Ke-2 (1 dari 2 Tercatat)
+            </p>
+            <p className="text-xs text-blue-800/90 font-medium mt-1.5 ml-7 leading-relaxed">
+              Presensi pertama Anda hari ini sudah tersimpan. Silakan ambil foto dan lengkapi data untuk mengirim presensi reguler ke-2 (misal presensi pulang).
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 border border-rose-200 p-5 shadow-sm transition-all duration-300">
-            <p className="text-lg font-black text-rose-600 flex items-center gap-2">
-              🔴 Status: Belum Melakukan Presensi Hari Ini
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-300 p-5 shadow-sm transition-all duration-300">
+            <p className="text-base sm:text-lg font-black text-emerald-800 flex items-center gap-2">
+              📸 Pengisian Presensi Reguler Ke-1 (0 dari 2)
+            </p>
+            <p className="text-xs text-emerald-800/90 font-medium mt-1.5 ml-7 leading-relaxed">
+              Silakan ambil foto selfie dan lengkapi data untuk presensi reguler pertama Anda hari ini.
             </p>
           </div>
         )}
@@ -836,22 +856,32 @@ export default function PresensiPage() {
             </div>
 
             <div className="pt-4">
-              <button
-                onClick={handleSubmit}
-                disabled={!photo || latitude === "-" || saving}
-                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
-              >
-                {saving
-                  ? `🔄 MENYIMPAN... (${Math.round(saveProgress)}%)`
-                  : "🚀 SIMPAN & KIRIM PRESENSI"}
-              </button>
-
-              {(!photo || latitude === "-") && !saving && (
-                <p className="mt-3 text-center text-xs font-bold text-rose-500 animate-pulse">
-                  *Akses simpan ditutup. Harap ambil foto selfie & pastikan
-                  koordinat GPS terkunci terlebih dahulu.
-                </p>
+              {regulerCount >= MAX_PRESENSI_REGULER_PER_HARI ? (
+                <div className="w-full rounded-2xl bg-slate-200 border-2 border-slate-300 py-4 px-3 text-center text-slate-600 font-black text-sm sm:text-base">
+                  ⛔ Batas 2x Presensi Hari Ini Telah Terpenuhi
+                </div>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!photo || latitude === "-" || saving}
+                  className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
+                >
+                  {saving
+                    ? `🔄 MENYIMPAN... (${Math.round(saveProgress)}%)`
+                    : regulerCount === 1
+                    ? "🚀 SIMPAN & KIRIM PRESENSI KE-2"
+                    : "🚀 SIMPAN & KIRIM PRESENSI KE-1"}
+                </button>
               )}
+
+              {regulerCount < MAX_PRESENSI_REGULER_PER_HARI &&
+                (!photo || latitude === "-") &&
+                !saving && (
+                  <p className="mt-3 text-center text-xs font-bold text-rose-500 animate-pulse">
+                    *Akses simpan ditutup. Harap ambil foto selfie & pastikan
+                    koordinat GPS terkunci terlebih dahulu.
+                  </p>
+                )}
             </div>
           </div>
         </section>

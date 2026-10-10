@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -35,6 +35,10 @@ import {
   parseKeteranganWali,
   cachePetugasLocal,
 } from "../lib/petugasPresensiHelper";
+import {
+  getTotalPresensiRegulerToday,
+  MAX_PRESENSI_REGULER_PER_HARI,
+} from "../lib/presensiRegulerHelper";
 import { autoPushSubscribe, runPesanCleanupBackground } from "../lib/pushHelper";
 
 // --- HELPER FORMAT WAKTU & TANGGAL ---
@@ -648,7 +652,14 @@ export default function DashboardSiswa() {
     (rawTempat !== "" && rawTempat !== "-" && rawStatus !== "BELUM_MAGANG");
 
   const sudahMagang = isSedangMagang;
-  const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal;
+
+  // Hitung presensi reguler mandiri siswa hari ini (maks 2x sehari, independen dari barcode)
+  const regulerPresensiCount = useMemo(() => {
+    if (!user?.id) return 0;
+    return getTotalPresensiRegulerToday(user.id, riwayat);
+  }, [user?.id, riwayat]);
+
+  const isSudahPresensi = regulerPresensiCount >= MAX_PRESENSI_REGULER_PER_HARI;
   const fotoTerbaru = riwayat.length > 0 ? riwayat[0].FOTO : null;
 
   // Cek ada catatan wali terisi
@@ -1010,7 +1021,7 @@ export default function DashboardSiswa() {
               </span>
             </div>
             <div className="grid gap-2 sm:gap-3 grid-cols-2">
-              {/* 1. PRESENSI SEKARANG */}
+              {/* 1. PRESENSI SEKARANG (MAKSIMAL 2x SEHARI) */}
               {!sudahMagang ? (
                 <MenuCardDisabled
                   title="Presensi Terkunci"
@@ -1020,15 +1031,24 @@ export default function DashboardSiswa() {
               ) : isSudahPresensi ? (
                 <MenuCardDisabled
                   title="Presensi Selesai"
-                  subtitle="Telah diisi hari ini"
+                  subtitle="Batas 2x presensi harian tercapai"
                   icon="✅"
+                />
+              ) : regulerPresensiCount === 1 ? (
+                <MenuCard
+                  title="Presensi Ke-2"
+                  subtitle="Presensi ke-2 hari ini (1/2)"
+                  icon="📸"
+                  badge="Ke-2"
+                  bgGrad="from-sky-500 via-teal-600 to-emerald-700 shadow-teal-500/20 border-teal-300/40"
+                  onClick={() => router.push("/magang/presensi")}
                 />
               ) : (
                 <MenuCard
                   title="Presensi Sekarang"
-                  subtitle="Kirim foto & lokasi live"
+                  subtitle="Kirim foto & lokasi live (0/2)"
                   icon="📸"
-                  badge="Harian"
+                  badge="Ke-1"
                   bgGrad="from-emerald-500 via-teal-600 to-teal-700 shadow-emerald-500/20 border-emerald-300/40"
                   onClick={() => router.push("/magang/presensi")}
                 />

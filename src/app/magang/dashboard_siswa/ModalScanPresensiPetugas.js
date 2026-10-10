@@ -29,8 +29,11 @@ function checkIsPastTimeLimit() {
   const hours = now.getHours();
   const minutes = now.getMinutes();
   // Batas 08:30 WIB: jika jam > 8 ATAU (jam == 8 dan menit >= 30)
-  return hours > 22 || (hours === 22 && minutes >= 30);
+  return hours > 23 || (hours === 23 && minutes >= 30);
 }
+
+// In-memory cache internal modul agar scanner start instan saat modal dibuka kembali
+const MEMORY_SISWA_CACHE = {}; // { [idWali]: siswaList }
 
 export default function ModalScanPresensiPetugas({
   isOpen,
@@ -94,14 +97,60 @@ export default function ModalScanPresensiPetugas({
     return `${y}-${m}-${d}`;
   }, []);
 
-  // 1. Muat data siswa rombel ke in-memory cache saat modal dibuka
+  // 1. Muat data siswa rombel secara instan dari internal storage/cache
   useEffect(() => {
     if (!isOpen || !petugasInfo?.idWali || !petugasInfo?.idGuru) return;
 
     let isMounted = true;
+    const waliId = petugasInfo.idWali;
+    const storageKeySiswa = `cache_scan_siswa_${waliId}`;
 
-    async function initData() {
+    // Cek apakah data siswa sudah tersimpan di memory atau local storage internal
+    let cachedSiswa = MEMORY_SISWA_CACHE[waliId];
+    if (!cachedSiswa && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(storageKeySiswa);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            cachedSiswa = parsed;
+            MEMORY_SISWA_CACHE[waliId] = parsed;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Jika sudah ada cache internal, terapkan langsung SECARA INSTAN agar kamera langsung aktif
+    if (cachedSiswa && cachedSiswa.length > 0) {
+      setSiswaList(cachedSiswa);
+      const sMap = {};
+      cachedSiswa.forEach((s) => {
+        sMap[s.idSiswa] = s;
+      });
+      siswaMapRef.current = sMap;
+      setLoadingData(false);
+    } else {
       setLoadingData(true);
+    }
+
+    // Baca draft scan lokal untuk hari ini
+    const draftKey = `draft_scan_${waliId}_${todayISO}`;
+    let localDraft = {};
+    try {
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed && typeof parsed === "object") {
+          localDraft = parsed;
+        }
+      }
+    } catch (_) {}
+
+    if (Object.keys(localDraft).length > 0) {
+      setScannedMap((prev) => ({ ...localDraft, ...prev }));
+    }
+
+    async function syncDataFromServer() {
       setScannerError("");
       try {
         const pastLimit = checkIsPastTimeLimit();
@@ -129,6 +178,15 @@ export default function ModalScanPresensiPetugas({
           }))
           .filter((s) => s.idSiswa)
           .sort((a, b) => a.nama.localeCompare(b.nama));
+
+        // Simpan ke storage internal & cache memory
+        MEMORY_SISWA_CACHE[waliId] = normalizedSiswa;
+        try {
+          localStorage.setItem(
+            storageKeySiswa,
+            JSON.stringify(normalizedSiswa),
+          );
+        } catch (_) {}
 
         setSiswaList(normalizedSiswa);
 
@@ -170,34 +228,22 @@ export default function ModalScanPresensiPetugas({
           });
         }
 
-        // Baca draft lokal jika ada scan yang belum disubmit
-        const draftKey = `draft_scan_${petugasInfo.idWali}_${todayISO}`;
-        let localDraft = {};
-        try {
-          const savedDraft = localStorage.getItem(draftKey);
-          if (savedDraft) {
-            const parsed = JSON.parse(savedDraft);
-            if (parsed && typeof parsed === "object") {
-              localDraft = parsed;
-            }
-          }
-        } catch (_) {}
-
         // Gabungkan: data server + draft lokal (pertahankan scan pertama)
-        const combinedScans = { ...existingScanMap, ...localDraft };
-        setScannedMap(combinedScans);
-        setManualStatusMap(existingManualMap);
-        setManualKetMap(existingKetMap);
+        setScannedMap((prev) => ({
+          ...existingScanMap,
+          ...localDraft,
+          ...prev,
+        }));
+        setManualStatusMap((prev) => ({ ...existingManualMap, ...prev }));
+        setManualKetMap((prev) => ({ ...existingKetMap, ...prev }));
 
-        // KUNCI HANYA JIKA SUDAH MELEWATI JAM 08.30 WIB
-        // Jika belum jam 08.30 WIB, TETAP DIBUKA agar bisa scan dan simpan berulang-ulang!
         if (pastLimit) {
           setIsSubmittedToday(true);
         } else {
           setIsSubmittedToday(false);
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMounted && (!cachedSiswa || cachedSiswa.length === 0)) {
           setScannerError(err.message || "Gagal memuat data rombel kelas.");
         }
       } finally {
@@ -205,7 +251,7 @@ export default function ModalScanPresensiPetugas({
       }
     }
 
-    initData();
+    syncDataFromServer();
 
     return () => {
       isMounted = false;
@@ -223,7 +269,7 @@ export default function ModalScanPresensiPetugas({
     } catch (_) {}
   }, [scannedMap, petugasInfo?.idWali, isSubmittedToday, todayISO]);
 
-  // 2. Lifecycle Scanner Kamera Html5Qrcode
+  // 2. Lifecycle Scanner Kamera Html5Qrcode (Start Instan)
   useEffect(() => {
     if (!isOpen || loadingData || isSubmittedToday || activeTab !== "kamera") {
       stopScannerGracefully();
@@ -233,10 +279,11 @@ export default function ModalScanPresensiPetugas({
     const scannerContainerId = "qr-reader-petugas";
     let isCancelled = false;
 
+    // Timeout dipercepat ke 60ms agar kamera langsung aktif
     const timer = setTimeout(() => {
       if (isCancelled) return;
       startScanner(scannerContainerId);
-    }, 250);
+    }, 60);
 
     return () => {
       isCancelled = true;
@@ -258,10 +305,17 @@ export default function ModalScanPresensiPetugas({
       const html5QrCode = new Html5Qrcode(containerId);
       html5QrCodeRef.current = html5QrCode;
 
+      // Konfigurasi kamera luas & adaptif: qrbox proporsional tanpa mengunci rasio 1:1
       const config = {
-        fps: 15,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
+        fps: 20,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const edge = Math.floor(minEdge * 0.78);
+          return {
+            width: Math.max(edge, 200),
+            height: Math.max(edge, 200),
+          };
+        },
       };
 
       await html5QrCode.start(
@@ -545,24 +599,23 @@ export default function ModalScanPresensiPetugas({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
-        {/* HEADER MODAL */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="p-1.5 rounded-lg bg-teal-400/20 text-teal-300 text-base">
+        {/* HEADER MODAL MINIMALIS */}
+        <div className="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-md bg-teal-400/20 text-teal-300 text-sm">
               📷
             </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black tracking-tight">
+            <div className="leading-tight">
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-xs sm:text-sm font-black tracking-tight">
                   Scan Presensi Siswa
                 </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30">
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30">
                   {petugasInfo?.namaKelas || "Rombel"}
                 </span>
               </div>
-              <p className="text-[10px] sm:text-xs text-teal-200">
-                Pindai kartu kertas siswa • Dibuka & dapat diperbarui s.d pukul
-                08.30 WIB
+              <p className="text-[9px] sm:text-[10px] text-teal-200 truncate">
+                Pindai kartu kertas siswa • Simpan berulang s.d 08.30 WIB
               </p>
             </div>
           </div>
@@ -571,7 +624,7 @@ export default function ModalScanPresensiPetugas({
               stopScannerGracefully();
               onClose();
             }}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold cursor-pointer"
+            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
             aria-label="Tutup"
           >
             ✕
@@ -579,10 +632,10 @@ export default function ModalScanPresensiPetugas({
         </div>
 
         {/* TAB NAVIGASI: KAMERA SCAN vs REVIEW DAFTAR */}
-        <div className="flex items-center border-b border-slate-200 bg-slate-50 px-4 sm:px-6 pt-2 shrink-0">
+        <div className="flex items-center border-b border-slate-200 bg-slate-50 px-3 sm:px-5 pt-1.5 shrink-0">
           <button
             onClick={() => setActiveTab("kamera")}
-            className={`px-4 py-2 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === "kamera"
                 ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
                 : "border-transparent text-slate-500 hover:text-slate-800"
@@ -590,23 +643,23 @@ export default function ModalScanPresensiPetugas({
           >
             <span>📷</span>
             <span>Kamera Pemindai</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
               {stats.hadir}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab("daftar")}
-            className={`px-4 py-2 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === "daftar"
                 ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <span>📋</span>
-            <span>Daftar Siswa & Status</span>
+            <span>Daftar Siswa &amp; Status</span>
             {stats.belumScan > 0 && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
                 {stats.belumScan} Belum
               </span>
             )}
@@ -614,83 +667,76 @@ export default function ModalScanPresensiPetugas({
         </div>
 
         {/* KONTEN BODY */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-3.5 flex-1">
-          {/* BANNER KETERANGAN PEMBATASAN JAM 08.30 WIB */}
+        <div className="p-2.5 sm:p-4 overflow-y-auto space-y-2 sm:space-y-2.5 flex-1">
+          {/* BANNER NOTIFIKASI BATAS WAKTU SIMPEL */}
           {isLockedByTime ? (
-            <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-200 text-rose-950 flex items-start gap-2.5 text-xs shadow-2xs">
-              <span className="text-xl shrink-0">⛔</span>
-              <div>
-                <div className="font-black text-sm text-rose-900">
-                  Batas Waktu Presensi Barcode Telah Berakhir (Lewat 08.30 WIB)
-                </div>
-                <p className="mt-0.5 text-rose-800 leading-relaxed">
-                  Pengisian dan pembaruan presensi barcode harian telah ditutup
-                  pada pukul <strong>08.30 WIB</strong>. Data presensi kelas
-                  telah dikunci. Pembaruan selanjutnya hanya dapat dilakukan
-                  oleh <strong>Guru Wali Kelas</strong>.
-                </p>
+            <div className="px-2.5 py-1.5 bg-rose-50 rounded-lg border border-rose-300 text-rose-950 flex items-center justify-between text-[11px] shadow-2xs">
+              <div className="flex items-center gap-1.5 truncate">
+                <span>⛔</span>
+                <span className="font-bold text-rose-900 truncate">
+                  Batas waktu 08.30 WIB telah berakhir. Data presensi barcode
+                  dikunci.
+                </span>
               </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-200 text-rose-900 font-bold shrink-0">
+                Terkunci
+              </span>
             </div>
           ) : (
-            <div className="p-3 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-xl border border-teal-200/90 text-teal-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs shadow-2xs">
-              <div className="flex items-center gap-2">
-                <span className="text-base shrink-0">⏰</span>
-                <div className="leading-relaxed">
-                  <span className="font-black text-teal-900">
-                    Batas Waktu Pengisian:
-                  </span>{" "}
-                  Scan barcode dapat diisi dan{" "}
-                  <strong>disimpan berulang kali</strong> setiap ada siswa hadir
-                  menyusul hingga pukul <strong>08.30 WIB</strong>.
-                </div>
+            <div className="px-2.5 py-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-lg border border-teal-200 text-teal-950 flex items-center justify-between text-[11px] shadow-2xs">
+              <div className="flex items-center gap-1.5 truncate">
+                <span>⏰</span>
+                <span className="truncate">
+                  Bisa simpan &amp; scan berulang s.d <strong>08.30 WIB</strong>
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white border border-teal-300 font-black text-teal-800 shadow-2xs">
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white border border-teal-300 font-bold text-teal-800 shadow-2xs">
                   Batas: 08.30 WIB
                 </span>
                 {hasPreviousSubmission && (
-                  <span className="text-[9px] px-2 py-0.5 rounded-md bg-emerald-600 text-white font-bold">
-                    ✓ Sudah Ada Data
+                  <span className="text-[8.5px] px-1 py-0.5 rounded bg-emerald-600 text-white font-bold">
+                    ✓ Tersimpan
                   </span>
                 )}
               </div>
             </div>
           )}
 
-          {/* STATISTIK RINGKAS */}
-          <div className="grid grid-cols-4 gap-2 text-center">
-            <div className="p-2 rounded-xl bg-slate-100 border border-slate-200">
-              <div className="text-[10px] text-slate-500 font-bold uppercase">
+          {/* STATISTIK RINGKAS MINIMALIS */}
+          <div className="grid grid-cols-4 gap-1.5 text-center">
+            <div className="py-1 px-1 rounded-lg bg-slate-100 border border-slate-200">
+              <div className="text-[8.5px] text-slate-500 font-bold uppercase leading-none">
                 Total
               </div>
-              <div className="text-base sm:text-lg font-black text-slate-900">
+              <div className="text-xs sm:text-sm font-black text-slate-900 leading-tight mt-0.5">
                 {stats.total}
               </div>
             </div>
 
-            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200">
-              <div className="text-[10px] text-emerald-700 font-bold uppercase">
-                Hadir (Scan)
+            <div className="py-1 px-1 rounded-lg bg-emerald-50 border border-emerald-200">
+              <div className="text-[8.5px] text-emerald-700 font-bold uppercase leading-none">
+                Hadir
               </div>
-              <div className="text-base sm:text-lg font-black text-emerald-700">
+              <div className="text-xs sm:text-sm font-black text-emerald-700 leading-tight mt-0.5">
                 {stats.hadir}
               </div>
             </div>
 
-            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200">
-              <div className="text-[10px] text-amber-700 font-bold uppercase">
-                Sakit / Izin
+            <div className="py-1 px-1 rounded-lg bg-amber-50 border border-amber-200">
+              <div className="text-[8.5px] text-amber-700 font-bold uppercase leading-none">
+                Sakit/Izin
               </div>
-              <div className="text-base sm:text-lg font-black text-amber-700">
+              <div className="text-xs sm:text-sm font-black text-amber-700 leading-tight mt-0.5">
                 {stats.sakit + stats.izin}
               </div>
             </div>
 
-            <div className="p-2 rounded-xl bg-rose-50 border border-rose-200">
-              <div className="text-[10px] text-rose-700 font-bold uppercase">
-                Belum Hadir
+            <div className="py-1 px-1 rounded-lg bg-rose-50 border border-rose-200">
+              <div className="text-[8.5px] text-rose-700 font-bold uppercase leading-none">
+                Belum
               </div>
-              <div className="text-base sm:text-lg font-black text-rose-700">
+              <div className="text-xs sm:text-sm font-black text-rose-700 leading-tight mt-0.5">
                 {stats.belumScan + stats.alfa + stats.cabut}
               </div>
             </div>
@@ -698,11 +744,11 @@ export default function ModalScanPresensiPetugas({
 
           {/* TAB 1: KAMERA PEMINDAI */}
           {activeTab === "kamera" && !isLockedByTime && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {/* FEEDBACK TERAKHIR HASIL SCAN (TOAST BANNER) */}
               {lastScanNotice && (
                 <div
-                  className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-all animate-in fade-in slide-in-from-top-1 ${
+                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition-all animate-in fade-in slide-in-from-top-1 ${
                     lastScanNotice.type === "success"
                       ? "bg-emerald-50 border-emerald-300 text-emerald-950"
                       : lastScanNotice.type === "duplicate"
@@ -710,38 +756,63 @@ export default function ModalScanPresensiPetugas({
                         : "bg-rose-50 border-rose-300 text-rose-950"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="text-sm">
                       {lastScanNotice.type === "success"
                         ? "✅"
                         : lastScanNotice.type === "duplicate"
                           ? "ℹ️"
                           : "⚠️"}
                     </span>
-                    <div>
+                    <div className="truncate">
                       <span className="font-bold">{lastScanNotice.title}:</span>{" "}
                       {lastScanNotice.message}
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/70 font-bold shrink-0">
+                  <span className="text-[9.5px] font-mono px-1.5 py-0.5 rounded bg-white/80 font-bold shrink-0 ml-1">
                     {lastScanNotice.waktu}
                   </span>
                 </div>
               )}
 
-              {/* CONTAINER KAMERA */}
-              <div className="relative rounded-2xl overflow-hidden bg-slate-900 border-2 border-slate-700 aspect-video sm:aspect-[4/3] flex flex-col items-center justify-center">
+              {/* CONTAINER KAMERA LUAS & LEBAR UNTUK SMARTPHONE */}
+              <div className="relative rounded-2xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[54vh] sm:h-[430px] min-h-[300px] max-h-[550px] flex flex-col items-center justify-center shadow-md">
+                <style
+                  dangerouslySetInnerHTML={{
+                    __html: `
+                      #qr-reader-petugas {
+                        width: 100% !important;
+                        height: 100% !important;
+                        border: none !important;
+                        position: relative !important;
+                      }
+                      #qr-reader-petugas video {
+                        width: 100% !important;
+                        height: 100% !important;
+                        object-fit: cover !important;
+                        border-radius: 0.875rem !important;
+                      }
+                      #qr-reader-petugas__scan_region {
+                        background: transparent !important;
+                      }
+                      #qr-reader-petugas__dashboard_section_csr span,
+                      #qr-reader-petugas__dashboard_section_swaplink {
+                        display: none !important;
+                      }
+                    `,
+                  }}
+                />
                 <div id="qr-reader-petugas" className="w-full h-full" />
 
                 {scannerActive && (
-                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-4">
-                    <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-xs text-[10px] sm:text-xs text-white font-medium">
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-3.5">
+                    <div className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-xs text-[10px] text-white font-medium shadow-xs">
                       Arahkan kamera ke QR Code kartu kertas siswa
                     </div>
 
-                    <div className="w-48 h-48 border-2 border-dashed border-emerald-400 rounded-xl animate-pulse" />
+                    <div className="w-52 h-52 sm:w-60 sm:h-60 border-2 border-dashed border-emerald-400 rounded-2xl animate-pulse" />
 
-                    <div className="px-3 py-1 rounded-md bg-emerald-950/80 text-emerald-300 text-[10px] font-mono font-bold">
+                    <div className="px-2.5 py-0.5 rounded-md bg-emerald-950/85 text-emerald-300 text-[9.5px] font-mono font-bold shadow-xs">
                       Scan Pertama Terkunci • Bisa Simpan Berulang s.d 08.30
                     </div>
                   </div>
@@ -763,31 +834,31 @@ export default function ModalScanPresensiPetugas({
                 )}
               </div>
 
-              {/* LIST SISWA TERAKHIR DISCAN (5 TERATAS) */}
+              {/* LIST SISWA TERAKHIR DISCAN (KOMPAK) */}
               {siswaSudahDiscan.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                    <span>Siswa Hadir:</span>
+                <div className="space-y-1 pt-0.5">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                    <span>Terakhir Hadir:</span>
                     <span className="text-emerald-700 font-black">
                       {siswaSudahDiscan.length} Siswa Terdata
                     </span>
                   </div>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
                     {siswaSudahDiscan
-                      .slice(-5)
+                      .slice(-4)
                       .reverse()
                       .map((s) => (
                         <div
                           key={s.idSiswa}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 truncate">
                             <span className="text-emerald-600 font-bold">
                               ✓
                             </span>
-                            <span className="font-bold">{s.nama}</span>
+                            <span className="font-bold truncate">{s.nama}</span>
                           </div>
-                          <span className="text-[10px] font-mono text-emerald-800">
+                          <span className="text-[9.5px] font-mono text-emerald-800 shrink-0 ml-1">
                             {scannedMap[s.idSiswa]?.waktuScan} WIB
                           </span>
                         </div>
