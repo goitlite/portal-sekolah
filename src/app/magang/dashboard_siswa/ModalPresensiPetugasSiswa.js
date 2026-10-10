@@ -56,13 +56,14 @@ export default function ModalPresensiPetugasSiswa({
   onPresensiSubmitted,
 }) {
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
   const [siswaList, setSiswaList] = useState([]);
   const [presensiMap, setPresensiMap] = useState({}); // { [idSiswa]: { status: "Hadir", keterangan: "" } }
   const [isSubmittedToday, setIsSubmittedToday] = useState(false);
   const [submittedData, setSubmittedData] = useState([]); // data tersimpan hari ini (read-only)
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [regulerCount, setRegulerCount] = useState(0);
 
   const todayISO = useMemo(() => {
     // Format YYYY-MM-DD lokal
@@ -88,10 +89,16 @@ export default function ModalPresensiPetugasSiswa({
     setLoading(true);
     setErrorMessage("");
     try {
-      // 1. Cek flag localStorage untuk kecepatan akses
-      const lockKey = `presensi_petugas_done_${petugasInfo.idWali}_${todayISO}`;
-      const localLocked =
-        typeof window !== "undefined" && localStorage.getItem(lockKey) === "1";
+      // 1. Cek kuota pengisian reguler khusus hari ini (maksimal 2x sehari)
+      const regulerKey = `presensi_reguler_count_${petugasInfo.idWali}_${todayISO}`;
+      let currentRegulerCount = 0;
+      try {
+        const saved = localStorage.getItem(regulerKey);
+        if (saved !== null) {
+          currentRegulerCount = parseInt(saved, 10) || 0;
+        }
+      } catch (_) {}
+      setRegulerCount(currentRegulerCount);
 
       const res = await getPresensiWaliGrid(
         petugasInfo.idGuru,
@@ -115,37 +122,38 @@ export default function ModalPresensiPetugasSiswa({
 
       setSiswaList(normalizedSiswa);
 
-      // 2. Cek apakah di database sudah ada presensi pada todayISO
+      // 2. Ambil data presensi yang sudah tersimpan di database hari ini (jika ada)
       const rawPresensi = res.data?.presensi || [];
       const todayRecords = rawPresensi.filter(
         (p) => String(p.tanggal).trim() === todayISO,
       );
 
-      if (todayRecords.length > 0 || localLocked) {
-        // Hari ini sudah diisi! Masuk mode terkunci (read-only)
+      const mapExisting = {};
+      todayRecords.forEach((p) => {
+        mapExisting[String(p.idSiswa).trim()] = {
+          status: p.status || "Hadir",
+          keterangan: p.keterangan || "",
+        };
+      });
+
+      // Data awal: gabungkan siswa dengan status yang sudah tersimpan di database
+      const initialMap = {};
+      normalizedSiswa.forEach((s) => {
+        initialMap[s.idSiswa] = mapExisting[s.idSiswa] || {
+          status: "Hadir",
+          keterangan: "",
+        };
+      });
+
+      setPresensiMap(initialMap);
+
+      // KUNCI HANYA JIKA PENGISIAN REGULER SUDAH TERCAPAI 2 KALI!
+      // Presensi barcode TIDAK BOLEH mengunci presensi reguler
+      if (currentRegulerCount >= 2) {
         setIsSubmittedToday(true);
-        const mapExisting = {};
-        todayRecords.forEach((p) => {
-          mapExisting[String(p.idSiswa).trim()] = {
-            status: p.status || "Hadir",
-            keterangan: p.keterangan || "",
-          };
-        });
-        setSubmittedData(mapExisting);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(lockKey, "1");
-        }
+        setSubmittedData(initialMap);
       } else {
-        // Belum diisi: Inisialisasi default SEMUA HADIR
         setIsSubmittedToday(false);
-        const initialMap = {};
-        normalizedSiswa.forEach((s) => {
-          initialMap[s.idSiswa] = {
-            status: "Hadir",
-            keterangan: "",
-          };
-        });
-        setPresensiMap(initialMap);
       }
     } catch (err) {
       console.error("Gagal memuat data presensi petugas:", err);
@@ -219,7 +227,12 @@ export default function ModalPresensiPetugasSiswa({
   }, [siswaList, searchQuery]);
 
   async function handleSubmit() {
-    if (isSubmittedToday) return;
+    if (isSubmittedToday || regulerCount >= 2) {
+      alert(
+        "⛔ Batas maksimal 2 kali pengisian presensi reguler hari ini telah terpenuhi.",
+      );
+      return;
+    }
 
     if (siswaList.length === 0) {
       alert("Tidak ada data siswa yang dapat disimpan.");
@@ -228,18 +241,18 @@ export default function ModalPresensiPetugasSiswa({
 
     const nonHadirCount = stats.sakit + stats.izin + stats.alfa + stats.cabut;
     const konfirmasiPesan =
-      `📋 KONFIRMASI PENGIRIMAN PRESENSI KELAS\n\n` +
+      `📋 KONFIRMASI PENGIRIMAN PRESENSI REGULER\n\n` +
       `Kelas: ${petugasInfo.namaKelas}\n` +
       `Tanggal: ${todayFormatted}\n` +
+      `Pengisian Ke: ${regulerCount + 1} dari 2 harian\n` +
       `Total Siswa: ${stats.total}\n` +
       `• Hadir: ${stats.hadir}\n` +
       `• Sakit: ${stats.sakit}\n` +
       `• Izin: ${stats.izin}\n` +
       `• Alfa: ${stats.alfa}\n` +
       `• Cabut: ${stats.cabut}\n\n` +
-      `⚠️ PERHATIAN:\n` +
-      `Presensi hanya dapat diisi 1 KALI SEHARI.\n` +
-      `Setelah disimpan, Anda TIDAK DAPAT MENGUBAH data ini lagi (hanya Guru Wali Kelas yang dapat mengubah).\n\n` +
+      `💡 KETENTUAN PENGISIAN:\n` +
+      `Presensi reguler dapat diisi maksimal 2 kali sehari (tanpa terpengaruh oleh presensi barcode).\n\n` +
       `Apakah Anda yakin data ini sudah benar dan ingin mengirimkannya?`;
 
     if (!window.confirm(konfirmasiPesan)) return;
@@ -274,19 +287,28 @@ export default function ModalPresensiPetugasSiswa({
         throw new Error(res.message || "Gagal menyimpan presensi ke server.");
       }
 
-      // Kunci lokal
-      const lockKey = `presensi_petugas_done_${petugasInfo.idWali}_${todayISO}`;
+      // Update kuota presensi reguler
+      const nextCount = regulerCount + 1;
+      const regulerKey = `presensi_reguler_count_${petugasInfo.idWali}_${todayISO}`;
       if (typeof window !== "undefined") {
-        localStorage.setItem(lockKey, "1");
+        localStorage.setItem(regulerKey, String(nextCount));
       }
+      setRegulerCount(nextCount);
 
-      setIsSubmittedToday(true);
-      setSubmittedData({ ...presensiMap });
-
-      alert(
-        `✅ ALHAMDULILLAH! Presensi kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
-          `Data telah tercatat di sistem wali kelas. Terima kasih telah menjalankan tugas presensi hari ini.`,
-      );
+      if (nextCount >= 2) {
+        setIsSubmittedToday(true);
+        setSubmittedData({ ...presensiMap });
+        alert(
+          `✅ ALHAMDULILLAH! Presensi reguler ke-2 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+            `Batas 2 kali pengisian presensi reguler hari ini telah selesai. Terima kasih telah menjalankan tugas presensi hari ini.`,
+        );
+      } else {
+        setIsSubmittedToday(false);
+        alert(
+          `✅ ALHAMDULILLAH! Presensi reguler ke-1 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+            `💡 Anda masih dapat mengisi presensi reguler 1 kali lagi untuk hari ini jika ada pembaruan.`,
+        );
+      }
 
       if (typeof onPresensiSubmitted === "function") {
         onPresensiSubmitted();
@@ -348,14 +370,37 @@ export default function ModalPresensiPetugasSiswa({
             </button>
           </div>
 
-          {/* Banner Status Terkunci Hari Ini */}
-          {isSubmittedToday && (
+          {/* Banner Status Pengisian Reguler (Maksimal 2x Sehari) */}
+          {isSubmittedToday ? (
             <div className="mt-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-3.5 py-2 flex items-center gap-2 text-emerald-100 text-xs font-semibold">
               <span className="text-base">🔒</span>
               <span>
-                Presensi kelas untuk hari ini (<b>{todayFormatted}</b>) telah
-                dikirim dan <b>terkunci</b>. Hanya Guru Wali Kelas yang
-                berwenang melakukan perubahan.
+                Presensi reguler kelas untuk hari ini (<b>{todayFormatted}</b>)
+                telah dikirim <b>2 kali (2/2 selesai)</b> dan kini{" "}
+                <b>terkunci</b>. Hanya Guru Wali Kelas yang berwenang melakukan
+                perubahan lebih lanjut.
+              </span>
+            </div>
+          ) : regulerCount === 1 ? (
+            <div className="mt-3 rounded-xl bg-amber-400/20 border border-amber-300/40 px-3.5 py-2 flex items-center gap-2 text-amber-100 text-xs font-semibold">
+              <span className="text-base">ℹ️</span>
+              <span>
+                Pengisian Reguler Ke-2 (<b>1 dari 2 telah dikirim</b>). Anda
+                masih dapat memperbarui data dan mengirimkan presensi reguler 1
+                kali lagi untuk hari ini.
+              </span>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl bg-teal-400/20 border border-teal-300/30 px-3.5 py-2 flex items-center justify-between gap-2 text-teal-100 text-xs font-medium">
+              <div className="flex items-center gap-2">
+                <span>📋</span>
+                <span>
+                  Presensi reguler dapat diisi maksimal <b>2 kali sehari</b>{" "}
+                  (tanpa terpengaruh oleh presensi barcode).
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-white/20 font-mono font-bold shrink-0">
+                0 / 2 Terisi
               </span>
             </div>
           )}
@@ -644,7 +689,11 @@ export default function ModalPresensiPetugasSiswa({
                 ) : (
                   <>
                     <span>📤</span>
-                    <span>Kirim Presensi Hari Ini</span>
+                    <span>
+                      {regulerCount === 1
+                        ? "Kirim Presensi Reguler Ke-2 (2/2)"
+                        : "Kirim Presensi Reguler Ke-1 (1/2)"}
+                    </span>
                   </>
                 )}
               </button>

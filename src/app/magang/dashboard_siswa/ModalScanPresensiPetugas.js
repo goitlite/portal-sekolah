@@ -41,6 +41,7 @@ export default function ModalScanPresensiPetugas({
   petugasInfo, // { idWali, idGuru, namaKelas, kelas }
   user, // { id, nama }
   onPresensiSubmitted,
+  onOpenReguler,
 }) {
   const [loadingData, setLoadingData] = useState(true);
   const [scannerActive, setScannerActive] = useState(false);
@@ -631,39 +632,56 @@ export default function ModalScanPresensiPetugas({
           </button>
         </div>
 
-        {/* TAB NAVIGASI: KAMERA SCAN vs REVIEW DAFTAR */}
-        <div className="flex items-center border-b border-slate-200 bg-slate-50 px-3 sm:px-5 pt-1.5 shrink-0">
-          <button
-            onClick={() => setActiveTab("kamera")}
-            className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "kamera"
-                ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <span>📷</span>
-            <span>Kamera Pemindai</span>
-            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-              {stats.hadir}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("daftar")}
-            className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "daftar"
-                ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <span>📋</span>
-            <span>Daftar Siswa &amp; Status</span>
-            {stats.belumScan > 0 && (
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
-                {stats.belumScan} Belum
+        {/* TAB NAVIGASI: KAMERA SCAN vs REVIEW DAFTAR + TOMBOL REGULER */}
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 sm:px-5 pt-1.5 shrink-0">
+          <div className="flex items-center">
+            <button
+              onClick={() => setActiveTab("kamera")}
+              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "kamera"
+                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span>📷</span>
+              <span>Kamera Pemindai</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                {stats.hadir}
               </span>
-            )}
-          </button>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("daftar")}
+              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "daftar"
+                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span>📋</span>
+              <span>Daftar Siswa &amp; Status</span>
+              {stats.belumScan > 0 && (
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
+                  {stats.belumScan} Belum
+                </span>
+              )}
+            </button>
+          </div>
+
+          {typeof onOpenReguler === "function" && (
+            <button
+              type="button"
+              onClick={() => {
+                stopScannerGracefully();
+                onOpenReguler();
+              }}
+              className="mb-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 font-black text-[11px] shadow-2xs border border-amber-400 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+              title="Beralih ke Formulir Presensi Reguler"
+            >
+              <span>📋</span>
+              <span>Presensi Reguler</span>
+            </button>
+          )}
         </div>
 
         {/* KONTEN BODY */}
