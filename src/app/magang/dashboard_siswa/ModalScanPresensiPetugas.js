@@ -56,8 +56,12 @@ export default function ModalScanPresensiPetugas({
   const [manualStatusMap, setManualStatusMap] = useState({});
   const [manualKetMap, setManualKetMap] = useState({});
 
-  // Notifikasi real-time terakhir saat scan
+  // Notifikasi real-time terakhir saat scan (banner kecil di atas kamera)
   const [lastScanNotice, setLastScanNotice] = useState(null);
+
+  // Overlay notifikasi BESAR di tengah layar scan (sukses / gagal / duplikat)
+  const [scanOverlay, setScanOverlay] = useState(null);
+  const scanOverlayTimerRef = useRef(null);
 
   // Status pengiriman presensi & pembatasan jam
   const [saving, setSaving] = useState(false);
@@ -74,6 +78,18 @@ export default function ModalScanPresensiPetugas({
   useEffect(() => {
     scannedMapRef.current = scannedMap;
   }, [scannedMap]);
+
+  // Auto-dismiss overlay notifikasi tengah layar (sukses 2.8 dtk, error/duplikat 3.5 dtk)
+  useEffect(() => {
+    if (!scanOverlay) return;
+    if (scanOverlayTimerRef.current) clearTimeout(scanOverlayTimerRef.current);
+    scanOverlayTimerRef.current = setTimeout(() => {
+      setScanOverlay(null);
+    }, scanOverlay.type === "success" ? 2800 : 3500);
+    return () => {
+      if (scanOverlayTimerRef.current) clearTimeout(scanOverlayTimerRef.current);
+    };
+  }, [scanOverlay]);
 
   // Pantau pembatasan waktu (08:30 WIB) secara berkala
   useEffect(() => {
@@ -376,24 +392,33 @@ export default function ModalScanPresensiPetugas({
 
     // Kasus A: Kartu bukan milik siswa di rombel kelas ini
     if (!targetSiswa) {
-      setLastScanNotice({
+      const notif = {
         type: "error",
         title: "Siswa Tidak Dikenal",
         message: `ID [${scannedId}] tidak terdaftar di kelas ${petugasInfo?.namaKelas || "ini"}.`,
         waktu: new Date().toLocaleTimeString("id-ID"),
-      });
+      };
+      setLastScanNotice(notif);
+      setScanOverlay({ type: "error", nama: null, waktu: notif.waktu, pesan: notif.message });
       return;
     }
 
     // Kasus B: Siswa SUDAH PERNAH DI-SCAN SEBELUMNYA (FIRST-SCAN WINS)
     const existingScan = scannedMapRef.current[scannedId];
     if (existingScan) {
-      setLastScanNotice({
+      const notif = {
         type: "duplicate",
         title: "Sudah Pernah Discan",
         message: `${targetSiswa.nama} sudah tercatat pada scan pertama pukul ${existingScan.waktuScan} WIB. Data pertama tetap dipertahankan.`,
         waktu: existingScan.waktuScan,
         siswa: targetSiswa,
+      };
+      setLastScanNotice(notif);
+      setScanOverlay({
+        type: "duplicate",
+        nama: targetSiswa.nama,
+        waktu: existingScan.waktuScan,
+        pesan: `Sudah tercatat hadir pukul ${existingScan.waktuScan} WIB`,
       });
       return;
     }
@@ -434,6 +459,12 @@ export default function ModalScanPresensiPetugas({
       message: `${targetSiswa.nama} berhasil dicatat HADIR.`,
       waktu: jamScan,
       siswa: targetSiswa,
+    });
+    setScanOverlay({
+      type: "success",
+      nama: targetSiswa.nama,
+      waktu: jamScan,
+      pesan: `hadir pada pukul ${jamScan} WIB`,
     });
   }
 
@@ -848,6 +879,79 @@ export default function ModalScanPresensiPetugas({
                     >
                       Coba Lagi
                     </button>
+                  </div>
+                )}
+
+                {/* OVERLAY NOTIFIKASI BESAR DI TENGAH LAYAR SCAN */}
+                {scanOverlay && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none px-4"
+                    style={{ animation: "fadeInScale 0.18s ease-out" }}
+                  >
+                    <style dangerouslySetInnerHTML={{ __html: `
+                      @keyframes fadeInScale {
+                        from { opacity: 0; transform: scale(0.82); }
+                        to   { opacity: 1; transform: scale(1); }
+                      }
+                      @keyframes overlayPulse {
+                        0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
+                        50%       { box-shadow: 0 0 0 16px rgba(16,185,129,0); }
+                      }
+                    `}} />
+                    <div
+                      className={`w-full max-w-xs rounded-2xl px-5 py-5 flex flex-col items-center gap-2 text-center shadow-2xl border-2 backdrop-blur-md ${
+                        scanOverlay.type === "success"
+                          ? "bg-emerald-950/92 border-emerald-400 text-white"
+                          : scanOverlay.type === "duplicate"
+                            ? "bg-blue-950/92 border-blue-400 text-white"
+                            : "bg-rose-950/92 border-rose-400 text-white"
+                      }`}
+                      style={scanOverlay.type === "success" ? { animation: "overlayPulse 0.8s ease-out 1" } : {}}
+                    >
+                      {/* Ikon status */}
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 ${
+                        scanOverlay.type === "success"
+                          ? "bg-emerald-500 border-emerald-300"
+                          : scanOverlay.type === "duplicate"
+                            ? "bg-blue-500 border-blue-300"
+                            : "bg-rose-500 border-rose-300"
+                      }`}>
+                        {scanOverlay.type === "success" ? "✅" : scanOverlay.type === "duplicate" ? "ℹ️" : "⚠️"}
+                      </div>
+
+                      {/* Label status */}
+                      <div className={`text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full ${
+                        scanOverlay.type === "success"
+                          ? "bg-emerald-500/40 text-emerald-200"
+                          : scanOverlay.type === "duplicate"
+                            ? "bg-blue-500/40 text-blue-200"
+                            : "bg-rose-500/40 text-rose-200"
+                      }`}>
+                        {scanOverlay.type === "success" ? "Hadir Tercatat" : scanOverlay.type === "duplicate" ? "Sudah Discan" : "Tidak Dikenal"}
+                      </div>
+
+                      {/* Nama siswa (besar & jelas) */}
+                      {scanOverlay.nama && (
+                        <div className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-white drop-shadow-md">
+                          {scanOverlay.nama}
+                        </div>
+                      )}
+
+                      {/* Keterangan / pesan */}
+                      <div className={`text-sm font-bold leading-snug ${
+                        scanOverlay.type === "success" ? "text-emerald-200" :
+                        scanOverlay.type === "duplicate" ? "text-blue-200" : "text-rose-200"
+                      }`}>
+                        {scanOverlay.pesan}
+                      </div>
+
+                      {/* Jam tampil besar untuk sukses */}
+                      {scanOverlay.type === "success" && (
+                        <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-300 tracking-wide drop-shadow-lg">
+                          {scanOverlay.waktu} WIB
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
