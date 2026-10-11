@@ -73,6 +73,10 @@ export default function ModalScanPresensiPetugas({
   const html5QrCodeRef = useRef(null);
   const scannedMapRef = useRef(scannedMap);
   const siswaMapRef = useRef({});
+  // Timestamp scan terakhir sukses — digunakan untuk cooldown agar overlay hijau tidak langsung diganti
+  const lastSuccessScanAt = useRef(0);
+  // Durasi cooldown (ms): selama ini semua bacaan scanner diabaikan
+  const SCAN_COOLDOWN_MS = 3000;
 
   // Sync ref agar callback Html5Qrcode selalu membaca data terbaru tanpa stale closure
   useEffect(() => {
@@ -372,6 +376,11 @@ export default function ModalScanPresensiPetugas({
   function handleBarcodeDecoded(rawText) {
     if (!rawText) return;
 
+    // Cooldown: abaikan scan apapun selama SCAN_COOLDOWN_MS setelah scan sukses terakhir
+    // agar overlay hijau (sukses) tidak langsung digantikan oleh bacaan ulang yg sama
+    const nowMs = Date.now();
+    if (nowMs - lastSuccessScanAt.current < SCAN_COOLDOWN_MS) return;
+
     // Cek batas jam sebelum memproses
     if (checkIsPastTimeLimit()) {
       setIsSubmittedToday(true);
@@ -452,6 +461,9 @@ export default function ModalScanPresensiPetugas({
     if (typeof navigator !== "undefined" && navigator.vibrate) {
       navigator.vibrate(60);
     }
+
+    // Catat waktu scan sukses untuk aktifkan cooldown (blokir bacaan ulang scanner)
+    lastSuccessScanAt.current = Date.now();
 
     setLastScanNotice({
       type: "success",
