@@ -44,6 +44,7 @@ import ModalPresensiMapel from "./guru-mapel/ModalPresensiMapel";
 import ModalPresensiWaliKelas from "./guru-wali-kelas/ModalPresensiWaliKelas";
 import ModalJurnalWaliKelas from "./guru-wali-kelas/kelola/ModalJurnalWaliKelas";
 import ModalPilihPetugasPresensi from "./guru-wali-kelas/ModalPilihPetugasPresensi";
+import ModalCetakBarcodeWaliKelas from "./guru-wali-kelas/ModalCetakBarcodeWaliKelas";
 import {
   getPetugasFromWali,
   parseKeteranganWali,
@@ -842,6 +843,7 @@ function DashboardGuruContent() {
   const [waliKelasPresensiAktif, setWaliKelasPresensiAktif] = useState(null);
   const [waliKelasJurnalAktif, setWaliKelasJurnalAktif] = useState(null);
   const [waliPetugasTarget, setWaliPetugasTarget] = useState(null);
+  const [waliCetakBarcodeTarget, setWaliCetakBarcodeTarget] = useState(null);
   const [showCetakWaliKelasModal, setShowCetakWaliKelasModal] = useState(false);
   const [statsPresensiHariIniWali, setStatsPresensiHariIniWali] = useState({});
   const [loadingStatsWali, setLoadingStatsWali] = useState({});
@@ -4872,7 +4874,7 @@ function DashboardGuruContent() {
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                               <button
                                 type="button"
                                 onClick={() => setWaliPetugasTarget(wali)}
@@ -4889,6 +4891,15 @@ function DashboardGuruContent() {
                               >
                                 <span>📝</span>
                                 <span>Jurnal</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setWaliCetakBarcodeTarget(wali)}
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 sm:text-[11px]"
+                              >
+                                <span>🪪</span>
+                                <span>Cetak Barcode</span>
                               </button>
 
                               <button
@@ -6861,6 +6872,16 @@ function DashboardGuruContent() {
             );
             loadWaliKelasData(true);
           }}
+        />
+      )}
+
+      {/* MODAL: CETAK BARCODE SELURUH SISWA KELAS WALI (A4 6 KARTU/LEMBAR) */}
+      {waliCetakBarcodeTarget && (
+        <ModalCetakBarcodeWaliKelas
+          isOpen={!!waliCetakBarcodeTarget}
+          onClose={() => setWaliCetakBarcodeTarget(null)}
+          guru={user}
+          wali={waliCetakBarcodeTarget}
         />
       )}
 

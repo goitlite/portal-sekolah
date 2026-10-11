@@ -120,6 +120,43 @@ function isValidPhotoUrl(url) {
   );
 }
 
+function optimizeFotoUrl(url, size = 400) {
+  if (!url || typeof url !== "string") return url;
+  const trimmed = url.trim();
+  if (trimmed.includes("googleusercontent.com")) {
+    const base = trimmed.split("=")[0];
+    return `${base}=w${size}-h${size}-c`;
+  }
+  const driveIdMatch = trimmed.match(/[-\w]{25,}/);
+  if (trimmed.includes("drive.google.com") && driveIdMatch) {
+    return `https://lh3.googleusercontent.com/d/${driveIdMatch[0]}=w${size}-h${size}-c`;
+  }
+  return trimmed;
+}
+
+function formatTTL(tempatLahir, tglLahir) {
+  const tempat = (tempatLahir || "").trim();
+  let tgl = (tglLahir || "").trim();
+
+  if (tgl) {
+    try {
+      const d = new Date(tgl);
+      if (!isNaN(d.getTime())) {
+        tgl = d.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      }
+    } catch (_) {}
+  }
+
+  if (tempat && tgl) return `${tempat}, ${tgl}`;
+  if (tempat) return tempat;
+  if (tgl) return tgl;
+  return "-";
+}
+
 /**
  * PURE HTML5 CANVAS GENERATOR (100% BEBAS DARI ERROR DOM/CORS/FONT)
  * Menggambar kartu ID Card CR80 (860 x 540 px, 300 DPI HD)
@@ -129,6 +166,7 @@ function generateCardCanvas({
   idSiswa,
   kelas,
   jurusan,
+  ttl,
   noHp,
   qrDataUrl,
   logoBase64,
@@ -186,107 +224,117 @@ function generateCardCanvas({
       ctx.fillText(kelas || "-", badgeX + badgeW / 2, badgeY + 28);
       ctx.textAlign = "left";
 
-      // 5. Kotak Pas Foto 3x4 (Kiri)
-      const photoX = 35;
-      const photoY = 125;
-      const photoW = 180;
-      const photoH = 240;
+      // 5. Kotak Pas Foto 3x4 (Kiri - Aspek Rasio Tepat 3:4, Tanpa Menabrak Teks)
+      const photoX = 32;
+      const photoY = 118;
+      const photoW = 155;
+      const photoH = 207; // 155 * 4/3 = 206.7 (Aspek rasio pas foto 3:4)
 
       ctx.fillStyle = "#f8fafc";
       ctx.fillRect(photoX, photoY, photoW, photoH);
       ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]); // Garis putus-putus resmi area foto
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]); // Garis putus-putus resmi area foto
       ctx.strokeRect(photoX, photoY, photoW, photoH);
       ctx.setLineDash([]); // Reset dash
 
       // Model Gambar Pas Foto Kosong (Siluet Elegan)
       ctx.fillStyle = "#e2e8f0";
       ctx.beginPath();
-      ctx.arc(photoX + photoW / 2, photoY + 95, 42, 0, Math.PI * 2);
+      ctx.arc(photoX + photoW / 2, photoY + 76, 36, 0, Math.PI * 2);
       ctx.fill();
 
       // Siluet Kepala & Bahu
       ctx.fillStyle = "#94a3b8";
       ctx.beginPath();
-      ctx.arc(photoX + photoW / 2, photoY + 85, 18, 0, Math.PI * 2);
+      ctx.arc(photoX + photoW / 2, photoY + 68, 15, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(photoX + photoW / 2, photoY + 130, 28, Math.PI, Math.PI * 2);
+      ctx.arc(photoX + photoW / 2, photoY + 108, 24, Math.PI, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = "#475569";
-      ctx.font = "bold 15px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.font = "bold 13px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("PAS FOTO", photoX + photoW / 2, photoY + 185);
+      ctx.fillText("PAS FOTO", photoX + photoW / 2, photoY + 154);
 
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "bold 13px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("3 × 4 CM", photoX + photoW / 2, photoY + 210);
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("3 × 4 CM", photoX + photoW / 2, photoY + 176);
       ctx.textAlign = "left";
 
-      // 6. Biodata Siswa (Tengah)
-      const bioX = 245;
+      // 6. Biodata Siswa (Tengah - Jarak Aman 28px dari Kotak Foto)
+      const bioX = 215;
 
       // Nama Siswa
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "bold 12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("NAMA LENGKAP", bioX, 142);
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("NAMA LENGKAP", bioX, 134);
       ctx.fillStyle = "#0f172a";
-      ctx.font = "bold 20px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      const maxNamaW = 340;
+      ctx.font = "bold 18px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      const maxNamaW = 310;
       let namaTrunc = (nama || "SISWA").toUpperCase();
       if (ctx.measureText(namaTrunc).width > maxNamaW) {
-        ctx.font = "bold 17px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.font = "bold 15px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
       }
-      ctx.fillText(namaTrunc, bioX, 170);
+      ctx.fillText(namaTrunc, bioX, 156);
 
       // Nomor Induk / ID
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "bold 12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("NOMOR INDUK / ID", bioX, 206);
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("NOMOR INDUK / ID", bioX, 190);
       ctx.fillStyle = "#1e3a8a";
-      ctx.font = "bold 18px monospace";
-      ctx.fillText(idSiswa || "-", bioX, 230);
+      ctx.font = "bold 17px monospace";
+      ctx.fillText(idSiswa || "-", bioX, 212);
 
       // Konsentrasi Keahlian
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "bold 12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("KONSENTRASI KEAHLIAN", bioX, 268);
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("KONSENTRASI KEAHLIAN", bioX, 246);
       ctx.fillStyle = "#0369a1";
-      ctx.font = "bold 17px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText(jurusan || "-", bioX, 293);
+      ctx.font = "bold 15px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(jurusan || "-", bioX, 268);
+
+      // TTL (Tempat, Tanggal Lahir)
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("TTL", bioX, 302);
+      ctx.fillStyle = "#334155";
+      ctx.font = "bold 14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(ttl || "-", bioX, 324);
 
       // No HP
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "bold 12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("NO. KONTAK / HP", bioX, 330);
-      ctx.fillStyle = "#475569";
-      ctx.font = "600 16px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText(noHp || "-", bioX, 354);
+      ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("NO. HP", bioX, 358);
+      ctx.fillStyle = "#334155";
+      ctx.font = "bold 15px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(noHp || "-", bioX, 380);
 
-      // 7. Area QR Code (Kanan)
-      const qrBoxX = 615;
-      const qrBoxY = 125;
-      const qrBoxW = 210;
-      const qrBoxH = 240;
+      // 7. Area QR Code (Kanan - Tetap Luas & Tidak Menabrak Teks)
+      const qrBoxX = 548;
+      const qrBoxY = 112;
+      const qrBoxW = 280;
+      const qrBoxH = 354;
 
       ctx.fillStyle = "#f8fafc";
       ctx.fillRect(qrBoxX, qrBoxY, qrBoxW, qrBoxH);
-      ctx.strokeStyle = "#e2e8f0";
+      ctx.strokeStyle = "#cbd5e1";
       ctx.lineWidth = 1.5;
       ctx.strokeRect(qrBoxX, qrBoxY, qrBoxW, qrBoxH);
 
-      // Teks ID Siswa di bawah QR
+      // Teks ID Siswa & Label di bawah QR Code
+      const qrSize = 236;
+      const labelY = qrBoxY + qrSize + 44;
       ctx.fillStyle = "#0f172a";
-      ctx.font = "bold 17px monospace";
+      ctx.font = "bold 22px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(idSiswa || "-", qrBoxX + qrBoxW / 2, qrBoxY + 195);
+      ctx.fillText(idSiswa || "-", qrBoxX + qrBoxW / 2, labelY);
 
-      ctx.fillStyle = "#64748b";
-      ctx.font = "bold 12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("SCAN PRESENSI", qrBoxX + qrBoxW / 2, qrBoxY + 220);
+      ctx.fillStyle = "#475569";
+      ctx.font = "bold 13px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("SCAN PRESENSI", qrBoxX + qrBoxW / 2, labelY + 24);
       ctx.textAlign = "left";
 
       // 8. Footer Kartu
@@ -304,7 +352,34 @@ function generateCardCanvas({
       ctx.fillText("Wajib dibawa setiap hari sekolah", W - 35, 520);
       ctx.textAlign = "left";
 
-      // 9. Load dan Render Logo Sekolah & QR Code
+      // Helper Menggambar Gambar Pas Foto dengan Aspek Rasio Asli (Object-Fit: Cover)
+      function drawImageCover(c, img, x, y, w, h) {
+        c.save();
+        c.beginPath();
+        c.rect(x, y, w, h);
+        c.clip();
+
+        const imgRatio = img.width / img.height;
+        const boxRatio = w / h;
+        let sx, sy, sw, sh;
+
+        if (imgRatio > boxRatio) {
+          sh = img.height;
+          sw = img.height * boxRatio;
+          sy = 0;
+          sx = (img.width - sw) / 2;
+        } else {
+          sw = img.width;
+          sh = img.width / boxRatio;
+          sx = 0;
+          sy = (img.height - sh) / 2;
+        }
+
+        c.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+        c.restore();
+      }
+
+      // 9. Load dan Render Logo Sekolah, QR Code, dan Pas Foto Siswa
       const logoImg = new Image();
       const qrImg = new Image();
       let loaded = 0;
@@ -327,10 +402,12 @@ function generateCardCanvas({
       logoImg.onerror = () => onResourceLoaded();
 
       qrImg.onload = () => {
-        // Gambar QR Code tajam
+        // Gambar QR Code tajam & besar
+        const qrX = qrBoxX + (qrBoxW - qrSize) / 2;
+        const qrY = qrBoxY + 14;
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(qrBoxX + 25, qrBoxY + 15, 160, 160);
-        ctx.drawImage(qrImg, qrBoxX + 25, qrBoxY + 15, 160, 160);
+        ctx.fillRect(qrX, qrY, qrSize, qrSize);
+        ctx.drawImage(qrImg, qrX + 4, qrY + 4, qrSize - 8, qrSize - 8);
         onResourceLoaded();
       };
       qrImg.onerror = () => onResourceLoaded();
@@ -338,12 +415,16 @@ function generateCardCanvas({
       logoImg.src = logoBase64;
       qrImg.src = qrDataUrl;
 
-      // Jika ada foto siswa riil
+      // Jika ada foto siswa riil -> Gambar dengan Object-Fit: Cover (Aspek Rasio Sempurna)
       if (photoUrl) {
         const pImg = new Image();
         pImg.crossOrigin = "anonymous";
         pImg.onload = () => {
-          ctx.drawImage(pImg, photoX, photoY, photoW, photoH);
+          try {
+            drawImageCover(ctx, pImg, photoX, photoY, photoW, photoH);
+          } catch (_) {
+            ctx.drawImage(pImg, photoX, photoY, photoW, photoH);
+          }
           onResourceLoaded();
         };
         pImg.onerror = () => onResourceLoaded();
@@ -418,8 +499,9 @@ export default function ModalKartuBarcodeSiswa({
     null;
 
   const hasPhoto = isValidPhotoUrl(rawPhoto);
-  const studentPhoto = hasPhoto ? rawPhoto : null;
+  const studentPhoto = hasPhoto ? optimizeFotoUrl(rawPhoto) : null;
 
+  const ttlSiswa = formatTTL(biodata?.tempatLahir, biodata?.tglLahir);
   const noHp = biodata?.noHp || biodata?.kontak || user?.noHp || "-";
   const idSiswa = String(user.id || "").trim();
   const rawNama = user.nama || "Siswa";
@@ -443,6 +525,7 @@ export default function ModalKartuBarcodeSiswa({
         idSiswa,
         kelas: kelasSiswa,
         jurusan: konsentrasiKeahlian,
+        ttl: ttlSiswa,
         noHp,
         qrDataUrl: qrCodeDataUrl,
         logoBase64: LOGO_SEKOLAH_BASE64,
@@ -481,6 +564,7 @@ export default function ModalKartuBarcodeSiswa({
         idSiswa,
         kelas: kelasSiswa,
         jurusan: konsentrasiKeahlian,
+        ttl: ttlSiswa,
         noHp,
         qrDataUrl: qrCodeDataUrl,
         logoBase64: LOGO_SEKOLAH_BASE64,
@@ -659,15 +743,15 @@ export default function ModalKartuBarcodeSiswa({
                   </div>
                 </div>
 
-                {/* 2. BIODATA SISWA (5 Kolom) */}
-                <div className="col-span-5 space-y-1 sm:space-y-1.5 text-slate-800 pr-1">
+                {/* 2. BIODATA SISWA (4 Kolom) */}
+                <div className="col-span-4 space-y-1 sm:space-y-1.5 text-slate-800 pr-1">
                   <div>
                     <div className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">
                       Nama Siswa
                     </div>
                     <div
                       style={{ color: "#0f172a" }}
-                      className="text-[10.5px] sm:text-xs font-black leading-tight line-clamp-2 uppercase"
+                      className="text-[10px] sm:text-[11.5px] font-black leading-tight line-clamp-2 uppercase"
                     >
                       {namaSiswaTampil}
                     </div>
@@ -679,7 +763,7 @@ export default function ModalKartuBarcodeSiswa({
                     </div>
                     <div
                       style={{ color: "#1e3a8a" }}
-                      className="text-[9px] sm:text-[10px] font-mono font-bold"
+                      className="text-[8.5px] sm:text-[9.5px] font-mono font-bold"
                     >
                       {idSiswa || "-"}
                     </div>
@@ -691,7 +775,7 @@ export default function ModalKartuBarcodeSiswa({
                     </div>
                     <div
                       style={{ color: "#0369a1" }}
-                      className="text-[8.5px] sm:text-[9.5px] font-black leading-tight line-clamp-2"
+                      className="text-[8px] sm:text-[9px] font-black leading-tight line-clamp-2"
                     >
                       {konsentrasiKeahlian}
                     </div>
@@ -699,31 +783,43 @@ export default function ModalKartuBarcodeSiswa({
 
                   <div>
                     <div className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">
-                      No. Kontak / HP
+                      TTL
+                    </div>
+                    <div
+                      style={{ color: "#334155" }}
+                      className="text-[8px] sm:text-[9px] font-bold leading-tight line-clamp-1"
+                    >
+                      {ttlSiswa}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">
+                      No. HP
                     </div>
                     <div
                       style={{ color: "#475569" }}
-                      className="text-[8px] sm:text-[9px] font-semibold"
+                      className="text-[7.5px] sm:text-[8.5px] font-semibold"
                     >
                       {noHp}
                     </div>
                   </div>
                 </div>
 
-                {/* 3. BARCODE / QR CODE (4 Kolom) */}
+                {/* 3. BARCODE / QR CODE (5 Kolom - DIPERBESAR SEHINGGA MUDAH DI-SCAN) */}
                 <div
                   style={{
                     backgroundColor: "#f8fafc",
-                    borderColor: "#e2e8f0",
+                    borderColor: "#cbd5e1",
                   }}
-                  className="col-span-4 flex flex-col items-center justify-center p-2 rounded-lg border"
+                  className="col-span-5 flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-lg border shadow-xs"
                 >
                   <div
                     style={{
                       backgroundColor: "#ffffff",
-                      borderColor: "#cbd5e1",
+                      borderColor: "#94a3b8",
                     }}
-                    className="w-18 h-18 sm:w-22 sm:h-22 p-1 rounded-md border shadow-2xs flex items-center justify-center"
+                    className="w-24 h-24 sm:w-32 sm:h-32 p-1 rounded-md border-2 shadow-xs flex items-center justify-center"
                   >
                     {qrCodeDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -740,13 +836,13 @@ export default function ModalKartuBarcodeSiswa({
                   </div>
                   <div
                     style={{ color: "#0f172a" }}
-                    className="mt-1 text-[8.5px] sm:text-[9.5px] font-mono font-black tracking-wider"
+                    className="mt-1 text-[10px] sm:text-[12px] font-mono font-black tracking-wider"
                   >
                     {idSiswa}
                   </div>
                   <div
-                    style={{ color: "#64748b" }}
-                    className="text-[6.5px] font-bold uppercase tracking-tight"
+                    style={{ color: "#475569" }}
+                    className="text-[7px] sm:text-[8px] font-bold uppercase tracking-tight"
                   >
                     SCAN PRESENSI
                   </div>
