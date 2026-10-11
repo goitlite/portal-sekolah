@@ -885,8 +885,9 @@ export default function ModalScanPresensiPetugas({
                 {/* OVERLAY NOTIFIKASI BESAR DI TENGAH LAYAR SCAN */}
                 {scanOverlay && (
                   <div
-                    className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none px-4"
+                    className="absolute inset-0 flex items-center justify-center z-20 px-4 cursor-pointer"
                     style={{ animation: "fadeInScale 0.18s ease-out" }}
+                    onClick={() => setScanOverlay(null)}
                   >
                     <style dangerouslySetInnerHTML={{ __html: `
                       @keyframes fadeInScale {
