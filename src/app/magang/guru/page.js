@@ -45,6 +45,7 @@ import ModalPresensiWaliKelas from "./guru-wali-kelas/ModalPresensiWaliKelas";
 import ModalJurnalWaliKelas from "./guru-wali-kelas/kelola/ModalJurnalWaliKelas";
 import ModalPilihPetugasPresensi from "./guru-wali-kelas/ModalPilihPetugasPresensi";
 import ModalCetakBarcodeWaliKelas from "./guru-wali-kelas/ModalCetakBarcodeWaliKelas";
+import ModalRegistrasiWajahWaliKelas from "./guru-wali-kelas/ModalRegistrasiWajahWaliKelas";
 import {
   getPetugasFromWali,
   parseKeteranganWali,
@@ -844,6 +845,8 @@ function DashboardGuruContent() {
   const [waliKelasJurnalAktif, setWaliKelasJurnalAktif] = useState(null);
   const [waliPetugasTarget, setWaliPetugasTarget] = useState(null);
   const [waliCetakBarcodeTarget, setWaliCetakBarcodeTarget] = useState(null);
+  const [waliRegistrasiWajahTarget, setWaliRegistrasiWajahTarget] =
+    useState(null);
   const [showCetakWaliKelasModal, setShowCetakWaliKelasModal] = useState(false);
   const [statsPresensiHariIniWali, setStatsPresensiHariIniWali] = useState({});
   const [loadingStatsWali, setLoadingStatsWali] = useState({});
@@ -4874,7 +4877,7 @@ function DashboardGuruContent() {
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                               <button
                                 type="button"
                                 onClick={() => setWaliPetugasTarget(wali)}
@@ -4900,6 +4903,17 @@ function DashboardGuruContent() {
                               >
                                 <span>🪪</span>
                                 <span>Cetak Barcode</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setWaliRegistrasiWajahTarget(wali)
+                                }
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 sm:text-[11px]"
+                              >
+                                <span>🧏</span>
+                                <span>Registrasi Wajah</span>
                               </button>
 
                               <button
@@ -6882,6 +6896,16 @@ function DashboardGuruContent() {
           onClose={() => setWaliCetakBarcodeTarget(null)}
           guru={user}
           wali={waliCetakBarcodeTarget}
+        />
+      )}
+
+      {/* MODAL: REGISTRASI WAJAH SISWA KELAS WALI */}
+      {waliRegistrasiWajahTarget && (
+        <ModalRegistrasiWajahWaliKelas
+          isOpen={!!waliRegistrasiWajahTarget}
+          onClose={() => setWaliRegistrasiWajahTarget(null)}
+          guru={user}
+          wali={waliRegistrasiWajahTarget}
         />
       )}
 

@@ -26,6 +26,8 @@ import ModalCatatanWali from "./ModalCatatanWali";
 import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
 import ModalKartuBarcodeSiswa from "./ModalKartuBarcodeSiswa";
 import ModalScanPresensiPetugas from "./ModalScanPresensiPetugas";
+import ModalRegistrasiWajahSiswa from "./ModalRegistrasiWajahSiswa";
+import ModalScanWajahPetugas from "./ModalScanWajahPetugas";
 import PesanSekolahModal, {
   useJumlahPesanSekolah,
 } from "../components/PesanSekolahModal";
@@ -202,6 +204,8 @@ export default function DashboardSiswa() {
     useState(false);
   const [showModalKartuBarcode, setShowModalKartuBarcode] = useState(false);
   const [showModalScanBarcode, setShowModalScanBarcode] = useState(false);
+  const [showModalScanWajah, setShowModalScanWajah] = useState(false);
+  const [showModalRegistrasiWajah, setShowModalRegistrasiWajah] = useState(false);
   const [showModalPesan, setShowModalPesan] = useState(false);
   const [unreadPesanCount, refreshPesanCount] = useJumlahPesanSekolah({
     userId: user?.id,
@@ -804,44 +808,11 @@ export default function DashboardSiswa() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Tombol Lihat Barcode Presensi Siswa (Tersedia untuk Semua Siswa) */}
-          <button
-            onClick={() => setShowModalKartuBarcode(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-white/95 hover:bg-amber-100/90 text-amber-950 text-xs font-black shadow-2xs hover:shadow-xs transition-all active:scale-95 cursor-pointer border border-amber-300"
-            title="Lihat & Cetak Kartu Barcode Presensi"
-          >
-            <span>🪪</span>
-            <span>Lihat Barcode Presensi</span>
-          </button>
-
-          {/* Tombol Khusus Petugas Presensi Kelas */}
-          {petugasWaliData ? (
-            <>
-              <button
-                onClick={() => setShowModalScanBarcode(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-teal-500"
-                title="Pindai Kartu Barcode Kertas Siswa"
-              >
-                <span>📷</span>
-                <span>Scan Kehadiran</span>
-              </button>
-              <button
-                onClick={() => setShowModalPresensiPetugas(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 text-xs font-black shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer border border-amber-400"
-                title="Isi Presensi Kelas secara Reguler"
-              >
-                <span>📋</span>
-                <span>Isi Presensi Reguler</span>
-              </button>
-            </>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/95 border border-amber-300 text-amber-900 text-[10px] sm:text-xs font-bold shadow-2xs">
-              <span>👥</span>
-              <span>{statistikKelas?.jumlahSiswa || 0} Siswa Rombel</span>
-            </span>
-          )}
-        </div>
+        {/* Badge jumlah siswa — tombol aksi ada di card grid di bawah */}
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/95 border border-amber-300 text-amber-900 text-[10px] sm:text-xs font-bold shadow-2xs shrink-0">
+          <span>👥</span>
+          <span>{statistikKelas?.jumlahSiswa || 0} Siswa Rombel</span>
+        </span>
       </div>
 
       <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4 relative z-10">
@@ -906,8 +877,80 @@ export default function DashboardSiswa() {
           textColor={petugasWaliData ? "text-amber-600 font-bold" : "text-amber-950"}
         />
       </div>
+
+      {/* ─── Menu Card Akses Cepat Kelas ─── */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 relative z-10">
+        {/* Registrasi Wajah — tersedia untuk semua siswa */}
+        <button
+          onClick={() => setShowModalRegistrasiWajah(true)}
+          className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-teal-500/50"
+        >
+          <span className="text-2xl sm:text-3xl shrink-0">🧏</span>
+          <div className="text-left min-w-0">
+            <div className="text-[11px] sm:text-xs font-black leading-tight">Registrasi Wajah</div>
+            <div className="text-[9px] sm:text-[10px] text-teal-100 font-medium mt-0.5 leading-tight">Daftarkan wajah untuk presensi</div>
+          </div>
+        </button>
+
+        {/* Lihat Barcode Presensi — tersedia untuk semua siswa */}
+        <button
+          onClick={() => setShowModalKartuBarcode(true)}
+          className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-white/90 hover:bg-amber-50 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-300"
+        >
+          <span className="text-2xl sm:text-3xl shrink-0">🪪</span>
+          <div className="text-left min-w-0">
+            <div className="text-[11px] sm:text-xs font-black leading-tight">Lihat Barcode Presensi</div>
+            <div className="text-[9px] sm:text-[10px] text-amber-700 font-medium mt-0.5 leading-tight">Kartu barcode kelas kamu</div>
+          </div>
+        </button>
+
+        {/* Scan Kehadiran — hanya untuk petugas */}
+        {petugasWaliData ? (
+          <button
+            onClick={() => setShowModalScanWajah(true)}
+            className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-emerald-400/50"
+          >
+            <span className="text-2xl sm:text-3xl shrink-0">📷</span>
+            <div className="text-left min-w-0">
+              <div className="text-[11px] sm:text-xs font-black leading-tight">Scan Kehadiran</div>
+              <div className="text-[9px] sm:text-[10px] text-emerald-100 font-medium mt-0.5 leading-tight">Wajah & barcode siswa</div>
+            </div>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
+            <span className="text-2xl sm:text-3xl shrink-0 opacity-50">📷</span>
+            <div className="text-left min-w-0">
+              <div className="text-[11px] sm:text-xs font-black leading-tight">Scan Kehadiran</div>
+              <div className="text-[9px] sm:text-[10px] font-medium mt-0.5 leading-tight">Khusus petugas kelas</div>
+            </div>
+          </div>
+        )}
+
+        {/* Isi Presensi Reguler — hanya untuk petugas */}
+        {petugasWaliData ? (
+          <button
+            onClick={() => setShowModalPresensiPetugas(true)}
+            className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-400/50"
+          >
+            <span className="text-2xl sm:text-3xl shrink-0">📋</span>
+            <div className="text-left min-w-0">
+              <div className="text-[11px] sm:text-xs font-black leading-tight">Isi Presensi Reguler</div>
+              <div className="text-[9px] sm:text-[10px] text-amber-800 font-medium mt-0.5 leading-tight">Form manual seluruh kelas</div>
+            </div>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
+            <span className="text-2xl sm:text-3xl shrink-0 opacity-50">📋</span>
+            <div className="text-left min-w-0">
+              <div className="text-[11px] sm:text-xs font-black leading-tight">Isi Presensi Reguler</div>
+              <div className="text-[9px] sm:text-[10px] font-medium mt-0.5 leading-tight">Khusus petugas kelas</div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
+
 
   return (
     <main className="min-h-screen bg-slate-50 space-y-4 sm:space-y-6 pb-12 relative">
@@ -1170,8 +1213,9 @@ export default function DashboardSiswa() {
         {petugasWaliData && (
           <div className="rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-teal-900 via-emerald-900 to-slate-900 p-4 sm:p-6 text-white shadow-lg border border-teal-400/40 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-1.5 max-w-xl">
+            <div className="relative z-10 space-y-4">
+              {/* Header teks */}
+              <div className="space-y-1.5">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-xs font-black uppercase tracking-wider border border-amber-400/30">
                   ⭐ Mandat Petugas Presensi Kelas
                 </div>
@@ -1180,25 +1224,37 @@ export default function DashboardSiswa() {
                 </h3>
                 <p className="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
                   Kamu ditunjuk untuk mengisi presensi harian seluruh siswa di
-                  kelas {petugasWaliData.namaKelas}. Pengisian dilakukan 1 kali
-                  sehari dengan default Hadir semua.
+                  kelas {petugasWaliData.namaKelas}. Gunakan salah satu metode di bawah.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Grid tombol 2 kolom — responsif di HP maupun desktop */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                {/* Scan Wajah */}
+                <button
+                  onClick={() => setShowModalScanWajah(true)}
+                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-emerald-400/50 text-center"
+                >
+                  <span className="text-2xl">🧏</span>
+                  <span className="text-[11px] sm:text-xs leading-tight">Scan Presensi<br/>Wajah</span>
+                </button>
+
+                {/* Scan Barcode */}
                 <button
                   onClick={() => setShowModalScanBarcode(true)}
-                  className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 hover:brightness-110 active:scale-95 text-teal-950 text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-teal-400/50 text-center"
                 >
-                  <span>📷</span>
-                  <span>Scan Barcode Siswa</span>
+                  <span className="text-2xl">📷</span>
+                  <span className="text-[11px] sm:text-xs leading-tight">Scan Barcode<br/>Siswa</span>
                 </button>
+
+                {/* Isi Reguler */}
                 <button
                   onClick={() => setShowModalPresensiPetugas(true)}
-                  className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 text-amber-950 font-black shadow-md transition-all cursor-pointer border border-amber-400/50 text-center col-span-2 sm:col-span-1"
                 >
-                  <span>📋</span>
-                  <span>Isi Presensi Reguler</span>
+                  <span className="text-2xl">📋</span>
+                  <span className="text-[11px] sm:text-xs leading-tight">Isi Presensi<br/>Reguler</span>
                 </button>
               </div>
             </div>
@@ -1438,6 +1494,38 @@ export default function DashboardSiswa() {
         fotoTerbaru={fotoTerbaru}
       />
 
+      {/* MODAL REGISTRASI WAJAH SISWA MANDIRI */}
+      <ModalRegistrasiWajahSiswa
+        isOpen={showModalRegistrasiWajah}
+        onClose={() => setShowModalRegistrasiWajah(false)}
+        user={user}
+        fotoLama={fotoTerbaru}
+        onFaceRegistered={() => {
+          // Foto kartu barcode dan foto profil wali tetap utuh dan terpisah
+        }}
+      />
+
+      {/* MODAL SCAN PRESENSI WAJAH UNTUK PETUGAS KELAS */}
+      {petugasWaliData && (
+        <ModalScanWajahPetugas
+          isOpen={showModalScanWajah}
+          onClose={() => setShowModalScanWajah(false)}
+          petugasInfo={petugasWaliData}
+          user={user}
+          onOpenBarcode={() => {
+            setShowModalScanWajah(false);
+            setShowModalScanBarcode(true);
+          }}
+          onOpenReguler={() => {
+            setShowModalScanWajah(false);
+            setShowModalPresensiPetugas(true);
+          }}
+          onPresensiSubmitted={() => {
+            loadDataKelasSiswa();
+          }}
+        />
+      )}
+
       {/* MODAL SCAN PRESENSI BARCODE UNTUK PETUGAS KELAS */}
       {petugasWaliData && (
         <ModalScanPresensiPetugas
@@ -1445,6 +1533,10 @@ export default function DashboardSiswa() {
           onClose={() => setShowModalScanBarcode(false)}
           petugasInfo={petugasWaliData}
           user={user}
+          onOpenScanWajah={() => {
+            setShowModalScanBarcode(false);
+            setShowModalScanWajah(true);
+          }}
           onOpenReguler={() => {
             setShowModalScanBarcode(false);
             setShowModalPresensiPetugas(true);

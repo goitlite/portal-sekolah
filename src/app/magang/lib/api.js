@@ -285,7 +285,8 @@ export async function updateBiodataSiswa(data) {
 
     data: {
       // DATA SISWA
-      fotoProfil: data.fotoProfil, // ---> TAMBAHKAN BARIS INI
+      fotoProfil: data.fotoProfil,
+      fotoWajah: data.fotoWajah, // Foto khusus presensi wajah (terpisah dari foto kartu barcode)
       noHp: data.noHp,
       tempatLahir: data.tempatLahir,
       tglLahir: data.tglLahir,

@@ -42,6 +42,7 @@ export default function ModalScanPresensiPetugas({
   user, // { id, nama }
   onPresensiSubmitted,
   onOpenReguler,
+  onOpenScanWajah,
 }) {
   const [loadingData, setLoadingData] = useState(true);
   const [scannerActive, setScannerActive] = useState(false);
@@ -711,20 +712,37 @@ export default function ModalScanPresensiPetugas({
             </button>
           </div>
 
-          {typeof onOpenReguler === "function" && (
-            <button
-              type="button"
-              onClick={() => {
-                stopScannerGracefully();
-                onOpenReguler();
-              }}
-              className="mb-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 font-black text-[11px] shadow-2xs border border-amber-400 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-              title="Beralih ke Formulir Presensi Reguler"
-            >
-              <span>📋</span>
-              <span>Presensi Reguler</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1 mb-1">
+            {typeof onOpenScanWajah === "function" && (
+              <button
+                type="button"
+                onClick={() => {
+                  stopScannerGracefully();
+                  onOpenScanWajah();
+                }}
+                className="px-2.5 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-black text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                title="Beralih ke Pemindai Wajah"
+              >
+                <span>🧏</span>
+                <span>Mode Wajah</span>
+              </button>
+            )}
+
+            {typeof onOpenReguler === "function" && (
+              <button
+                type="button"
+                onClick={() => {
+                  stopScannerGracefully();
+                  onOpenReguler();
+                }}
+                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 font-black text-[11px] shadow-2xs border border-amber-400 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                title="Beralih ke Formulir Presensi Reguler"
+              >
+                <span>📋</span>
+                <span>Presensi Reguler</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* KONTEN BODY */}
