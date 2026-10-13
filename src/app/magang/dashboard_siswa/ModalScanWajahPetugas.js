@@ -1,152 +1,277 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   getPresensiWaliGrid,
   savePresensiWaliKelas,
   getBiodataSiswa,
 } from "../lib/api";
 
-// Web Audio API beep nada tinggi bersih
-function playBeepSuccess() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.12);
-  } catch (_) {}
-}
+// =====================================================================
+// KONFIGURASI
+// =====================================================================
+// Batas jam presensi. CATATAN: komentar lama menyebut 08:30, tetapi nilai
+// yang aktif di kode sebelumnya adalah 23:30 (mode uji). Untuk produksi
+// ubah menjadi BATAS_JAM = 8 dan BATAS_MENIT = 30.
+const BATAS_JAM = 23;
+const BATAS_MENIT = 30;
 
-// Helper cek batas jam 08:30 WIB
+// Pengenalan wajah: jarak Euclidean antar deskriptor 128-d (makin kecil = makin mirip).
+// Orang yang sama biasanya < 0.4, orang berbeda biasanya > 0.6.
+const MATCH_DIST = 0.5; // kandidat dianggap cocok jika jarak <= ini
+const LOOSE_DIST = 0.6; // di atas ini = jelas bukan siapa pun
+const MARGIN_MIN = 0.06; // jarak siswa terdekat ke-2 harus lebih jauh sekian (anti-ragu)
+const VOTES_NEEDED = 3; // jumlah hasil identik berturut-turut sebelum dicatat hadir
+const VOTE_WINDOW_MS = 3500; // jendela waktu pengumpulan suara
+const MIN_FACE_RATIO = 0.16; // lebar wajah minimal terhadap lebar frame kamera
+const MAX_YAW = 0.35; // toleransi menoleh (rasio hidung terhadap jarak mata)
+const MAX_ROLL_DEG = 22; // toleransi kepala miring
+const DETECT_INTERVAL_MS = 110; // jeda antar deteksi wajah
+const DESC_INTERVAL_MS = 300; // jeda antar pembuatan deskriptor (bagian paling berat)
+const SCAN_COOLDOWN_MS = 3000; // jeda anti-duplikat setelah satu siswa tercatat
+
+const FA_VERSION = "1.7.15";
+const FA_BUNDLE = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/dist/face-api.esm.js`;
+const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/model/`;
+
+// =====================================================================
+// HELPER UMUM
+// =====================================================================
 function checkIsPastTimeLimit() {
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
-  return hours > 23 || (hours === 23 && minutes >= 30);
+  return hours > BATAS_JAM || (hours === BATAS_JAM && minutes >= BATAS_MENIT);
 }
 
-// MediaPipe BlazeFace CDN Config
-const MP_VERSION = "0.10.14";
-const MP_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`;
-const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`;
-const MP_MODEL =
-  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
-
-let mpDetectorPromise = null;
-function loadMediaPipeDetector() {
-  if (mpDetectorPromise) return mpDetectorPromise;
-  mpDetectorPromise = (async () => {
-    const mod = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ MP_BUNDLE
-    );
-    const vision = await mod.FilesetResolver.forVisionTasks(MP_WASM);
-    const make = (delegate) =>
-      mod.FaceDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: MP_MODEL, delegate },
-        runningMode: "VIDEO",
-        minDetectionConfidence: 0.52,
-      });
-    try {
-      return await make("GPU");
-    } catch (_) {
-      return await make("CPU");
-    }
-  })().catch((err) => {
-    mpDetectorPromise = null;
-    throw err;
-  });
-  return mpDetectorPromise;
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms),
+    ),
+  ]);
 }
 
-// Ekstrak fitur visual dari area wajah (grid 8x8 luminance & gradien)
-function extractFaceFeatures(ctx, x, y, w, h) {
-  if (w <= 10 || h <= 10) return null;
+// Satu AudioContext dipakai ulang (membuat baru tiap bunyi = kebocoran memori)
+let audioCtx = null;
+function playBeepSuccess() {
   try {
-    const imgData = ctx.getImageData(
-      Math.max(0, Math.floor(x)),
-      Math.max(0, Math.floor(y)),
-      Math.floor(w),
-      Math.floor(h),
-    );
-    const d = imgData.data;
-    const grid = 8;
-    const features = new Float32Array(grid * grid);
-    const blockW = Math.max(1, Math.floor(w / grid));
-    const blockH = Math.max(1, Math.floor(h / grid));
-
-    for (let gy = 0; gy < grid; gy++) {
-      for (let gx = 0; gx < grid; gx++) {
-        let sum = 0;
-        let count = 0;
-        for (let py = 0; py < blockH; py += 2) {
-          for (let px = 0; px < blockW; px += 2) {
-            const ix = (gy * blockH + py) * Math.floor(w) + (gx * blockW + px);
-            const p = ix * 4;
-            if (p < d.length) {
-              sum += 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
-              count++;
-            }
-          }
-        }
-        features[gy * grid + gx] = count > 0 ? sum / count / 255 : 0;
-      }
-    }
-    return features;
-  } catch (_) {
-    return null;
-  }
-}
-
-// Cosine similarity antara dua vektor fitur
-function cosineSimilarity(a, b) {
-  if (!a || !b || a.length !== b.length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-// In-memory cache data siswa rombel
-const MEMORY_SISWA_CACHE = {};
-
-// ✅ Cache fitur wajah yang sudah diekstrak, bertahan lintas buka/tutup modal
-// Key: idSiswa, Value: Float32Array fitur wajah
-const FEATURE_CACHE = {};
-
-// Penyimpanan vektor fitur wajah ke localStorage (instant warm-start)
-function saveFeatureToStorage(idSiswa, features) {
-  try {
-    if (!features) return;
-    localStorage.setItem(`face_feat_${idSiswa}`, JSON.stringify(Array.from(features)));
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const t = audioCtx.currentTime;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, t);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.12);
   } catch (_) {}
 }
 
-function loadFeatureFromStorage(idSiswa) {
+// Cache in-memory data siswa rombel & penanda: URL foto sudah divalidasi ke server
+// pada sesi halaman ini (agar tidak memanggil server berulang tiap modal dibuka)
+const MEMORY_SISWA_CACHE = {};
+const SESSION_URL_CHECKED = {};
+
+// <PURE-HELPERS>
+function euclid(a, b) {
+  let s = 0;
+  for (let i = 0; i < 128; i++) {
+    const d = a[i] - b[i];
+    s += d * d;
+  }
+  return Math.sqrt(s);
+}
+
+// Cari siswa paling mirip + jarak ke siswa terdekat kedua
+function matchFace(desc, profiles) {
+  let best = null;
+  let d1 = Infinity;
+  let d2 = Infinity;
+  for (const p of profiles) {
+    const d = euclid(desc, p.descriptor);
+    if (d < d1) {
+      d2 = d1;
+      d1 = d;
+      best = p;
+    } else if (d < d2) {
+      d2 = d;
+    }
+  }
+  return { best, d1, d2 };
+}
+
+function isConfident(d1, d2) {
+  return d1 <= MATCH_DIST && d2 - d1 >= MARGIN_MIN;
+}
+
+// Kumpulkan suara; kembalikan idSiswa jika sudah terkonfirmasi (atau null)
+function pushVote(votes, id, now) {
+  while (votes.length && now - votes[0].t > VOTE_WINDOW_MS) votes.shift();
+  votes.push({ id, t: now });
+  if (!id) return null;
+  const counts = {};
+  for (const v of votes) if (v.id) counts[v.id] = (counts[v.id] || 0) + 1;
+  if ((counts[id] || 0) < VOTES_NEEDED) return null;
+  for (const k of Object.keys(counts)) {
+    if (k !== id && counts[k] >= 2) return null; // ada kandidat lain yang bersaing
+  }
+  return id;
+}
+
+// Kotak wajah (piksel video) -> persen di kontainer (video memakai object-cover)
+function mapBoxToContainer(box, vw, vh, cw, ch, mirror) {
+  const scale = Math.max(cw / vw, ch / vh);
+  const ox = (cw - vw * scale) / 2;
+  const oy = (ch - vh * scale) / 2;
+  const w = box.width * scale;
+  const h = box.height * scale;
+  let left = box.x * scale + ox;
+  const top = box.y * scale + oy;
+  if (mirror) left = cw - left - w;
+  return {
+    leftPct: (left / cw) * 100,
+    topPct: (top / ch) * 100,
+    widthPct: (w / cw) * 100,
+    heightPct: (h / ch) * 100,
+  };
+}
+
+function centerOf(pts) {
+  let x = 0;
+  let y = 0;
+  for (const p of pts) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / pts.length, y: y / pts.length };
+}
+
+// Perkiraan arah hadap & kemiringan dari 68 titik landmark
+function headPose(landmarks) {
+  const eyes = [centerOf(landmarks.getLeftEye()), centerOf(landmarks.getRightEye())].sort(
+    (a, b) => a.x - b.x,
+  );
+  const nose = landmarks.getNose();
+  const tip = nose[3] || nose[Math.floor(nose.length / 2)];
+  const dx = eyes[1].x - eyes[0].x;
+  const dy = eyes[1].y - eyes[0].y;
+  const eyeDist = Math.hypot(dx, dy) || 1;
+  const midX = (eyes[0].x + eyes[1].x) / 2;
+  return {
+    yaw: (tip.x - midX) / eyeDist,
+    rollDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
+  };
+}
+// </PURE-HELPERS>
+
+// =====================================================================
+// FACE-API (deskriptor wajah 128-d) — dimuat sekali per sesi halaman
+// =====================================================================
+let faPromise = null;
+function loadFaceApi() {
+  if (faPromise) return faPromise;
+  faPromise = (async () => {
+    const fa = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ FA_BUNDLE
+    );
+    let backendOk = false;
+    try {
+      backendOk = await fa.tf.setBackend("webgl");
+    } catch (_) {}
+    if (!backendOk) await fa.tf.setBackend("cpu"); // perangkat tanpa WebGL
+    await fa.tf.ready();
+    await Promise.all([
+      fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS),
+      fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS),
+      fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS),
+    ]);
+    return fa;
+  })().catch((err) => {
+    faPromise = null; // boleh dicoba lagi
+    throw err;
+  });
+  return faPromise;
+}
+
+// Cache template per siswa, TERIKAT pada URL foto: jika siswa mendaftar ulang
+// (URL berubah) template lama otomatis dibuang di semua perangkat.
+const DESC_KEY = "face_desc_v2_";
+function readCachedDescriptor(idSiswa, url) {
   try {
-    const saved = localStorage.getItem(`face_feat_${idSiswa}`);
-    if (saved) {
-      const arr = JSON.parse(saved);
-      if (Array.isArray(arr) && arr.length === 64) {
-        return new Float32Array(arr);
-      }
+    const raw = localStorage.getItem(DESC_KEY + idSiswa);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (o?.url === url && Array.isArray(o.d) && o.d.length === 128) {
+      return Float32Array.from(o.d);
     }
   } catch (_) {}
   return null;
+}
+function writeCachedDescriptor(idSiswa, url, desc) {
+  try {
+    localStorage.setItem(
+      DESC_KEY + idSiswa,
+      JSON.stringify({ url, d: Array.from(desc, (v) => +v.toFixed(5)) }),
+    );
+  } catch (_) {}
+}
+
+function driveThumbUrl(url, size = 800) {
+  if (!url) return "";
+  let id = "";
+  if (url.includes("/file/d/")) id = url.split("/file/d/")[1].split("/")[0];
+  else if (url.includes("id=")) id = url.split("id=")[1].split("&")[0];
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : url;
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("gagal memuat gambar"));
+    img.src = src;
+  });
+}
+
+// Coba lewat proxy internal dulu (aman dari CORS), lalu langsung dari Drive
+async function loadFaceImage(url) {
+  const candidates = [
+    `/api/image-proxy?url=${encodeURIComponent(url)}`,
+    driveThumbUrl(url, 800),
+  ];
+  let lastErr = null;
+  for (const src of candidates) {
+    try {
+      return await loadImage(src);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("gagal memuat foto");
+}
+
+// Foto pendaftaran -> deskriptor 128-d (wajah diratakan lewat landmark)
+async function computeTemplate(fa, url) {
+  const img = await loadFaceImage(url);
+  const det = await fa
+    .detectSingleFace(
+      img,
+      new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
+    )
+    .withFaceLandmarks(true);
+  if (!det) return { descriptor: null };
+  const [canvas] = await fa.extractFaces(img, [det.landmarks.align()]);
+  const descriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(canvas);
+  return { descriptor };
 }
 
 export default function ModalScanWajahPetugas({
@@ -166,6 +291,10 @@ export default function ModalScanWajahPetugas({
   const [engineStatus, setEngineStatus] = useState("loading"); // loading | ready | fallback
   const [siswaList, setSiswaList] = useState([]);
   const [registeredFaceCount, setRegisteredFaceCount] = useState(0);
+  const [templateInfo, setTemplateInfo] = useState({ total: 0, ready: 0, pending: 0, failed: [] });
+  const [engineNonce, setEngineNonce] = useState(0);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugLine, setDebugLine] = useState("");
 
   // Status visual deteksi wajah di layar kamera (Live HUD)
   const [liveFaceBox, setLiveFaceBox] = useState(null); // { leftPct, topPct, widthPct, heightPct }
@@ -188,19 +317,23 @@ export default function ModalScanWajahPetugas({
   const [hasPreviousSubmission, setHasPreviousSubmission] = useState(false);
   const [activeTab, setActiveTab] = useState("kamera"); // "kamera" | "daftar"
 
-  // Ref untuk loop kamera dan pencocokan wajah
+  // Ref untuk kamera & pengenalan wajah
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const detectorRef = useRef(null);
   const streamRef = useRef(null);
-  const rafRef = useRef(null);
+  const camSessionRef = useRef(0); // token sesi kamera: cegah stream bocor/balapan
+  const faRef = useRef(null); // modul face-api (setelah termuat)
+  const engineStatusRef = useRef("loading");
   const scannedMapRef = useRef(scannedMap);
-  const studentProfilesRef = useRef([]); // [{ idSiswa, nama, features, fotoWajah }]
+  const studentProfilesRef = useRef([]); // [{ idSiswa, nama, fotoWajah, descriptor, status }]
+  const templateJobRef = useRef(0); // pembatalan pekerjaan penyiapan template lama
   const lastSuccessScanAt = useRef(0);
-  const SCAN_COOLDOWN_MS = 3000;
-  const lastUnknownFaceAtRef = useRef(0);
-  const lastInferenceAtRef = useRef(0);
-  const INFERENCE_INTERVAL_MS = 85; // ±12 FPS inferensi: sangat hemat daya baterai & kamera tetap mulus 60 FPS
+  const recognizedRef = useRef(() => {});
+  const showDebugRef = useRef(false);
+
+  function setEngine(s) {
+    engineStatusRef.current = s;
+    setEngineStatus(s);
+  }
 
   useEffect(() => {
     scannedMapRef.current = scannedMap;
@@ -352,156 +485,143 @@ export default function ModalScanWajahPetugas({
     };
   }, [isOpen, petugasInfo, todayISO]);
 
-  // Pra-muat foto wajah siswa secara paralel (bebas blocking & instant cache)
+  // Ringkasan status template (untuk header & peringatan di layar)
+  function syncTemplateInfo(profiles) {
+    const reg = profiles.filter((p) => p.fotoWajah);
+    setTemplateInfo({
+      total: reg.length,
+      ready: reg.filter((p) => p.descriptor).length,
+      pending: reg.filter((p) => p.status === "pending").length,
+      failed: reg
+        .filter((p) => p.status === "noface" || p.status === "error")
+        .map((p) => ({ nama: p.nama, reason: p.status })),
+    });
+  }
+
+  // Siapkan profil wajah: URL foto -> template (deskriptor 128-d).
+  // 1) Pakai URL dari cache agar scan bisa langsung jalan.
+  // 2) Validasi URL ke server (sekali per sesi halaman / saat "Sinkron Wajah");
+  //    jika ada yang berubah (siswa daftar ulang) profil dibangun ulang.
   async function loadStudentFaceProfilesParallel(siswaArray, forceRefresh = false) {
     if (forceRefresh) setSyncingFaces(true);
     const waliId = petugasInfo?.idWali || "unknown";
     const localCacheKey = `cached_face_urls_${waliId}`;
 
-    let urlCache = {};
-    if (!forceRefresh) {
+    try {
+      let urlCache = {};
       try {
         const saved = localStorage.getItem(localCacheKey);
         if (saved) urlCache = JSON.parse(saved) || {};
       } catch (_) {}
-    }
 
-    // Pisahkan: siswa yang sudah punya URL & fitur vs yang perlu diambil
-    const results = [];
-    const missingStudents = [];
-
-    siswaArray.forEach((s) => {
-      let faceUrl = urlCache[s.idSiswa] || null;
-      if (!faceUrl) {
-        try {
-          const saved = localStorage.getItem(`face_reg_${s.idSiswa}`);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed?.fotoWajah) faceUrl = parsed.fotoWajah;
-          }
-        } catch (_) {}
-      }
-
-      const cachedFeat = FEATURE_CACHE[s.idSiswa] || loadFeatureFromStorage(s.idSiswa);
-      if (cachedFeat) {
-        FEATURE_CACHE[s.idSiswa] = cachedFeat;
-      }
-
-      if (faceUrl && cachedFeat && !forceRefresh) {
-        results.push({
-          idSiswa: s.idSiswa,
-          nama: s.nama,
-          fotoWajah: faceUrl,
-          features: cachedFeat,
-        });
-      } else {
-        missingStudents.push({ ...s, faceUrl, cachedFeat });
-      }
-    });
-
-    // Ambil data siswa yang belum ada di cache (secara bertahap dalam batch 5)
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < missingStudents.length; i += BATCH_SIZE) {
-      const batch = missingStudents.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(async (s) => {
-        let faceUrl = s.faceUrl;
-        if (!faceUrl || forceRefresh) {
+      // --- URL awal dari cache lokal ---
+      const urlsA = {};
+      siswaArray.forEach((s) => {
+        let u = urlCache[s.idSiswa] || null;
+        if (!u) {
           try {
-            const bio = await getBiodataSiswa(s.idSiswa);
-            if (bio?.success && bio.data?.fotoWajah) {
-              faceUrl = bio.data.fotoWajah;
-            }
+            const saved = localStorage.getItem(`face_reg_${s.idSiswa}`);
+            if (saved) u = JSON.parse(saved)?.fotoWajah || null;
           } catch (_) {}
         }
-
-        if (faceUrl) {
-          urlCache[s.idSiswa] = faceUrl;
-        }
-
-        const features = FEATURE_CACHE[s.idSiswa] || s.cachedFeat || null;
-        return {
-          idSiswa: s.idSiswa,
-          nama: s.nama,
-          fotoWajah: faceUrl,
-          features,
-        };
+        if (u) urlsA[s.idSiswa] = u;
       });
 
-      const batchResults = await Promise.allSettled(batchPromises);
-      batchResults.forEach((r) => {
-        if (r.status === "fulfilled") results.push(r.value);
-      });
-    }
+      const applyProfiles = async (urlMap) => {
+        const jobId = ++templateJobRef.current;
+        const profiles = siswaArray.map((s) => {
+          const url = urlMap[s.idSiswa] || null;
+          const cached = url ? readCachedDescriptor(s.idSiswa, url) : null;
+          return {
+            idSiswa: s.idSiswa,
+            nama: s.nama,
+            fotoWajah: url,
+            descriptor: cached,
+            status: !url ? "nophoto" : cached ? "ok" : "pending",
+          };
+        });
+        studentProfilesRef.current = profiles;
+        setRegisteredFaceCount(profiles.filter((p) => p.fotoWajah).length);
+        syncTemplateInfo(profiles);
 
-    results.sort((a, b) => a.nama.localeCompare(b.nama));
+        const pending = profiles.filter((p) => p.status === "pending");
+        if (pending.length === 0) return;
 
-    try {
-      localStorage.setItem(localCacheKey, JSON.stringify(urlCache));
-    } catch (_) {}
-
-    studentProfilesRef.current = results;
-    const count = results.filter((p) => !!p.fotoWajah).length;
-    setRegisteredFaceCount(count);
-
-    // Ekstrak template visual jika belum tersimpan
-    extractTemplatesViaProxy(results);
-    if (forceRefresh) setSyncingFaces(false);
-  }
-
-  // Ekstrak template visual lewat proxy Image (/api/image-proxy)
-  function extractTemplatesViaProxy(profiles) {
-    profiles.forEach((p) => {
-      // Jika fitur sudah tersedia, pastikan tersimpan ke localStorage
-      if (p.features) {
-        FEATURE_CACHE[p.idSiswa] = p.features;
-        saveFeatureToStorage(p.idSiswa, p.features);
-        return;
-      }
-      if (FEATURE_CACHE[p.idSiswa]) {
-        p.features = FEATURE_CACHE[p.idSiswa];
-        saveFeatureToStorage(p.idSiswa, p.features);
-        return;
-      }
-
-      if (!p.fotoWajah) return;
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
+        let fa;
         try {
-          const tempCanvas = document.createElement("canvas");
-          tempCanvas.width = 120;
-          tempCanvas.height = 160;
-          const tCtx = tempCanvas.getContext("2d");
-          tCtx.drawImage(img, 0, 0, 120, 160);
-          const extracted = extractFaceFeatures(tCtx, 15, 20, 90, 120);
-          if (extracted) {
-            FEATURE_CACHE[p.idSiswa] = extracted;
-            saveFeatureToStorage(p.idSiswa, extracted);
-            p.features = extracted;
+          fa = await loadFaceApi();
+        } catch (_) {
+          return; // status engine "fallback" ditangani efek pemuat model
+        }
+        for (const p of pending) {
+          if (jobId !== templateJobRef.current) return;
+          try {
+            const res = await computeTemplate(fa, p.fotoWajah);
+            if (res.descriptor) {
+              p.descriptor = res.descriptor;
+              p.status = "ok";
+              writeCachedDescriptor(p.idSiswa, p.fotoWajah, res.descriptor);
+            } else {
+              p.status = "noface";
+            }
+          } catch (e) {
+            console.warn("Template wajah gagal:", p.nama, e);
+            p.status = "error";
           }
-        } catch (e) {
-          console.warn("Gagal ekstrak fitur template:", e);
+          if (jobId === templateJobRef.current) syncTemplateInfo(profiles);
         }
       };
-      img.onerror = () => {
+
+      // Jalankan awal (tanpa menunggu selesai agar validasi server paralel)
+      const firstRun = applyProfiles(urlsA);
+
+      // --- Validasi URL ke server ---
+      const mustCheck = forceRefresh || !SESSION_URL_CHECKED[waliId];
+      if (mustCheck) {
+        const urlsB = {};
+        const BATCH_SIZE = 5;
+        let allOk = true;
+        for (let i = 0; i < siswaArray.length; i += BATCH_SIZE) {
+          const batch = siswaArray.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(
+            batch.map(async (s) => {
+              try {
+                const bio = await getBiodataSiswa(s.idSiswa);
+                if (bio?.success) {
+                  if (bio.data?.fotoWajah) urlsB[s.idSiswa] = bio.data.fotoWajah;
+                } else {
+                  allOk = false;
+                  if (urlsA[s.idSiswa]) urlsB[s.idSiswa] = urlsA[s.idSiswa];
+                }
+              } catch (_) {
+                allOk = false;
+                if (urlsA[s.idSiswa]) urlsB[s.idSiswa] = urlsA[s.idSiswa];
+              }
+            }),
+          );
+        }
+        if (allOk) SESSION_URL_CHECKED[waliId] = true;
+
         try {
-          const waliId = petugasInfo?.idWali || "unknown";
-          const localCacheKey = `cached_face_urls_${waliId}`;
-          const saved = localStorage.getItem(localCacheKey);
-          if (saved) {
-            const cache = JSON.parse(saved);
-            delete cache[p.idSiswa];
-            localStorage.setItem(localCacheKey, JSON.stringify(cache));
-          }
+          localStorage.setItem(localCacheKey, JSON.stringify(urlsB));
         } catch (_) {}
-      };
 
-      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.fotoWajah)}`;
-      img.src = proxyUrl;
-    });
+        const changed =
+          siswaArray.some((s) => (urlsA[s.idSiswa] || null) !== (urlsB[s.idSiswa] || null));
+        if (changed || forceRefresh) {
+          await applyProfiles(urlsB);
+        } else {
+          await firstRun;
+        }
+      } else {
+        await firstRun;
+      }
+    } catch (err) {
+      console.warn("Gagal menyiapkan profil wajah:", err);
+    } finally {
+      if (forceRefresh) setSyncingFaces(false);
+    }
   }
-
 
   // Simpan draft lokal
   useEffect(() => {
@@ -514,30 +634,42 @@ export default function ModalScanWajahPetugas({
     } catch (_) {}
   }, [scannedMap, petugasInfo?.idWali, isSubmittedToday, todayISO]);
 
-  // 2. LIFECYCLE MODEL AI & KAMERA
+  // 2. MODEL PENGENALAN WAJAH (dimuat sekali per sesi halaman, lalu di-cache browser)
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setEngine("loading");
+    withTimeout(loadFaceApi(), 90000)
+      .then((fa) => {
+        if (cancelled) return;
+        faRef.current = fa;
+        setEngine("ready");
+      })
+      .catch((err) => {
+        console.warn("Model pengenalan wajah gagal dimuat:", err);
+        if (cancelled) return;
+        faRef.current = null;
+        setEngine("fallback");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, engineNonce]);
+
+  // Batalkan pekerjaan template yang masih berjalan saat modal ditutup
+  useEffect(() => {
+    if (isOpen) return;
+    templateJobRef.current += 1;
+  }, [isOpen]);
+
+  // 3. SIKLUS HIDUP KAMERA
   useEffect(() => {
     if (!isOpen || isSubmittedToday || activeTab !== "kamera") {
       stopCamera();
       return;
     }
-
-    let isMounted = true;
-    (async () => {
-      try {
-        setEngineStatus("loading");
-        const det = await loadMediaPipeDetector();
-        if (!isMounted) return;
-        detectorRef.current = det;
-        setEngineStatus("ready");
-      } catch (err) {
-        console.warn("MediaPipe gagal, beralih ke deteksi bawaan:", err);
-        setEngineStatus("fallback");
-      }
-      startCamera();
-    })();
-
+    startCamera();
     return () => {
-      isMounted = false;
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -545,245 +677,224 @@ export default function ModalScanWajahPetugas({
 
   async function startCamera() {
     stopCamera();
+    const session = ++camSessionRef.current;
     setCameraError("");
 
-    try {
-      const constraints = {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        "Browser tidak mendukung kamera. Buka lewat HTTPS dan gunakan Chrome / Safari terbaru.",
+      );
+      return;
+    }
+
+    const attempts = [
+      {
         audio: false,
         video: {
           facingMode: cameraFacing,
-          width: { ideal: 720 },
-          height: { ideal: 960 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
-      };
+      },
+      { audio: false, video: true },
+    ];
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCameraActive(true);
-        startFaceRecognitionLoop();
+    let stream = null;
+    let lastErr = null;
+    for (const constraints of attempts) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (err?.name === "NotAllowedError") break;
       }
-    } catch (err) {
-      console.warn("Gagal menyalakan kamera:", err);
-      setCameraActive(false);
-      setCameraError(
-        "Kamera tidak dapat diakses. Pastikan izin kamera aktif pada browser.",
-      );
     }
+
+    // Modal ditutup / kamera di-restart saat menunggu izin -> buang stream
+    if (session !== camSessionRef.current) {
+      stream?.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    if (!stream) {
+      const name = lastErr?.name;
+      setCameraError(
+        name === "NotAllowedError"
+          ? "Izin kamera ditolak. Aktifkan izin kamera di pengaturan browser lalu coba lagi."
+          : name === "NotFoundError"
+            ? "Kamera tidak ditemukan pada perangkat ini."
+            : name === "NotReadableError"
+              ? "Kamera sedang dipakai aplikasi/modal lain. Tutup lalu coba lagi."
+              : "Kamera tidak dapat diakses. Pastikan izin kamera aktif pada browser.",
+      );
+      return;
+    }
+
+    streamRef.current = stream;
+    const video = videoRef.current;
+    if (!video) {
+      stream.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      return;
+    }
+    video.srcObject = stream;
+    try {
+      await video.play();
+    } catch (e) {
+      if (e?.name !== "AbortError") console.warn("Video play gagal:", e);
+    }
+    if (session !== camSessionRef.current) return;
+    setCameraActive(true);
   }
 
   function stopCamera() {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
+    camSessionRef.current += 1; // batalkan permintaan kamera yang masih menunggu
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
     setLiveFaceBox(null);
   }
 
-  // 3. LOOP REKOGNISI WAJAH SECARA REAL-TIME DENGAN LIVE TRACKING FEEDBACK
-  const recognizeFaceFrame = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(recognizeFaceFrame);
-      return;
-    }
-
-    // Cooldown 3 detik setelah scan sukses
-    const nowMs = Date.now();
-    if (nowMs - lastSuccessScanAt.current < SCAN_COOLDOWN_MS) {
-      setLiveFaceStatus("⏳ Cooldown anti-duplikat...");
-      rafRef.current = requestAnimationFrame(recognizeFaceFrame);
-      return;
-    }
-
-    // Throttle deteksi AI ke ±12 FPS agar hemat baterai & kamera tetap lancar 60 FPS
-    if (nowMs - lastInferenceAtRef.current < INFERENCE_INTERVAL_MS) {
-      rafRef.current = requestAnimationFrame(recognizeFaceFrame);
-      return;
-    }
-    lastInferenceAtRef.current = nowMs;
-
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
-
-    let canvas = canvasRef.current;
-    if (!canvas) {
-      canvas = document.createElement("canvas");
-      canvasRef.current = canvas;
-    }
-    const cw = 320;
-    const ch = Math.round((vh / vw) * cw) || 240;
-    canvas.width = cw;
-    canvas.height = ch;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) {
-      rafRef.current = requestAnimationFrame(recognizeFaceFrame);
-      return;
-    }
-
-    ctx.drawImage(video, 0, 0, cw, ch);
-
-    let detectedFace = null;
-
-    // A. Deteksi dengan MediaPipe BlazeFace jika tersedia
-    if (detectorRef.current) {
-      try {
-        const detections = detectorRef.current.detectForVideo(
-          video,
-          performance.now(),
-        );
-        if (detections?.detections?.length > 0) {
-          // Prioritaskan wajah terbesar / terdekat ke kamera (abaikan orang lewat di belakang)
-          let dominant = detections.detections[0];
-          let maxArea = dominant.boundingBox.width * dominant.boundingBox.height;
-          for (let i = 1; i < detections.detections.length; i++) {
-            const det = detections.detections[i];
-            const area = det.boundingBox.width * det.boundingBox.height;
-            if (area > maxArea) {
-              maxArea = area;
-              dominant = det;
-            }
-          }
-
-          const b = dominant.boundingBox;
-          const scaleX = cw / vw;
-          const scaleY = ch / vh;
-          detectedFace = {
-            x: b.originX * scaleX,
-            y: b.originY * scaleY,
-            w: b.width * scaleX,
-            h: b.height * scaleY,
-            rawX: b.originX,
-            rawY: b.originY,
-            rawW: b.width,
-            rawH: b.height,
-          };
+  // 4. LOOP PENGENALAN WAJAH (berurutan, tanpa tumpang-tindih)
+  useEffect(() => {
+    if (!isOpen || !cameraActive) return;
+    const st = { alive: true, votes: [], lastDescAt: 0 };
+    (async () => {
+      while (st.alive) {
+        const t0 = performance.now();
+        try {
+          await recognitionTick(st);
+        } catch (e) {
+          console.warn("Siklus pengenalan wajah gagal:", e);
         }
-      } catch (_) {}
-    }
-
-    // B. Fallback Native FaceDetector jika didukung
-    if (!detectedFace && typeof window !== "undefined" && "FaceDetector" in window) {
-      try {
-        // eslint-disable-next-line no-undef
-        const nativeDet = new window.FaceDetector({ fastMode: true });
-        const faces = await nativeDet.detect(video);
-        if (faces && faces.length > 0) {
-          // Prioritaskan wajah terbesar
-          let dominant = faces[0];
-          let maxArea = dominant.boundingBox.width * dominant.boundingBox.height;
-          for (let i = 1; i < faces.length; i++) {
-            const f = faces[i];
-            const area = f.boundingBox.width * f.boundingBox.height;
-            if (area > maxArea) {
-              maxArea = area;
-              dominant = f;
-            }
-          }
-
-          const b = dominant.boundingBox;
-          const scaleX = cw / vw;
-          const scaleY = ch / vh;
-          detectedFace = {
-            x: b.x * scaleX,
-            y: b.y * scaleY,
-            w: b.width * scaleX,
-            h: b.height * scaleY,
-            rawX: b.x,
-            rawY: b.y,
-            rawW: b.width,
-            rawH: b.height,
-          };
-        }
-      } catch (_) {}
-    }
-
-    // C. UPDATE LIVE TRACKING BOX KE LAYAR (Memberi respon visual langsung)
-    if (detectedFace && detectedFace.w > 30 && detectedFace.h > 30) {
-      const leftPct = (detectedFace.rawX / vw) * 100;
-      const topPct = (detectedFace.rawY / vh) * 100;
-      const widthPct = (detectedFace.rawW / vw) * 100;
-      const heightPct = (detectedFace.rawH / vh) * 100;
-
-      // Jika kamera depan, cerminkan posisi X bounding box
-      const displayLeft =
-        cameraFacing === "user" ? 100 - leftPct - widthPct : leftPct;
-
-      setLiveFaceBox({
-        leftPct: displayLeft,
-        topPct,
-        widthPct,
-        heightPct,
-      });
-
-      setLiveFaceStatus("🔍 Wajah terdeteksi! Mencocokkan data kelas...");
-
-      // D. PENCARIAN & PENCOCOKAN WAJAH DENGAN SISWA KELAS (1 : N)
-      const liveFeatures = extractFaceFeatures(
-        ctx,
-        detectedFace.x,
-        detectedFace.y,
-        detectedFace.w,
-        detectedFace.h,
-      );
-
-      if (liveFeatures) {
-        let bestMatch = null;
-        let highestScore = 0;
-
-        const profiles = studentProfilesRef.current || [];
-        for (const prof of profiles) {
-          if (prof.features) {
-            const sim = cosineSimilarity(liveFeatures, prof.features);
-            if (sim > highestScore) {
-              highestScore = sim;
-              bestMatch = prof;
-            }
-          }
-        }
-
-        // Tampilkan persentase pencocokan langsung di status
-        if (bestMatch && highestScore > 0.45) {
-          const matchPercent = Math.round(highestScore * 100);
-          setLiveFaceStatus(
-            `⏳ Memindai: ${bestMatch.nama} (${matchPercent}%)`,
-          );
-        }
-
-        // Ambang batas kecocokan (Threshold Similarity ≥ 0.72)
-        if (bestMatch && highestScore >= 0.72) {
-          handleStudentRecognized(bestMatch.idSiswa, bestMatch.nama);
-        } else if (highestScore < 0.55 && Date.now() - lastUnknownFaceAtRef.current > 4000) {
-          // Jika wajah stabil tetapi tidak cocok dengan siapa pun
-          lastUnknownFaceAtRef.current = Date.now();
-          setLiveFaceStatus("⚠️ Wajah belum terdaftar di kelas ini.");
-        }
+        const wait = Math.max(40, DETECT_INTERVAL_MS - (performance.now() - t0));
+        await new Promise((r) => setTimeout(r, wait));
       }
-    } else {
-      setLiveFaceBox(null);
-      setLiveFaceStatus("Arahkan kamera ke wajah siswa...");
+    })();
+    return () => {
+      st.alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, cameraActive, cameraFacing]);
+
+  async function recognitionTick(st) {
+    const video = videoRef.current;
+    const fa = faRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth) return;
+
+    if (!fa) {
+      setLiveFaceStatus(
+        engineStatusRef.current === "fallback"
+          ? "⚠️ Model pengenalan wajah gagal dimuat"
+          : "⏳ Memuat model pengenalan wajah...",
+      );
+      return;
     }
 
-    rafRef.current = requestAnimationFrame(recognizeFaceFrame);
-  }, [cameraFacing]);
+    if (Date.now() - lastSuccessScanAt.current < SCAN_COOLDOWN_MS) {
+      setLiveFaceStatus("⏳ Jeda anti-duplikat...");
+      return;
+    }
 
-  function startFaceRecognitionLoop() {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(recognizeFaceFrame);
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const dets = await fa
+      .detectAllFaces(
+        video,
+        new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }),
+      )
+      .withFaceLandmarks(true);
+    if (!st.alive) return;
+
+    if (!dets || dets.length === 0) {
+      st.votes.length = 0;
+      setLiveFaceBox(null);
+      setDebugLine("");
+      setLiveFaceStatus("Arahkan kamera ke wajah siswa...");
+      return;
+    }
+
+    // Wajah terbesar (terdekat ke kamera); wajah lain di belakang diabaikan
+    const main = dets.reduce((a, b) =>
+      b.detection.box.width * b.detection.box.height >
+      a.detection.box.width * a.detection.box.height
+        ? b
+        : a,
+    );
+    const box = main.detection.box;
+
+    setLiveFaceBox(
+      mapBoxToContainer(
+        box,
+        vw,
+        vh,
+        video.clientWidth || vw,
+        video.clientHeight || vh,
+        cameraFacing === "user",
+      ),
+    );
+
+    if (box.width / vw < MIN_FACE_RATIO) {
+      st.votes.length = 0;
+      setLiveFaceStatus("🔍 Dekatkan kamera ke wajah siswa");
+      return;
+    }
+
+    const pose = headPose(main.landmarks);
+    if (Math.abs(pose.yaw) > MAX_YAW || Math.abs(pose.rollDeg) > MAX_ROLL_DEG) {
+      st.votes.length = 0;
+      setLiveFaceStatus("😐 Minta siswa menghadap lurus ke kamera");
+      return;
+    }
+
+    const now = Date.now();
+    if (now - st.lastDescAt < DESC_INTERVAL_MS) return;
+    st.lastDescAt = now;
+
+    const profiles = (studentProfilesRef.current || []).filter((p) => p.descriptor);
+    if (profiles.length === 0) {
+      setLiveFaceStatus(
+        "⚠️ Belum ada template wajah siap (tunggu / tekan Sinkron Wajah)",
+      );
+      return;
+    }
+
+    const [faceCanvas] = await fa.extractFaces(video, [main.landmarks.align()]);
+    const desc = await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
+    if (!st.alive) return;
+
+    const { best, d1, d2 } = matchFace(desc, profiles);
+    const confident = best && isConfident(d1, d2);
+
+    if (showDebugRef.current && best) {
+      setDebugLine(
+        `terdekat: ${best.nama} • jarak ${d1.toFixed(2)} • selisih ${
+          Number.isFinite(d2) ? (d2 - d1).toFixed(2) : "-"
+        } (butuh ≤ ${MATCH_DIST} & ≥ ${MARGIN_MIN})`,
+      );
+    }
+
+    const confirmed = pushVote(st.votes, confident ? best.idSiswa : null, now);
+    if (confirmed) {
+      st.votes.length = 0;
+      recognizedRef.current(best.idSiswa, best.nama);
+      return;
+    }
+
+    if (confident) {
+      setLiveFaceStatus("🔍 Memverifikasi wajah...");
+    } else if (best && d1 <= LOOSE_DIST) {
+      setLiveFaceStatus("🔍 Mencocokkan... tahan posisi sebentar");
+    } else {
+      setLiveFaceStatus("⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini");
+    }
   }
 
-  // 4. PENANGANAN HASIL SCAN WAJAH (SAMA PERSIS DENGAN ATURAN BARCODE)
+  // 5. PENANGANAN HASIL SCAN WAJAH (SAMA PERSIS DENGAN ATURAN BARCODE)
   function handleStudentRecognized(scannedId, studentName) {
     if (checkIsPastTimeLimit()) {
       setIsSubmittedToday(true);
@@ -846,6 +957,9 @@ export default function ModalScanWajahPetugas({
     });
   }
 
+  recognizedRef.current = handleStudentRecognized;
+  showDebugRef.current = showDebug;
+
   // Statistik Ringkasan
   const stats = useMemo(() => {
     let hadirCount = 0;
@@ -890,7 +1004,7 @@ export default function ModalScanWajahPetugas({
     return siswaList.filter((s) => !!scannedMap[s.idSiswa]);
   }, [siswaList, scannedMap]);
 
-  // 5. KIRIM / SIMPAN PRESENSI KE BACKEND DENGAN PROGRESS BAR
+  // 6. KIRIM / SIMPAN PRESENSI KE BACKEND DENGAN PROGRESS BAR
   async function handleSubmitPresensi() {
     if (isSubmittedToday || isLockedByTime) {
       alert("⛔ Batas waktu pengisian presensi hari ini telah berakhir.");
@@ -1014,12 +1128,12 @@ export default function ModalScanWajahPetugas({
                 <h3 className="text-xs sm:text-sm font-black tracking-tight">
                   Scan Presensi Wajah
                 </h3>
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30">
                   {petugasInfo?.namaKelas || "Rombel"}
                 </span>
               </div>
               <p className="text-[9px] sm:text-[10px] text-teal-200 truncate">
-                AI Face Matching • {registeredFaceCount}/{siswaList.length} Wajah Terdaftar
+                Pengenalan wajah • {templateInfo.ready}/{registeredFaceCount} template siap • {registeredFaceCount}/{siswaList.length} terdaftar
               </p>
             </div>
           </div>
@@ -1070,7 +1184,7 @@ export default function ModalScanWajahPetugas({
             >
               <span>🧏</span>
               <span>Kamera Wajah</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
                 {stats.hadir}
               </span>
             </button>
@@ -1086,7 +1200,7 @@ export default function ModalScanWajahPetugas({
               <span>📋</span>
               <span>Daftar Siswa</span>
               {stats.belumScan > 0 && (
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
                   {stats.belumScan} Belum
                 </span>
               )}
@@ -1150,6 +1264,47 @@ export default function ModalScanWajahPetugas({
           {/* TAB 1: KAMERA SCAN WAJAH */}
           {activeTab === "kamera" && !isLockedByTime && (
             <div className="space-y-2">
+              {/* STATUS MODEL & TEMPLATE */}
+              {engineStatus === "loading" && (
+                <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px]">
+                  ⏳ Memuat model pengenalan wajah (±7 MB, hanya sekali)...
+                </div>
+              )}
+              {engineStatus === "fallback" && (
+                <div className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] flex items-center justify-between gap-2">
+                  <span>
+                    Model pengenalan wajah gagal dimuat (cek koneksi / akses ke cdn.jsdelivr.net).
+                    Scan wajah tidak aktif.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEngineNonce((n) => n + 1)}
+                    className="px-2 py-1 rounded-lg bg-rose-600 text-white font-bold shrink-0 cursor-pointer"
+                  >
+                    Coba lagi
+                  </button>
+                </div>
+              )}
+              {templateInfo.pending > 0 && (
+                <div className="px-2.5 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-[10.5px]">
+                  🔄 Menyiapkan template wajah siswa: {templateInfo.ready}/{templateInfo.total}...
+                </div>
+              )}
+              {templateInfo.failed.length > 0 && (
+                <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px]">
+                  ⚠️ {templateInfo.failed.length} foto wajah tidak bisa dipakai:{" "}
+                  <strong>
+                    {templateInfo.failed
+                      .slice(0, 5)
+                      .map((f) => f.nama)
+                      .join(", ")}
+                    {templateInfo.failed.length > 5 ? ", ..." : ""}
+                  </strong>
+                  . Minta siswa daftar ulang (wajah menghadap lurus, cahaya cukup), lalu tekan
+                  Sinkron Wajah.
+                </div>
+              )}
+
               {/* CONTAINER KAMERA PEMINDAI */}
               <div className="relative rounded-2xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[52vh] sm:h-[400px] min-h-[300px] flex items-center justify-center shadow-md">
                 <video
@@ -1168,6 +1323,12 @@ export default function ModalScanWajahPetugas({
                       {liveFaceStatus}
                     </div>
 
+                    {showDebug && debugLine && (
+                      <div className="absolute top-10 left-1/2 -translate-x-1/2 max-w-[94%] text-center px-2 py-0.5 rounded-md bg-black/70 text-yellow-200 text-[9.5px] font-mono">
+                        {debugLine}
+                      </div>
+                    )}
+
                     {/* LIVE FACE TRACKING BOX (Kotak Hijau Melacak Wajah Langsung) */}
                     {liveFaceBox ? (
                       <div
@@ -1179,7 +1340,7 @@ export default function ModalScanWajahPetugas({
                           height: `${liveFaceBox.heightPct}%`,
                         }}
                       >
-                        <span className="text-[8.5px] font-mono font-bold bg-emerald-950/80 text-emerald-200 px-1 py-0.2 rounded w-fit">
+                        <span className="text-[8.5px] font-mono font-bold bg-emerald-950/80 text-emerald-200 px-1 py-0.5 rounded w-fit">
                           WAJAH
                         </span>
                         <div className="w-full flex justify-end">
@@ -1284,6 +1445,16 @@ export default function ModalScanWajahPetugas({
                   </div>
                 )}
               </div>
+
+              <label className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showDebug}
+                  onChange={(e) => setShowDebug(e.target.checked)}
+                  className="rounded w-3.5 h-3.5"
+                />
+                <span>Tampilkan jarak kemiripan (untuk uji coba / kalibrasi)</span>
+              </label>
 
               {/* LIST SISWA TERAKHIR DISCAN */}
               {siswaSudahDiscan.length > 0 && (

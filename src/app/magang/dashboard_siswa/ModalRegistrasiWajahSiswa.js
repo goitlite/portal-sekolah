@@ -956,6 +956,7 @@ export default function ModalRegistrasiWajahSiswa({
         );
         // Hapus cache fitur lama agar otomatis diekstrak ulang dari foto terbaru
         localStorage.removeItem(`face_feat_${user.id}`);
+        localStorage.removeItem(`face_feat_zncc_${user.id}`);
       } catch (_) {}
 
       setExistingFacePhoto(photoUrl);

@@ -155,6 +155,7 @@ export default function ModalRegistrasiWajahWaliKelas({
       localStorage.setItem(localCacheKey, JSON.stringify(cache));
       // Invalidate feature cache lama agar diekstrak ulang
       localStorage.removeItem(`face_feat_${idSiswa}`);
+      localStorage.removeItem(`face_feat_zncc_${idSiswa}`);
     } catch (_) {}
 
     setActiveSiswaToRegister(null);
