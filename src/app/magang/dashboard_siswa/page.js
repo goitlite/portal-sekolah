@@ -883,24 +883,24 @@ export default function DashboardSiswa() {
         {/* Registrasi Wajah — tersedia untuk semua siswa */}
         <button
           onClick={() => setShowModalRegistrasiWajah(true)}
-          className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-teal-500/50"
+          className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-gradient-to-br from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-teal-500/50"
         >
-          <span className="text-2xl sm:text-3xl shrink-0">🧏</span>
+          <span className="text-xl sm:text-2xl shrink-0">🧏</span>
           <div className="text-left min-w-0">
-            <div className="text-[11px] sm:text-xs font-black leading-tight">Registrasi Wajah</div>
-            <div className="text-[9px] sm:text-[10px] text-teal-100 font-medium mt-0.5 leading-tight">Daftarkan wajah untuk presensi</div>
+            <div className="text-xs sm:text-sm font-black leading-tight">Registrasi Wajah</div>
+            <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">Daftar wajah siswa</div>
           </div>
         </button>
 
         {/* Lihat Barcode Presensi — tersedia untuk semua siswa */}
         <button
           onClick={() => setShowModalKartuBarcode(true)}
-          className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-white/90 hover:bg-amber-50 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-300"
+          className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-white/95 hover:bg-amber-50 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-300"
         >
-          <span className="text-2xl sm:text-3xl shrink-0">🪪</span>
+          <span className="text-xl sm:text-2xl shrink-0">🪪</span>
           <div className="text-left min-w-0">
-            <div className="text-[11px] sm:text-xs font-black leading-tight">Lihat Barcode Presensi</div>
-            <div className="text-[9px] sm:text-[10px] text-amber-700 font-medium mt-0.5 leading-tight">Kartu barcode kelas kamu</div>
+            <div className="text-xs sm:text-sm font-black leading-tight">Barcode Siswa</div>
+            <div className="text-[10px] sm:text-[11px] text-amber-700 font-medium mt-0.5 truncate">Kartu barcode presensi</div>
           </div>
         </button>
 
@@ -908,20 +908,20 @@ export default function DashboardSiswa() {
         {petugasWaliData ? (
           <button
             onClick={() => setShowModalScanWajah(true)}
-            className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-emerald-400/50"
+            className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-emerald-400/50"
           >
-            <span className="text-2xl sm:text-3xl shrink-0">📷</span>
+            <span className="text-xl sm:text-2xl shrink-0">📷</span>
             <div className="text-left min-w-0">
-              <div className="text-[11px] sm:text-xs font-black leading-tight">Scan Kehadiran</div>
-              <div className="text-[9px] sm:text-[10px] text-emerald-100 font-medium mt-0.5 leading-tight">Wajah & barcode siswa</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">Scan Presensi</div>
+              <div className="text-[10px] sm:text-[11px] text-emerald-100 font-medium mt-0.5 truncate">Wajah & barcode</div>
             </div>
           </button>
         ) : (
-          <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
-            <span className="text-2xl sm:text-3xl shrink-0 opacity-50">📷</span>
+          <div className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
+            <span className="text-xl sm:text-2xl shrink-0 opacity-50">📷</span>
             <div className="text-left min-w-0">
-              <div className="text-[11px] sm:text-xs font-black leading-tight">Scan Kehadiran</div>
-              <div className="text-[9px] sm:text-[10px] font-medium mt-0.5 leading-tight">Khusus petugas kelas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">Scan Presensi</div>
+              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">Khusus petugas</div>
             </div>
           </div>
         )}
@@ -930,20 +930,20 @@ export default function DashboardSiswa() {
         {petugasWaliData ? (
           <button
             onClick={() => setShowModalPresensiPetugas(true)}
-            className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-400/50"
+            className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-400 hover:brightness-110 active:scale-95 text-amber-950 shadow-md transition-all cursor-pointer border border-amber-400/50"
           >
-            <span className="text-2xl sm:text-3xl shrink-0">📋</span>
+            <span className="text-xl sm:text-2xl shrink-0">📋</span>
             <div className="text-left min-w-0">
-              <div className="text-[11px] sm:text-xs font-black leading-tight">Isi Presensi Reguler</div>
-              <div className="text-[9px] sm:text-[10px] text-amber-800 font-medium mt-0.5 leading-tight">Form manual seluruh kelas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">Presensi Reguler</div>
+              <div className="text-[10px] sm:text-[11px] text-amber-800 font-medium mt-0.5 truncate">Form manual kelas</div>
             </div>
           </button>
         ) : (
-          <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
-            <span className="text-2xl sm:text-3xl shrink-0 opacity-50">📋</span>
+          <div className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
+            <span className="text-xl sm:text-2xl shrink-0 opacity-50">📋</span>
             <div className="text-left min-w-0">
-              <div className="text-[11px] sm:text-xs font-black leading-tight">Isi Presensi Reguler</div>
-              <div className="text-[9px] sm:text-[10px] font-medium mt-0.5 leading-tight">Khusus petugas kelas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">Presensi Reguler</div>
+              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">Khusus petugas</div>
             </div>
           </div>
         )}
@@ -1211,50 +1211,49 @@ export default function DashboardSiswa() {
         {/* BANNER SPOTLIGHT: PETUGAS PRESENSI KELAS (JIKA DITUNJUK) */}
         {/* ============================================================ */}
         {petugasWaliData && (
-          <div className="rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-teal-900 via-emerald-900 to-slate-900 p-4 sm:p-6 text-white shadow-lg border border-teal-400/40 relative overflow-hidden">
+          <div className="rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-teal-900 via-emerald-900 to-slate-900 p-3.5 sm:p-5 text-white shadow-lg border border-teal-400/40 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="relative z-10 space-y-4">
+            <div className="relative z-10 space-y-3">
               {/* Header teks */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-xs font-black uppercase tracking-wider border border-amber-400/30">
-                  ⭐ Mandat Petugas Presensi Kelas
+                  ⭐ Petugas Presensi Kelas
                 </div>
-                <h3 className="text-base sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-teal-100 to-emerald-200">
-                  Petugas Presensi: {petugasWaliData.namaKelas}
+                <h3 className="text-sm sm:text-lg font-black text-white">
+                  Presensi Harian: {petugasWaliData.namaKelas}
                 </h3>
-                <p className="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
-                  Kamu ditunjuk untuk mengisi presensi harian seluruh siswa di
-                  kelas {petugasWaliData.namaKelas}. Gunakan salah satu metode di bawah.
+                <p className="text-[11px] sm:text-xs text-teal-100 font-medium">
+                  Pilih metode untuk mencatat kehadiran siswa:
                 </p>
               </div>
 
-              {/* Grid tombol 2 kolom — responsif di HP maupun desktop */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+              {/* Grid 3 tombol seimbang & responsif di HP */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {/* Scan Wajah */}
                 <button
                   onClick={() => setShowModalScanWajah(true)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-emerald-400/50 text-center"
+                  className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-emerald-400/50 text-center"
                 >
-                  <span className="text-2xl">🧏</span>
-                  <span className="text-[11px] sm:text-xs leading-tight">Scan Presensi<br/>Wajah</span>
+                  <span className="text-xl sm:text-2xl">🧏</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">Scan Wajah</span>
                 </button>
 
                 {/* Scan Barcode */}
                 <button
                   onClick={() => setShowModalScanBarcode(true)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-teal-400/50 text-center"
+                  className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-teal-400/50 text-center"
                 >
-                  <span className="text-2xl">📷</span>
-                  <span className="text-[11px] sm:text-xs leading-tight">Scan Barcode<br/>Siswa</span>
+                  <span className="text-xl sm:text-2xl">📷</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">Scan Barcode</span>
                 </button>
 
                 {/* Isi Reguler */}
                 <button
                   onClick={() => setShowModalPresensiPetugas(true)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 text-amber-950 font-black shadow-md transition-all cursor-pointer border border-amber-400/50 text-center col-span-2 sm:col-span-1"
+                  className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 text-amber-950 font-black shadow-md transition-all cursor-pointer border border-amber-400/50 text-center"
                 >
-                  <span className="text-2xl">📋</span>
-                  <span className="text-[11px] sm:text-xs leading-tight">Isi Presensi<br/>Reguler</span>
+                  <span className="text-xl sm:text-2xl">📋</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">Isi Reguler</span>
                 </button>
               </div>
             </div>

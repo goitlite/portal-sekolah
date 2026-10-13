@@ -676,43 +676,47 @@ export default function ModalScanPresensiPetugas({
           </button>
         </div>
 
-        {/* TAB NAVIGASI: KAMERA SCAN vs REVIEW DAFTAR + TOMBOL REGULER */}
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 sm:px-5 pt-1.5 shrink-0">
-          <div className="flex items-center">
+        {/* TAB NAVIGASI & SWITCH KE WAJAH / REGULER */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 sm:px-4 py-1.5 shrink-0">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab("kamera")}
-              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                 activeTab === "kamera"
-                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "bg-teal-700 text-white shadow-xs"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
               }`}
             >
               <span>📷</span>
-              <span>Kamera Pemindai</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+              <span>Scanner</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                activeTab === "kamera" ? "bg-white/25 text-white" : "bg-teal-100 text-teal-800"
+              }`}>
                 {stats.hadir}
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab("daftar")}
-              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                 activeTab === "daftar"
-                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "bg-teal-700 text-white shadow-xs"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
               }`}
             >
               <span>📋</span>
-              <span>Daftar Siswa &amp; Status</span>
+              <span>Daftar</span>
               {stats.belumScan > 0 && (
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
-                  {stats.belumScan} Belum
+                <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                  activeTab === "daftar" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {stats.belumScan}
                 </span>
               )}
             </button>
           </div>
 
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center gap-1 ml-auto">
             {typeof onOpenScanWajah === "function" && (
               <button
                 type="button"
@@ -720,11 +724,11 @@ export default function ModalScanPresensiPetugas({
                   stopScannerGracefully();
                   onOpenScanWajah();
                 }}
-                className="px-2.5 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-black text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                className="px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-[10px] sm:text-[11px] border border-emerald-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                 title="Beralih ke Pemindai Wajah"
               >
                 <span>🧏</span>
-                <span>Mode Wajah</span>
+                <span>Wajah</span>
               </button>
             )}
 
@@ -735,11 +739,11 @@ export default function ModalScanPresensiPetugas({
                   stopScannerGracefully();
                   onOpenReguler();
                 }}
-                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 font-black text-[11px] shadow-2xs border border-amber-400 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                title="Beralih ke Formulir Presensi Reguler"
+                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[10px] sm:text-[11px] border border-amber-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                title="Beralih ke Presensi Reguler"
               >
                 <span>📋</span>
-                <span>Presensi Reguler</span>
+                <span>Reguler</span>
               </button>
             )}
           </div>

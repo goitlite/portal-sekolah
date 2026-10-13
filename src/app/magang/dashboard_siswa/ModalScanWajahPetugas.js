@@ -1118,37 +1118,37 @@ export default function ModalScanWajahPetugas({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]">
         {/* HEADER MODAL */}
-        <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="p-1 rounded-md bg-teal-400/20 text-teal-300 text-sm">
+        <div className="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1 rounded-md bg-teal-400/20 text-teal-300 text-sm shrink-0">
               🧏
             </span>
-            <div className="leading-tight">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-xs sm:text-sm font-black tracking-tight">
+            <div className="leading-tight min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black tracking-tight truncate">
                   Scan Presensi Wajah
                 </h3>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30">
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30 shrink-0">
                   {petugasInfo?.namaKelas || "Rombel"}
                 </span>
               </div>
-              <p className="text-[9px] sm:text-[10px] text-teal-200 truncate">
-                Pengenalan wajah • {templateInfo.ready}/{registeredFaceCount} template siap • {registeredFaceCount}/{siswaList.length} terdaftar
+              <p className="text-[9px] text-teal-200 truncate mt-0.5">
+                {templateInfo.ready}/{registeredFaceCount} siap • {stats.hadir}/{stats.total} hadir
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => {
                 loadStudentFaceProfilesParallel(siswaList, true);
               }}
               disabled={syncingFaces}
               className="px-2 py-1 rounded-lg bg-teal-500/25 hover:bg-teal-500/40 border border-teal-300/40 text-teal-100 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
-              title="Sinkronkan pembaruan foto wajah siswa terbaru dari Google Sheets"
+              title="Sinkronkan foto wajah terbaru"
             >
               <span className={syncingFaces ? "animate-spin" : ""}>🔄</span>
-              <span>{syncingFaces ? "Sinkron..." : "Sinkron Wajah"}</span>
+              <span className="hidden sm:inline">{syncingFaces ? "Sinkron..." : "Sinkron"}</span>
             </button>
             <button
               onClick={toggleCameraFacing}
@@ -1172,42 +1172,46 @@ export default function ModalScanWajahPetugas({
         </div>
 
         {/* TAB NAVIGASI & SWITCH KE BARCODE / REGULER */}
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 sm:px-5 pt-1.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 sm:px-4 py-1.5 shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab("kamera")}
-              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                 activeTab === "kamera"
-                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
               }`}
             >
               <span>🧏</span>
-              <span>Kamera Wajah</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+              <span>Kamera</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                activeTab === "kamera" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-800"
+              }`}>
                 {stats.hadir}
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab("daftar")}
-              className={`px-3 py-1.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                 activeTab === "daftar"
-                  ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
               }`}
             >
               <span>📋</span>
-              <span>Daftar Siswa</span>
+              <span>Daftar</span>
               {stats.belumScan > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
-                  {stats.belumScan} Belum
+                <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                  activeTab === "daftar" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {stats.belumScan}
                 </span>
               )}
             </button>
           </div>
 
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center gap-1 ml-auto">
             {typeof onOpenBarcode === "function" && (
               <button
                 type="button"
@@ -1215,11 +1219,11 @@ export default function ModalScanWajahPetugas({
                   stopCamera();
                   onOpenBarcode();
                 }}
-                className="px-2.5 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-black text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer"
+                className="px-2 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold text-[10px] sm:text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                 title="Beralih ke Scan Barcode"
               >
                 <span>📷</span>
-                <span>Mode Barcode</span>
+                <span>Barcode</span>
               </button>
             )}
             {typeof onOpenReguler === "function" && (
@@ -1229,7 +1233,7 @@ export default function ModalScanWajahPetugas({
                   stopCamera();
                   onOpenReguler();
                 }}
-                className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-black text-[11px] border border-amber-300 flex items-center gap-1 transition-all cursor-pointer"
+                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[10px] sm:text-[11px] border border-amber-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                 title="Beralih ke Presensi Reguler"
               >
                 <span>📋</span>
@@ -1240,7 +1244,7 @@ export default function ModalScanWajahPetugas({
         </div>
 
         {/* BODY AREA */}
-        <div className="p-2.5 sm:p-4 overflow-y-auto space-y-2.5 flex-1 bg-slate-50/50">
+        <div className="p-2 sm:p-3.5 overflow-y-auto space-y-2 flex-1 bg-slate-50/50">
           {/* STATISTIK RINGKAS */}
           <div className="grid grid-cols-4 gap-1.5 text-center">
             <div className="py-1 px-1 rounded-lg bg-slate-100 border border-slate-200">
@@ -1263,45 +1267,37 @@ export default function ModalScanWajahPetugas({
 
           {/* TAB 1: KAMERA SCAN WAJAH */}
           {activeTab === "kamera" && !isLockedByTime && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {/* STATUS MODEL & TEMPLATE */}
               {engineStatus === "loading" && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px]">
-                  ⏳ Memuat model pengenalan wajah (±7 MB, hanya sekali)...
+                <div className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] flex items-center gap-1.5">
+                  <span className="animate-spin">⏳</span>
+                  <span>Memuat model AI wajah...</span>
                 </div>
               )}
               {engineStatus === "fallback" && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] flex items-center justify-between gap-2">
-                  <span>
-                    Model pengenalan wajah gagal dimuat (cek koneksi / akses ke cdn.jsdelivr.net).
-                    Scan wajah tidak aktif.
-                  </span>
+                <div className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] flex items-center justify-between gap-1.5">
+                  <span className="truncate">Model AI gagal dimuat. Periksa koneksi internet.</span>
                   <button
                     type="button"
                     onClick={() => setEngineNonce((n) => n + 1)}
-                    className="px-2 py-1 rounded-lg bg-rose-600 text-white font-bold shrink-0 cursor-pointer"
+                    className="px-2 py-0.5 rounded bg-rose-600 text-white font-bold text-[10px] shrink-0 cursor-pointer"
                   >
-                    Coba lagi
+                    Ulangi
                   </button>
                 </div>
               )}
               {templateInfo.pending > 0 && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-[10.5px]">
-                  🔄 Menyiapkan template wajah siswa: {templateInfo.ready}/{templateInfo.total}...
+                <div className="px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[10.5px] flex items-center gap-1.5">
+                  <span className="animate-spin">🔄</span>
+                  <span>Menyiapkan template: {templateInfo.ready}/{templateInfo.total}...</span>
                 </div>
               )}
               {templateInfo.failed.length > 0 && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px]">
-                  ⚠️ {templateInfo.failed.length} foto wajah tidak bisa dipakai:{" "}
-                  <strong>
-                    {templateInfo.failed
-                      .slice(0, 5)
-                      .map((f) => f.nama)
-                      .join(", ")}
-                    {templateInfo.failed.length > 5 ? ", ..." : ""}
-                  </strong>
-                  . Minta siswa daftar ulang (wajah menghadap lurus, cahaya cukup), lalu tekan
-                  Sinkron Wajah.
+                <div className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
+                  <span className="truncate">
+                    ⚠️ {templateInfo.failed.length} foto perlu didaftarkan ulang (harus lurus & jelas).
+                  </span>
                 </div>
               )}
 
