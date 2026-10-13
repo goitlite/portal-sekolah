@@ -10,6 +10,16 @@ export const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA
 export const DESC_KEY = "face_desc_v2_";
 export const MATCH_DIST = 0.5; // Batas kecocokan presensi
 export const DUPLICATE_THRESHOLD = 0.45; // Batas identik anti-duplikasi (makin kecil = makin mirip)
+export const LOOSE_DIST = 0.6; // di atas ini = jelas bukan siapa pun
+export const MARGIN_MIN = 0.06; // jarak siswa terdekat ke-2 harus lebih jauh sekian (anti-ragu)
+export const VOTES_NEEDED = 3; // jumlah hasil identik berturut-turut sebelum dicatat hadir
+export const VOTE_WINDOW_MS = 3500; // jendela waktu pengumpulan suara
+export const MIN_FACE_RATIO = 0.16; // lebar wajah minimal terhadap lebar frame kamera
+export const MAX_YAW = 0.35; // toleransi menoleh (rasio hidung terhadap jarak mata)
+export const MAX_ROLL_DEG = 22; // toleransi kepala miring
+export const DETECT_INTERVAL_MS = 110; // jeda antar deteksi wajah
+export const DESC_INTERVAL_MS = 300; // jeda antar pembuatan deskriptor (bagian paling berat)
+export const SCAN_COOLDOWN_MS = 3000; // jeda anti-duplikat setelah satu siswa tercatat
 
 let faPromise = null;
 
@@ -48,6 +58,87 @@ export function euclid(a, b) {
     s += d * d;
   }
   return Math.sqrt(s);
+}
+
+// Cari siswa paling mirip + jarak ke siswa terdekat kedua
+export function matchFace(desc, profiles) {
+  let best = null;
+  let d1 = Infinity;
+  let d2 = Infinity;
+  for (const p of profiles) {
+    const d = euclid(desc, p.descriptor);
+    if (d < d1) {
+      d2 = d1;
+      d1 = d;
+      best = p;
+    } else if (d < d2) {
+      d2 = d;
+    }
+  }
+  return { best, d1, d2 };
+}
+
+export function isConfident(d1, d2, matchDist = MATCH_DIST, marginMin = MARGIN_MIN) {
+  return d1 <= matchDist && d2 - d1 >= marginMin;
+}
+
+// Kumpulkan suara; kembalikan idSiswa jika sudah terkonfirmasi (atau null)
+export function pushVote(votes, id, now, windowMs = VOTE_WINDOW_MS, needed = VOTES_NEEDED) {
+  while (votes.length && now - votes[0].t > windowMs) votes.shift();
+  votes.push({ id, t: now });
+  if (!id) return null;
+  const counts = {};
+  for (const v of votes) if (v.id) counts[v.id] = (counts[v.id] || 0) + 1;
+  if ((counts[id] || 0) < needed) return null;
+  for (const k of Object.keys(counts)) {
+    if (k !== id && counts[k] >= 2) return null; // ada kandidat lain yang bersaing
+  }
+  return id;
+}
+
+// Kotak wajah (piksel video) -> persen di kontainer (video memakai object-cover)
+export function mapBoxToContainer(box, vw, vh, cw, ch, mirror) {
+  const scale = Math.max(cw / vw, ch / vh);
+  const ox = (cw - vw * scale) / 2;
+  const oy = (ch - vh * scale) / 2;
+  const w = box.width * scale;
+  const h = box.height * scale;
+  let left = box.x * scale + ox;
+  const top = box.y * scale + oy;
+  if (mirror) left = cw - left - w;
+  return {
+    leftPct: (left / cw) * 100,
+    topPct: (top / ch) * 100,
+    widthPct: (w / cw) * 100,
+    heightPct: (h / ch) * 100,
+  };
+}
+
+export function centerOf(pts) {
+  let x = 0;
+  let y = 0;
+  for (const p of pts) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / pts.length, y: y / pts.length };
+}
+
+// Perkiraan arah hadap & kemiringan dari 68 titik landmark
+export function headPose(landmarks) {
+  const eyes = [centerOf(landmarks.getLeftEye()), centerOf(landmarks.getRightEye())].sort(
+    (a, b) => a.x - b.x,
+  );
+  const nose = landmarks.getNose();
+  const tip = nose[3] || nose[Math.floor(nose.length / 2)];
+  const dx = eyes[1].x - eyes[0].x;
+  const dy = eyes[1].y - eyes[0].y;
+  const eyeDist = Math.hypot(dx, dy) || 1;
+  const midX = (eyes[0].x + eyes[1].x) / 2;
+  return {
+    yaw: (tip.x - midX) / eyeDist,
+    rollDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
+  };
 }
 
 // Baca deskriptor dari cache lokal

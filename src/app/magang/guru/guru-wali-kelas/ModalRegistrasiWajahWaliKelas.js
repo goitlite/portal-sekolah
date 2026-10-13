@@ -156,6 +156,20 @@ export default function ModalRegistrasiWajahWaliKelas({
       // Invalidate feature cache lama agar diekstrak ulang
       localStorage.removeItem(`face_feat_${idSiswa}`);
       localStorage.removeItem(`face_feat_zncc_${idSiswa}`);
+
+      // Broadcast pembaruan wajah ke scanner yang sedang aktif di tab/jendela lain
+      localStorage.setItem(`face_updated_at_${waliId}`, String(Date.now()));
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("portal_face_sync");
+        bc.postMessage({
+          type: "FACE_UPDATED",
+          waliId,
+          idSiswa,
+          newPhotoUrl,
+          timestamp: Date.now(),
+        });
+        bc.close();
+      }
     } catch (_) {}
 
     setActiveSiswaToRegister(null);

@@ -6,33 +6,39 @@ import {
   savePresensiWaliKelas,
   getBiodataSiswa,
 } from "../lib/api";
+import {
+  MATCH_DIST,
+  LOOSE_DIST,
+  MARGIN_MIN,
+  VOTES_NEEDED,
+  VOTE_WINDOW_MS,
+  MIN_FACE_RATIO,
+  MAX_YAW,
+  MAX_ROLL_DEG,
+  DETECT_INTERVAL_MS,
+  DESC_INTERVAL_MS,
+  SCAN_COOLDOWN_MS,
+  loadFaceApi,
+  euclid,
+  matchFace,
+  isConfident,
+  pushVote,
+  mapBoxToContainer,
+  headPose,
+  readCachedDescriptor,
+  writeCachedDescriptor,
+  loadFaceImage,
+  computeTemplate,
+} from "../lib/faceApiHelper";
 
 // =====================================================================
-// KONFIGURASI
+// KONFIGURASI PRESENSI
 // =====================================================================
 // Batas jam presensi. CATATAN: komentar lama menyebut 08:30, tetapi nilai
 // yang aktif di kode sebelumnya adalah 23:30 (mode uji). Untuk produksi
 // ubah menjadi BATAS_JAM = 8 dan BATAS_MENIT = 30.
 const BATAS_JAM = 23;
 const BATAS_MENIT = 30;
-
-// Pengenalan wajah: jarak Euclidean antar deskriptor 128-d (makin kecil = makin mirip).
-// Orang yang sama biasanya < 0.4, orang berbeda biasanya > 0.6.
-const MATCH_DIST = 0.5; // kandidat dianggap cocok jika jarak <= ini
-const LOOSE_DIST = 0.6; // di atas ini = jelas bukan siapa pun
-const MARGIN_MIN = 0.06; // jarak siswa terdekat ke-2 harus lebih jauh sekian (anti-ragu)
-const VOTES_NEEDED = 3; // jumlah hasil identik berturut-turut sebelum dicatat hadir
-const VOTE_WINDOW_MS = 3500; // jendela waktu pengumpulan suara
-const MIN_FACE_RATIO = 0.16; // lebar wajah minimal terhadap lebar frame kamera
-const MAX_YAW = 0.35; // toleransi menoleh (rasio hidung terhadap jarak mata)
-const MAX_ROLL_DEG = 22; // toleransi kepala miring
-const DETECT_INTERVAL_MS = 110; // jeda antar deteksi wajah
-const DESC_INTERVAL_MS = 300; // jeda antar pembuatan deskriptor (bagian paling berat)
-const SCAN_COOLDOWN_MS = 3000; // jeda anti-duplikat setelah satu siswa tercatat
-
-const FA_VERSION = "1.7.15";
-const FA_BUNDLE = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/dist/face-api.esm.js`;
-const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/model/`;
 
 // =====================================================================
 // HELPER UMUM
@@ -80,199 +86,7 @@ function playBeepSuccess() {
 const MEMORY_SISWA_CACHE = {};
 const SESSION_URL_CHECKED = {};
 
-// <PURE-HELPERS>
-function euclid(a, b) {
-  let s = 0;
-  for (let i = 0; i < 128; i++) {
-    const d = a[i] - b[i];
-    s += d * d;
-  }
-  return Math.sqrt(s);
-}
 
-// Cari siswa paling mirip + jarak ke siswa terdekat kedua
-function matchFace(desc, profiles) {
-  let best = null;
-  let d1 = Infinity;
-  let d2 = Infinity;
-  for (const p of profiles) {
-    const d = euclid(desc, p.descriptor);
-    if (d < d1) {
-      d2 = d1;
-      d1 = d;
-      best = p;
-    } else if (d < d2) {
-      d2 = d;
-    }
-  }
-  return { best, d1, d2 };
-}
-
-function isConfident(d1, d2) {
-  return d1 <= MATCH_DIST && d2 - d1 >= MARGIN_MIN;
-}
-
-// Kumpulkan suara; kembalikan idSiswa jika sudah terkonfirmasi (atau null)
-function pushVote(votes, id, now) {
-  while (votes.length && now - votes[0].t > VOTE_WINDOW_MS) votes.shift();
-  votes.push({ id, t: now });
-  if (!id) return null;
-  const counts = {};
-  for (const v of votes) if (v.id) counts[v.id] = (counts[v.id] || 0) + 1;
-  if ((counts[id] || 0) < VOTES_NEEDED) return null;
-  for (const k of Object.keys(counts)) {
-    if (k !== id && counts[k] >= 2) return null; // ada kandidat lain yang bersaing
-  }
-  return id;
-}
-
-// Kotak wajah (piksel video) -> persen di kontainer (video memakai object-cover)
-function mapBoxToContainer(box, vw, vh, cw, ch, mirror) {
-  const scale = Math.max(cw / vw, ch / vh);
-  const ox = (cw - vw * scale) / 2;
-  const oy = (ch - vh * scale) / 2;
-  const w = box.width * scale;
-  const h = box.height * scale;
-  let left = box.x * scale + ox;
-  const top = box.y * scale + oy;
-  if (mirror) left = cw - left - w;
-  return {
-    leftPct: (left / cw) * 100,
-    topPct: (top / ch) * 100,
-    widthPct: (w / cw) * 100,
-    heightPct: (h / ch) * 100,
-  };
-}
-
-function centerOf(pts) {
-  let x = 0;
-  let y = 0;
-  for (const p of pts) {
-    x += p.x;
-    y += p.y;
-  }
-  return { x: x / pts.length, y: y / pts.length };
-}
-
-// Perkiraan arah hadap & kemiringan dari 68 titik landmark
-function headPose(landmarks) {
-  const eyes = [centerOf(landmarks.getLeftEye()), centerOf(landmarks.getRightEye())].sort(
-    (a, b) => a.x - b.x,
-  );
-  const nose = landmarks.getNose();
-  const tip = nose[3] || nose[Math.floor(nose.length / 2)];
-  const dx = eyes[1].x - eyes[0].x;
-  const dy = eyes[1].y - eyes[0].y;
-  const eyeDist = Math.hypot(dx, dy) || 1;
-  const midX = (eyes[0].x + eyes[1].x) / 2;
-  return {
-    yaw: (tip.x - midX) / eyeDist,
-    rollDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
-  };
-}
-// </PURE-HELPERS>
-
-// =====================================================================
-// FACE-API (deskriptor wajah 128-d) — dimuat sekali per sesi halaman
-// =====================================================================
-let faPromise = null;
-function loadFaceApi() {
-  if (faPromise) return faPromise;
-  faPromise = (async () => {
-    const fa = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ FA_BUNDLE
-    );
-    let backendOk = false;
-    try {
-      backendOk = await fa.tf.setBackend("webgl");
-    } catch (_) {}
-    if (!backendOk) await fa.tf.setBackend("cpu"); // perangkat tanpa WebGL
-    await fa.tf.ready();
-    await Promise.all([
-      fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS),
-      fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS),
-      fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS),
-    ]);
-    return fa;
-  })().catch((err) => {
-    faPromise = null; // boleh dicoba lagi
-    throw err;
-  });
-  return faPromise;
-}
-
-// Cache template per siswa, TERIKAT pada URL foto: jika siswa mendaftar ulang
-// (URL berubah) template lama otomatis dibuang di semua perangkat.
-const DESC_KEY = "face_desc_v2_";
-function readCachedDescriptor(idSiswa, url) {
-  try {
-    const raw = localStorage.getItem(DESC_KEY + idSiswa);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (o?.url === url && Array.isArray(o.d) && o.d.length === 128) {
-      return Float32Array.from(o.d);
-    }
-  } catch (_) {}
-  return null;
-}
-function writeCachedDescriptor(idSiswa, url, desc) {
-  try {
-    localStorage.setItem(
-      DESC_KEY + idSiswa,
-      JSON.stringify({ url, d: Array.from(desc, (v) => +v.toFixed(5)) }),
-    );
-  } catch (_) {}
-}
-
-function driveThumbUrl(url, size = 800) {
-  if (!url) return "";
-  let id = "";
-  if (url.includes("/file/d/")) id = url.split("/file/d/")[1].split("/")[0];
-  else if (url.includes("id=")) id = url.split("id=")[1].split("&")[0];
-  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : url;
-}
-
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("gagal memuat gambar"));
-    img.src = src;
-  });
-}
-
-// Coba lewat proxy internal dulu (aman dari CORS), lalu langsung dari Drive
-async function loadFaceImage(url) {
-  const candidates = [
-    `/api/image-proxy?url=${encodeURIComponent(url)}`,
-    driveThumbUrl(url, 800),
-  ];
-  let lastErr = null;
-  for (const src of candidates) {
-    try {
-      return await loadImage(src);
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("gagal memuat foto");
-}
-
-// Foto pendaftaran -> deskriptor 128-d (wajah diratakan lewat landmark)
-async function computeTemplate(fa, url) {
-  const img = await loadFaceImage(url);
-  const det = await fa
-    .detectSingleFace(
-      img,
-      new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
-    )
-    .withFaceLandmarks(true);
-  if (!det) return { descriptor: null };
-  const [canvas] = await fa.extractFaces(img, [det.landmarks.align()]);
-  const descriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(canvas);
-  return { descriptor };
-}
 
 export default function ModalScanWajahPetugas({
   isOpen,
@@ -298,7 +112,8 @@ export default function ModalScanWajahPetugas({
 
   // Status visual deteksi wajah di layar kamera (Live HUD)
   const [liveFaceBox, setLiveFaceBox] = useState(null); // { leftPct, topPct, widthPct, heightPct }
-  const [liveFaceStatus, setLiveFaceStatus] = useState("Arahkan kamera ke wajah siswa...");
+  const [liveFaceStatus, setLiveFaceStatus] = useState("Arahkan wajah ke dalam zona pemindaian...");
+  const [scanZoneState, setScanZoneState] = useState("standby"); // standby | adjust | multiple | moving | verifying | success
 
   // Status scan: { [idSiswa]: { status: "Hadir", waktuScan: "07:15:23", timestamp } }
   const [scannedMap, setScannedMap] = useState({});
@@ -329,6 +144,15 @@ export default function ModalScanWajahPetugas({
   const lastSuccessScanAt = useRef(0);
   const recognizedRef = useRef(() => {});
   const showDebugRef = useRef(false);
+
+  // Status pemuatan profil foto wajah kelas: "loading_data" | "reading_photos" | "computing_templates" | "ready"
+  const [profileLoadingState, setProfileLoadingState] = useState("loading_data");
+  const profileLoadingStateRef = useRef("loading_data");
+
+  function updateProfileLoadingState(st) {
+    profileLoadingStateRef.current = st;
+    setProfileLoadingState(st);
+  }
 
   function setEngine(s) {
     engineStatusRef.current = s;
@@ -397,6 +221,7 @@ export default function ModalScanWajahPetugas({
 
     async function initClassData() {
       setLoadingData(true);
+      updateProfileLoadingState("loading_data");
       try {
         const pastLimit = checkIsPastTimeLimit();
         setIsLockedByTime(pastLimit);
@@ -547,6 +372,7 @@ export default function ModalScanWajahPetugas({
         const pending = profiles.filter((p) => p.status === "pending");
         if (pending.length === 0) return;
 
+        updateProfileLoadingState("computing_templates");
         let fa;
         try {
           fa = await loadFaceApi();
@@ -575,9 +401,18 @@ export default function ModalScanWajahPetugas({
       // Jalankan awal (tanpa menunggu selesai agar validasi server paralel)
       const firstRun = applyProfiles(urlsA);
 
-      // --- Validasi URL ke server ---
-      const mustCheck = forceRefresh || !SESSION_URL_CHECKED[waliId];
+      // --- Validasi URL ke server (Auto-Sinkron Harian / Force Refresh) ---
+      const lastSyncKey = `face_last_sync_date_${waliId}`;
+      let lastSyncDate = null;
+      try {
+        lastSyncDate = localStorage.getItem(lastSyncKey);
+      } catch (_) {}
+
+      // Jika hari baru (tanggal hari ini berbeda dengan tanggal sync terakhir) atau forceRefresh
+      const isNewDay = lastSyncDate !== todayISO;
+      const mustCheck = forceRefresh || isNewDay || !SESSION_URL_CHECKED[waliId];
       if (mustCheck) {
+        updateProfileLoadingState("reading_photos");
         const urlsB = {};
         const BATCH_SIZE = 5;
         let allOk = true;
@@ -600,7 +435,12 @@ export default function ModalScanWajahPetugas({
             }),
           );
         }
-        if (allOk) SESSION_URL_CHECKED[waliId] = true;
+        if (allOk) {
+          SESSION_URL_CHECKED[waliId] = true;
+          try {
+            localStorage.setItem(lastSyncKey, todayISO);
+          } catch (_) {}
+        }
 
         try {
           localStorage.setItem(localCacheKey, JSON.stringify(urlsB));
@@ -613,15 +453,56 @@ export default function ModalScanWajahPetugas({
         } else {
           await firstRun;
         }
+        updateProfileLoadingState("ready");
       } else {
         await firstRun;
+        updateProfileLoadingState("ready");
       }
     } catch (err) {
       console.warn("Gagal menyiapkan profil wajah:", err);
+      updateProfileLoadingState("ready");
     } finally {
       if (forceRefresh) setSyncingFaces(false);
     }
   }
+
+  // Sinkronisasi instan jika ada pendaftaran foto baru di perangkat yang sama
+  useEffect(() => {
+    if (!isOpen || !petugasInfo?.idWali) return;
+    const waliId = petugasInfo.idWali;
+
+    let bc = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        bc = new BroadcastChannel("portal_face_sync");
+        bc.onmessage = (event) => {
+          if (event.data?.waliId === waliId && event.data?.type === "FACE_UPDATED") {
+            if (studentProfilesRef.current && studentProfilesRef.current.length > 0) {
+              loadStudentFaceProfilesParallel(studentProfilesRef.current, true);
+            }
+          }
+        };
+      } catch (_) {}
+    }
+
+    const handleStorage = (e) => {
+      if (e.key === `face_updated_at_${waliId}` && e.newValue) {
+        if (studentProfilesRef.current && studentProfilesRef.current.length > 0) {
+          loadStudentFaceProfilesParallel(studentProfilesRef.current, true);
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      if (bc) {
+        try {
+          bc.close();
+        } catch (_) {}
+      }
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [isOpen, petugasInfo?.idWali]);
 
   // Simpan draft lokal
   useEffect(() => {
@@ -762,7 +643,7 @@ export default function ModalScanWajahPetugas({
   // 4. LOOP PENGENALAN WAJAH (berurutan, tanpa tumpang-tindih)
   useEffect(() => {
     if (!isOpen || !cameraActive) return;
-    const st = { alive: true, votes: [], lastDescAt: 0 };
+    const st = { alive: true, votes: [], lastDescAt: 0, lastCenter: null };
     (async () => {
       while (st.alive) {
         const t0 = performance.now();
@@ -787,6 +668,7 @@ export default function ModalScanWajahPetugas({
     if (!video || video.readyState < 2 || !video.videoWidth) return;
 
     if (!fa) {
+      setScanZoneState("standby");
       setLiveFaceStatus(
         engineStatusRef.current === "fallback"
           ? "⚠️ Model pengenalan wajah gagal dimuat"
@@ -796,6 +678,7 @@ export default function ModalScanWajahPetugas({
     }
 
     if (Date.now() - lastSuccessScanAt.current < SCAN_COOLDOWN_MS) {
+      setScanZoneState("success");
       setLiveFaceStatus("⏳ Jeda anti-duplikat...");
       return;
     }
@@ -810,21 +693,41 @@ export default function ModalScanWajahPetugas({
       .withFaceLandmarks(true);
     if (!st.alive) return;
 
+    // 1. Tidak Ada Wajah Terdeteksi
     if (!dets || dets.length === 0) {
       st.votes.length = 0;
+      st.lastCenter = null;
       setLiveFaceBox(null);
+      setScanZoneState("standby");
       setDebugLine("");
-      setLiveFaceStatus("Arahkan kamera ke wajah siswa...");
+      const loadState = profileLoadingStateRef.current;
+      if (loadState === "loading_data") {
+        setLiveFaceStatus("⏳ Sedang memuat data rombel kelas...");
+      } else if (loadState === "reading_photos") {
+        setLiveFaceStatus("⏳ Sedang membaca foto wajah siswa dari server...");
+      } else if (loadState === "computing_templates" || templateInfo.pending > 0 || syncingFaces) {
+        setLiveFaceStatus(
+          `⏳ Sedang memproses template wajah (${templateInfo.ready}/${templateInfo.total} siswa siap)...`,
+        );
+      } else {
+        setLiveFaceStatus("Arahkan wajah ke dalam zona pemindaian...");
+      }
       return;
     }
 
-    // Wajah terbesar (terdekat ke kamera); wajah lain di belakang diabaikan
-    const main = dets.reduce((a, b) =>
-      b.detection.box.width * b.detection.box.height >
-      a.detection.box.width * a.detection.box.height
-        ? b
-        : a,
-    );
+    // 2. BEBERAPA WAJAH TERDETEKSI (Multi-Face Protection)
+    // Cegah salah presensi akibat siswa lain berdiri lebih dekat/di samping kamera
+    if (dets.length > 1) {
+      st.votes.length = 0;
+      st.lastCenter = null;
+      setLiveFaceBox(null);
+      setScanZoneState("multiple");
+      setLiveFaceStatus("⚠️ Beberapa wajah terdeteksi: pastikan hanya 1 siswa di zona pemindaian");
+      return;
+    }
+
+    // 3. Wajah Tunggal Terdeteksi — Validasi Zona Pemindaian Target
+    const main = dets[0];
     const box = main.detection.box;
 
     setLiveFaceBox(
@@ -838,30 +741,90 @@ export default function ModalScanWajahPetugas({
       ),
     );
 
-    if (box.width / vw < MIN_FACE_RATIO) {
+    // Hitung posisi normalisasi pusat wajah (0.0 - 1.0)
+    const cxNorm = (box.x + box.width / 2) / vw;
+    const cyNorm = (box.y + box.height / 2) / vh;
+    const wRatio = box.width / vw;
+
+    // A. Cek Wajah di Posisi Tengah (Zona Reticle Tengah)
+    if (cxNorm < 0.28 || cxNorm > 0.72 || cyNorm < 0.20 || cyNorm > 0.75) {
       st.votes.length = 0;
-      setLiveFaceStatus("🔍 Dekatkan kamera ke wajah siswa");
+      st.lastCenter = null;
+      setScanZoneState("adjust");
+      setLiveFaceStatus("📍 Wajah belum berada di tengah: posisikan wajah di dalam bingkai");
       return;
     }
 
+    // B. Cek Jarak Wajah ke Kamera (Terlalu Jauh / Terlalu Dekat)
+    if (wRatio < 0.18) {
+      st.votes.length = 0;
+      st.lastCenter = null;
+      setScanZoneState("adjust");
+      setLiveFaceStatus("🔍 Wajah terlalu jauh: dekatkan wajah ke kamera");
+      return;
+    }
+
+    if (wRatio > 0.68) {
+      st.votes.length = 0;
+      st.lastCenter = null;
+      setScanZoneState("adjust");
+      setLiveFaceStatus("↔️ Wajah terlalu dekat: mundurkan wajah sedikit");
+      return;
+    }
+
+    // C. Cek Kemiringan dan Arah Hadap Kepala
     const pose = headPose(main.landmarks);
     if (Math.abs(pose.yaw) > MAX_YAW || Math.abs(pose.rollDeg) > MAX_ROLL_DEG) {
       st.votes.length = 0;
-      setLiveFaceStatus("😐 Minta siswa menghadap lurus ke kamera");
+      st.lastCenter = null;
+      setScanZoneState("adjust");
+      setLiveFaceStatus("😐 Luruskan kepala: hadap lurus ke kamera");
       return;
     }
 
+    // D. Cek Stabilitas Gerakan Wajah (Motion Stability)
     const now = Date.now();
-    if (now - st.lastDescAt < DESC_INTERVAL_MS) return;
-    st.lastDescAt = now;
+    if (st.lastCenter) {
+      const dt = now - st.lastCenter.t;
+      const shift = Math.hypot(cxNorm - st.lastCenter.x, cyNorm - st.lastCenter.y);
+      if (dt < 250 && shift > 0.045) {
+        st.votes.length = 0;
+        st.lastCenter = { x: cxNorm, y: cyNorm, t: now };
+        setScanZoneState("moving");
+        setLiveFaceStatus("✋ Wajah bergerak: tahan posisi sebentar");
+        return;
+      }
+    }
+    st.lastCenter = { x: cxNorm, y: cyNorm, t: now };
 
+    // E. Cek Kesiapan Template Profil Kelas (Pemuatan Awal)
     const profiles = (studentProfilesRef.current || []).filter((p) => p.descriptor);
     if (profiles.length === 0) {
-      setLiveFaceStatus(
-        "⚠️ Belum ada template wajah siap (tunggu / tekan Sinkron Wajah)",
-      );
+      st.votes.length = 0;
+      setScanZoneState("standby");
+      const loadState = profileLoadingStateRef.current;
+      if (loadState === "loading_data") {
+        setLiveFaceStatus("⏳ Sedang memuat data rombel kelas... Mohon tunggu");
+      } else if (loadState === "reading_photos") {
+        setLiveFaceStatus("⏳ Sedang membaca foto wajah siswa dari server... Mohon tunggu");
+      } else if (loadState === "computing_templates" || templateInfo.pending > 0 || syncingFaces) {
+        setLiveFaceStatus(
+          `⏳ Sedang memproses template wajah (${templateInfo.ready}/${templateInfo.total} siswa)... Mohon tunggu`,
+        );
+      } else {
+        const totalWithPhoto = (studentProfilesRef.current || []).filter((p) => p.fotoWajah).length;
+        if (totalWithPhoto === 0) {
+          setLiveFaceStatus("ℹ️ Belum ada foto wajah siswa yang terdaftar di kelas ini");
+        } else {
+          setLiveFaceStatus("⚠️ Template wajah belum siap (tekan tombol Sinkron Wajah)");
+        }
+      }
       return;
     }
+
+    // F. Analisis Biometrik 128-d (Interval Hemat Daya)
+    if (now - st.lastDescAt < DESC_INTERVAL_MS) return;
+    st.lastDescAt = now;
 
     const [faceCanvas] = await fa.extractFaces(video, [main.landmarks.align()]);
     const desc = await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
@@ -881,15 +844,21 @@ export default function ModalScanWajahPetugas({
     const confirmed = pushVote(st.votes, confident ? best.idSiswa : null, now);
     if (confirmed) {
       st.votes.length = 0;
+      st.lastCenter = null;
+      setScanZoneState("success");
+      setLiveFaceStatus(`✅ Wajah terverifikasi: ${best.nama}`);
       recognizedRef.current(best.idSiswa, best.nama);
       return;
     }
 
     if (confident) {
-      setLiveFaceStatus("🔍 Memverifikasi wajah...");
+      setScanZoneState("verifying");
+      setLiveFaceStatus("✨ Wajah terverifikasi: tahan posisi sebentar...");
     } else if (best && d1 <= LOOSE_DIST) {
-      setLiveFaceStatus("🔍 Mencocokkan... tahan posisi sebentar");
+      setScanZoneState("verifying");
+      setLiveFaceStatus("🔍 Mencocokkan wajah... tahan posisi");
     } else {
+      setScanZoneState("adjust");
       setLiveFaceStatus("⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini");
     }
   }
@@ -1287,10 +1256,19 @@ export default function ModalScanWajahPetugas({
                   </button>
                 </div>
               )}
-              {templateInfo.pending > 0 && (
+              {profileLoadingState === "reading_photos" && (
+                <div className="px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-[10.5px] flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="animate-spin">🔄</span>
+                    <span className="font-semibold">Auto-Sinkron Harian: Membaca foto wajah siswa dari server...</span>
+                  </div>
+                  <span className="text-[9.5px] text-sky-700 font-mono font-bold shrink-0">Hari Ini</span>
+                </div>
+              )}
+              {(templateInfo.pending > 0 || profileLoadingState === "computing_templates") && (
                 <div className="px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[10.5px] flex items-center gap-1.5">
                   <span className="animate-spin">🔄</span>
-                  <span>Menyiapkan template: {templateInfo.ready}/{templateInfo.total}...</span>
+                  <span>Menyiapkan template wajah: {templateInfo.ready}/{templateInfo.total} siswa siap...</span>
                 </div>
               )}
               {templateInfo.failed.length > 0 && (
@@ -1314,21 +1292,102 @@ export default function ModalScanWajahPetugas({
                 {/* OVERLAY PANDUAN PENGAMBILAN WAJAH */}
                 {cameraActive && (
                   <div className="absolute inset-0 pointer-events-none">
-                    {/* Status Deteksi di Bagian Atas */}
-                    <div className="absolute top-2.5 left-1/2 -translate-x-1/2 max-w-[94%] text-center px-3 py-1 rounded-full text-[10.5px] font-bold shadow-md backdrop-blur-xs transition-colors bg-black/75 text-emerald-300 border border-emerald-400/30">
-                      {liveFaceStatus}
+                    {/* CONTAINER NOTIFIKASI ATAS (Flex Vertikal Mencegah Tumpang Tindih) */}
+                    <div className="absolute top-2.5 inset-x-0 flex flex-col items-center gap-1.5 px-2.5 pointer-events-none z-10">
+                      {/* Status Deteksi di Bagian Atas */}
+                      <div
+                        className={`max-w-[96%] text-center px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold shadow-lg backdrop-blur-md transition-all border ${
+                          scanZoneState === "multiple"
+                            ? "bg-rose-950/92 text-rose-200 border-rose-500 shadow-rose-500/30"
+                            : scanZoneState === "adjust" || scanZoneState === "moving"
+                            ? "bg-amber-950/92 text-amber-200 border-amber-400 shadow-amber-400/30"
+                            : scanZoneState === "verifying" || scanZoneState === "success"
+                            ? "bg-emerald-950/92 text-emerald-200 border-emerald-400 shadow-emerald-400/30"
+                            : "bg-black/80 text-teal-200 border-teal-400/40"
+                        }`}
+                      >
+                        {liveFaceStatus}
+                      </div>
+
+                      {/* Notifikasi Jarak Kemiripan (Debug/Kalibrasi) - Posisi Dinamis Bebas Himpitan */}
+                      {showDebug && debugLine && (
+                        <div className="max-w-[96%] text-center px-2.5 py-1 rounded-md bg-black/85 text-yellow-300 text-[9.5px] font-mono border border-yellow-400/40 shadow-md backdrop-blur-sm">
+                          🔍 {debugLine}
+                        </div>
+                      )}
                     </div>
 
-                    {showDebug && debugLine && (
-                      <div className="absolute top-10 left-1/2 -translate-x-1/2 max-w-[94%] text-center px-2 py-0.5 rounded-md bg-black/70 text-yellow-200 text-[9.5px] font-mono">
-                        {debugLine}
-                      </div>
-                    )}
-
-                    {/* LIVE FACE TRACKING BOX (Kotak Hijau Melacak Wajah Langsung) */}
-                    {liveFaceBox ? (
+                    {/* ZONA PEMINDAIAN WAJAH (Interactive Target Reticle) */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4 sm:p-6">
                       <div
-                        className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.7)] transition-all duration-75 flex flex-col justify-between p-1"
+                        className={`relative w-56 h-72 sm:w-64 sm:h-80 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between p-3 ${
+                          scanZoneState === "multiple"
+                            ? "border-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.6)] bg-rose-950/20"
+                            : scanZoneState === "adjust" || scanZoneState === "moving"
+                            ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)] bg-amber-950/15"
+                            : scanZoneState === "verifying" || scanZoneState === "success"
+                            ? "border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7)] bg-emerald-950/20"
+                            : "border-teal-400/40 shadow-[0_0_15px_rgba(45,212,191,0.2)] bg-black/10"
+                        }`}
+                      >
+                        {/* Sudut Fokus (Corner Brackets) */}
+                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-xl border-current" />
+                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-xl border-current" />
+                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-xl border-current" />
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-xl border-current" />
+
+                        {/* Label Header Zona */}
+                        <div className="flex justify-between items-center w-full">
+                          <span
+                            className={`text-[9px] font-mono font-black px-2 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-md shadow-sm ${
+                              scanZoneState === "multiple"
+                                ? "bg-rose-600 text-white"
+                                : scanZoneState === "moving"
+                                ? "bg-amber-500 text-black"
+                                : scanZoneState === "adjust"
+                                ? "bg-amber-500/90 text-black"
+                                : scanZoneState === "verifying" || scanZoneState === "success"
+                                ? "bg-emerald-500 text-black animate-pulse"
+                                : "bg-teal-900/80 text-teal-200 border border-teal-400/30"
+                            }`}
+                          >
+                            {scanZoneState === "multiple"
+                              ? "⚠️ 1 SISWA SAJA"
+                              : scanZoneState === "moving"
+                              ? "✋ TAHAN POSISI"
+                              : scanZoneState === "adjust"
+                              ? "📍 POSISIKAN WAJAH"
+                              : scanZoneState === "verifying"
+                              ? "✨ MEMVERIFIKASI"
+                              : "ZONA PRESENSI"}
+                          </span>
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              scanZoneState === "multiple"
+                                ? "bg-rose-500 animate-ping"
+                                : scanZoneState === "verifying" || scanZoneState === "success"
+                                ? "bg-emerald-400 animate-ping"
+                                : "bg-teal-400/60"
+                            }`}
+                          />
+                        </div>
+
+                        {/* Garis Pemindai Halus */}
+                        {(scanZoneState === "verifying" || scanZoneState === "standby") && (
+                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent opacity-60 animate-pulse my-auto" />
+                        )}
+
+                        {/* Titik Pusat Fokus */}
+                        <div className="flex justify-center items-center w-full">
+                          <div className="w-2 h-2 rounded-full border border-teal-300/40 opacity-70" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LIVE FACE TRACKING BOX (Melacak Wajah Aktif di Dalam Zona) */}
+                    {liveFaceBox && (
+                      <div
+                        className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.7)] transition-all duration-75 flex flex-col justify-between p-1 pointer-events-none"
                         style={{
                           left: `${liveFaceBox.leftPct}%`,
                           top: `${liveFaceBox.topPct}%`,
@@ -1337,17 +1396,10 @@ export default function ModalScanWajahPetugas({
                         }}
                       >
                         <span className="text-[8.5px] font-mono font-bold bg-emerald-950/80 text-emerald-200 px-1 py-0.5 rounded w-fit">
-                          WAJAH
+                          SISWA
                         </span>
                         <div className="w-full flex justify-end">
                           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        </div>
-                      </div>
-                    ) : (
-                      /* Oval Target Jika Belum Ada Wajah */
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-52 h-64 sm:w-56 sm:h-72 rounded-[50%] border-2 border-dashed border-teal-400/50 flex items-center justify-center">
-                          <div className="w-2.5 h-2.5 rounded-full bg-teal-400/60" />
                         </div>
                       </div>
                     )}
