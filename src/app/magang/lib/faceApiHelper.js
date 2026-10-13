@@ -1,0 +1,267 @@
+// =====================================================================
+// faceApiHelper.js — Modul Pusat Pengenalan Wajah & Anti-Duplikasi Biometrik
+// Menggunakan @vladmandic/face-api (128-d Neural Embeddings)
+// =====================================================================
+
+export const FA_VERSION = "1.7.15";
+export const FA_BUNDLE = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/dist/face-api.esm.js`;
+export const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/model/`;
+
+export const DESC_KEY = "face_desc_v2_";
+export const MATCH_DIST = 0.5; // Batas kecocokan presensi
+export const DUPLICATE_THRESHOLD = 0.45; // Batas identik anti-duplikasi (makin kecil = makin mirip)
+
+let faPromise = null;
+
+// Pemuatan modul face-api secara singleton (hanya 1x per sesi)
+export function loadFaceApi() {
+  if (faPromise) return faPromise;
+  faPromise = (async () => {
+    const fa = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ FA_BUNDLE
+    );
+    let backendOk = false;
+    try {
+      backendOk = await fa.tf.setBackend("webgl");
+    } catch (_) {}
+    if (!backendOk) await fa.tf.setBackend("cpu");
+    await fa.tf.ready();
+    await Promise.all([
+      fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS),
+      fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS),
+      fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS),
+    ]);
+    return fa;
+  })().catch((err) => {
+    faPromise = null; // Boleh dicoba lagi jika koneksi sempat terputus
+    throw err;
+  });
+  return faPromise;
+}
+
+// Jarak Euclidean antar dua deskriptor 128-d
+export function euclid(a, b) {
+  if (!a || !b || a.length !== 128 || b.length !== 128) return Infinity;
+  let s = 0;
+  for (let i = 0; i < 128; i++) {
+    const d = a[i] - b[i];
+    s += d * d;
+  }
+  return Math.sqrt(s);
+}
+
+// Baca deskriptor dari cache lokal
+export function readCachedDescriptor(idSiswa, url) {
+  try {
+    const raw = localStorage.getItem(DESC_KEY + idSiswa);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (o?.url === url && Array.isArray(o.d) && o.d.length === 128) {
+      return Float32Array.from(o.d);
+    }
+  } catch (_) {}
+  return null;
+}
+
+// Simpan deskriptor ke cache lokal
+export function writeCachedDescriptor(idSiswa, url, desc) {
+  try {
+    if (!desc) return;
+    localStorage.setItem(
+      DESC_KEY + idSiswa,
+      JSON.stringify({ url: url || "", d: Array.from(desc, (v) => +v.toFixed(5)) }),
+    );
+  } catch (_) {}
+}
+
+export function driveThumbUrl(url, size = 800) {
+  if (!url) return "";
+  let id = "";
+  if (url.includes("/file/d/")) id = url.split("/file/d/")[1].split("/")[0];
+  else if (url.includes("id=")) id = url.split("id=")[1].split("&")[0];
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : url;
+}
+
+export function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gagal memuat gambar"));
+    img.src = src;
+  });
+}
+
+// Muat foto wajah lewat proxy atau thumbnail Drive
+export async function loadFaceImage(url) {
+  const candidates = [
+    `/api/image-proxy?url=${encodeURIComponent(url)}`,
+    driveThumbUrl(url, 800),
+  ];
+  let lastErr = null;
+  for (const src of candidates) {
+    try {
+      return await loadImage(src);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("Gagal memuat foto wajah");
+}
+
+// Ekstrak deskriptor 128-d dari URL foto pendaftaran
+export async function computeTemplate(fa, url) {
+  const img = await loadFaceImage(url);
+  const det = await fa
+    .detectSingleFace(
+      img,
+      new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
+    )
+    .withFaceLandmarks(true);
+  if (!det) return { descriptor: null };
+  const [canvas] = await fa.extractFaces(img, [det.landmarks.align()]);
+  const descriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(canvas);
+  return { descriptor };
+}
+
+// Cari nama siswa dari berbagai cache penyimpanan lokal
+export function findStudentNameById(idSiswa, otherStudents = []) {
+  if (!idSiswa) return "Siswa Lain";
+
+  // 1. Cek dari daftar siswa yang di-passing
+  if (Array.isArray(otherStudents)) {
+    const found = otherStudents.find(
+      (s) => String(s.idSiswa || s.id || "").trim() === String(idSiswa).trim(),
+    );
+    if (found?.nama || found?.namaSiswa) return found.nama || found.namaSiswa;
+  }
+
+  // 2. Cek dari face_reg_[id]
+  try {
+    const reg = localStorage.getItem(`face_reg_${idSiswa}`);
+    if (reg) {
+      const parsed = JSON.parse(reg);
+      if (parsed?.nama) return parsed.nama;
+    }
+  } catch (_) {}
+
+  // 3. Cek dari semua cache_scan_siswa_* di localStorage
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("cache_scan_siswa_")) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            const match = arr.find(
+              (s) => String(s.idSiswa || s.id || "").trim() === String(idSiswa).trim(),
+            );
+            if (match?.nama) return match.nama;
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  return `Siswa ID ${idSiswa}`;
+}
+
+// =====================================================================
+// PENGECEKAN ANTI-DUPLIKASI BIOMETRIK (PRE-REGISTRATION FACE MATCHING)
+// =====================================================================
+/**
+ * Mengecek apakah deskriptor wajah baru mirip dengan siswa lain yang sudah terdaftar
+ * @param {Object} params
+ * @param {string|number} params.currentStudentId - ID siswa yang sedang didaftarkan
+ * @param {Float32Array|Array} params.descriptor - Deskriptor 128-d wajah baru
+ * @param {Array} [params.otherStudents] - Daftar siswa rombel/kelas (opsional)
+ * @param {number} [params.threshold=0.45] - Jarak maksimal yang dianggap identik
+ * @returns {Promise<{ isDuplicate: boolean, matchedId?: string, matchedName?: string, distance?: number }>}
+ */
+export async function checkFaceDuplicate({
+  currentStudentId,
+  descriptor,
+  otherStudents = [],
+  threshold = DUPLICATE_THRESHOLD,
+}) {
+  if (!descriptor || descriptor.length !== 128) {
+    return { isDuplicate: false };
+  }
+
+  const curIdStr = String(currentStudentId || "").trim();
+
+  // 1. Periksa seluruh descriptor yang tersimpan di localStorage (face_desc_v2_*)
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(DESC_KEY)) {
+        const otherId = key.slice(DESC_KEY.length).trim();
+        if (otherId && otherId !== curIdStr) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed?.d) && parsed.d.length === 128) {
+              const dist = euclid(descriptor, parsed.d);
+              if (dist <= threshold) {
+                const matchedName = findStudentNameById(otherId, otherStudents);
+                return {
+                  isDuplicate: true,
+                  matchedId: otherId,
+                  matchedName,
+                  distance: dist,
+                };
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Pemeriksaan duplikasi descriptor lokal gagal:", e);
+  }
+
+  // 2. Periksa siswa lain dari otherStudents yang belum memiliki descriptor lokal
+  if (Array.isArray(otherStudents) && otherStudents.length > 0) {
+    let fa = null;
+    for (const st of otherStudents) {
+      const sid = String(st.idSiswa || st.id || "").trim();
+      if (!sid || sid === curIdStr || !st.fotoWajah) continue;
+
+      // Cek apakah descriptor sudah ada di cache
+      const cached = readCachedDescriptor(sid, st.fotoWajah);
+      if (cached) {
+        const dist = euclid(descriptor, cached);
+        if (dist <= threshold) {
+          return {
+            isDuplicate: true,
+            matchedId: sid,
+            matchedName: st.nama || st.namaSiswa || sid,
+            distance: dist,
+          };
+        }
+      } else {
+        // Ekstrak template siswa pembanding jika perlu
+        try {
+          if (!fa) fa = await loadFaceApi();
+          const res = await computeTemplate(fa, st.fotoWajah);
+          if (res?.descriptor) {
+            writeCachedDescriptor(sid, st.fotoWajah, res.descriptor);
+            const dist = euclid(descriptor, res.descriptor);
+            if (dist <= threshold) {
+              return {
+                isDuplicate: true,
+                matchedId: sid,
+                matchedName: st.nama || st.namaSiswa || sid,
+                distance: dist,
+              };
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  return { isDuplicate: false };
+}
+

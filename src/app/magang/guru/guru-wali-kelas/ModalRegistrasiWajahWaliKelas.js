@@ -432,6 +432,7 @@ export default function ModalRegistrasiWajahWaliKelas({
             kelas: activeSiswaToRegister.kelas,
           }}
           fotoLama={activeSiswaToRegister.fotoLama}
+          otherStudents={siswaList}
           onFaceRegistered={(newUrl) =>
             handleFaceRegistered(activeSiswaToRegister.id, newUrl)
           }

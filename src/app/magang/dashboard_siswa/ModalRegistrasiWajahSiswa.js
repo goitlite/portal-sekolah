@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { uploadPhoto, updateBiodataSiswa, getBiodataSiswa } from "../lib/api";
+import {
+  loadFaceApi,
+  checkFaceDuplicate,
+  writeCachedDescriptor,
+  loadImage,
+} from "../lib/faceApiHelper";
 
 // =====================================================================
 // KONFIGURASI (bisa disetel tanpa mengubah logika)
@@ -267,6 +273,7 @@ export default function ModalRegistrasiWajahSiswa({
   user, // { id, nama, kelas }
   fotoLama,
   onFaceRegistered,
+  otherStudents = [],
 }) {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -889,16 +896,76 @@ export default function ModalRegistrasiWajahSiswa({
     if (!previewImage || !user?.id || saving) return;
 
     setSaving(true);
-    setSaveProgress({ pct: 15, label: "Menyiapkan foto wajah...", done: false, error: false });
+    setSaveProgress({
+      pct: 12,
+      label: "Menganalisis biometrik wajah (128-d)...",
+      done: false,
+      error: false,
+    });
 
     try {
-      // Upload (dipakai ulang jika sebelumnya upload sukses tapi simpan gagal)
+      // 1. Ekstraksi biometrik wajah & Pemeriksaan Anti-Duplikasi
+      let myDescriptor = null;
+      try {
+        const fa = await loadFaceApi();
+        const img = await loadImage(previewImage);
+        const det = await fa
+          .detectSingleFace(
+            img,
+            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
+          )
+          .withFaceLandmarks(true);
+
+        if (det) {
+          const [aligned] = await fa.extractFaces(img, [det.landmarks.align()]);
+          myDescriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(aligned);
+        }
+      } catch (e) {
+        console.warn("Gagal menganalisis fitur biometrik wajah:", e);
+      }
+
+      // Jika fitur biometrik wajah berhasil diekstrak, lakukan verifikasi anti-duplikasi
+      if (myDescriptor) {
+        setSaveProgress({
+          pct: 28,
+          label: "Memeriksa keunikan wajah (Anti-Duplikasi)...",
+          done: false,
+          error: false,
+        });
+
+        const dupCheck = await checkFaceDuplicate({
+          currentStudentId: user.id,
+          descriptor: myDescriptor,
+          otherStudents,
+          threshold: 0.45,
+        });
+
+        if (dupCheck.isDuplicate) {
+          setSaving(false);
+          setSaveProgress({
+            pct: 100,
+            label: `❌ Wajah sudah terdaftar atas nama ${dupCheck.matchedName}`,
+            done: true,
+            error: true,
+          });
+          alert(
+            `⛔ Registrasi Wajah Ditolak!\n\n` +
+            `Biometrik wajah ini terdeteksi sudah terdaftar atas nama siswa lain:\n` +
+            `• Nama: ${dupCheck.matchedName}\n` +
+            `• ID Siswa: ${dupCheck.matchedId}\n\n` +
+            `Satu wajah tidak dapat digunakan untuk mendaftar lebih dari satu siswa.`
+          );
+          return;
+        }
+      }
+
+      // 2. Upload (dipakai ulang jika sebelumnya upload sukses tapi simpan gagal)
       let photoUrl = null;
       if (uploadedRef.current.image === previewImage) {
         photoUrl = uploadedRef.current.url;
       } else {
         setSaveProgress({
-          pct: 40,
+          pct: 50,
           label: "Mengunggah foto wajah ke Google Drive...",
           done: false,
           error: false,
@@ -913,7 +980,7 @@ export default function ModalRegistrasiWajahSiswa({
       }
 
       setSaveProgress({
-        pct: 70,
+        pct: 75,
         label: "Mendaftarkan foto wajah ke spreadsheet...",
         done: false,
         error: false,
@@ -924,6 +991,13 @@ export default function ModalRegistrasiWajahSiswa({
       });
       if (!updateRes?.success) {
         throw new Error(updateRes?.message || "Gagal memperbarui data di spreadsheet.");
+      }
+
+      // Simpan template deskriptor biometrik ke cache lokal agar scanner presensi instan mengenali
+      if (myDescriptor && photoUrl) {
+        try {
+          writeCachedDescriptor(user.id, photoUrl, myDescriptor);
+        } catch (_) {}
       }
 
       // Verifikasi lembut: coba baca ulang dari server untuk sinkronisasi cache

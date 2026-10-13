@@ -26,7 +26,6 @@ import ModalCatatanWali from "./ModalCatatanWali";
 import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
 import ModalKartuBarcodeSiswa from "./ModalKartuBarcodeSiswa";
 import ModalScanPresensiPetugas from "./ModalScanPresensiPetugas";
-import ModalRegistrasiWajahSiswa from "./ModalRegistrasiWajahSiswa";
 import ModalScanWajahPetugas from "./ModalScanWajahPetugas";
 import PesanSekolahModal, {
   useJumlahPesanSekolah,
@@ -205,7 +204,8 @@ export default function DashboardSiswa() {
   const [showModalKartuBarcode, setShowModalKartuBarcode] = useState(false);
   const [showModalScanBarcode, setShowModalScanBarcode] = useState(false);
   const [showModalScanWajah, setShowModalScanWajah] = useState(false);
-  const [showModalRegistrasiWajah, setShowModalRegistrasiWajah] = useState(false);
+  const [showInfoRegistrasiWajah, setShowInfoRegistrasiWajah] = useState(false);
+  const [pesanInitialTarget, setPesanInitialTarget] = useState(null);
   const [showModalPesan, setShowModalPesan] = useState(false);
   const [unreadPesanCount, refreshPesanCount] = useJumlahPesanSekolah({
     userId: user?.id,
@@ -880,15 +880,15 @@ export default function DashboardSiswa() {
 
       {/* ─── Menu Card Akses Cepat Kelas ─── */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3 relative z-10">
-        {/* Registrasi Wajah — tersedia untuk semua siswa */}
+        {/* Registrasi Wajah — diarahkan ke pesan ke wali kelas */}
         <button
-          onClick={() => setShowModalRegistrasiWajah(true)}
+          onClick={() => setShowInfoRegistrasiWajah(true)}
           className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-gradient-to-br from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white shadow-md transition-all cursor-pointer border border-teal-500/50"
         >
           <span className="text-xl sm:text-2xl shrink-0">🧏</span>
           <div className="text-left min-w-0">
             <div className="text-xs sm:text-sm font-black leading-tight">Registrasi Wajah</div>
-            <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">Daftar wajah siswa</div>
+            <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">Pesan ke Wali Kelas</div>
           </div>
         </button>
 
@@ -1493,16 +1493,67 @@ export default function DashboardSiswa() {
         fotoTerbaru={fotoTerbaru}
       />
 
-      {/* MODAL REGISTRASI WAJAH SISWA MANDIRI */}
-      <ModalRegistrasiWajahSiswa
-        isOpen={showModalRegistrasiWajah}
-        onClose={() => setShowModalRegistrasiWajah(false)}
-        user={user}
-        fotoLama={fotoTerbaru}
-        onFaceRegistered={() => {
-          // Foto kartu barcode dan foto profil wali tetap utuh dan terpisah
-        }}
-      />
+      {/* MODAL INFO REGISTRASI WAJAH TERPUSAT WALI KELAS */}
+      {showInfoRegistrasiWajah && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-md rounded-2xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl border border-teal-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center text-2xl shrink-0 shadow-md">
+                🧏
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                  Pendaftaran Presensi Wajah
+                </h3>
+                <p className="text-xs text-teal-700 font-bold">
+                  Terpusat melalui Guru Wali Kelas
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed space-y-2.5">
+              <p>
+                Untuk menjaga keamanan data biometrik dan mencegah duplikasi, pendaftaran foto wajah siswa dilakukan langsung oleh <strong>Bapak/Ibu Wali Kelas</strong> di kelas.
+              </p>
+              {statistikKelas?.namaGuru && (
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500">Guru Wali Kelas:</span>
+                  <span className="font-bold text-teal-800">{statistikKelas.namaGuru}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowInfoRegistrasiWajah(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInfoRegistrasiWajah(false);
+                  if (statistikKelas?.idGuru && statistikKelas?.namaGuru) {
+                    setPesanInitialTarget({
+                      id: String(statistikKelas.idGuru),
+                      nama: statistikKelas.namaGuru,
+                      role: "guru",
+                      subLabel: `Wali Kelas ${statistikKelas.namaKelas || ""}`,
+                    });
+                  }
+                  setShowModalPesan(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>💬</span>
+                <span>Kirim Pesan ke Wali Kelas</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL SCAN PRESENSI WAJAH UNTUK PETUGAS KELAS */}
       {petugasWaliData && (
@@ -1565,8 +1616,10 @@ export default function DashboardSiswa() {
 
       <PesanSekolahModal
         isOpen={showModalPesan}
+        initialTarget={pesanInitialTarget}
         onClose={() => {
           setShowModalPesan(false);
+          setPesanInitialTarget(null);
           refreshPesanCount();
         }}
         currentUser={{
