@@ -29,6 +29,14 @@ import {
   writeCachedDescriptor,
   loadFaceImage,
   computeTemplate,
+  updateHeadTurnTracker,
+  keepLiveness,
+  headTurnHint,
+  headTurnStep,
+  MAX_CHALLENGE_YAW,
+  IDENT_WINDOW_MS,
+  IDENT_LOCK_TTL_MS,
+  IDENT_LATE_LOCK_MS,
 } from "../lib/faceApiHelper";
 
 // =====================================================================
@@ -86,8 +94,6 @@ function playBeepSuccess() {
 const MEMORY_SISWA_CACHE = {};
 const SESSION_URL_CHECKED = {};
 
-
-
 export default function ModalScanWajahPetugas({
   isOpen,
   onClose,
@@ -105,15 +111,27 @@ export default function ModalScanWajahPetugas({
   const [engineStatus, setEngineStatus] = useState("loading"); // loading | ready | fallback
   const [siswaList, setSiswaList] = useState([]);
   const [registeredFaceCount, setRegisteredFaceCount] = useState(0);
-  const [templateInfo, setTemplateInfo] = useState({ total: 0, ready: 0, pending: 0, failed: [] });
+  const [templateInfo, setTemplateInfo] = useState({
+    total: 0,
+    ready: 0,
+    pending: 0,
+    failed: [],
+  });
   const [engineNonce, setEngineNonce] = useState(0);
   const [showDebug, setShowDebug] = useState(false);
   const [debugLine, setDebugLine] = useState("");
 
   // Status visual deteksi wajah di layar kamera (Live HUD)
   const [liveFaceBox, setLiveFaceBox] = useState(null); // { leftPct, topPct, widthPct, heightPct }
-  const [liveFaceStatus, setLiveFaceStatus] = useState("Arahkan wajah ke dalam zona pemindaian...");
+  const [liveFaceStatus, setLiveFaceStatus] = useState(
+    "Arahkan wajah ke dalam zona pemindaian...",
+  );
+  const [challengeStep, setChallengeStep] = useState(-1); // indikator langkah toleh (-1 = sembunyi)
   const [scanZoneState, setScanZoneState] = useState("standby"); // standby | adjust | multiple | moving | verifying | success
+
+  // Loading bar bertingkat di tengah layar untuk sinkron harian pertama kali
+  const [syncModalProgress, setSyncModalProgress] = useState(null);
+  // { show: boolean, stage: number, totalStages: number, pct: number, title: string, desc: string, detail: string }
 
   // Status scan: { [idSiswa]: { status: "Hadir", waktuScan: "07:15:23", timestamp } }
   const [scannedMap, setScannedMap] = useState({});
@@ -146,7 +164,8 @@ export default function ModalScanWajahPetugas({
   const showDebugRef = useRef(false);
 
   // Status pemuatan profil foto wajah kelas: "loading_data" | "reading_photos" | "computing_templates" | "ready"
-  const [profileLoadingState, setProfileLoadingState] = useState("loading_data");
+  const [profileLoadingState, setProfileLoadingState] =
+    useState("loading_data");
   const profileLoadingStateRef = useRef("loading_data");
 
   function updateProfileLoadingState(st) {
@@ -172,7 +191,8 @@ export default function ModalScanWajahPetugas({
       scanOverlay.type === "success" ? 2800 : 3500,
     );
     return () => {
-      if (scanOverlayTimerRef.current) clearTimeout(scanOverlayTimerRef.current);
+      if (scanOverlayTimerRef.current)
+        clearTimeout(scanOverlayTimerRef.current);
     };
   }, [scanOverlay]);
 
@@ -327,7 +347,10 @@ export default function ModalScanWajahPetugas({
   // 1) Pakai URL dari cache agar scan bisa langsung jalan.
   // 2) Validasi URL ke server (sekali per sesi halaman / saat "Sinkron Wajah");
   //    jika ada yang berubah (siswa daftar ulang) profil dibangun ulang.
-  async function loadStudentFaceProfilesParallel(siswaArray, forceRefresh = false) {
+  async function loadStudentFaceProfilesParallel(
+    siswaArray,
+    forceRefresh = false,
+  ) {
     if (forceRefresh) setSyncingFaces(true);
     const waliId = petugasInfo?.idWali || "unknown";
     const localCacheKey = `cached_face_urls_${waliId}`;
@@ -352,7 +375,7 @@ export default function ModalScanWajahPetugas({
         if (u) urlsA[s.idSiswa] = u;
       });
 
-      const applyProfiles = async (urlMap) => {
+      const applyProfiles = async (urlMap, isSyncingWithModal = false) => {
         const jobId = ++templateJobRef.current;
         const profiles = siswaArray.map((s) => {
           const url = urlMap[s.idSiswa] || null;
@@ -370,15 +393,45 @@ export default function ModalScanWajahPetugas({
         syncTemplateInfo(profiles);
 
         const pending = profiles.filter((p) => p.status === "pending");
-        if (pending.length === 0) return;
+        if (pending.length === 0) {
+          if (isSyncingWithModal) {
+            setSyncModalProgress({
+              show: true,
+              stage: 3,
+              totalStages: 3,
+              pct: 100,
+              title: "✅ Data Wajah Siswa Siap!",
+              desc: "Seluruh foto dan template biometrik wajah telah tersinkronisasi.",
+              detail: `${profiles.filter((p) => p.descriptor).length} siswa siap presensi`,
+            });
+            setTimeout(() => setSyncModalProgress(null), 600);
+          }
+          return;
+        }
 
         updateProfileLoadingState("computing_templates");
+
+        if (isSyncingWithModal) {
+          setSyncModalProgress({
+            show: true,
+            stage: 2,
+            totalStages: 3,
+            pct: 50,
+            title: "Menyiapkan Kecerdasan Buatan (AI)",
+            desc: "Memuat modul neural recognition & biometrik...",
+            detail: "Mempersiapkan modul AI wajah",
+          });
+        }
+
         let fa;
         try {
           fa = await loadFaceApi();
         } catch (_) {
+          if (isSyncingWithModal) setSyncModalProgress(null);
           return; // status engine "fallback" ditangani efek pemuat model
         }
+
+        let computedCount = 0;
         for (const p of pending) {
           if (jobId !== templateJobRef.current) return;
           try {
@@ -394,12 +447,40 @@ export default function ModalScanWajahPetugas({
             console.warn("Template wajah gagal:", p.nama, e);
             p.status = "error";
           }
+          computedCount++;
           if (jobId === templateJobRef.current) syncTemplateInfo(profiles);
+
+          if (isSyncingWithModal) {
+            const stage3Pct =
+              55 + Math.round((computedCount / pending.length) * 42); // 55% -> 97%
+            setSyncModalProgress({
+              show: true,
+              stage: 3,
+              totalStages: 3,
+              pct: stage3Pct,
+              title: "Membangun Template Biometrik",
+              desc: "Mengekstrak ciri khas wajah 128-d untuk identifikasi akurat...",
+              detail: `${computedCount} dari ${pending.length} template siswa diproses`,
+            });
+          }
+        }
+
+        if (isSyncingWithModal) {
+          setSyncModalProgress({
+            show: true,
+            stage: 3,
+            totalStages: 3,
+            pct: 100,
+            title: "✅ Data Wajah Siswa Siap!",
+            desc: "Seluruh foto dan template biometrik wajah berhasil disinkronkan.",
+            detail: "Kamera pemindai siap digunakan",
+          });
+          setTimeout(() => setSyncModalProgress(null), 600);
         }
       };
 
       // Jalankan awal (tanpa menunggu selesai agar validasi server paralel)
-      const firstRun = applyProfiles(urlsA);
+      const firstRun = applyProfiles(urlsA, false);
 
       // --- Validasi URL ke server (Auto-Sinkron Harian / Force Refresh) ---
       const lastSyncKey = `face_last_sync_date_${waliId}`;
@@ -410,9 +491,20 @@ export default function ModalScanWajahPetugas({
 
       // Jika hari baru (tanggal hari ini berbeda dengan tanggal sync terakhir) atau forceRefresh
       const isNewDay = lastSyncDate !== todayISO;
-      const mustCheck = forceRefresh || isNewDay || !SESSION_URL_CHECKED[waliId];
+      const mustCheck =
+        forceRefresh || isNewDay || !SESSION_URL_CHECKED[waliId];
       if (mustCheck) {
         updateProfileLoadingState("reading_photos");
+        setSyncModalProgress({
+          show: true,
+          stage: 1,
+          totalStages: 3,
+          pct: 10,
+          title: "Sinkronisasi Foto Wajah Harian",
+          desc: "Memeriksa pembaruan foto wajah siswa kelas dari server...",
+          detail: `0 dari ${siswaArray.length} siswa`,
+        });
+
         const urlsB = {};
         const BATCH_SIZE = 5;
         let allOk = true;
@@ -423,7 +515,8 @@ export default function ModalScanWajahPetugas({
               try {
                 const bio = await getBiodataSiswa(s.idSiswa);
                 if (bio?.success) {
-                  if (bio.data?.fotoWajah) urlsB[s.idSiswa] = bio.data.fotoWajah;
+                  if (bio.data?.fotoWajah)
+                    urlsB[s.idSiswa] = bio.data.fotoWajah;
                 } else {
                   allOk = false;
                   if (urlsA[s.idSiswa]) urlsB[s.idSiswa] = urlsA[s.idSiswa];
@@ -434,6 +527,19 @@ export default function ModalScanWajahPetugas({
               }
             }),
           );
+
+          const currentProcessed = Math.min(i + BATCH_SIZE, siswaArray.length);
+          const stage1Pct =
+            10 + Math.round((currentProcessed / siswaArray.length) * 35); // 10% - 45%
+          setSyncModalProgress({
+            show: true,
+            stage: 1,
+            totalStages: 3,
+            pct: stage1Pct,
+            title: "Mengunduh Foto Wajah Siswa",
+            desc: "Memvalidasi foto wajah siswa kelas dari database server...",
+            detail: `${currentProcessed} dari ${siswaArray.length} siswa diperiksa`,
+          });
         }
         if (allOk) {
           SESSION_URL_CHECKED[waliId] = true;
@@ -446,12 +552,23 @@ export default function ModalScanWajahPetugas({
           localStorage.setItem(localCacheKey, JSON.stringify(urlsB));
         } catch (_) {}
 
-        const changed =
-          siswaArray.some((s) => (urlsA[s.idSiswa] || null) !== (urlsB[s.idSiswa] || null));
+        const changed = siswaArray.some(
+          (s) => (urlsA[s.idSiswa] || null) !== (urlsB[s.idSiswa] || null),
+        );
         if (changed || forceRefresh) {
-          await applyProfiles(urlsB);
+          await applyProfiles(urlsB, true);
         } else {
           await firstRun;
+          setSyncModalProgress({
+            show: true,
+            stage: 3,
+            totalStages: 3,
+            pct: 100,
+            title: "✅ Data Wajah Siswa Siap!",
+            desc: "Semua foto wajah siswa sudah termutakhirkan.",
+            detail: "Kamera pemindai siap digunakan",
+          });
+          setTimeout(() => setSyncModalProgress(null), 600);
         }
         updateProfileLoadingState("ready");
       } else {
@@ -461,6 +578,7 @@ export default function ModalScanWajahPetugas({
     } catch (err) {
       console.warn("Gagal menyiapkan profil wajah:", err);
       updateProfileLoadingState("ready");
+      setSyncModalProgress(null);
     } finally {
       if (forceRefresh) setSyncingFaces(false);
     }
@@ -476,8 +594,14 @@ export default function ModalScanWajahPetugas({
       try {
         bc = new BroadcastChannel("portal_face_sync");
         bc.onmessage = (event) => {
-          if (event.data?.waliId === waliId && event.data?.type === "FACE_UPDATED") {
-            if (studentProfilesRef.current && studentProfilesRef.current.length > 0) {
+          if (
+            event.data?.waliId === waliId &&
+            event.data?.type === "FACE_UPDATED"
+          ) {
+            if (
+              studentProfilesRef.current &&
+              studentProfilesRef.current.length > 0
+            ) {
               loadStudentFaceProfilesParallel(studentProfilesRef.current, true);
             }
           }
@@ -487,7 +611,10 @@ export default function ModalScanWajahPetugas({
 
     const handleStorage = (e) => {
       if (e.key === `face_updated_at_${waliId}` && e.newValue) {
-        if (studentProfilesRef.current && studentProfilesRef.current.length > 0) {
+        if (
+          studentProfilesRef.current &&
+          studentProfilesRef.current.length > 0
+        ) {
           loadStudentFaceProfilesParallel(studentProfilesRef.current, true);
         }
       }
@@ -643,7 +770,15 @@ export default function ModalScanWajahPetugas({
   // 4. LOOP PENGENALAN WAJAH (berurutan, tanpa tumpang-tindih)
   useEffect(() => {
     if (!isOpen || !cameraActive) return;
-    const st = { alive: true, votes: [], lastDescAt: 0, lastCenter: null };
+    const st = {
+      alive: true,
+      votes: [],
+      lastDescAt: 0,
+      lastCenter: null,
+      liveness: null,
+      lock: null,
+      lastStep: -1,
+    };
     (async () => {
       while (st.alive) {
         const t0 = performance.now();
@@ -652,7 +787,10 @@ export default function ModalScanWajahPetugas({
         } catch (e) {
           console.warn("Siklus pengenalan wajah gagal:", e);
         }
-        const wait = Math.max(40, DETECT_INTERVAL_MS - (performance.now() - t0));
+        const wait = Math.max(
+          40,
+          DETECT_INTERVAL_MS - (performance.now() - t0),
+        );
         await new Promise((r) => setTimeout(r, wait));
       }
     })();
@@ -661,6 +799,17 @@ export default function ModalScanWajahPetugas({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, cameraActive, cameraFacing]);
+
+  // Wajah hilang / keluar zona: tantangan & identitas dipertahankan selama masa tenggang
+  function dropIfLost(st, now) {
+    st.liveness = keepLiveness(st.liveness, now);
+    if (!st.liveness) {
+      st.lock = null;
+      st.votes.length = 0;
+      st.lastStep = -1;
+      setChallengeStep(-1);
+    }
+  }
 
   async function recognitionTick(st) {
     const video = videoRef.current;
@@ -695,8 +844,8 @@ export default function ModalScanWajahPetugas({
 
     // 1. Tidak Ada Wajah Terdeteksi
     if (!dets || dets.length === 0) {
-      st.votes.length = 0;
       st.lastCenter = null;
+      dropIfLost(st, Date.now());
       setLiveFaceBox(null);
       setScanZoneState("standby");
       setDebugLine("");
@@ -705,7 +854,11 @@ export default function ModalScanWajahPetugas({
         setLiveFaceStatus("⏳ Sedang memuat data rombel kelas...");
       } else if (loadState === "reading_photos") {
         setLiveFaceStatus("⏳ Sedang membaca foto wajah siswa dari server...");
-      } else if (loadState === "computing_templates" || templateInfo.pending > 0 || syncingFaces) {
+      } else if (
+        loadState === "computing_templates" ||
+        templateInfo.pending > 0 ||
+        syncingFaces
+      ) {
         setLiveFaceStatus(
           `⏳ Sedang memproses template wajah (${templateInfo.ready}/${templateInfo.total} siswa siap)...`,
         );
@@ -720,9 +873,13 @@ export default function ModalScanWajahPetugas({
     if (dets.length > 1) {
       st.votes.length = 0;
       st.lastCenter = null;
+      st.liveness = null;
+      st.lock = null;
+      st.lastStep = -1;
+      setChallengeStep(-1);
       setLiveFaceBox(null);
       setScanZoneState("multiple");
-      setLiveFaceStatus("⚠️ Beberapa wajah terdeteksi: pastikan hanya 1 siswa di zona pemindaian");
+      setLiveFaceStatus("⚠️ Hanya 1 siswa di dalam zona");
       return;
     }
 
@@ -746,59 +903,119 @@ export default function ModalScanWajahPetugas({
     const cyNorm = (box.y + box.height / 2) / vh;
     const wRatio = box.width / vw;
 
+    // Selama tantangan toleh berlangsung, zona dilonggarkan karena kotak wajah
+    // bergeser & menyempit saat kepala menoleh.
+    const nowT = Date.now();
+    const inChallenge = !(st.liveness && st.liveness.isMotionVerified);
+    const cxLo = inChallenge ? 0.2 : 0.28;
+    const cxHi = inChallenge ? 0.8 : 0.72;
+    const minRatio = inChallenge ? 0.13 : 0.18;
+
     // A. Cek Wajah di Posisi Tengah (Zona Reticle Tengah)
-    if (cxNorm < 0.28 || cxNorm > 0.72 || cyNorm < 0.20 || cyNorm > 0.75) {
-      st.votes.length = 0;
+    if (cxNorm < cxLo || cxNorm > cxHi || cyNorm < 0.2 || cyNorm > 0.75) {
       st.lastCenter = null;
+      dropIfLost(st, nowT);
       setScanZoneState("adjust");
-      setLiveFaceStatus("📍 Wajah belum berada di tengah: posisikan wajah di dalam bingkai");
+      setLiveFaceStatus("📍 Posisikan wajah di tengah bingkai");
       return;
     }
 
     // B. Cek Jarak Wajah ke Kamera (Terlalu Jauh / Terlalu Dekat)
-    if (wRatio < 0.18) {
-      st.votes.length = 0;
+    if (wRatio < minRatio) {
       st.lastCenter = null;
+      dropIfLost(st, nowT);
       setScanZoneState("adjust");
-      setLiveFaceStatus("🔍 Wajah terlalu jauh: dekatkan wajah ke kamera");
+      setLiveFaceStatus("🔍 Dekatkan wajah ke kamera");
       return;
     }
 
     if (wRatio > 0.68) {
-      st.votes.length = 0;
       st.lastCenter = null;
+      dropIfLost(st, nowT);
       setScanZoneState("adjust");
-      setLiveFaceStatus("↔️ Wajah terlalu dekat: mundurkan wajah sedikit");
+      setLiveFaceStatus("↔️ Mundurkan wajah sedikit");
       return;
     }
 
     // C. Cek Kemiringan dan Arah Hadap Kepala
+    // Saat tantangan toleh: menoleh jauh DIPERBOLEHKAN (MAX_CHALLENGE_YAW).
+    // Setelah lolos: pengenalan wajah hanya pada posisi hampir lurus (MAX_YAW).
     const pose = headPose(main.landmarks);
-    if (Math.abs(pose.yaw) > MAX_YAW || Math.abs(pose.rollDeg) > MAX_ROLL_DEG) {
-      st.votes.length = 0;
+    const yawLimit = inChallenge ? MAX_CHALLENGE_YAW : MAX_YAW;
+    if (
+      Math.abs(pose.yaw) > yawLimit ||
+      Math.abs(pose.rollDeg) > MAX_ROLL_DEG
+    ) {
       st.lastCenter = null;
+      dropIfLost(st, nowT);
       setScanZoneState("adjust");
-      setLiveFaceStatus("😐 Luruskan kepala: hadap lurus ke kamera");
+      setLiveFaceStatus(
+        inChallenge
+          ? "↔️ Jangan miringkan kepala: hadap ke kamera"
+          : "😐 Hadap lurus ke kamera",
+      );
       return;
     }
 
-    // D. Cek Stabilitas Gerakan Wajah (Motion Stability)
+    // D. LIVENESS (tantangan toleh) — BERJALAN PARALEL dengan pengenalan identitas.
+    // Siswa cukup menghadap kamera, menoleh sekali, lalu hadap lurus. Identitas
+    // sudah dikumpulkan dari frame-frame lurus sebelum/selama tantangan, sehingga
+    // begitu kembali lurus langsung selesai (tidak perlu mengulang pencocokan dari nol).
     const now = Date.now();
+    st.liveness = updateHeadTurnTracker(st.liveness, pose.yaw, now);
+    const live = st.liveness;
+    const step = headTurnStep(live);
+    if (step !== st.lastStep) {
+      if (
+        step > st.lastStep &&
+        step > 0 &&
+        typeof navigator !== "undefined" &&
+        navigator.vibrate
+      ) {
+        navigator.vibrate(30); // getar singkat tiap langkah berhasil
+      }
+      st.lastStep = step;
+      setChallengeStep(step);
+    }
+    if (st.lock && now - st.lock.at > IDENT_LOCK_TTL_MS) st.lock = null;
+    if (showDebugRef.current && !live.isMotionVerified) {
+      setDebugLine(
+        `liveness: ${live.phase} • yaw ${pose.yaw.toFixed(2)} • dasar ${live.base.toFixed(2)} • selisih ${live.relYaw.toFixed(2)}${
+          st.lock ? ` • terkunci: ${st.lock.nama}` : ""
+        }`,
+      );
+    }
+
+    // Petunjuk sesuai kondisi saat ini (dipakai di beberapa cabang di bawah)
+    const guideText = live.isMotionVerified
+      ? "✨ Tahan lurus ke kamera sebentar..."
+      : st.lock
+        ? `👤 ${st.lock.nama} dikenali — ${headTurnHint(live)}`
+        : headTurnHint(live);
+
+    // Stabilitas gerakan: wajah yang sedang bergerak cepat buram, jadi
+    // pembuatan deskriptor dilewati (suara yang sudah terkumpul TIDAK dihapus).
+    let moving = false;
     if (st.lastCenter) {
       const dt = now - st.lastCenter.t;
-      const shift = Math.hypot(cxNorm - st.lastCenter.x, cyNorm - st.lastCenter.y);
-      if (dt < 250 && shift > 0.045) {
-        st.votes.length = 0;
-        st.lastCenter = { x: cxNorm, y: cyNorm, t: now };
-        setScanZoneState("moving");
-        setLiveFaceStatus("✋ Wajah bergerak: tahan posisi sebentar");
-        return;
-      }
+      const shift = Math.hypot(
+        cxNorm - st.lastCenter.x,
+        cyNorm - st.lastCenter.y,
+      );
+      if (dt < 250 && shift > 0.06) moving = true;
+      if (dt < 250 && shift > 0.2) st.votes.length = 0; // lompatan besar: kemungkinan orang lain
     }
     st.lastCenter = { x: cxNorm, y: cyNorm, t: now };
+    if (moving) {
+      setScanZoneState("verifying");
+      setLiveFaceStatus(guideText);
+      return;
+    }
 
     // E. Cek Kesiapan Template Profil Kelas (Pemuatan Awal)
-    const profiles = (studentProfilesRef.current || []).filter((p) => p.descriptor);
+    const profiles = (studentProfilesRef.current || []).filter(
+      (p) => p.descriptor,
+    );
     if (profiles.length === 0) {
       st.votes.length = 0;
       setScanZoneState("standby");
@@ -806,19 +1023,42 @@ export default function ModalScanWajahPetugas({
       if (loadState === "loading_data") {
         setLiveFaceStatus("⏳ Sedang memuat data rombel kelas... Mohon tunggu");
       } else if (loadState === "reading_photos") {
-        setLiveFaceStatus("⏳ Sedang membaca foto wajah siswa dari server... Mohon tunggu");
-      } else if (loadState === "computing_templates" || templateInfo.pending > 0 || syncingFaces) {
+        setLiveFaceStatus(
+          "⏳ Sedang membaca foto wajah siswa dari server... Mohon tunggu",
+        );
+      } else if (
+        loadState === "computing_templates" ||
+        templateInfo.pending > 0 ||
+        syncingFaces
+      ) {
         setLiveFaceStatus(
           `⏳ Sedang memproses template wajah (${templateInfo.ready}/${templateInfo.total} siswa)... Mohon tunggu`,
         );
       } else {
-        const totalWithPhoto = (studentProfilesRef.current || []).filter((p) => p.fotoWajah).length;
+        const totalWithPhoto = (studentProfilesRef.current || []).filter(
+          (p) => p.fotoWajah,
+        ).length;
         if (totalWithPhoto === 0) {
-          setLiveFaceStatus("ℹ️ Belum ada foto wajah siswa yang terdaftar di kelas ini");
+          setLiveFaceStatus(
+            "ℹ️ Belum ada foto wajah siswa yang terdaftar di kelas ini",
+          );
         } else {
-          setLiveFaceStatus("⚠️ Template wajah belum siap (tekan tombol Sinkron Wajah)");
+          setLiveFaceStatus(
+            "⚠️ Template wajah belum siap (tekan tombol Sinkron Wajah)",
+          );
         }
       }
+      return;
+    }
+
+    // Pengenalan identitas hanya pada frame yang cukup menghadap lurus
+    if (Math.abs(pose.yaw) > MAX_YAW) {
+      setScanZoneState("verifying");
+      setLiveFaceStatus(
+        live.isMotionVerified
+          ? "😐 Hadap lurus ke kamera untuk dicocokkan"
+          : guideText,
+      );
       return;
     }
 
@@ -827,7 +1067,8 @@ export default function ModalScanWajahPetugas({
     st.lastDescAt = now;
 
     const [faceCanvas] = await fa.extractFaces(video, [main.landmarks.align()]);
-    const desc = await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
+    const desc =
+      await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
     if (!st.alive) return;
 
     const { best, d1, d2 } = matchFace(desc, profiles);
@@ -837,29 +1078,72 @@ export default function ModalScanWajahPetugas({
       setDebugLine(
         `terdekat: ${best.nama} • jarak ${d1.toFixed(2)} • selisih ${
           Number.isFinite(d2) ? (d2 - d1).toFixed(2) : "-"
-        } (butuh ≤ ${MATCH_DIST} & ≥ ${MARGIN_MIN})`,
+        } (butuh ≤ ${MATCH_DIST} & ≥ ${MARGIN_MIN}) • ${live.phase}${st.lock ? " • terkunci" : ""}`,
       );
     }
 
-    const confirmed = pushVote(st.votes, confident ? best.idSiswa : null, now);
-    if (confirmed) {
+    // Identitas berganti di tengah proses (orang lain menggantikan): mulai ulang
+    // dari awal, termasuk tantangan toleh, agar verifikasi tidak "dipinjam".
+    if (st.lock && confident && best.idSiswa !== st.lock.id) {
+      st.lock = null;
       st.votes.length = 0;
-      st.lastCenter = null;
-      setScanZoneState("success");
-      setLiveFaceStatus(`✅ Wajah terverifikasi: ${best.nama}`);
-      recognizedRef.current(best.idSiswa, best.nama);
+      st.liveness = null;
+      st.lastStep = -1;
+      setChallengeStep(-1);
+      setScanZoneState("adjust");
+      setLiveFaceStatus("🔄 Wajah berganti: mulai ulang verifikasi");
       return;
     }
 
-    if (confident) {
+    const confirmedId = pushVote(
+      st.votes,
+      confident ? best.idSiswa : null,
+      now,
+      IDENT_WINDOW_MS,
+      VOTES_NEEDED,
+    );
+    if (st.lock && confident && best.idSiswa === st.lock.id) {
+      st.lock.at = now; // pencocokan segar: perbarui
+    } else if (confirmedId && !st.lock) {
+      st.lock = { id: best.idSiswa, nama: best.nama, firstAt: now, at: now };
+    }
+
+    // Selesai: tantangan toleh lulus + identitas terkunci + ada pencocokan segar sesudahnya
+    if (st.lock && live.isMotionVerified) {
+      if (st.lock.firstAt > live.verifiedAt + IDENT_LATE_LOCK_MS) {
+        // Identitas baru terbentuk lama setelah tantangan: tidak dipercaya, ulangi toleh
+        st.liveness = null;
+        st.lastStep = -1;
+        setChallengeStep(-1);
+        setScanZoneState("adjust");
+        setLiveFaceStatus(
+          "🔄 Ulangi: toleh kepala sekali lagi lalu hadap lurus",
+        );
+        return;
+      }
+      if (st.lock.at >= live.verifiedAt) {
+        const { id, nama } = st.lock;
+        st.votes.length = 0;
+        st.lastCenter = null;
+        st.liveness = null; // Siswa berikutnya harus menoleh ulang
+        st.lock = null;
+        st.lastStep = -1;
+        setChallengeStep(-1);
+        setScanZoneState("success");
+        setLiveFaceStatus(`✅ Wajah terverifikasi: ${nama}`);
+        recognizedRef.current(id, nama);
+        return;
+      }
+    }
+
+    if (confident || (best && d1 <= LOOSE_DIST)) {
       setScanZoneState("verifying");
-      setLiveFaceStatus("✨ Wajah terverifikasi: tahan posisi sebentar...");
-    } else if (best && d1 <= LOOSE_DIST) {
-      setScanZoneState("verifying");
-      setLiveFaceStatus("🔍 Mencocokkan wajah... tahan posisi");
+      setLiveFaceStatus(guideText);
     } else {
       setScanZoneState("adjust");
-      setLiveFaceStatus("⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini");
+      setLiveFaceStatus(
+        "⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini",
+      );
     }
   }
 
@@ -998,7 +1282,12 @@ export default function ModalScanWajahPetugas({
     if (!window.confirm(confirmText)) return;
 
     setSaving(true);
-    setSaveProgress({ pct: 25, label: "Menyusun data presensi...", done: false, error: false });
+    setSaveProgress({
+      pct: 25,
+      label: "Menyusun data presensi...",
+      done: false,
+      error: false,
+    });
 
     try {
       const cells = siswaList.map((s) => {
@@ -1029,7 +1318,12 @@ export default function ModalScanWajahPetugas({
         };
       });
 
-      setSaveProgress({ pct: 65, label: "Menyimpan ke Google Sheets...", done: false, error: false });
+      setSaveProgress({
+        pct: 65,
+        label: "Menyimpan ke Google Sheets...",
+        done: false,
+        error: false,
+      });
 
       const res = await savePresensiWaliKelas({
         idGuru: petugasInfo.idGuru,
@@ -1078,7 +1372,9 @@ export default function ModalScanWajahPetugas({
   }
 
   function toggleCameraFacing() {
-    setCameraFacing((prev) => (prev === "environment" ? "user" : "environment"));
+    setCameraFacing((prev) =>
+      prev === "environment" ? "user" : "environment",
+    );
   }
 
   if (!isOpen) return null;
@@ -1102,7 +1398,8 @@ export default function ModalScanWajahPetugas({
                 </span>
               </div>
               <p className="text-[9px] text-teal-200 truncate mt-0.5">
-                {templateInfo.ready}/{registeredFaceCount} siap • {stats.hadir}/{stats.total} hadir
+                {templateInfo.ready}/{registeredFaceCount} siap • {stats.hadir}/
+                {stats.total} hadir
               </p>
             </div>
           </div>
@@ -1117,7 +1414,9 @@ export default function ModalScanWajahPetugas({
               title="Sinkronkan foto wajah terbaru"
             >
               <span className={syncingFaces ? "animate-spin" : ""}>🔄</span>
-              <span className="hidden sm:inline">{syncingFaces ? "Sinkron..." : "Sinkron"}</span>
+              <span className="hidden sm:inline">
+                {syncingFaces ? "Sinkron..." : "Sinkron"}
+              </span>
             </button>
             <button
               onClick={toggleCameraFacing}
@@ -1153,9 +1452,13 @@ export default function ModalScanWajahPetugas({
             >
               <span>🧏</span>
               <span>Kamera</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
-                activeTab === "kamera" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-800"
-              }`}>
+              <span
+                className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                  activeTab === "kamera"
+                    ? "bg-white/25 text-white"
+                    : "bg-emerald-100 text-emerald-800"
+                }`}
+              >
                 {stats.hadir}
               </span>
             </button>
@@ -1171,9 +1474,13 @@ export default function ModalScanWajahPetugas({
               <span>📋</span>
               <span>Daftar</span>
               {stats.belumScan > 0 && (
-                <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
-                  activeTab === "daftar" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-800"
-                }`}>
+                <span
+                  className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                    activeTab === "daftar"
+                      ? "bg-white/25 text-white"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
                   {stats.belumScan}
                 </span>
               )}
@@ -1217,70 +1524,67 @@ export default function ModalScanWajahPetugas({
           {/* STATISTIK RINGKAS */}
           <div className="grid grid-cols-4 gap-1.5 text-center">
             <div className="py-1 px-1 rounded-lg bg-slate-100 border border-slate-200">
-              <div className="text-[8.5px] text-slate-500 font-bold uppercase">Total</div>
-              <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">{stats.total}</div>
+              <div className="text-[8.5px] text-slate-500 font-bold uppercase">
+                Total
+              </div>
+              <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
+                {stats.total}
+              </div>
             </div>
             <div className="py-1 px-1 rounded-lg bg-emerald-50 border border-emerald-200">
-              <div className="text-[8.5px] text-emerald-700 font-bold uppercase">Hadir</div>
-              <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">{stats.hadir}</div>
+              <div className="text-[8.5px] text-emerald-700 font-bold uppercase">
+                Hadir
+              </div>
+              <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">
+                {stats.hadir}
+              </div>
             </div>
             <div className="py-1 px-1 rounded-lg bg-amber-50 border border-amber-200">
-              <div className="text-[8.5px] text-amber-700 font-bold uppercase">Sakit/Izin</div>
-              <div className="text-xs sm:text-sm font-black text-amber-700 mt-0.5">{stats.sakit + stats.izin}</div>
+              <div className="text-[8.5px] text-amber-700 font-bold uppercase">
+                Sakit/Izin
+              </div>
+              <div className="text-xs sm:text-sm font-black text-amber-700 mt-0.5">
+                {stats.sakit + stats.izin}
+              </div>
             </div>
             <div className="py-1 px-1 rounded-lg bg-rose-50 border border-rose-200">
-              <div className="text-[8.5px] text-rose-700 font-bold uppercase">Belum</div>
-              <div className="text-xs sm:text-sm font-black text-rose-700 mt-0.5">{stats.belumScan + stats.alfa + stats.cabut}</div>
+              <div className="text-[8.5px] text-rose-700 font-bold uppercase">
+                Belum
+              </div>
+              <div className="text-xs sm:text-sm font-black text-rose-700 mt-0.5">
+                {stats.belumScan + stats.alfa + stats.cabut}
+              </div>
             </div>
           </div>
 
           {/* TAB 1: KAMERA SCAN WAJAH */}
           {activeTab === "kamera" && !isLockedByTime && (
-            <div className="space-y-1.5">
-              {/* STATUS MODEL & TEMPLATE */}
-              {engineStatus === "loading" && (
-                <div className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] flex items-center gap-1.5">
-                  <span className="animate-spin">⏳</span>
-                  <span>Memuat model AI wajah...</span>
-                </div>
-              )}
+            <div className="space-y-1.5 relative">
+              {/* STATUS KRITIS MODEL AI / FOTO GAGAL */}
               {engineStatus === "fallback" && (
-                <div className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] flex items-center justify-between gap-1.5">
-                  <span className="truncate">Model AI gagal dimuat. Periksa koneksi internet.</span>
+                <div className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center justify-between gap-1.5 shadow-xs">
+                  <span className="truncate font-semibold">
+                    ⚠️ Model AI gagal dimuat. Periksa koneksi internet.
+                  </span>
                   <button
                     type="button"
                     onClick={() => setEngineNonce((n) => n + 1)}
-                    className="px-2 py-0.5 rounded bg-rose-600 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-colors"
                   >
                     Ulangi
                   </button>
                 </div>
               )}
-              {profileLoadingState === "reading_photos" && (
-                <div className="px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-[10.5px] flex items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="animate-spin">🔄</span>
-                    <span className="font-semibold">Auto-Sinkron Harian: Membaca foto wajah siswa dari server...</span>
-                  </div>
-                  <span className="text-[9.5px] text-sky-700 font-mono font-bold shrink-0">Hari Ini</span>
-                </div>
-              )}
-              {(templateInfo.pending > 0 || profileLoadingState === "computing_templates") && (
-                <div className="px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[10.5px] flex items-center gap-1.5">
-                  <span className="animate-spin">🔄</span>
-                  <span>Menyiapkan template wajah: {templateInfo.ready}/{templateInfo.total} siswa siap...</span>
-                </div>
-              )}
               {templateInfo.failed.length > 0 && (
-                <div className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
+                <div className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
                   <span className="truncate">
-                    ⚠️ {templateInfo.failed.length} foto perlu didaftarkan ulang (harus lurus & jelas).
+                    ⚠️ {templateInfo.failed.length} foto siswa perlu didaftarkan ulang (harus lurus & jelas).
                   </span>
                 </div>
               )}
 
-              {/* CONTAINER KAMERA PEMINDAI */}
-              <div className="relative rounded-2xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[52vh] sm:h-[400px] min-h-[300px] flex items-center justify-center shadow-md">
+              {/* CONTAINER KAMERA PEMINDAI (MOBILE-OPTIMIZED VIEWPORT) */}
+              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[58vh] sm:h-[430px] min-h-[350px] max-h-[520px] flex items-center justify-center shadow-lg">
                 <video
                   ref={videoRef}
                   playsInline
@@ -1292,102 +1596,113 @@ export default function ModalScanWajahPetugas({
                 {/* OVERLAY PANDUAN PENGAMBILAN WAJAH */}
                 {cameraActive && (
                   <div className="absolute inset-0 pointer-events-none">
-                    {/* CONTAINER NOTIFIKASI ATAS (Flex Vertikal Mencegah Tumpang Tindih) */}
-                    <div className="absolute top-2.5 inset-x-0 flex flex-col items-center gap-1.5 px-2.5 pointer-events-none z-10">
-                      {/* Status Deteksi di Bagian Atas */}
+                    {/* TOP HUD: PANDUAN SISWA & STEPPER TANTANGAN (BEBAS TUMPANG TINDIH) */}
+                    <div className="absolute top-2.5 inset-x-2 flex flex-col items-center gap-1 z-20 pointer-events-none">
+                      {/* Kartu Status Panduan Utama */}
                       <div
-                        className={`max-w-[96%] text-center px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold shadow-lg backdrop-blur-md transition-all border ${
+                        className={`max-w-[92%] text-center px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-black shadow-xl backdrop-blur-md transition-all border ${
                           scanZoneState === "multiple"
-                            ? "bg-rose-950/92 text-rose-200 border-rose-500 shadow-rose-500/30"
-                            : scanZoneState === "adjust" || scanZoneState === "moving"
-                            ? "bg-amber-950/92 text-amber-200 border-amber-400 shadow-amber-400/30"
-                            : scanZoneState === "verifying" || scanZoneState === "success"
-                            ? "bg-emerald-950/92 text-emerald-200 border-emerald-400 shadow-emerald-400/30"
-                            : "bg-black/80 text-teal-200 border-teal-400/40"
+                            ? "bg-rose-950/95 text-rose-200 border-rose-500 shadow-rose-500/30"
+                            : scanZoneState === "adjust" ||
+                                scanZoneState === "moving"
+                              ? "bg-amber-950/95 text-amber-200 border-amber-400 shadow-amber-400/30"
+                              : scanZoneState === "verifying" ||
+                                  scanZoneState === "success"
+                                ? "bg-emerald-950/95 text-emerald-200 border-emerald-400 shadow-emerald-400/30"
+                                : "bg-slate-950/85 text-teal-200 border-teal-400/40"
                         }`}
                       >
                         {liveFaceStatus}
                       </div>
 
-                      {/* Notifikasi Jarak Kemiripan (Debug/Kalibrasi) - Posisi Dinamis Bebas Himpitan */}
+                      {/* Stepper Tantangan Toleh (3 Kapsul Mini Kompak) */}
+                      {challengeStep >= 0 && (
+                        <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                          {[
+                            { num: "1", label: "Hadap" },
+                            { num: "2", label: "Toleh" },
+                            { num: "3", label: "Lurus" },
+                          ].map((stepItem, i) => {
+                            const done = i < challengeStep;
+                            const active = i === challengeStep;
+                            return (
+                              <span
+                                key={stepItem.label}
+                                className={`px-2 py-0.5 rounded-full text-[9.5px] font-black border backdrop-blur-md transition-all ${
+                                  done
+                                    ? "bg-emerald-500 text-black border-emerald-300 shadow-xs"
+                                    : active
+                                      ? "bg-amber-400 text-black border-amber-200 animate-pulse shadow-xs ring-1 ring-amber-300"
+                                      : "bg-black/60 text-slate-300 border-white/20"
+                                }`}
+                              >
+                                {done ? "✓" : stepItem.num} {stepItem.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Baris Kalibrasi / Debug (Hanya saat diaktifkan) */}
                       {showDebug && debugLine && (
-                        <div className="max-w-[96%] text-center px-2.5 py-1 rounded-md bg-black/85 text-yellow-300 text-[9.5px] font-mono border border-yellow-400/40 shadow-md backdrop-blur-sm">
+                        <div className="max-w-[94%] text-center px-2 py-0.5 rounded-md bg-black/85 text-yellow-300 text-[9px] font-mono border border-yellow-400/40 shadow-md backdrop-blur-sm truncate">
                           🔍 {debugLine}
                         </div>
                       )}
                     </div>
 
-                    {/* ZONA PEMINDAIAN WAJAH (Interactive Target Reticle) */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4 sm:p-6">
+                    {/* ZONA PEMINDAIAN WAJAH (RETICLE ERGONOMIS PONSEL — BERSIH TANPA TEKS PENUTUP MATA) */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
                       <div
-                        className={`relative w-56 h-72 sm:w-64 sm:h-80 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between p-3 ${
+                        className={`relative w-[205px] h-[255px] sm:w-[245px] sm:h-[305px] rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between p-2.5 ${
                           scanZoneState === "multiple"
                             ? "border-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.6)] bg-rose-950/20"
-                            : scanZoneState === "adjust" || scanZoneState === "moving"
-                            ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)] bg-amber-950/15"
-                            : scanZoneState === "verifying" || scanZoneState === "success"
-                            ? "border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7)] bg-emerald-950/20"
-                            : "border-teal-400/40 shadow-[0_0_15px_rgba(45,212,191,0.2)] bg-black/10"
+                            : scanZoneState === "adjust" ||
+                                scanZoneState === "moving"
+                              ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)] bg-amber-950/15"
+                              : scanZoneState === "verifying" ||
+                                  scanZoneState === "success"
+                                ? "border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7)] bg-emerald-950/20"
+                                : "border-teal-400/40 shadow-[0_0_15px_rgba(45,212,191,0.2)] bg-black/10"
                         }`}
                       >
-                        {/* Sudut Fokus (Corner Brackets) */}
-                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-xl border-current" />
-                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-xl border-current" />
-                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-xl border-current" />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-xl border-current" />
+                        {/* Sudut Fokus (Corner Brackets Minimalis) */}
+                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 rounded-tl-xl border-current opacity-90" />
+                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 rounded-tr-xl border-current opacity-90" />
+                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 rounded-bl-xl border-current opacity-90" />
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 rounded-br-xl border-current opacity-90" />
 
-                        {/* Label Header Zona */}
-                        <div className="flex justify-between items-center w-full">
+                        {/* Indikator Ping di Sudut Kanan Atas */}
+                        <div className="w-full flex justify-end">
                           <span
-                            className={`text-[9px] font-mono font-black px-2 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-md shadow-sm ${
-                              scanZoneState === "multiple"
-                                ? "bg-rose-600 text-white"
-                                : scanZoneState === "moving"
-                                ? "bg-amber-500 text-black"
-                                : scanZoneState === "adjust"
-                                ? "bg-amber-500/90 text-black"
-                                : scanZoneState === "verifying" || scanZoneState === "success"
-                                ? "bg-emerald-500 text-black animate-pulse"
-                                : "bg-teal-900/80 text-teal-200 border border-teal-400/30"
-                            }`}
-                          >
-                            {scanZoneState === "multiple"
-                              ? "⚠️ 1 SISWA SAJA"
-                              : scanZoneState === "moving"
-                              ? "✋ TAHAN POSISI"
-                              : scanZoneState === "adjust"
-                              ? "📍 POSISIKAN WAJAH"
-                              : scanZoneState === "verifying"
-                              ? "✨ MEMVERIFIKASI"
-                              : "ZONA PRESENSI"}
-                          </span>
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full ${
+                            className={`w-2 h-2 rounded-full ${
                               scanZoneState === "multiple"
                                 ? "bg-rose-500 animate-ping"
-                                : scanZoneState === "verifying" || scanZoneState === "success"
-                                ? "bg-emerald-400 animate-ping"
-                                : "bg-teal-400/60"
+                                : scanZoneState === "verifying" ||
+                                    scanZoneState === "success"
+                                  ? "bg-emerald-400 animate-ping"
+                                  : "bg-teal-400/50"
                             }`}
                           />
                         </div>
 
-                        {/* Garis Pemindai Halus */}
-                        {(scanZoneState === "verifying" || scanZoneState === "standby") && (
-                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent opacity-60 animate-pulse my-auto" />
+                        {/* Garis Pemindai Halus Animasi */}
+                        {(scanZoneState === "verifying" ||
+                          scanZoneState === "standby") && (
+                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent opacity-65 animate-pulse my-auto" />
                         )}
 
                         {/* Titik Pusat Fokus */}
                         <div className="flex justify-center items-center w-full">
-                          <div className="w-2 h-2 rounded-full border border-teal-300/40 opacity-70" />
+                          <div className="w-2 h-2 rounded-full border border-teal-300/40 opacity-60" />
                         </div>
                       </div>
                     </div>
 
-                    {/* LIVE FACE TRACKING BOX (Melacak Wajah Aktif di Dalam Zona) */}
+                    {/* LIVE FACE TRACKING BOX */}
                     {liveFaceBox && (
                       <div
-                        className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.7)] transition-all duration-75 flex flex-col justify-between p-1 pointer-events-none"
+                        className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)] transition-all duration-75 flex flex-col justify-between p-1 pointer-events-none"
                         style={{
                           left: `${liveFaceBox.leftPct}%`,
                           top: `${liveFaceBox.topPct}%`,
@@ -1395,17 +1710,96 @@ export default function ModalScanWajahPetugas({
                           height: `${liveFaceBox.heightPct}%`,
                         }}
                       >
-                        <span className="text-[8.5px] font-mono font-bold bg-emerald-950/80 text-emerald-200 px-1 py-0.5 rounded w-fit">
+                        <span className="text-[8px] font-mono font-bold bg-emerald-950/85 text-emerald-200 px-1 py-0.2 rounded w-fit">
                           SISWA
                         </span>
                         <div className="w-full flex justify-end">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                         </div>
                       </div>
                     )}
 
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-md bg-emerald-950/85 text-emerald-300 text-[9.5px] font-mono font-bold shadow-xs whitespace-nowrap">
-                      Deteksi Wajah Aktif • Cooldown 3 Detik Anti-Duplikat
+                    {/* BOTTOM HUD: STATUS AMAN TANPA MENABRAK RETICLE */}
+                    <div className="absolute bottom-2.5 inset-x-0 flex justify-center pointer-events-none z-10">
+                      <div className="px-3 py-0.5 rounded-full bg-black/75 text-emerald-300 text-[9px] font-mono font-bold border border-emerald-500/25 backdrop-blur-xs shadow-xs">
+                        Deteksi Wajah Aktif • Cooldown 3s
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MODAL NOTIFIKASI LOADING BAR BERTINGKAT DI TENGAH LAYAR (SINKRON HARIAN PERTAMA KALI) */}
+                {syncModalProgress && syncModalProgress.show && (
+                  <div className="absolute inset-0 z-30 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl border border-slate-100 flex flex-col items-center text-center space-y-3.5">
+                      {/* Ikon Tahap */}
+                      <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-3xl shadow-inner">
+                        {syncModalProgress.pct === 100
+                          ? "✅"
+                          : syncModalProgress.stage === 1
+                            ? "📥"
+                            : syncModalProgress.stage === 2
+                              ? "🧠"
+                              : "⚡"}
+                      </div>
+
+                      {/* Judul & Keterangan */}
+                      <div className="space-y-1 w-full">
+                        <div className="flex items-center justify-between text-[10px] font-black text-teal-700 uppercase tracking-wider">
+                          <span>
+                            Tahap {syncModalProgress.stage} dari{" "}
+                            {syncModalProgress.totalStages}
+                          </span>
+                          <span className="font-mono text-xs font-bold text-teal-800">
+                            {syncModalProgress.pct}%
+                          </span>
+                        </div>
+                        <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                          {syncModalProgress.title}
+                        </h4>
+                        <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                          {syncModalProgress.desc}
+                        </p>
+                      </div>
+
+                      {/* Loading Bar Bertingkat */}
+                      <div className="w-full space-y-1.5">
+                        <div className="w-full h-3 rounded-full bg-slate-100 p-0.5 border border-slate-200 overflow-hidden shadow-inner">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              syncModalProgress.pct === 100
+                                ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                                : "bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 animate-pulse"
+                            }`}
+                            style={{ width: `${syncModalProgress.pct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                          <span className="truncate mr-2">
+                            {syncModalProgress.detail || "Sedang memproses..."}
+                          </span>
+                          <span className="font-bold shrink-0">
+                            {syncModalProgress.pct}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Indikator Tahap (Step Dots) */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        {[1, 2, 3].map((stg) => (
+                          <div
+                            key={stg}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              stg < syncModalProgress.stage ||
+                              syncModalProgress.pct === 100
+                                ? "w-6 bg-emerald-500"
+                                : stg === syncModalProgress.stage
+                                  ? "w-8 bg-teal-600 animate-pulse"
+                                  : "w-3 bg-slate-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1417,7 +1811,9 @@ export default function ModalScanWajahPetugas({
                     style={{ animation: "fadeInScale 0.18s ease-out" }}
                     onClick={() => setScanOverlay(null)}
                   >
-                    <style dangerouslySetInnerHTML={{ __html: `
+                    <style
+                      dangerouslySetInnerHTML={{
+                        __html: `
                       @keyframes fadeInScale {
                         from { opacity: 0; transform: scale(0.82); }
                         to   { opacity: 1; transform: scale(1); }
@@ -1426,7 +1822,9 @@ export default function ModalScanWajahPetugas({
                         0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
                         50%       { box-shadow: 0 0 0 16px rgba(16,185,129,0); }
                       }
-                    `}} />
+                    `,
+                      }}
+                    />
                     <div
                       className={`w-full max-w-xs rounded-2xl px-5 py-5 flex flex-col items-center gap-2 text-center shadow-2xl border-2 backdrop-blur-md ${
                         scanOverlay.type === "success"
@@ -1435,26 +1833,42 @@ export default function ModalScanWajahPetugas({
                             ? "bg-blue-950/92 border-blue-400 text-white"
                             : "bg-rose-950/92 border-rose-400 text-white"
                       }`}
-                      style={scanOverlay.type === "success" ? { animation: "overlayPulse 0.8s ease-out 1" } : {}}
-                    >
-                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 ${
+                      style={
                         scanOverlay.type === "success"
-                          ? "bg-emerald-500 border-emerald-300"
+                          ? { animation: "overlayPulse 0.8s ease-out 1" }
+                          : {}
+                      }
+                    >
+                      <div
+                        className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 ${
+                          scanOverlay.type === "success"
+                            ? "bg-emerald-500 border-emerald-300"
+                            : scanOverlay.type === "duplicate"
+                              ? "bg-blue-500 border-blue-300"
+                              : "bg-rose-500 border-rose-300"
+                        }`}
+                      >
+                        {scanOverlay.type === "success"
+                          ? "✅"
                           : scanOverlay.type === "duplicate"
-                            ? "bg-blue-500 border-blue-300"
-                            : "bg-rose-500 border-rose-300"
-                      }`}>
-                        {scanOverlay.type === "success" ? "✅" : scanOverlay.type === "duplicate" ? "ℹ️" : "⚠️"}
+                            ? "ℹ️"
+                            : "⚠️"}
                       </div>
 
-                      <div className={`text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full ${
-                        scanOverlay.type === "success"
-                          ? "bg-emerald-500/40 text-emerald-200"
+                      <div
+                        className={`text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full ${
+                          scanOverlay.type === "success"
+                            ? "bg-emerald-500/40 text-emerald-200"
+                            : scanOverlay.type === "duplicate"
+                              ? "bg-blue-500/40 text-blue-200"
+                              : "bg-rose-500/40 text-rose-200"
+                        }`}
+                      >
+                        {scanOverlay.type === "success"
+                          ? "Hadir Terverifikasi"
                           : scanOverlay.type === "duplicate"
-                            ? "bg-blue-500/40 text-blue-200"
-                            : "bg-rose-500/40 text-rose-200"
-                      }`}>
-                        {scanOverlay.type === "success" ? "Hadir Terverifikasi" : scanOverlay.type === "duplicate" ? "Sudah Hadir" : "Tidak Dikenal"}
+                            ? "Sudah Hadir"
+                            : "Tidak Dikenal"}
                       </div>
 
                       {scanOverlay.nama && (
@@ -1463,10 +1877,15 @@ export default function ModalScanWajahPetugas({
                         </div>
                       )}
 
-                      <div className={`text-sm font-bold leading-snug ${
-                        scanOverlay.type === "success" ? "text-emerald-200" :
-                        scanOverlay.type === "duplicate" ? "text-blue-200" : "text-rose-200"
-                      }`}>
+                      <div
+                        className={`text-sm font-bold leading-snug ${
+                          scanOverlay.type === "success"
+                            ? "text-emerald-200"
+                            : scanOverlay.type === "duplicate"
+                              ? "text-blue-200"
+                              : "text-rose-200"
+                        }`}
+                      >
                         {scanOverlay.pesan}
                       </div>
 
@@ -1483,7 +1902,9 @@ export default function ModalScanWajahPetugas({
                 {cameraError && (
                   <div className="absolute inset-0 p-4 bg-slate-900/90 text-white flex flex-col items-center justify-center text-center space-y-2">
                     <span className="text-3xl">📷</span>
-                    <p className="text-xs text-rose-300 max-w-sm">{cameraError}</p>
+                    <p className="text-xs text-rose-300 max-w-sm">
+                      {cameraError}
+                    </p>
                     <button
                       onClick={startCamera}
                       className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer"
@@ -1501,7 +1922,9 @@ export default function ModalScanWajahPetugas({
                   onChange={(e) => setShowDebug(e.target.checked)}
                   className="rounded w-3.5 h-3.5"
                 />
-                <span>Tampilkan jarak kemiripan (untuk uji coba / kalibrasi)</span>
+                <span>
+                  Tampilkan jarak kemiripan (untuk uji coba / kalibrasi)
+                </span>
               </label>
 
               {/* LIST SISWA TERAKHIR DISCAN */}
@@ -1509,7 +1932,9 @@ export default function ModalScanWajahPetugas({
                 <div className="space-y-1 pt-0.5">
                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
                     <span>Terakhir Hadir:</span>
-                    <span className="text-emerald-700 font-black">{siswaSudahDiscan.length} Siswa Terdata</span>
+                    <span className="text-emerald-700 font-black">
+                      {siswaSudahDiscan.length} Siswa Terdata
+                    </span>
                   </div>
                   <div className="space-y-1 max-h-24 overflow-y-auto">
                     {siswaSudahDiscan
@@ -1521,7 +1946,9 @@ export default function ModalScanWajahPetugas({
                           className="px-2.5 py-1 rounded-lg bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950"
                         >
                           <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-emerald-600 font-bold">✓</span>
+                            <span className="text-emerald-600 font-bold">
+                              ✓
+                            </span>
                             <span className="font-bold truncate">{s.nama}</span>
                           </div>
                           <span className="text-[9.5px] font-mono text-emerald-800 shrink-0 ml-1">
@@ -1545,7 +1972,9 @@ export default function ModalScanWajahPetugas({
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
                     <span>Siswa Belum Hadir ({siswaBelumDiscan.length})</span>
                   </h4>
-                  <span className="text-[10px] text-slate-500">Tandai Sakit / Izin</span>
+                  <span className="text-[10px] text-slate-500">
+                    Tandai Sakit / Izin
+                  </span>
                 </div>
 
                 <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -1557,8 +1986,12 @@ export default function ModalScanWajahPetugas({
                         className="p-2.5 rounded-xl border border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                       >
                         <div>
-                          <div className="font-bold text-slate-900">{s.nama}</div>
-                          <div className="text-[10px] font-mono text-slate-500">ID: {s.idSiswa}</div>
+                          <div className="font-bold text-slate-900">
+                            {s.nama}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-500">
+                            ID: {s.idSiswa}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -1607,8 +2040,12 @@ export default function ModalScanWajahPetugas({
                       className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-200 flex items-center justify-between text-xs"
                     >
                       <div className="truncate">
-                        <span className="font-bold text-slate-900 truncate block">{s.nama}</span>
-                        <span className="text-[9px] text-slate-500 font-mono">{s.idSiswa}</span>
+                        <span className="font-bold text-slate-900 truncate block">
+                          {s.nama}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {s.idSiswa}
+                        </span>
                       </div>
                       <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
                         {scannedMap[s.idSiswa]?.waktuScan} WIB
@@ -1624,8 +2061,12 @@ export default function ModalScanWajahPetugas({
           {saveProgress && (
             <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs space-y-1.5">
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                <span className={saveProgress.error ? "text-rose-700" : ""}>{saveProgress.label}</span>
-                <span className="font-mono text-teal-700 ml-2">{saveProgress.pct}%</span>
+                <span className={saveProgress.error ? "text-rose-700" : ""}>
+                  {saveProgress.label}
+                </span>
+                <span className="font-mono text-teal-700 ml-2">
+                  {saveProgress.pct}%
+                </span>
               </div>
               <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
                 <div

@@ -78,12 +78,23 @@ export function matchFace(desc, profiles) {
   return { best, d1, d2 };
 }
 
-export function isConfident(d1, d2, matchDist = MATCH_DIST, marginMin = MARGIN_MIN) {
+export function isConfident(
+  d1,
+  d2,
+  matchDist = MATCH_DIST,
+  marginMin = MARGIN_MIN,
+) {
   return d1 <= matchDist && d2 - d1 >= marginMin;
 }
 
 // Kumpulkan suara; kembalikan idSiswa jika sudah terkonfirmasi (atau null)
-export function pushVote(votes, id, now, windowMs = VOTE_WINDOW_MS, needed = VOTES_NEEDED) {
+export function pushVote(
+  votes,
+  id,
+  now,
+  windowMs = VOTE_WINDOW_MS,
+  needed = VOTES_NEEDED,
+) {
   while (votes.length && now - votes[0].t > windowMs) votes.shift();
   votes.push({ id, t: now });
   if (!id) return null;
@@ -126,9 +137,10 @@ export function centerOf(pts) {
 
 // Perkiraan arah hadap & kemiringan dari 68 titik landmark
 export function headPose(landmarks) {
-  const eyes = [centerOf(landmarks.getLeftEye()), centerOf(landmarks.getRightEye())].sort(
-    (a, b) => a.x - b.x,
-  );
+  const eyes = [
+    centerOf(landmarks.getLeftEye()),
+    centerOf(landmarks.getRightEye()),
+  ].sort((a, b) => a.x - b.x);
   const nose = landmarks.getNose();
   const tip = nose[3] || nose[Math.floor(nose.length / 2)];
   const dx = eyes[1].x - eyes[0].x;
@@ -160,7 +172,10 @@ export function writeCachedDescriptor(idSiswa, url, desc) {
     if (!desc) return;
     localStorage.setItem(
       DESC_KEY + idSiswa,
-      JSON.stringify({ url: url || "", d: Array.from(desc, (v) => +v.toFixed(5)) }),
+      JSON.stringify({
+        url: url || "",
+        d: Array.from(desc, (v) => +v.toFixed(5)),
+      }),
     );
   } catch (_) {}
 }
@@ -211,7 +226,8 @@ export async function computeTemplate(fa, url) {
     .withFaceLandmarks(true);
   if (!det) return { descriptor: null };
   const [canvas] = await fa.extractFaces(img, [det.landmarks.align()]);
-  const descriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(canvas);
+  const descriptor =
+    await fa.nets.faceRecognitionNet.computeFaceDescriptor(canvas);
   return { descriptor };
 }
 
@@ -246,7 +262,9 @@ export function findStudentNameById(idSiswa, otherStudents = []) {
           const arr = JSON.parse(raw);
           if (Array.isArray(arr)) {
             const match = arr.find(
-              (s) => String(s.idSiswa || s.id || "").trim() === String(idSiswa).trim(),
+              (s) =>
+                String(s.idSiswa || s.id || "").trim() ===
+                String(idSiswa).trim(),
             );
             if (match?.nama) return match.nama;
           }
@@ -356,3 +374,208 @@ export async function checkFaceDuplicate({
   return { isDuplicate: false };
 }
 
+// =====================================================================
+// LIVENESS — TANTANGAN TOLEH KEPALA (v2, toleran & tahan getaran)
+// ---------------------------------------------------------------------
+// Prinsip: foto cetak / layar HP tidak bisa mengubah arah hadap. Siswa
+// cukup menoleh kiri ATAU kanan (sedikit sampai jauh), lalu hadap lurus.
+//
+// Perbaikan dari versi sebelumnya:
+//  1) Yaw diukur RELATIF terhadap posisi awal siswa (baseline). Wajah yang
+//     secara alami condong (hidung asimetris / sudut kamera) tidak lagi
+//     macet di fase "kembali ke tengah".
+//  2) Yaw disaring median-3 dan butuh >= 2 frame berturut-turut, sehingga
+//     getaran landmark / foto yang digoyang tidak dihitung sebagai toleh.
+//  3) Menoleh JAUH tidak membatalkan tantangan (modal memakai
+//     MAX_CHALLENGE_YAW selama tantangan, bukan MAX_YAW).
+//  4) Wajah hilang sesaat (saat menoleh jauh detektor sering kehilangan
+//     wajah) diberi masa tenggang FACE_LOSS_GRACE_MS, bukan reset total.
+//  5) Status "terverifikasi" kedaluwarsa setelah LIVENESS_TTL_MS.
+// =====================================================================
+export const HEAD_TURN_REL = 0.2; // selisih yaw dari baseline agar dianggap menoleh (~20 derajat)
+export const HEAD_CENTER_REL = 0.1; // selisih maksimum dari baseline agar dianggap sudah kembali
+export const MAX_CHALLENGE_YAW = 1.0; // batas yaw saat tantangan berlangsung (menoleh jauh diperbolehkan)
+export const HEAD_HOLD_MS = 300; // lama tahan minimal di posisi toleh / tengah (tahan sebentar ~0,3 dtk)
+export const HEAD_HOLD_FRAMES = 3; // dan minimal sekian frame berturut-turut
+export const HEAD_CENTER_HOLD_MS = 150; // tahan di tengah (identitas tetap harus cocok lagi sesudahnya)
+export const HEAD_CENTER_FRAMES = 2;
+export const HEAD_BASELINE_FRAMES = 4; // jumlah frame stabil untuk menentukan baseline
+export const HEAD_BASELINE_SPREAD = 0.08; // batas getaran yaw saat kalibrasi baseline
+export const HEAD_BASELINE_FALLBACK_MS = 2500; // tak kunjung diam: pakai median frame terakhir
+export const HEAD_TURN_TIMEOUT_MS = 10000; // fase "toleh" diulang bila tak ada gerakan
+export const HEAD_CENTER_TIMEOUT_MS = 6000; // fase "kembali" diulang bila tak kembali
+export const LIVENESS_TTL_MS = 10000; // masa berlaku verifikasi sampai wajah dicocokkan
+export const IDENT_WINDOW_MS = 6000; // jendela suara identitas (lebih panjang: siswa sedang menoleh)
+export const IDENT_LOCK_TTL_MS = 12000; // identitas yang sudah terkunci dianggap segar selama ini
+export const IDENT_LATE_LOCK_MS = 1000; // kunci identitas yang terbentuk >1 dtk setelah liveness tidak dipercaya
+export const FACE_LOSS_GRACE_MS = 1500; // wajah boleh hilang sesaat tanpa reset tantangan
+
+// Alias nama lama agar impor lama tidak error
+export const HEAD_TURN_YAW = HEAD_TURN_REL;
+export const HEAD_CENTER_YAW = HEAD_CENTER_REL;
+export const HEAD_TURN_HOLD_MS = HEAD_HOLD_MS;
+
+function median(arr) {
+  const a = [...arr].sort((x, y) => x - y);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+function newHeadTracker(now) {
+  return {
+    phase: "calibrating", // calibrating -> need_turn -> need_center -> verified
+    base: 0,
+    baseBuf: [],
+    yawBuf: [],
+    direction: 0,
+    holdStart: 0,
+    holdFrames: 0,
+    centerStart: 0,
+    centerFrames: 0,
+    phaseStart: now,
+    lastSeenAt: now,
+    verifiedAt: 0,
+    relYaw: 0,
+    isMotionVerified: false,
+  };
+}
+
+/**
+ * State machine liveness. Panggil sekali per frame saat satu wajah terdeteksi.
+ * Mengembalikan tracker (objek yang sama, diubah di tempat).
+ */
+export function updateHeadTurnTracker(tracker, yaw, now = Date.now()) {
+  let t = tracker || newHeadTracker(now);
+
+  if (t.isMotionVerified) {
+    if (now - t.verifiedAt <= LIVENESS_TTL_MS) {
+      t.lastSeenAt = now;
+      return t;
+    }
+    t = newHeadTracker(now); // kedaluwarsa: ulangi dari awal
+  }
+
+  t.lastSeenAt = now;
+  t.yawBuf.push(yaw);
+  if (t.yawBuf.length > 3) t.yawBuf.shift();
+  const y = t.yawBuf.length >= 3 ? median(t.yawBuf) : yaw;
+
+  // ── Kalibrasi baseline: tunggu beberapa frame yang stabil ──────────
+  // Siswa yang tidak pernah diam (terus menoleh) tidak akan pernah stabil, jadi
+  // setelah HEAD_BASELINE_FALLBACK_MS dipakai median beberapa frame terakhir.
+  if (t.phase === "calibrating") {
+    t.baseBuf.push(y);
+    if (t.baseBuf.length > 8) t.baseBuf.shift();
+    const recent = t.baseBuf.slice(-HEAD_BASELINE_FRAMES);
+    if (recent.length >= HEAD_BASELINE_FRAMES) {
+      const spread = Math.max(...recent) - Math.min(...recent);
+      const stable = spread <= HEAD_BASELINE_SPREAD;
+      const timedOut =
+        now - t.phaseStart >= HEAD_BASELINE_FALLBACK_MS &&
+        t.baseBuf.length >= 6;
+      if (stable || timedOut) {
+        t.base = median(stable ? recent : t.baseBuf);
+        t.phase = "need_turn";
+        t.phaseStart = now;
+        t.direction = 0;
+        t.holdFrames = 0;
+      }
+    }
+    t.relYaw = 0;
+    return t;
+  }
+
+  const rel = y - t.base;
+  t.relYaw = rel;
+
+  // ── Fase 1: menoleh (kiri atau kanan, seberapa jauh pun) ───────────
+  if (t.phase === "need_turn") {
+    if (now - t.phaseStart > HEAD_TURN_TIMEOUT_MS) {
+      t.phaseStart = now;
+      t.direction = 0;
+      t.holdFrames = 0;
+      return t;
+    }
+    if (Math.abs(rel) >= HEAD_TURN_REL) {
+      const dir = rel > 0 ? 1 : -1;
+      if (t.direction !== dir) {
+        t.direction = dir;
+        t.holdStart = now;
+        t.holdFrames = 1;
+      } else {
+        t.holdFrames += 1;
+      }
+      if (
+        t.holdFrames >= HEAD_HOLD_FRAMES &&
+        now - t.holdStart >= HEAD_HOLD_MS
+      ) {
+        t.phase = "need_center";
+        t.phaseStart = now;
+        t.centerStart = 0;
+        t.centerFrames = 0;
+      }
+    } else {
+      t.direction = 0;
+      t.holdFrames = 0;
+    }
+    return t;
+  }
+
+  // ── Fase 2: kembali menghadap lurus ────────────────────────────────
+  if (t.phase === "need_center") {
+    if (now - t.phaseStart > HEAD_CENTER_TIMEOUT_MS) {
+      t.phase = "need_turn";
+      t.phaseStart = now;
+      t.direction = 0;
+      t.holdFrames = 0;
+      return t;
+    }
+    if (Math.abs(rel) <= HEAD_CENTER_REL) {
+      if (!t.centerStart) t.centerStart = now;
+      t.centerFrames += 1;
+      if (
+        t.centerFrames >= HEAD_CENTER_FRAMES &&
+        now - t.centerStart >= HEAD_CENTER_HOLD_MS
+      ) {
+        t.phase = "verified";
+        t.isMotionVerified = true;
+        t.verifiedAt = now;
+      }
+    } else {
+      t.centerStart = 0;
+      t.centerFrames = 0;
+    }
+    return t;
+  }
+
+  return t;
+}
+
+/**
+ * Dipanggil saat frame tidak valid (wajah hilang, di luar zona, dsb.).
+ * Tantangan dipertahankan selama masih dalam masa tenggang.
+ */
+export function keepLiveness(tracker, now = Date.now()) {
+  if (!tracker) return null;
+  return now - tracker.lastSeenAt <= FACE_LOSS_GRACE_MS ? tracker : null;
+}
+
+/** Teks petunjuk untuk siswa sesuai fase tantangan (ringkas untuk ponsel). */
+export function headTurnHint(tracker) {
+  if (!tracker || tracker.phase === "calibrating") {
+    return "😐 Hadap lurus ke kamera sebentar";
+  }
+  if (tracker.phase === "need_center") {
+    return "😊 Bagus! Hadapkan kembali wajah ke kamera";
+  }
+  return "↔️ Toleh sedikit ke kiri atau kanan";
+}
+
+/** Nomor langkah tantangan untuk indikator di layar: -1 = tidak aktif, 0..3 */
+export function headTurnStep(tracker) {
+  if (!tracker) return -1;
+  if (tracker.phase === "calibrating") return 0;
+  if (tracker.phase === "need_turn") return 1;
+  if (tracker.phase === "need_center") return 2;
+  return 3;
+}
