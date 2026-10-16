@@ -23,8 +23,15 @@ export const SCAN_COOLDOWN_MS = 3000; // jeda anti-duplikat setelah satu siswa t
 
 let faPromise = null;
 
-// Pemuatan modul face-api secara singleton (hanya 1x per sesi)
-export function loadFaceApi() {
+export function resetFaceApiPromise() {
+  faPromise = null;
+}
+
+// Pemuatan modul face-api secara singleton (hanya 1x per sesi, bisa di-force jika retry)
+export function loadFaceApi(force = false) {
+  if (force) {
+    faPromise = null;
+  }
   if (faPromise) return faPromise;
   faPromise = (async () => {
     const fa = await import(

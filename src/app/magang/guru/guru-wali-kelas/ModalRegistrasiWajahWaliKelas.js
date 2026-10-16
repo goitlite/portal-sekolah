@@ -19,6 +19,7 @@ export default function ModalRegistrasiWajahWaliKelas({
   wali,
 }) {
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
   const [siswaList, setSiswaList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTab, setFilterTab] = useState("semua"); // "semua" | "terdaftar" | "belum"
@@ -34,6 +35,7 @@ export default function ModalRegistrasiWajahWaliKelas({
 
     if (force) setRefreshing(true);
     else setLoading(true);
+    setLoadProgress(10);
 
     try {
       // 1. Ambil daftar siswa rombel dari spreadsheet
@@ -48,6 +50,8 @@ export default function ModalRegistrasiWajahWaliKelas({
         }))
         .filter((s) => s.idSiswa)
         .sort((a, b) => a.nama.localeCompare(b.nama));
+
+      setLoadProgress(25);
 
       // 2. Baca URL foto dari cache lokal
       let urlCache = {};
@@ -82,7 +86,8 @@ export default function ModalRegistrasiWajahWaliKelas({
       const missing = normalized.filter((s) => !s.fotoWajah || force);
       if (missing.length > 0) {
         const BATCH_SIZE = 5;
-        for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+        const totalMissing = missing.length;
+        for (let i = 0; i < totalMissing; i += BATCH_SIZE) {
           const batch = missing.slice(i, i + BATCH_SIZE);
           await Promise.allSettled(
             batch.map(async (st) => {
@@ -95,15 +100,19 @@ export default function ModalRegistrasiWajahWaliKelas({
               } catch (_) {}
             }),
           );
+          setLoadProgress(25 + Math.round(((i + batch.length) / totalMissing) * 75));
         }
         setSiswaList([...normalized]);
         try {
           localStorage.setItem(localCacheKey, JSON.stringify(urlCache));
         } catch (_) {}
+      } else {
+        setLoadProgress(100);
       }
     } catch (err) {
       console.error("Gagal memuat siswa untuk registrasi wajah:", err);
     } finally {
+      setLoadProgress(100);
       setLoading(false);
       setRefreshing(false);
     }
@@ -212,7 +221,7 @@ export default function ModalRegistrasiWajahWaliKelas({
               >
                 <span className={refreshing ? "animate-spin" : ""}>🔄</span>
                 <span className="hidden sm:inline">
-                  {refreshing ? "Menyinkronkan..." : "Sinkron"}
+                  {refreshing ? `Menyinkronkan (${loadProgress}%)...` : "Sinkron"}
                 </span>
               </button>
               <button
@@ -313,11 +322,20 @@ export default function ModalRegistrasiWajahWaliKelas({
           {/* LIST SISWA */}
           <div className="p-3 sm:p-5 overflow-y-auto space-y-2 flex-1 bg-slate-50/60">
             {loading ? (
-              <div className="text-center py-12 space-y-2">
-                <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs font-bold text-slate-500">
-                  Memuat data siswa dan verifikasi foto wajah...
+              <div className="flex flex-col items-center justify-center h-72 text-center space-y-3">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm font-bold text-slate-700">
+                  Memuat data siswa dan verifikasi foto wajah kelas {wali?.namaKelas}...
                 </p>
+                <div className="w-48 bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-teal-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${loadProgress}%` }}
+                  ></div>
+                </div>
+                <span className="text-[11px] font-mono text-slate-400">
+                  {loadProgress}% Selesai
+                </span>
               </div>
             ) : filteredSiswa.length === 0 ? (
               <div className="text-center py-10 rounded-2xl bg-white border border-dashed border-slate-300 p-6 space-y-1">
@@ -330,7 +348,27 @@ export default function ModalRegistrasiWajahWaliKelas({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5">
+              <div className="space-y-2">
+                {refreshing && (
+                  <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-between gap-3 text-xs mb-1 animate-in fade-in">
+                    <div className="flex items-center gap-2 text-teal-800 font-bold truncate">
+                      <span className="animate-spin text-sm shrink-0">🔄</span>
+                      <span className="truncate">Menyinkronkan foto wajah siswa dari server...</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-24 sm:w-32 bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-teal-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${loadProgress}%` }}
+                        ></div>
+                      </div>
+                      <span className="font-mono text-teal-700 font-bold text-[11px]">
+                        {loadProgress}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5">
                 {filteredSiswa.map((s, idx) => {
                   const hasPhoto = !!s.fotoWajah;
                   return (
@@ -416,8 +454,9 @@ export default function ModalRegistrasiWajahWaliKelas({
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
           {/* FOOTER */}
           <div className="px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">

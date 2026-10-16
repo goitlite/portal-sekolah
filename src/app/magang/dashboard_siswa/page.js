@@ -219,25 +219,50 @@ export default function DashboardSiswa() {
     }
   }, [user?.id]);
 
+  // Status Online / Offline
+  const [isOfflineMode, setIsOfflineMode] = useState(
+    typeof navigator !== "undefined" ? !navigator.onLine : false,
+  );
+  const [isUpdatingOnline, setIsUpdatingOnline] = useState(false);
+
   // Status Petugas Presensi Kelas & Statistik Kehadiran Kelas
   const [petugasWaliData, setPetugasWaliData] = useState(null);
   const [statistikKelas, setStatistikKelas] = useState(null);
   const [loadingStatistikKelas, setLoadingStatistikKelas] = useState(false);
 
-  // Ambil data Wali Kelas siswa dari backend & cek mandat petugas presensi
+  // Ambil data Wali Kelas siswa dari backend & cek mandat petugas presensi (Dukungan Offline-First)
   const loadDataKelasSiswa = useCallback(async (currentSession) => {
     const sess = currentSession || getSession();
     if (!sess || !sess.id) return;
 
+    const sid = String(sess.id).trim();
+    const cacheKeyStorage = `dashboard_siswa_cache_kelas_${sid}`;
+
+    // 1. OFFLINE-FIRST: Baca cache lokal kelas siswa agar langsung tampil tanpa internet
+    let cachedKelas = null;
+    try {
+      const saved = localStorage.getItem(cacheKeyStorage);
+      if (saved) {
+        cachedKelas = JSON.parse(saved);
+        if (cachedKelas && isMountedRef.current) {
+          if (cachedKelas.statistikKelas) setStatistikKelas(cachedKelas.statistikKelas);
+          if (cachedKelas.petugasWaliData) setPetugasWaliData(cachedKelas.petugasWaliData);
+        }
+      }
+    } catch (_) {}
+
+    const pInfoLocal = findPetugasWaliKelasForSiswa(sess.id);
+    if (pInfoLocal && isMountedRef.current) {
+      setPetugasWaliData(pInfoLocal);
+    }
+
+    // Jika perangkat offline, cukup gunakan cache lokal
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return;
+    }
+
     setLoadingStatistikKelas(true);
     try {
-      // 1. Coba baca cache lokal dulu untuk render instan
-      const pInfoLocal = findPetugasWaliKelasForSiswa(sess.id);
-      if (pInfoLocal) {
-        setPetugasWaliData(pInfoLocal);
-      }
-
-      // 2. Ambil data wali kelas (gunakan sessionStorage dulu agar tidak berulang kali fetch)
       const cacheKey = "dashboard_siswa_cache_walikelas";
       let cards = [];
       try {
@@ -325,6 +350,46 @@ export default function DashboardSiswa() {
             };
             setPetugasWaliData(pInfo);
             cachePetugasLocal(myClass.idWali, pInfo);
+
+            try {
+              localStorage.setItem(
+                cacheKeyStorage,
+                JSON.stringify({
+                  statistikKelas: {
+                    idWali: myClass.idWali,
+                    idGuru: myClass.idGuru,
+                    namaKelas: myClass.namaKelas,
+                    namaGuru: myClass.namaGuru,
+                    jumlahSiswa: myClass.jumlahSiswa,
+                    presensiHariIni: myClass.presensiHariIni,
+                    presensi: myClass.presensi,
+                    daftarSiswa: myClass.daftarSiswa,
+                    keterangan: myClass.keterangan,
+                  },
+                  petugasWaliData: pInfo,
+                }),
+              );
+            } catch (_) {}
+          } else {
+            try {
+              localStorage.setItem(
+                cacheKeyStorage,
+                JSON.stringify({
+                  statistikKelas: {
+                    idWali: myClass.idWali,
+                    idGuru: myClass.idGuru,
+                    namaKelas: myClass.namaKelas,
+                    namaGuru: myClass.namaGuru,
+                    jumlahSiswa: myClass.jumlahSiswa,
+                    presensiHariIni: myClass.presensiHariIni,
+                    presensi: myClass.presensi,
+                    daftarSiswa: myClass.daftarSiswa,
+                    keterangan: myClass.keterangan,
+                  },
+                  petugasWaliData: null,
+                }),
+              );
+            } catch (_) {}
           }
         }
       }
@@ -337,7 +402,7 @@ export default function DashboardSiswa() {
     }
   }, []);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (isSilent = false) => {
     if (!isLoggedIn()) {
       router.replace("/magang/login");
       return;
@@ -354,7 +419,11 @@ export default function DashboardSiswa() {
       setUser(session);
       setLoadFailed(false);
       setLoadFailedMessage("");
-      setLoadProgress(8);
+      if (!isSilent) {
+        setLoadProgress(8);
+      } else {
+        setIsUpdatingOnline(true);
+      }
 
       // Cek apakah siswa merupakan petugas presensi kelas & ambil statistik kelas
       loadDataKelasSiswa(session);
@@ -571,8 +640,9 @@ export default function DashboardSiswa() {
         console.warn("Cache dashboard siswa dilewati:", cacheErr);
       }
     } catch (err) {
-      console.error("Error fetching dashboard siswa:", err);
-      if (!usedCache) {
+      console.warn("Koneksi server gagal/offline saat mengambil data siswa:", err);
+      // Jika pernah login dan punya cache lokal atau data session, jangan pernah tampilkan layar error yang memblokir
+      if (!usedCache && !session?.nama) {
         setLoadFailed(true);
         setLoadFailedMessage(
           "Terjadi kendala saat mengambil data siswa dari server. Periksa koneksi internet Anda.",
@@ -581,6 +651,7 @@ export default function DashboardSiswa() {
     } finally {
       if (isMountedRef.current) {
         setLoading(false);
+        setIsUpdatingOnline(false);
       }
     }
   }, [router, CACHE_KEY, loadDataKelasSiswa]);
@@ -608,6 +679,31 @@ export default function DashboardSiswa() {
       isMountedRef.current = false;
     };
   }, [loadDashboard]);
+
+  // Listener otomatis status Online/Offline & Auto-update saat koneksi internet kembali
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOfflineMode(false);
+      // Auto-update senyap di background saat online kembali
+      const sess = getSession();
+      if (sess?.id) {
+        loadDashboard(true);
+        loadDataKelasSiswa(sess);
+      }
+    };
+
+    const handleOffline = () => {
+      setIsOfflineMode(true);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [loadDashboard, loadDataKelasSiswa]);
 
   // Cek berkala / saat tab kembali aktif jika penunjukan baru saja dilakukan guru
   useEffect(() => {
@@ -1005,8 +1101,26 @@ export default function DashboardSiswa() {
         <div className="relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-4 sm:p-7 text-white shadow-xl border border-blue-800">
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-amber-400 opacity-15 rounded-full blur-2xl pointer-events-none" />
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-xs font-bold uppercase tracking-wider mb-2.5 sm:mb-4 border border-amber-400/30">
-              🎓 Dashboard Peserta Didik
+            <div className="flex flex-wrap items-center gap-2 mb-2.5 sm:mb-4">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-xs font-bold uppercase tracking-wider border border-amber-400/30">
+                🎓 Dashboard Peserta Didik
+              </div>
+              {isOfflineMode ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/25 text-rose-200 text-[9px] sm:text-xs font-bold border border-rose-400/40 animate-pulse">
+                  <span>📱</span>
+                  <span>Mode Offline (Data Lokal)</span>
+                </div>
+              ) : isUpdatingOnline ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 text-[9px] sm:text-xs font-bold border border-emerald-400/40">
+                  <span className="animate-spin">🔄</span>
+                  <span>Memperbarui Data Online...</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[9px] sm:text-xs font-semibold border border-emerald-400/20">
+                  <span>🟢</span>
+                  <span>Online</span>
+                </div>
+              )}
             </div>
             <h2 className="text-xl sm:text-3xl font-black tracking-tight">
               Selamat Datang,

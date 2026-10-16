@@ -11,7 +11,7 @@ export const API_URL =
 // Semua request ke Apps Script lewat sini
 // ==========================================
 
-async function request(action, params = {}) {
+async function request(action, params = {}, { silent = false } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await fetch(API_URL, {
@@ -33,13 +33,17 @@ async function request(action, params = {}) {
         await new Promise((resolve) => setTimeout(resolve, 600));
         continue;
       }
-      console.warn(
-        `[API Info] Request "${action}" tidak terhubung:`,
-        err?.message || err,
-      );
+      // Hanya log jika bukan mode silent (mis. saat offline dengan fallback sendiri)
+      if (!silent) {
+        console.warn(
+          `[API Info] Request "${action}" tidak terhubung:`,
+          err?.message || err,
+        );
+      }
 
       return {
         success: false,
+        networkError: true, // jaringan/server tak terjangkau (BUKAN penolakan server)
         message: "Tidak dapat terhubung ke server.",
       };
     }
@@ -687,12 +691,17 @@ export async function getPresensiWaliGrid(idGuru, idWali) {
 }
 
 // Simpan presensi harian (upsert per siswa+tanggal)
+// silent=true: komponen punya offline-fallback sendiri, tidak perlu warn dari sini
 export async function savePresensiWaliKelas(data) {
-  return request("savePresensiWaliKelas", {
-    idGuru: data.idGuru,
-    idWali: data.idWali,
-    cells: data.cells || [],
-  });
+  return request(
+    "savePresensiWaliKelas",
+    {
+      idGuru: data.idGuru,
+      idWali: data.idWali,
+      cells: data.cells || [],
+    },
+    { silent: true },
+  );
 }
 
 // Simpan jurnal bimbingan wali kelas (+ foto)

@@ -19,6 +19,7 @@ import {
   DESC_INTERVAL_MS,
   SCAN_COOLDOWN_MS,
   loadFaceApi,
+  resetFaceApiPromise,
   euclid,
   matchFace,
   isConfident,
@@ -94,6 +95,48 @@ function playBeepSuccess() {
 const MEMORY_SISWA_CACHE = {};
 const SESSION_URL_CHECKED = {};
 
+// Format tanggal, hari, dan jam bahasa Indonesia (misal: "Jumat, 16 Okt 2026 • 07:45 WIB")
+function formatLastSavedIndo(isoString) {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    const hari = d.toLocaleDateString("id-ID", { weekday: "long" });
+    const tgl = d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const jam = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${hari}, ${tgl} • ${jam} WIB`;
+  } catch (_) {
+    return "";
+  }
+}
+
+// Helper penyimpanan antrian presensi offline multi-hari
+function getOfflineQueue(waliId) {
+  try {
+    const raw = localStorage.getItem(`offline_presensi_queue_${waliId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveOfflineQueue(waliId, queue) {
+  try {
+    localStorage.setItem(
+      `offline_presensi_queue_${waliId}`,
+      JSON.stringify(queue),
+    );
+  } catch (_) {}
+}
+
 export default function ModalScanWajahPetugas({
   isOpen,
   onClose,
@@ -132,6 +175,13 @@ export default function ModalScanWajahPetugas({
   // Loading bar bertingkat di tengah layar untuk sinkron harian pertama kali
   const [syncModalProgress, setSyncModalProgress] = useState(null);
   // { show: boolean, stage: number, totalStages: number, pct: number, title: string, desc: string, detail: string }
+
+  // Dialog pilihan konfirmasi sinkron ulang bagi yang sudah pernah menggunakan
+  const [syncPromptOpen, setSyncPromptOpen] = useState(false);
+
+  // Status sinkronisasi online & akumulasi offline multi-hari
+  const [lastOnlineSaveTime, setLastOnlineSaveTime] = useState("");
+  const [pendingOfflineRecords, setPendingOfflineRecords] = useState([]);
 
   // Status scan: { [idSiswa]: { status: "Hadir", waktuScan: "07:15:23", timestamp } }
   const [scannedMap, setScannedMap] = useState({});
@@ -240,83 +290,200 @@ export default function ModalScanWajahPetugas({
     }
 
     async function initClassData() {
-      setLoadingData(true);
-      updateProfileLoadingState("loading_data");
-      try {
-        const pastLimit = checkIsPastTimeLimit();
-        setIsLockedByTime(pastLimit);
+      const pastLimit = checkIsPastTimeLimit();
+      setIsLockedByTime(pastLimit);
 
+      // 1. OFFLINE-FIRST: Ambil data rombel siswa dari cache lokal segera
+      let localSiswa = MEMORY_SISWA_CACHE[waliId] || null;
+      if (!localSiswa) {
+        try {
+          const raw = localStorage.getItem(storageKeySiswa);
+          if (raw) localSiswa = JSON.parse(raw);
+        } catch (_) {}
+      }
+
+      // Muat waktu simpan online terakhir jika ada
+      try {
+        const lastSaved = localStorage.getItem(`last_online_save_${waliId}`);
+        if (lastSaved) setLastOnlineSaveTime(lastSaved);
+      } catch (_) {}
+
+      // Muat antrian offline multi-hari
+      const offlineQueue = getOfflineQueue(waliId);
+      // Catatan presensi hari lampau yang belum terkirim online
+      const pastRecords = offlineQueue.filter(
+        (item) => item.tanggal && item.tanggal !== todayISO,
+      );
+      setPendingOfflineRecords(pastRecords);
+
+      // Catatan offline hari ini jika ada
+      const todayOffline = offlineQueue.filter(
+        (item) => !item.tanggal || item.tanggal === todayISO,
+      );
+      const todayOfflineScan = {};
+      const todayOfflineManual = {};
+      todayOffline.forEach((item) => {
+        if (item.status === "Hadir") {
+          todayOfflineScan[item.idSiswa] = {
+            status: "Hadir",
+            waktuScan:
+              String(item.keterangan || "").match(
+                /(\d{2}[:.]\d{2}(?:[:.]\d{2})?)/,
+              )?.[1] || "Offline",
+            timestamp: item.timestamp || Date.now(),
+          };
+        } else if (item.status) {
+          todayOfflineManual[item.idSiswa] = item.status;
+        }
+      });
+
+      // Status sinkronisasi awal & batasan notif pilihan hanya 1 kali sehari (saat pertama buka)
+      let hasEverSynced = false;
+      try {
+        hasEverSynced =
+          localStorage.getItem(`face_sync_completed_${waliId}`) === "true";
+      } catch (_) {}
+
+      const promptKey = `face_sync_prompt_date_${waliId}`;
+      let lastPromptDate = null;
+      try {
+        lastPromptDate = localStorage.getItem(promptKey);
+      } catch (_) {}
+      const isFirstOpenToday = lastPromptDate !== todayISO;
+
+      // Jika data lokal sudah ada, gunakan LANGSUNG agar kamera siap seketika (meskipun offline)
+      if (Array.isArray(localSiswa) && localSiswa.length > 0) {
+        setSiswaList(localSiswa);
+        setScannedMap((prev) => ({
+          ...localDraft,
+          ...todayOfflineScan,
+          ...prev,
+        }));
+        setManualStatusMap((prev) => ({
+          ...todayOfflineManual,
+          ...prev,
+        }));
+        setLoadingData(false);
+        // Langsung siapkan profil wajah secara offline
+        loadStudentFaceProfilesParallel(localSiswa, false);
+
+        // Jika sudah pernah sinkron dan baru pertama buka hari ini: munculkan dialog pilihan (1x sehari)
+        if (hasEverSynced && isFirstOpenToday) {
+          setSyncPromptOpen(true);
+          try {
+            localStorage.setItem(promptKey, todayISO);
+          } catch (_) {}
+        }
+      } else {
+        setLoadingData(true);
+        updateProfileLoadingState("loading_data");
+      }
+
+      // 2. Cobalah sinkronisasi data terbaru dari server jika online
+      try {
         const res = await getPresensiWaliGrid(
           petugasInfo.idGuru,
           petugasInfo.idWali,
         );
         if (!isMounted) return;
 
-        if (!res.success) {
-          throw new Error(res.message || "Gagal memuat data rombel.");
-        }
+        if (res && res.success) {
+          const rawSiswa = res.data?.siswa || [];
+          const normalizedSiswa = rawSiswa
+            .map((s) => ({
+              idSiswa: String(s.idSiswa || s.id || "").trim(),
+              nama: (s.nama || s.namaSiswa || "").trim(),
+              kelas: s.kelas || "",
+            }))
+            .filter((s) => s.idSiswa)
+            .sort((a, b) => a.nama.localeCompare(b.nama));
 
-        const rawSiswa = res.data?.siswa || [];
-        const normalizedSiswa = rawSiswa
-          .map((s) => ({
-            idSiswa: String(s.idSiswa || s.id || "").trim(),
-            nama: (s.nama || s.namaSiswa || "").trim(),
-            kelas: s.kelas || "",
-          }))
-          .filter((s) => s.idSiswa)
-          .sort((a, b) => a.nama.localeCompare(b.nama));
+          setSiswaList(normalizedSiswa);
+          MEMORY_SISWA_CACHE[waliId] = normalizedSiswa;
+          try {
+            localStorage.setItem(
+              storageKeySiswa,
+              JSON.stringify(normalizedSiswa),
+            );
+          } catch (_) {}
 
-        setSiswaList(normalizedSiswa);
-        MEMORY_SISWA_CACHE[waliId] = normalizedSiswa;
-        try {
-          localStorage.setItem(
-            storageKeySiswa,
-            JSON.stringify(normalizedSiswa),
+          // Sinkronisasi data presensi yang sudah tersimpan di server hari ini
+          const rawPresensi = res.data?.presensi || [];
+          const todayRecords = rawPresensi.filter(
+            (p) => String(p.tanggal).trim() === todayISO,
           );
-        } catch (_) {}
+          const existingScanMap = {};
+          const existingManualMap = {};
+          const existingKetMap = {};
 
-        // Sinkronisasi data presensi yang sudah tersimpan hari ini
-        const rawPresensi = res.data?.presensi || [];
-        const todayRecords = rawPresensi.filter(
-          (p) => String(p.tanggal).trim() === todayISO,
-        );
-        const existingScanMap = {};
-        const existingManualMap = {};
-        const existingKetMap = {};
+          if (todayRecords.length > 0) {
+            setHasPreviousSubmission(true);
+            todayRecords.forEach((p) => {
+              const sid = String(p.idSiswa).trim();
+              if (p.status === "Hadir") {
+                const matchTime = String(p.keterangan || "").match(
+                  /(\d{2}[:.]\d{2}(?:[:.]\d{2})?)/,
+                );
+                existingScanMap[sid] = {
+                  status: "Hadir",
+                  waktuScan: matchTime ? matchTime[1] : "Tersimpan",
+                  timestamp: Date.now(),
+                };
+              } else {
+                existingManualMap[sid] = p.status || "Alfa";
+                existingKetMap[sid] = p.keterangan || "";
+              }
+            });
+          }
 
-        if (todayRecords.length > 0) {
-          setHasPreviousSubmission(true);
-          todayRecords.forEach((p) => {
-            const sid = String(p.idSiswa).trim();
-            if (p.status === "Hadir") {
-              const matchTime = String(p.keterangan || "").match(
-                /(\d{2}[:.]\d{2}(?:[:.]\d{2})?)/,
-              );
-              existingScanMap[sid] = {
-                status: "Hadir",
-                waktuScan: matchTime ? matchTime[1] : "Tersimpan",
-                timestamp: Date.now(),
-              };
-            } else {
-              existingManualMap[sid] = p.status || "Alfa";
-              existingKetMap[sid] = p.keterangan || "";
+          setScannedMap((prev) => ({
+            ...existingScanMap,
+            ...localDraft,
+            ...todayOfflineScan,
+            ...prev,
+          }));
+          setManualStatusMap((prev) => ({
+            ...existingManualMap,
+            ...todayOfflineManual,
+            ...prev,
+          }));
+          setManualKetMap((prev) => ({ ...existingKetMap, ...prev }));
+
+          // Jika petugas baru pertama kali menggunakan -> auto sinkronisasi penuh
+          // Daftar siswa dari server berbeda dengan cache (siswa masuk/keluar kelas):
+          // profil wajah harus dibangun ulang agar siswa baru dikenali.
+          const idsOf = (arr) =>
+            (arr || []).map((s) => s.idSiswa).sort().join("|");
+          const rosterChanged =
+            Array.isArray(localSiswa) &&
+            localSiswa.length > 0 &&
+            idsOf(localSiswa) !== idsOf(normalizedSiswa);
+
+          if (!hasEverSynced) {
+            loadStudentFaceProfilesParallel(normalizedSiswa, true);
+          } else if (rosterChanged) {
+            loadStudentFaceProfilesParallel(normalizedSiswa, true);
+          } else if (!localSiswa || localSiswa.length === 0) {
+            // Jika sebelumnya belum ada cache lokal tapi sekarang sudah dapat dari server
+            loadStudentFaceProfilesParallel(normalizedSiswa, false);
+            if (isFirstOpenToday) {
+              setSyncPromptOpen(true);
+              try {
+                localStorage.setItem(promptKey, todayISO);
+              } catch (_) {}
             }
-          });
+          }
         }
-
-        setScannedMap((prev) => ({
-          ...existingScanMap,
-          ...localDraft,
-          ...prev,
-        }));
-        setManualStatusMap((prev) => ({ ...existingManualMap, ...prev }));
-        setManualKetMap((prev) => ({ ...existingKetMap, ...prev }));
-
-        // Pra-muat profil foto wajah siswa secara paralel
-        loadStudentFaceProfilesParallel(normalizedSiswa);
-      } catch (err) {
-        if (isMounted) {
-          setCameraError(err.message || "Gagal memuat data kelas.");
+      } catch (netErr) {
+        // Mode Offline: Jaringan terputus / server tidak terjangkau
+        console.warn(
+          "Koneksi offline atau server tidak terjangkau, menggunakan data cache lokal:",
+          netErr,
+        );
+        if ((!localSiswa || localSiswa.length === 0) && isMounted) {
+          setCameraError(
+            "Jaringan terputus dan data rombel belum tersimpan di perangkat ini. Hubungkan internet untuk sinkronisasi awal.",
+          );
         }
       } finally {
         if (isMounted) setLoadingData(false);
@@ -351,7 +518,13 @@ export default function ModalScanWajahPetugas({
     siswaArray,
     forceRefresh = false,
   ) {
-    if (forceRefresh) setSyncingFaces(true);
+    if (forceRefresh) {
+      setSyncingFaces(true);
+      if (engineStatusRef.current === "fallback") {
+        resetFaceApiPromise();
+        setEngineNonce((n) => n + 1);
+      }
+    }
     const waliId = petugasInfo?.idWali || "unknown";
     const localCacheKey = `cached_face_urls_${waliId}`;
 
@@ -482,17 +655,23 @@ export default function ModalScanWajahPetugas({
       // Jalankan awal (tanpa menunggu selesai agar validasi server paralel)
       const firstRun = applyProfiles(urlsA, false);
 
-      // --- Validasi URL ke server (Auto-Sinkron Harian / Force Refresh) ---
-      const lastSyncKey = `face_last_sync_date_${waliId}`;
-      let lastSyncDate = null;
+      // --- Validasi URL ke server ---
+      // Aturan: Hanya unduh dari server jika pertama kali pakai (!hasEverSynced) atau ditekan Ulang Sinkron (forceRefresh)
+      const hasEverSyncedKey = `face_sync_completed_${waliId}`;
+      let hasEverSynced = false;
       try {
-        lastSyncDate = localStorage.getItem(lastSyncKey);
+        hasEverSynced = localStorage.getItem(hasEverSyncedKey) === "true";
       } catch (_) {}
 
-      // Jika hari baru (tanggal hari ini berbeda dengan tanggal sync terakhir) atau forceRefresh
-      const isNewDay = lastSyncDate !== todayISO;
-      const mustCheck =
-        forceRefresh || isNewDay || !SESSION_URL_CHECKED[waliId];
+      const lastSyncKey = `face_last_sync_date_${waliId}`;
+      const isOnlineNow =
+        typeof navigator === "undefined" || navigator.onLine !== false;
+      if (forceRefresh && !isOnlineNow) {
+        alert(
+          "📴 Tidak ada koneksi internet. Sinkron wajah dibatalkan, kamera memakai data yang sudah tersimpan di perangkat.",
+        );
+      }
+      const mustCheck = (forceRefresh || !hasEverSynced) && isOnlineNow;
       if (mustCheck) {
         updateProfileLoadingState("reading_photos");
         setSyncModalProgress({
@@ -500,7 +679,7 @@ export default function ModalScanWajahPetugas({
           stage: 1,
           totalStages: 3,
           pct: 10,
-          title: "Sinkronisasi Foto Wajah Harian",
+          title: "Sinkronisasi Foto Wajah Siswa",
           desc: "Memeriksa pembaruan foto wajah siswa kelas dari server...",
           detail: `0 dari ${siswaArray.length} siswa`,
         });
@@ -544,6 +723,7 @@ export default function ModalScanWajahPetugas({
         if (allOk) {
           SESSION_URL_CHECKED[waliId] = true;
           try {
+            localStorage.setItem(hasEverSyncedKey, "true");
             localStorage.setItem(lastSyncKey, todayISO);
           } catch (_) {}
         }
@@ -569,6 +749,12 @@ export default function ModalScanWajahPetugas({
             detail: "Kamera pemindai siap digunakan",
           });
           setTimeout(() => setSyncModalProgress(null), 600);
+        }
+        // Tanda "pernah sinkron" hanya bila SEMUA siswa berhasil diperiksa
+        if (allOk) {
+          try {
+            localStorage.setItem(hasEverSyncedKey, "true");
+          } catch (_) {}
         }
         updateProfileLoadingState("ready");
       } else {
@@ -647,7 +833,14 @@ export default function ModalScanWajahPetugas({
     if (!isOpen) return;
     let cancelled = false;
     setEngine("loading");
-    withTimeout(loadFaceApi(), 90000)
+
+    // Jika dipicu dari engineNonce > 0, force reset promise agar bersih dari kegagalan sebelumnya
+    const isRetry = engineNonce > 0;
+    if (isRetry) {
+      resetFaceApiPromise();
+    }
+
+    withTimeout(loadFaceApi(isRetry), 90000)
       .then((fa) => {
         if (cancelled) return;
         faRef.current = fa;
@@ -659,8 +852,19 @@ export default function ModalScanWajahPetugas({
         faRef.current = null;
         setEngine("fallback");
       });
+
+    // Auto-retry saat koneksi internet kembali online
+    const handleOnlineRetry = () => {
+      if (engineStatusRef.current === "fallback") {
+        resetFaceApiPromise();
+        setEngineNonce((n) => n + 1);
+      }
+    };
+    window.addEventListener("online", handleOnlineRetry);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("online", handleOnlineRetry);
     };
   }, [isOpen, engineNonce]);
 
@@ -1157,6 +1361,17 @@ export default function ModalScanWajahPetugas({
       return;
     }
 
+    // Siswa yang sudah tidak terdaftar di kelas ini tidak boleh dicatat
+    if (!siswaList.some((s) => s.idSiswa === scannedId)) {
+      lastSuccessScanAt.current = Date.now();
+      setScanOverlay({
+        type: "unknown",
+        nama: studentName,
+        pesan: "Bukan siswa kelas ini. Sinkron ulang data wajah bila perlu.",
+      });
+      return;
+    }
+
     // Kasus: Siswa sudah pernah discan sebelumnya (FIRST-SCAN WINS)
     const existing = scannedMapRef.current[scannedId];
     if (existing) {
@@ -1196,6 +1411,26 @@ export default function ModalScanWajahPetugas({
       return copy;
     });
 
+    // Simpan ke antrian offline lokal multi-hari
+    try {
+      const waliId = petugasInfo?.idWali;
+      if (waliId) {
+        const q = getOfflineQueue(waliId);
+        const filtered = q.filter(
+          (item) => !(item.idSiswa === scannedId && item.tanggal === todayISO),
+        );
+        filtered.push({
+          idSiswa: scannedId,
+          namaSiswa: studentName,
+          tanggal: todayISO,
+          status: "Hadir",
+          keterangan: `Presensi Wajah: ${jamScan} WIB`,
+          timestamp: Date.now(),
+        });
+        saveOfflineQueue(waliId, filtered);
+      }
+    } catch (_) {}
+
     lastSuccessScanAt.current = Date.now();
     playBeepSuccess();
     if (typeof navigator !== "undefined" && navigator.vibrate) {
@@ -1208,6 +1443,40 @@ export default function ModalScanWajahPetugas({
       waktu: jamScan,
       pesan: `hadir pada pukul ${jamScan} WIB via Presensi Wajah`,
     });
+  }
+
+  // Update status manual (Sakit, Izin, Alfa, Cabut) sekaligus simpan ke antrian offline
+  function handleUpdateManualStatus(targetSiswa, st) {
+    if (isLockedByTime) return;
+    setManualStatusMap((prev) => ({
+      ...prev,
+      [targetSiswa.idSiswa]: st,
+    }));
+
+    try {
+      const waliId = petugasInfo?.idWali;
+      if (waliId) {
+        const q = getOfflineQueue(waliId);
+        const filtered = q.filter(
+          (item) =>
+            !(item.idSiswa === targetSiswa.idSiswa && item.tanggal === todayISO),
+        );
+        const ket =
+          manualKetMap[targetSiswa.idSiswa] ||
+          (st === "Alfa"
+            ? "Tidak hadir saat presensi wajah"
+            : `Petugas: ${user?.nama || "Siswa"}`);
+        filtered.push({
+          idSiswa: targetSiswa.idSiswa,
+          namaSiswa: targetSiswa.nama,
+          tanggal: todayISO,
+          status: st,
+          keterangan: ket,
+          timestamp: Date.now(),
+        });
+        saveOfflineQueue(waliId, filtered);
+      }
+    } catch (_) {}
   }
 
   recognizedRef.current = handleStudentRecognized;
@@ -1257,7 +1526,65 @@ export default function ModalScanWajahPetugas({
     return siswaList.filter((s) => !!scannedMap[s.idSiswa]);
   }, [siswaList, scannedMap]);
 
-  // 6. KIRIM / SIMPAN PRESENSI KE BACKEND DENGAN PROGRESS BAR
+  // KIRIM OTOMATIS ANTRIAN OFFLINE
+  // - Catatan hari lampau selalu boleh dikirim (tidak terkena batas jam).
+  // - Catatan hari ini ikut dikirim setelah batas jam lewat (petugas sudah tak bisa menyimpan manual).
+  // - Aman diulang: server melakukan upsert per siswa+tanggal.
+  const flushingRef = useRef(false);
+  async function flushOfflineQueue() {
+    const waliId = petugasInfo?.idWali;
+    const guruId = petugasInfo?.idGuru;
+    if (!waliId || !guruId || flushingRef.current) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+
+    const lockedNow = checkIsPastTimeLimit();
+    const cells = getOfflineQueue(waliId).filter(
+      (it) => it && it.idSiswa && it.tanggal && (it.tanggal !== todayISO || lockedNow),
+    );
+    if (cells.length === 0) return;
+
+    flushingRef.current = true;
+    try {
+      const res = await savePresensiWaliKelas({ idGuru: guruId, idWali: waliId, cells });
+      if (res && res.success) {
+        const keyOf = (it) => `${it.idSiswa}|${it.tanggal}|${it.timestamp || ""}|${it.status}`;
+        const sent = new Set(cells.map(keyOf));
+        // Baca ulang antrian: catatan baru yang masuk saat mengirim tidak ikut terhapus
+        saveOfflineQueue(
+          waliId,
+          getOfflineQueue(waliId).filter((it) => !sent.has(keyOf(it))),
+        );
+        setPendingOfflineRecords((prev) => prev.filter((it) => !sent.has(keyOf(it))));
+        const nowIso = new Date().toISOString();
+        try {
+          localStorage.setItem(`last_online_save_${waliId}`, nowIso);
+        } catch (_) {}
+        setLastOnlineSaveTime(nowIso);
+      } else if (res && !res.networkError) {
+        console.warn("Server menolak kiriman antrian offline:", res.message);
+      }
+    } catch (e) {
+      console.warn("Kirim antrian offline gagal:", e);
+    } finally {
+      flushingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen || !petugasInfo?.idWali) return;
+    const t0 = setTimeout(flushOfflineQueue, 1500);
+    const onOnline = () => flushOfflineQueue();
+    window.addEventListener("online", onOnline);
+    const iv = setInterval(flushOfflineQueue, 60000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(iv);
+      window.removeEventListener("online", onOnline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, petugasInfo?.idWali, petugasInfo?.idGuru, todayISO]);
+
+  // 6. KIRIM / SIMPAN PRESENSI KE BACKEND DENGAN PROGRESS BAR (OFFLINE & ONLINE)
   async function handleSubmitPresensi() {
     if (isSubmittedToday || isLockedByTime) {
       alert("⛔ Batas waktu pengisian presensi hari ini telah berakhir.");
@@ -1269,28 +1596,41 @@ export default function ModalScanWajahPetugas({
       return;
     }
 
+    const isOffline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
+    const pendingCount = pendingOfflineRecords.length;
+    const offlineNote =
+      pendingCount > 0
+        ? `\n\n📌 Terdeteksi ${pendingCount} data presensi offline hari kemarin yang belum tersimpan online dan akan dimasukkan bersama.`
+        : "";
+
     const confirmText =
-      `📋 KONFIRMASI PENGIRIMAN PRESENSI KELAS\n\n` +
+      (isOffline
+        ? `📱 KONFIRMASI SIMPAN PRESENSI (MODE OFFLINE)\n\n`
+        : `📋 KONFIRMASI PENGIRIMAN PRESENSI KELAS\n\n`) +
       `Kelas: ${petugasInfo?.namaKelas}\n` +
-      `Total Siswa: ${stats.total}\n` +
+      `Total Siswa Hari Ini: ${stats.total}\n` +
       `• Hadir: ${stats.hadir}\n` +
       `• Sakit: ${stats.sakit}\n` +
       `• Izin: ${stats.izin}\n` +
-      `• Alfa: ${stats.alfa + stats.belumScan} (${stats.belumScan} siswa belum hadir otomatis Alfa)\n\n` +
-      `Apakah Anda ingin menyimpan data presensi ini sekarang?`;
+      `• Alfa: ${stats.alfa + stats.belumScan} (${stats.belumScan} siswa belum hadir otomatis Alfa)` +
+      offlineNote +
+      (isOffline
+        ? `\n\nJaringan internet sedang mati. Data diamankan OFFLINE di HP dan dikirim otomatis ke Spreadsheet begitu internet kembali (selama aplikasi terbuka).\nSimpan presensi sekarang?`
+        : `\n\nApakah Anda ingin menyimpan data presensi ini sekarang?`);
 
     if (!window.confirm(confirmText)) return;
 
     setSaving(true);
     setSaveProgress({
-      pct: 25,
+      pct: 20,
       label: "Menyusun data presensi...",
       done: false,
       error: false,
     });
 
     try {
-      const cells = siswaList.map((s) => {
+      const todayCells = siswaList.map((s) => {
         const scan = scannedMap[s.idSiswa];
         if (scan) {
           return {
@@ -1302,7 +1642,8 @@ export default function ModalScanWajahPetugas({
           };
         }
 
-        const st = manualStatusMap[s.idSiswa] || "Alfa";
+        const explicit = manualStatusMap[s.idSiswa];
+        const st = explicit || "Alfa";
         const ket =
           manualKetMap[s.idSiswa] ||
           (st === "Alfa"
@@ -1315,57 +1656,138 @@ export default function ModalScanWajahPetugas({
           tanggal: todayISO,
           status: st,
           keterangan: ket,
+          ...(explicit ? {} : { auto: true, onlyIfEmpty: true }),
         };
       });
 
+      // Gabungkan data presensi offline dari hari-hari lampau dengan data hari ini
+      const allCells = [...pendingOfflineRecords, ...todayCells];
+
+      // Amankan dulu ke antrian lokal HP agar data terjamin tidak hilang
+      try {
+        saveOfflineQueue(petugasInfo.idWali, allCells);
+      } catch (_) {}
+
+      // KASUS 1: Perangkat sedang offline (jaringan dimatikan)
+      if (isOffline) {
+        setSaveProgress({
+          pct: 100,
+          label:
+            "📱 Presensi berhasil disimpan secara Offline di HP! Data aman dan akan otomatis dikirim ke Spreadsheet saat online.",
+          done: true,
+          error: false,
+        });
+
+        if (typeof onPresensiSubmitted === "function") {
+          onPresensiSubmitted();
+        }
+
+        setTimeout(() => {
+          setSaveProgress(null);
+          if (checkIsPastTimeLimit()) {
+            setIsSubmittedToday(true);
+            onClose();
+          }
+        }, 1800);
+        return;
+      }
+
+      // KASUS 2: Mencoba simpan secara Online ke Spreadsheet
       setSaveProgress({
-        pct: 65,
-        label: "Menyimpan ke Google Sheets...",
+        pct: 60,
+        label: `Menyimpan ${allCells.length} data presensi ke Google Sheets...`,
         done: false,
         error: false,
       });
 
-      const res = await savePresensiWaliKelas({
-        idGuru: petugasInfo.idGuru,
-        idWali: petugasInfo.idWali,
-        cells,
-      });
-
-      if (!res.success) {
-        throw new Error(res.message || "Gagal menyimpan presensi.");
-      }
-
-      setHasPreviousSubmission(true);
+      let res;
       try {
-        localStorage.removeItem(`draft_scan_${petugasInfo.idWali}_${todayISO}`);
-      } catch (_) {}
-
-      if (typeof onPresensiSubmitted === "function") {
-        onPresensiSubmitted();
+        res = await savePresensiWaliKelas({
+          idGuru: petugasInfo.idGuru,
+          idWali: petugasInfo.idWali,
+          cells: allCells,
+        });
+      } catch (netErr) {
+        res = {
+          success: false,
+          networkError: true,
+          message: netErr?.message || "Tidak dapat terhubung ke server.",
+        };
       }
 
+      if (res && res.success) {
+        const nowIso = new Date().toISOString();
+        try {
+          localStorage.setItem(`last_online_save_${petugasInfo.idWali}`, nowIso);
+          localStorage.removeItem(`draft_scan_${petugasInfo.idWali}_${todayISO}`);
+          // Bersihkan antrian offline karena seluruhnya telah berhasil tersimpan online
+          saveOfflineQueue(petugasInfo.idWali, []);
+        } catch (_) {}
+
+        setLastOnlineSaveTime(nowIso);
+        setPendingOfflineRecords([]);
+        setHasPreviousSubmission(true);
+
+        if (typeof onPresensiSubmitted === "function") {
+          onPresensiSubmitted();
+        }
+
+        setSaveProgress({
+          pct: 100,
+          label: "✅ Presensi kelas berhasil disimpan ke Spreadsheet secara online!",
+          done: true,
+          error: false,
+        });
+
+        setTimeout(() => {
+          setSaveProgress(null);
+          if (checkIsPastTimeLimit()) {
+            setIsSubmittedToday(true);
+            onClose();
+          }
+        }, 1500);
+      } else if (!res || res.networkError) {
+        // Jaringan putus / server tak terjangkau: data aman di antrian HP, dikirim otomatis nanti
+        console.warn("Gagal simpan online (jaringan), data tetap di antrian:", res?.message);
+        setSaveProgress({
+          pct: 100,
+          label:
+            "📱 Server tidak terjangkau. Presensi tersimpan aman di HP dan akan dikirim otomatis saat online.",
+          done: true,
+          error: false,
+        });
+
+        if (typeof onPresensiSubmitted === "function") {
+          onPresensiSubmitted();
+        }
+
+        setTimeout(() => {
+          setSaveProgress(null);
+          if (checkIsPastTimeLimit()) {
+            setIsSubmittedToday(true);
+            onClose();
+          }
+        }, 2000);
+      } else {
+        // Server MENOLAK (bukan masalah jaringan): jangan tampilkan seolah-olah sukses
+        console.warn("Server menolak penyimpanan presensi:", res?.message);
+        setSaveProgress({
+          pct: 100,
+          label: `⛔ Gagal disimpan: ${res?.message || "kesalahan di server"}. Data masih aman di HP — hubungi admin bila berulang.`,
+          done: true,
+          error: true,
+        });
+        setTimeout(() => setSaveProgress(null), 6000);
+      }
+    } catch (err) {
+      console.warn("Penyimpanan offline:", err);
       setSaveProgress({
         pct: 100,
-        label: "✅ Presensi kelas berhasil disimpan ke Spreadsheet!",
+        label: "📱 Presensi berhasil diamankan di penyimpanan lokal perangkat.",
         done: true,
         error: false,
       });
-
-      setTimeout(() => {
-        setSaveProgress(null);
-        if (checkIsPastTimeLimit()) {
-          setIsSubmittedToday(true);
-          onClose();
-        }
-      }, 1500);
-    } catch (err) {
-      console.error("Gagal simpan presensi:", err);
-      setSaveProgress({
-        pct: 100,
-        label: `❌ Terjadi kesalahan: ${err.message || "Koneksi terputus"}`,
-        done: true,
-        error: true,
-      });
+      setTimeout(() => setSaveProgress(null), 2000);
     } finally {
       setSaving(false);
     }
@@ -1381,7 +1803,57 @@ export default function ModalScanWajahPetugas({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh] relative">
+        {/* MODAL DIALOG PILIHAN SINKRONISASI ULANG */}
+        {syncPromptOpen && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl sm:rounded-3xl p-5 max-w-sm sm:max-w-md w-full shadow-2xl border border-slate-200 text-center space-y-3.5">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center text-2xl shadow-inner">
+                🔄
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-sm sm:text-base font-black text-slate-900">
+                  Sinkronisasi Data Wajah
+                </h4>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
+                  Ulang sinkron data jika ada foto siswa di daftarkan oleh guru wali kelas?
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Pilih &quot;Tidak&quot; jika tidak ada penambahan foto siswa baru, agar kamera langsung siap digunakan.
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row items-center gap-2 pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSyncPromptOpen(false);
+                    loadStudentFaceProfilesParallel(
+                      studentProfilesRef.current?.length
+                        ? studentProfilesRef.current
+                        : siswaList,
+                      true,
+                    );
+                  }}
+                  className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Ya, Sinkron Ulang
+                </button>
+
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setSyncPromptOpen(false)}
+                  className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 ring-2 ring-emerald-400/50"
+                >
+                  <span>✓</span>
+                  <span>Tidak (Default)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* HEADER MODAL */}
         <div className="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -1568,11 +2040,23 @@ export default function ModalScanWajahPetugas({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setEngineNonce((n) => n + 1)}
-                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-colors"
+                    onClick={() => {
+                      resetFaceApiPromise();
+                      setEngine("loading");
+                      setEngineNonce((n) => n + 1);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-all shadow-xs"
                   >
-                    Ulangi
+                    🔄 Ulangi
                   </button>
+                </div>
+              )}
+              {engineStatus === "loading" && (
+                <div className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] flex items-center gap-1.5 shadow-xs animate-pulse">
+                  <span className="animate-spin text-xs">⏳</span>
+                  <span className="font-semibold">
+                    Sedang memuat model kecerdasan buatan (AI)...
+                  </span>
                 </div>
               )}
               {templateInfo.failed.length > 0 && (
@@ -1999,12 +2483,7 @@ export default function ModalScanWajahPetugas({
                             <button
                               key={st}
                               disabled={isLockedByTime}
-                              onClick={() =>
-                                setManualStatusMap((prev) => ({
-                                  ...prev,
-                                  [s.idSiswa]: st,
-                                }))
-                              }
+                              onClick={() => handleUpdateManualStatus(s, st)}
                               className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
                                 curStatus === st
                                   ? st === "Sakit"
@@ -2085,31 +2564,67 @@ export default function ModalScanWajahPetugas({
         </div>
 
         {/* FOOTER AKSI */}
-        <div className="px-4 sm:px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
-          <button
-            onClick={() => {
-              stopCamera();
-              onClose();
-            }}
-            className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-          >
-            Tutup
-          </button>
+        <div className="px-3 sm:px-6 py-2.5 sm:py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+          <div className="flex items-center justify-between sm:justify-start gap-3">
+            <button
+              onClick={() => {
+                stopCamera();
+                onClose();
+              }}
+              className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            >
+              Tutup
+            </button>
+
+            {/* Indikator Status Simpan Terakhir */}
+            <div className="text-[10px] sm:text-[11px] leading-tight text-slate-500">
+              {lastOnlineSaveTime ? (
+                <div className="flex items-center gap-1 text-emerald-700 font-semibold">
+                  <span className="text-xs">☁️</span>
+                  <span>
+                    Update Online: {formatLastSavedIndo(lastOnlineSaveTime)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-slate-500">
+                  <span className="text-xs">📱</span>
+                  <span>Tersimpan Offline di HP</span>
+                </div>
+              )}
+              {pendingOfflineRecords.length > 0 && (
+                <div className="text-[9.5px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
+                  <span>⚠️</span>
+                  <span>
+                    +{pendingOfflineRecords.length} presensi offline belum tersimpan online
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
           {!isLockedByTime && (
             <button
               onClick={handleSubmitPresensi}
               disabled={saving || stats.total === 0}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-black transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <span>{saving ? "⏳" : "💾"}</span>
-              <span>
-                {saving
-                  ? "Menyimpan ke Spreadsheet..."
-                  : hasPreviousSubmission
-                    ? "Perbarui Presensi Kelas (s.d 08.30)"
-                    : "Kirim Presensi Kelas (s.d 08.30)"}
-              </span>
+              <span className="text-base">{saving ? "⏳" : "💾"}</span>
+              <div className="flex flex-col text-left">
+                <span>
+                  {saving
+                    ? "Menyimpan ke Spreadsheet..."
+                    : pendingOfflineRecords.length > 0
+                      ? `Simpan Online (${stats.hadir + stats.sakit + stats.izin} Siswa + ${pendingOfflineRecords.length} Offline)`
+                      : hasPreviousSubmission
+                        ? "Perbarui Presensi Kelas"
+                        : "Simpan Presensi Kelas"}
+                </span>
+                {lastOnlineSaveTime && !saving && (
+                  <span className="text-[9px] font-normal text-emerald-100 opacity-90 truncate">
+                    Update Terakhir: {formatLastSavedIndo(lastOnlineSaveTime)}
+                  </span>
+                )}
+              </div>
             </button>
           )}
         </div>

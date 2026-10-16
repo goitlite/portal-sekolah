@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { getPresensiWaliGrid, savePresensiWaliKelas } from "../lib/api";
 
 const STATUS_OPTIONS = [
@@ -47,6 +47,48 @@ function formatTanggalIndo(dateStr) {
   }
 }
 
+// Format waktu simpan terakhir dalam bahasa Indonesia
+function formatLastSavedIndo(isoString) {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    const hari = d.toLocaleDateString("id-ID", { weekday: "long" });
+    const tgl = d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const jam = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${hari}, ${tgl} • ${jam} WIB`;
+  } catch (_) {
+    return "";
+  }
+}
+
+// Helper penyimpanan antrian presensi offline multi-hari (kunci berbeda dari barcode)
+function getOfflineQueueReguler(waliId) {
+  try {
+    const raw = localStorage.getItem(`offline_presensi_reguler_${waliId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveOfflineQueueReguler(waliId, queue) {
+  try {
+    localStorage.setItem(
+      `offline_presensi_reguler_${waliId}`,
+      JSON.stringify(queue),
+    );
+  } catch (_) {}
+}
+
 export default function ModalPresensiPetugasSiswa({
   isOpen,
   onClose,
@@ -64,6 +106,11 @@ export default function ModalPresensiPetugasSiswa({
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [regulerCount, setRegulerCount] = useState(0);
+  // Status simpan online terakhir dan antrian offline multi-hari
+  const [lastOnlineSaveTime, setLastOnlineSaveTime] = useState("");
+  const [pendingOfflineRecords, setPendingOfflineRecords] = useState([]);
+  // Guard agar flush tidak jalan dua kali bersamaan
+  const flushingRef = useRef(false);
 
   const todayISO = useMemo(() => {
     // Format YYYY-MM-DD lokal
@@ -88,26 +135,57 @@ export default function ModalPresensiPetugasSiswa({
   async function loadDataKelas() {
     setLoading(true);
     setErrorMessage("");
-    try {
-      // 1. Cek kuota pengisian reguler khusus hari ini (maksimal 2x sehari)
-      const regulerKey = `presensi_reguler_count_${petugasInfo.idWali}_${todayISO}`;
-      let currentRegulerCount = 0;
-      try {
-        const saved = localStorage.getItem(regulerKey);
-        if (saved !== null) {
-          currentRegulerCount = parseInt(saved, 10) || 0;
-        }
-      } catch (_) {}
-      setRegulerCount(currentRegulerCount);
 
+    const waliId = petugasInfo?.idWali;
+    const storageKeySiswa = `cache_reguler_siswa_${waliId}`;
+
+    // 1. Cek kuota pengisian reguler khusus hari ini (maksimal 2x sehari)
+    const regulerKey = `presensi_reguler_count_${waliId}_${todayISO}`;
+    let currentRegulerCount = 0;
+    try {
+      const saved = localStorage.getItem(regulerKey);
+      if (saved !== null) {
+        currentRegulerCount = parseInt(saved, 10) || 0;
+      }
+    } catch (_) {}
+    setRegulerCount(currentRegulerCount);
+
+    // 2. Muat waktu simpan online terakhir dan antrian offline
+    try {
+      const lastSaved = localStorage.getItem(`last_online_save_reguler_${waliId}`);
+      if (lastSaved) setLastOnlineSaveTime(lastSaved);
+    } catch (_) {}
+    const offlineQueue = getOfflineQueueReguler(waliId);
+    const pastRecords = offlineQueue.filter(
+      (item) => item.tanggal && item.tanggal !== todayISO,
+    );
+    setPendingOfflineRecords(pastRecords);
+
+    // 3. Coba muat dari cache lokal dulu (agar dapat tampil tanpa internet)
+    let cachedSiswa = null;
+    try {
+      const raw = localStorage.getItem(storageKeySiswa);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cachedSiswa = parsed;
+        }
+      }
+    } catch (_) {}
+
+    try {
       const res = await getPresensiWaliGrid(
         petugasInfo.idGuru,
         petugasInfo.idWali,
       );
+
       if (!res.success) {
-        throw new Error(
-          res.message || "Gagal mengambil data kelas dari server.",
-        );
+        // Jika server menolak (bukan masalah jaringan), lempar error
+        if (!res.networkError) {
+          throw new Error(res.message || "Gagal mengambil data kelas dari server.");
+        }
+        // Masalah jaringan → pakai cache
+        throw new Error("network");
       }
 
       const rawSiswa = res.data?.siswa || [];
@@ -120,9 +198,14 @@ export default function ModalPresensiPetugasSiswa({
         .filter((s) => s.idSiswa)
         .sort((a, b) => a.nama.localeCompare(b.nama));
 
+      // Simpan ke cache lokal untuk akses offline selanjutnya
+      try {
+        localStorage.setItem(storageKeySiswa, JSON.stringify(normalizedSiswa));
+      } catch (_) {}
+
       setSiswaList(normalizedSiswa);
 
-      // 2. Ambil data presensi yang sudah tersimpan di database hari ini (jika ada)
+      // 4. Ambil data presensi yang sudah tersimpan di database hari ini (jika ada)
       const rawPresensi = res.data?.presensi || [];
       const todayRecords = rawPresensi.filter(
         (p) => String(p.tanggal).trim() === todayISO,
@@ -156,8 +239,40 @@ export default function ModalPresensiPetugasSiswa({
         setIsSubmittedToday(false);
       }
     } catch (err) {
-      console.error("Gagal memuat data presensi petugas:", err);
-      setErrorMessage(err.message || "Terjadi kesalahan koneksi.");
+      // Fallback: gunakan cache lokal jika ada (offline-first)
+      if (cachedSiswa && cachedSiswa.length > 0) {
+        setSiswaList(cachedSiswa);
+        const initialMap = {};
+        cachedSiswa.forEach((s) => {
+          // Cek juga apakah ada data antrian offline hari ini
+          const fromQueue = offlineQueue.find(
+            (q) => q.idSiswa === s.idSiswa && q.tanggal === todayISO,
+          );
+          initialMap[s.idSiswa] = fromQueue
+            ? { status: fromQueue.status, keterangan: fromQueue.keterangan || "" }
+            : { status: "Hadir", keterangan: "" };
+        });
+        setPresensiMap(initialMap);
+        if (currentRegulerCount >= 2) {
+          setIsSubmittedToday(true);
+          setSubmittedData(initialMap);
+        } else {
+          setIsSubmittedToday(false);
+        }
+        // Tampilkan error hanya jika bukan masalah jaringan biasa (offline)
+        if (err.message !== "network") {
+          setErrorMessage(
+            `⚠️ Menggunakan data cache. ${err.message || "Periksa koneksi internet."}`,
+          );
+        }
+      } else {
+        console.error("Gagal memuat data presensi petugas:", err);
+        setErrorMessage(
+          err.message === "network"
+            ? "Tidak ada koneksi internet dan belum ada data cache. Sambungkan ke internet lalu muat ulang."
+            : err.message || "Terjadi kesalahan koneksi.",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -239,7 +354,6 @@ export default function ModalPresensiPetugasSiswa({
       return;
     }
 
-    const nonHadirCount = stats.sakit + stats.izin + stats.alfa + stats.cabut;
     const konfirmasiPesan =
       `📋 KONFIRMASI PENGIRIMAN PRESENSI REGULER\n\n` +
       `Kelas: ${petugasInfo.namaKelas}\n` +
@@ -259,7 +373,11 @@ export default function ModalPresensiPetugasSiswa({
 
     setSaving(true);
     try {
-      const cells = siswaList.map((s) => {
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      const waliId = petugasInfo?.idWali;
+
+      // Susun cells dari presensiMap
+      const todayCells = siswaList.map((s) => {
         const item = presensiMap[s.idSiswa] || {
           status: "Hadir",
           keterangan: "",
@@ -277,52 +395,155 @@ export default function ModalPresensiPetugasSiswa({
         };
       });
 
-      const res = await savePresensiWaliKelas({
-        idGuru: petugasInfo.idGuru,
-        idWali: petugasInfo.idWali,
-        cells,
-      });
+      // Gabungkan dengan antrian pending offline multi-hari
+      const allCells = [...pendingOfflineRecords, ...todayCells];
 
-      if (!res.success) {
-        throw new Error(res.message || "Gagal menyimpan presensi ke server.");
-      }
+      // Simpan ke antrian offline DULU sebelum kirim
+      try {
+        if (waliId) {
+          const newQueue = allCells.map((c) => ({
+            ...c,
+            timestamp: c.timestamp || Date.now(),
+          }));
+          saveOfflineQueueReguler(waliId, newQueue);
+          const newPending = newQueue.filter((c) => c.tanggal !== todayISO);
+          setPendingOfflineRecords(newPending);
+        }
+      } catch (_) {}
 
-      // Update kuota presensi reguler
-      const nextCount = regulerCount + 1;
-      const regulerKey = `presensi_reguler_count_${petugasInfo.idWali}_${todayISO}`;
-      if (typeof window !== "undefined") {
-        localStorage.setItem(regulerKey, String(nextCount));
-      }
-      setRegulerCount(nextCount);
-
-      if (nextCount >= 2) {
-        setIsSubmittedToday(true);
-        setSubmittedData({ ...presensiMap });
+      // Jika sedang offline → simpan saja, tidak kirim (kuota TIDAK dinaikkan)
+      if (isOffline) {
         alert(
-          `✅ ALHAMDULILLAH! Presensi reguler ke-2 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
-            `Batas 2 kali pengisian presensi reguler hari ini telah selesai. Terima kasih telah menjalankan tugas presensi hari ini.`,
+          "📱 Data presensi tersimpan di perangkat ini.\n\nData akan dikirim otomatis ke server saat koneksi internet kembali tersedia.",
+        );
+        return;
+      }
+
+      // Kirim ke server
+      let res;
+      try {
+        res = await savePresensiWaliKelas({
+          idGuru: petugasInfo.idGuru,
+          idWali: petugasInfo.idWali,
+          cells: allCells,
+        });
+      } catch (_) {
+        res = { success: false, networkError: true };
+      }
+
+      if (res?.success) {
+        // Bersihkan antrian offline hari ini
+        if (waliId) {
+          const q = getOfflineQueueReguler(waliId);
+          const remaining = q.filter(
+            (c) =>
+              c.tanggal &&
+              c.tanggal !== todayISO &&
+              !allCells.some(
+                (a) => a.idSiswa === c.idSiswa && a.tanggal === c.tanggal,
+              ),
+          );
+          saveOfflineQueueReguler(waliId, remaining);
+          setPendingOfflineRecords(remaining);
+          const nowISO = new Date().toISOString();
+          try {
+            localStorage.setItem(`last_online_save_reguler_${waliId}`, nowISO);
+          } catch (_) {}
+          setLastOnlineSaveTime(nowISO);
+        }
+
+        // Update kuota presensi reguler (hanya saat server berhasil)
+        const nextCount = regulerCount + 1;
+        const regulerKey = `presensi_reguler_count_${waliId}_${todayISO}`;
+        try {
+          localStorage.setItem(regulerKey, String(nextCount));
+        } catch (_) {}
+        setRegulerCount(nextCount);
+
+        if (nextCount >= 2) {
+          setIsSubmittedToday(true);
+          setSubmittedData({ ...presensiMap });
+          alert(
+            `✅ ALHAMDULILLAH! Presensi reguler ke-2 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+              `Batas 2 kali pengisian presensi reguler hari ini telah selesai. Terima kasih telah menjalankan tugas presensi hari ini.`,
+          );
+        } else {
+          setIsSubmittedToday(false);
+          alert(
+            `✅ ALHAMDULILLAH! Presensi reguler ke-1 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+              `💡 Anda masih dapat mengisi presensi reguler 1 kali lagi untuk hari ini jika ada pembaruan.`,
+          );
+        }
+
+        if (typeof onPresensiSubmitted === "function") {
+          onPresensiSubmitted();
+        }
+      } else if (!res || res.networkError) {
+        // Jaringan terputus saat kirim → data sudah aman di antrian offline
+        alert(
+          "📱 Koneksi internet tidak tersedia saat pengiriman.\n\nData presensi tersimpan aman di perangkat dan akan dikirim otomatis saat online.",
         );
       } else {
-        setIsSubmittedToday(false);
+        // Server menolak (bukan masalah jaringan)
         alert(
-          `✅ ALHAMDULILLAH! Presensi reguler ke-1 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
-            `💡 Anda masih dapat mengisi presensi reguler 1 kali lagi untuk hari ini jika ada pembaruan.`,
+          `❌ Server menolak pengiriman: ${res.message || "Gagal menyimpan presensi."}`,
         );
-      }
-
-      if (typeof onPresensiSubmitted === "function") {
-        onPresensiSubmitted();
       }
     } catch (err) {
       console.error("Gagal mengirim presensi:", err);
       alert(
-        "❌ Terjadi kesalahan saat menyimpan: " +
+        "❌ Terjadi kesalahan tidak terduga: " +
           (err.message || "Silakan coba lagi."),
       );
     } finally {
       setSaving(false);
     }
   }
+
+  // AUTO-FLUSH: Kirim antrian offline reguler ke server saat ada koneksi
+  async function flushOfflineQueueReguler() {
+    const waliId = petugasInfo?.idWali;
+    if (!waliId || flushingRef.current) return;
+    const q = getOfflineQueueReguler(waliId);
+    if (q.length === 0) return;
+
+    flushingRef.current = true;
+    try {
+      const res = await savePresensiWaliKelas({
+        idGuru: petugasInfo.idGuru,
+        idWali: waliId,
+        cells: q,
+      });
+      if (res?.success) {
+        saveOfflineQueueReguler(waliId, []);
+        setPendingOfflineRecords([]);
+        const nowISO = new Date().toISOString();
+        try {
+          localStorage.setItem(`last_online_save_reguler_${waliId}`, nowISO);
+        } catch (_) {}
+        setLastOnlineSaveTime(nowISO);
+      } else if (res && !res.networkError) {
+        console.warn("[flushReguler] Server menolak:", res.message);
+      }
+    } catch (_) {
+      // Jaringan error → biarkan antrian
+    } finally {
+      flushingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen || !petugasInfo?.idWali) return;
+    const t0 = setTimeout(flushOfflineQueueReguler, 1500);
+    window.addEventListener("online", flushOfflineQueueReguler);
+    const iv = setInterval(flushOfflineQueueReguler, 60000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(iv);
+      window.removeEventListener("online", flushOfflineQueueReguler);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, petugasInfo?.idWali, petugasInfo?.idGuru, todayISO]);
 
   if (!isOpen) return null;
 
@@ -649,55 +870,77 @@ export default function ModalPresensiPetugasSiswa({
         {/* ============================================================ */}
         {/* FOOTER MODAL */}
         {/* ============================================================ */}
-        <div className="shrink-0 border-t border-slate-200 bg-white px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-[11px] text-slate-500 font-medium text-center sm:text-left">
-            {isSubmittedToday ? (
-              <span className="text-emerald-700 font-bold flex items-center gap-1">
-                <span>✅</span> Data presensi hari ini telah terekam secara
-                permanen.
-              </span>
-            ) : (
-              <span>
-                Default presensi adalah <b>Hadir semua</b>. Ubah status siswa
-                yang tidak hadir lalu tekan tombol simpan.
-              </span>
-            )}
-          </div>
+        <div className="shrink-0 border-t border-slate-200 bg-white px-4 sm:px-6 py-3.5 flex flex-col gap-2">
+          {/* Indikator status simpan offline */}
+          {(pendingOfflineRecords.length > 0 || lastOnlineSaveTime) && (
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              {pendingOfflineRecords.length > 0 ? (
+                <span className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                  <span>📱</span>
+                  <span>{pendingOfflineRecords.length} data hari lalu belum terkirim</span>
+                </span>
+              ) : (
+                <span />
+              )}
+              {lastOnlineSaveTime && (
+                <span className="flex items-center gap-1 text-emerald-700 font-bold">
+                  <span>☁️</span>
+                  <span className="truncate max-w-[200px]">{formatLastSavedIndo(lastOnlineSaveTime)}</span>
+                </span>
+              )}
+            </div>
+          )}
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="flex-1 sm:flex-initial rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all text-center"
-            >
-              {isSubmittedToday ? "Tutup" : "Batal"}
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-[11px] text-slate-500 font-medium text-center sm:text-left">
+              {isSubmittedToday ? (
+                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                  <span>✅</span> Data presensi hari ini telah terekam secara
+                  permanen.
+                </span>
+              ) : (
+                <span>
+                  Default presensi adalah <b>Hadir semua</b>. Ubah status siswa
+                  yang tidak hadir lalu tekan tombol simpan.
+                </span>
+              )}
+            </div>
 
-            {!isSubmittedToday && (
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <button
                 type="button"
-                onClick={handleSubmit}
-                disabled={saving || loading || siswaList.length === 0}
-                className="flex-1 sm:flex-initial rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white px-6 py-2.5 text-xs font-black shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={onClose}
+                disabled={saving}
+                className="flex-1 sm:flex-initial rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all text-center"
               >
-                {saving ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    <span>Mengirim Presensi...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>📤</span>
-                    <span>
-                      {regulerCount === 1
-                        ? "Kirim Presensi Reguler Ke-2 (2/2)"
-                        : "Kirim Presensi Reguler Ke-1 (1/2)"}
-                    </span>
-                  </>
-                )}
+                {isSubmittedToday ? "Tutup" : "Batal"}
               </button>
-            )}
+
+              {!isSubmittedToday && (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={saving || loading || siswaList.length === 0}
+                  className="flex-1 sm:flex-initial rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white px-6 py-2.5 text-xs font-black shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {saving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Mengirim Presensi...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📤</span>
+                      <span>
+                        {regulerCount === 1
+                          ? "Kirim Presensi Reguler Ke-2 (2/2)"
+                          : "Kirim Presensi Reguler Ke-1 (1/2)"}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
