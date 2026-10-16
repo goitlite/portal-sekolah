@@ -276,6 +276,7 @@ export default function ModalRegistrasiWajahSiswa({
   otherStudents = [],
 }) {
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState("user"); // "user" | "environment"
   const [cameraError, setCameraError] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
   const [faceMetrics, setFaceMetrics] = useState(EMPTY_METRICS);
@@ -300,8 +301,14 @@ export default function ModalRegistrasiWajahSiswa({
   const uploadedRef = useRef({ image: null, url: null });
   const captureRef = useRef(() => {});
   const trackRef = useRef({});
+  const cameraFacingRef = useRef(cameraFacing);
+  cameraFacingRef.current = cameraFacing;
 
   autoRef.current = autoCaptureEnabled;
+
+  function toggleCameraFacing() {
+    setCameraFacing((prev) => (prev === "environment" ? "user" : "environment"));
+  }
 
   // -------------------------------------------------------------------
   // 1. Muat detektor wajah saat modal dibuka
@@ -392,13 +399,15 @@ export default function ModalRegistrasiWajahSiswa({
       return;
     }
     uploadedRef.current = { image: null, url: null };
-    startCamera();
+    if (!previewImage) {
+      startCamera();
+    }
     return () => {
       stopCamera();
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, cameraFacing]);
 
   async function startCamera() {
     stopCamera();
@@ -413,13 +422,20 @@ export default function ModalRegistrasiWajahSiswa({
       return;
     }
 
+    const currentFacing = cameraFacingRef.current;
     const attempts = [
       {
         audio: false,
         video: {
-          facingMode: "user",
+          facingMode: { ideal: currentFacing },
           width: { ideal: 720 },
           height: { ideal: 960 },
+        },
+      },
+      {
+        audio: false,
+        video: {
+          facingMode: currentFacing,
         },
       },
       { audio: false, video: true },
@@ -452,7 +468,7 @@ export default function ModalRegistrasiWajahSiswa({
             ? "Kamera tidak ditemukan pada perangkat ini."
             : name === "NotReadableError"
               ? "Kamera sedang dipakai aplikasi lain. Tutup aplikasi tersebut lalu coba lagi."
-              : "Kamera depan tidak dapat diakses. Periksa izin kamera pada browser.",
+              : "Kamera tidak dapat diakses. Periksa izin kamera pada browser.",
       );
       return;
     }
@@ -738,13 +754,18 @@ export default function ModalRegistrasiWajahSiswa({
       );
 
       // ---- instruksi (prioritas: bingkai -> cahaya -> pose -> fokus) ----
-      // Tampilan di layar dicerminkan, jadi arah dihitung dari sudut pandang layar.
+      const isUserFacing = cameraFacingRef.current === "user";
       let statusText = "✨ Posisi sempurna! Tahan sebentar...";
       let xLabel = "Tengah";
       let yLabel = "Pas";
       if (!okX) {
-        // wajah (mentah) di kanan => di layar tampak di kiri => geser ke kanan
-        xLabel = dx > 0 ? "Ke kanan" : "Ke kiri";
+        if (isUserFacing) {
+          // wajah (mentah) di kanan => di layar selfie tampak di kiri => geser ke kanan
+          xLabel = dx > 0 ? "Ke kanan" : "Ke kiri";
+        } else {
+          // kamera belakang: mentah di kanan => di layar tampak di kanan => geser ke kiri
+          xLabel = dx > 0 ? "Ke kiri" : "Ke kanan";
+        }
       }
       if (!okY) {
         yLabel = dy > 0 ? "Turunkan HP" : "Naikkan HP";
@@ -755,7 +776,11 @@ export default function ModalRegistrasiWajahSiswa({
         statusText =
           scaleRatio < 1 ? "🔍 Dekatkan wajah ke kamera" : "↔️ Mundurkan wajah sedikit";
       } else if (!okX) {
-        statusText = dx > 0 ? "👉 Geser sedikit ke kanan" : "👈 Geser sedikit ke kiri";
+        if (isUserFacing) {
+          statusText = dx > 0 ? "👉 Geser sedikit ke kanan" : "👈 Geser sedikit ke kiri";
+        } else {
+          statusText = dx > 0 ? "👈 Geser sedikit ke kiri" : "👉 Geser sedikit ke kanan";
+        }
       } else if (!okY) {
         statusText =
           dy > 0 ? "👇 Turunkan HP sedikit" : "👆 Naikkan HP sedikit";
@@ -1124,14 +1149,28 @@ export default function ModalRegistrasiWajahSiswa({
               </p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            disabled={saving}
-            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs font-bold cursor-pointer disabled:opacity-50"
-            aria-label="Tutup"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!previewImage && (
+              <button
+                type="button"
+                onClick={toggleCameraFacing}
+                disabled={saving}
+                className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/20"
+                title="Ganti Kamera Depan / Belakang"
+              >
+                <span>📷</span>
+                <span>{cameraFacing === "environment" ? "Blkg" : "Dpn"}</span>
+              </button>
+            )}
+            <button
+              onClick={handleClose}
+              disabled={saving}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs font-bold cursor-pointer disabled:opacity-50"
+              aria-label="Tutup"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* BODY */}
@@ -1186,7 +1225,9 @@ export default function ModalRegistrasiWajahSiswa({
                 playsInline
                 muted
                 autoPlay
-                className="absolute inset-0 w-full h-full object-cover -scale-x-100"
+                className={`absolute inset-0 w-full h-full object-cover transition-transform duration-200 ${
+                  cameraFacing === "user" ? "-scale-x-100" : ""
+                }`}
               />
 
               {cameraActive && (
@@ -1206,14 +1247,16 @@ export default function ModalRegistrasiWajahSiswa({
                     {m.statusText}
                   </div>
 
-                  {/* Kotak wajah terdeteksi (dicerminkan sesuai tampilan) */}
+                  {/* Kotak wajah terdeteksi (dicerminkan jika kamera depan) */}
                   {m.box && (
                     <div
                       className={`absolute rounded-md border-2 transition-all duration-100 ${
                         m.ready ? "border-emerald-300/90" : "border-white/50"
                       }`}
                       style={{
-                        left: `${(1 - (m.box.cx + m.box.w / 2)) * 100}%`,
+                        left: cameraFacing === "user"
+                          ? `${(1 - (m.box.cx + m.box.w / 2)) * 100}%`
+                          : `${(m.box.cx - m.box.w / 2) * 100}%`,
                         top: `${(m.box.cy - m.box.h / 2) * 100}%`,
                         width: `${m.box.w * 100}%`,
                         height: `${m.box.h * 100}%`,
@@ -1403,18 +1446,30 @@ export default function ModalRegistrasiWajahSiswa({
         <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 bg-white border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
           {!previewImage ? (
             <>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-              >
-                Batal
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-3 sm:px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleCameraFacing}
+                  disabled={saving || !cameraActive}
+                  className="px-2.5 sm:px-3 py-2 rounded-xl border border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Ganti Kamera Depan / Belakang"
+                >
+                  <span>📷</span>
+                  <span>{cameraFacing === "environment" ? "Kamera Belakang" : "Kamera Depan"}</span>
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleManualCapture}
                 disabled={!cameraActive || countdown !== null || engine === "loading"}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <span>📸</span>
                 <span>Ambil Foto Wajah</span>
