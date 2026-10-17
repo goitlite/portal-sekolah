@@ -245,3 +245,49 @@ function sanitizeBiodataValue(value) {
   return str;
 }
 
+/**
+ * Mengambil foto wajah banyak siswa sekaligus dalam 1 panggilan (Bulk).
+ * @param {Array<string>} idSiswaList - Daftar ID Siswa
+ * @returns {Object} { [idSiswa]: urlFoto }
+ */
+function getWajahBulk(idSiswaList) {
+  try {
+    if (!idSiswaList || !Array.isArray(idSiswaList) || idSiswaList.length === 0) {
+      return successResponse("OK", {});
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DATA_SISWA_WALI);
+    if (!sheet) return successResponse("OK", {});
+
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return successResponse("OK", {});
+
+    const headers = values[0];
+    const idCol = headers.indexOf(COLUMNS.DATA_SISWA_WALI.ID_SISWA);
+    let wajahCol = headers.indexOf((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH) || "FOTO_WAJAH");
+    if (wajahCol === -1) wajahCol = headers.indexOf("FOTO_WAJAH");
+    if (wajahCol === -1) wajahCol = headers.indexOf("FOTO WAJAH");
+    if (wajahCol === -1) wajahCol = headers.indexOf("fotoWajah");
+
+    if (idCol === -1 || wajahCol === -1) return successResponse("OK", {});
+
+    const targetSet = {};
+    idSiswaList.forEach(function(id) {
+      targetSet[String(id).trim()] = true;
+    });
+
+    const result = {};
+    for (var i = 1; i < values.length; i++) {
+      var sid = String(values[i][idCol] || "").trim();
+      if (targetSet[sid]) {
+        var foto = values[i][wajahCol] || "";
+        result[sid] = foto;
+      }
+    }
+
+    return successResponse("Data wajah berhasil dimuat", result);
+  } catch (err) {
+    return errorResponse("Gagal memuat wajah bulk: " + err.message);
+  }
+}
+

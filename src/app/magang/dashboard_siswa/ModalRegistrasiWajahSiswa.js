@@ -274,6 +274,10 @@ export default function ModalRegistrasiWajahSiswa({
   fotoLama,
   onFaceRegistered,
   otherStudents = [],
+  onStagePhoto,
+  onNextStudent,
+  hasNextStudent,
+  nextStudentName,
 }) {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraFacing, setCameraFacing] = useState("user"); // "user" | "environment"
@@ -303,6 +307,21 @@ export default function ModalRegistrasiWajahSiswa({
   const trackRef = useRef({});
   const cameraFacingRef = useRef(cameraFacing);
   cameraFacingRef.current = cameraFacing;
+  const prevUserIdRef = useRef(user?.id);
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) return;
+    if (prevUserIdRef.current !== user?.id) {
+      prevUserIdRef.current = user?.id;
+      setPreviewImage(null);
+      setCountdown(null);
+      setSaveProgress(null);
+      setFaceMetrics(EMPTY_METRICS);
+      metricsRef.current = EMPTY_METRICS;
+      uploadedRef.current = { image: null, url: null };
+      startCamera();
+    }
+  }, [user?.id, isOpen]);
 
   autoRef.current = autoCaptureEnabled;
 
@@ -1132,6 +1151,11 @@ export default function ModalRegistrasiWajahSiswa({
                 <h3 className="text-xs sm:text-sm font-black tracking-tight">
                   Registrasi Wajah Siswa
                 </h3>
+                {onStagePhoto && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-400/30 text-amber-200 font-extrabold border border-amber-300/40">
+                    ⚡ Mode Antrian Guru
+                  </span>
+                )}
                 {user?.nama && (
                   <span className="text-[9.5px] px-1.5 py-0.2 rounded-full bg-teal-400/25 text-teal-100 font-extrabold border border-teal-300/30 max-w-[180px] truncate">
                     {user.nama}
@@ -1476,40 +1500,83 @@ export default function ModalRegistrasiWajahSiswa({
               </button>
             </>
           ) : (
-            <>
+            <div className="flex flex-wrap items-center justify-between w-full gap-2">
               <button
                 type="button"
                 onClick={handleRetake}
                 disabled={saving || saveOk}
-                className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
               >
                 <span>🔄</span>
                 <span>Foto Ulang</span>
               </button>
-              <button
-                type="button"
-                onClick={handleSaveFaceToSpreadsheet}
-                disabled={saving || saveOk}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {saving ? (
+
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 ml-auto">
+                {onStagePhoto && (
                   <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Menyimpan...</span>
-                  </>
-                ) : saveProgress?.error ? (
-                  <>
-                    <span>🔁</span>
-                    <span>Coba Simpan Lagi</span>
-                  </>
-                ) : (
-                  <>
-                    <span>💾</span>
-                    <span>Simpan Registrasi</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onStagePhoto(user.id, previewImage, user);
+                        handleClose();
+                      }}
+                      disabled={saving || saveOk}
+                      className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      title="Simpan foto siswa ini ke antrian lokal dan kembali ke daftar siswa"
+                    >
+                      <span>📥</span>
+                      <span>Simpan Antrian</span>
+                    </button>
+
+                    {hasNextStudent && onNextStudent && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onStagePhoto(user.id, previewImage, user);
+                          onNextStudent();
+                        }}
+                        disabled={saving || saveOk}
+                        className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title={`Simpan foto ke antrian dan langsung lanjut foto ${nextStudentName || "siswa berikutnya"}`}
+                      >
+                        <span>⚡</span>
+                        <span className="max-w-[130px] sm:max-w-[170px] truncate">
+                          Lanjut: {nextStudentName || "Berikutnya"}
+                        </span>
+                        <span>⏩</span>
+                      </button>
+                    )}
                   </>
                 )}
-              </button>
-            </>
+
+                <button
+                  type="button"
+                  onClick={handleSaveFaceToSpreadsheet}
+                  disabled={saving || saveOk}
+                  className={`px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                    onStagePhoto ? "text-[11px] opacity-90" : ""
+                  }`}
+                  title={onStagePhoto ? "Upload foto siswa ini langsung ke cloud tanpa antrian" : "Simpan foto wajah ke spreadsheet"}
+                >
+                  {saving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : saveProgress?.error ? (
+                    <>
+                      <span>🔁</span>
+                      <span>Coba Simpan Lagi</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>💾</span>
+                      <span>{onStagePhoto ? "Upload Sekarang" : "Simpan Registrasi"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

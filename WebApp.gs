@@ -20,7 +20,8 @@ function doPost(e) {
     const params = payload.params || {};
     
     // Debug log
-    log('WebApp Request', { action: action, params: params });
+    // Catat nama aksi saja (params bisa berisi foto base64 / data pribadi)
+    log('WebApp Request', { action: action });
     
     // Handle request berdasarkan action
     let response;
@@ -162,7 +163,7 @@ function doPost(e) {
     }
 
     else if (action === 'hapusSiswaWali') {
-      response = hapusSiswaWali(params);
+      response = hapusSiswaWaliAman_(params);
     }
 
     // ============================================
@@ -201,7 +202,6 @@ function doPost(e) {
     else if (action === 'deleteJurnalPKL') {
       response = deleteJurnalPKL(params);
     }
-
     // ============================================
     // PRESENSI OPERATIONS
     // ============================================
@@ -490,7 +490,7 @@ function doPost(e) {
     }
 
     else if (action === 'savePresensiWaliKelas') {
-      response = savePresensiWaliKelas(params);
+      response = savePresensiWaliKelasAman_(params);
     }
 
     else if (action === 'saveJurnalWaliKelas') {
@@ -499,6 +499,21 @@ function doPost(e) {
 
     else if (action === 'getJurnalWaliKelas') {
       response = getJurnalWaliKelas(params.idGuru, params.idWali);
+    }
+
+    // ============================================
+    // PETUGAS PRESENSI & EFISIENSI (PetugasPresensi.gs)
+    // ============================================
+    else if (action === 'getWajahBulk') {
+      response = getWajahBulk_(params);
+    }
+
+    else if (action === 'getKelasPetugas') {
+      response = getKelasPetugas_(params);
+    }
+
+    else if (action === 'getGuruWaliSiswa') {
+      response = getGuruWaliSiswa_(params);
     }
 
     // ============================================
@@ -559,8 +574,7 @@ function doGet(e) {
       'uploadTugasMapel', 'getTugasMapel', 'uploadJawabanSiswa', 'getJawabanSiswa',
       'getWaliKelasByGuru', 'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
       'getSiswaWaliKelas', 'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'getSemuaSiswaUntukTambahWali',
-      'sinkronSiswaWaliKelas', 'getPresensiWaliGrid', 'savePresensiWaliKelas', 'saveJurnalWaliKelas', 'getJurnalWaliKelas',
-      'saveJurnalPKL', 'getJurnalPKL', 'deleteJurnalPKL'
+      'sinkronSiswaWaliKelas', 'getPresensiWaliGrid', 'savePresensiWaliKelas', 'saveJurnalWaliKelas', 'getJurnalWaliKelas'
     ]
   };
   
@@ -657,4 +671,5 @@ function testDoPostGuruWali() {
   Logger.log(
     result.getContent()
   );
+}
 }
