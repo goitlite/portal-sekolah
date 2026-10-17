@@ -5,6 +5,7 @@ import {
   getPresensiWaliGrid,
   savePresensiWaliKelas,
   getBiodataSiswa,
+  getWajahBulk,
 } from "../lib/api";
 import {
   MATCH_DIST,
@@ -43,19 +44,34 @@ import {
 // =====================================================================
 // KONFIGURASI PRESENSI
 // =====================================================================
-// Batas jam presensi. CATATAN: komentar lama menyebut 08:30, tetapi nilai
-// yang aktif di kode sebelumnya adalah 23:30 (mode uji). Untuk produksi
-// ubah menjadi BATAS_JAM = 8 dan BATAS_MENIT = 30.
-const BATAS_JAM = 23;
+// KONFIGURASI BATAS WAKTU PRESENSI
+// =====================================================================
+// Batas resmi presensi adalah pukul 08:30 WIB.
+// Di luar jam sekolah (setelah pukul 18:00 atau sebelum 06:00 WIB) atau
+// jika bypass aktif di penyimpanan lokal, mode uji coba dibuka agar
+// petugas/admin dapat melakukan pengujian fitur kapan pun.
+const BATAS_JAM = 8;
 const BATAS_MENIT = 30;
 
-// =====================================================================
-// HELPER UMUM
-// =====================================================================
 function checkIsPastTimeLimit() {
+  try {
+    if (typeof window !== "undefined") {
+      if (localStorage.getItem("portal_bypass_time_limit") === "true") {
+        return false;
+      }
+    }
+  } catch (_) {}
+
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
+
+  // Jika di luar jam sekolah (sore/malam s.d dini hari), izinkan mode pengujian
+  if (hours >= 18 || hours < 6) {
+    return false;
+  }
+
+  // Jam operasional sekolah pagi: kunci jika lewat 08:30 WIB
   return hours > BATAS_JAM || (hours === BATAS_JAM && minutes >= BATAS_MENIT);
 }
 
@@ -137,15 +153,60 @@ function saveOfflineQueue(waliId, queue) {
   } catch (_) {}
 }
 
+// Jalankan satu per satu (GAS tanpa LockService rawan tabrakan bila banyak request menulis sekaligus)
+async function runSerial(items, fn) {
+  const out = [];
+  for (let i = 0; i < items.length; i++) out.push(await fn(items[i], i));
+  return out;
+}
+
 export default function ModalScanWajahPetugas({
   isOpen,
   onClose,
   petugasInfo, // { idWali, idGuru, namaKelas, kelas }
+  availableClasses = [],
   user, // { id, nama }
   onPresensiSubmitted,
   onOpenBarcode,
   onOpenReguler,
 }) {
+  const [selectedWaliId, setSelectedWaliId] = useState(petugasInfo?.idWali);
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && petugasInfo?.idWali && !selectedWaliId) {
+      setSelectedWaliId(petugasInfo.idWali);
+    }
+  }, [isOpen, petugasInfo?.idWali]);
+
+  const isAllClassesMode = selectedWaliId === "ALL_CLASSES";
+
+  const activeClass = useMemo(() => {
+    if (isAllClassesMode) {
+      return {
+        idWali: "ALL_CLASSES",
+        idGuru: petugasInfo?.idGuru,
+        namaKelas: "Semua Kelas (Scan Pintar)",
+        kelas: "Semua Kelas",
+      };
+    }
+    const found = availableClasses.find(
+      (c) => String(c.idWali) === String(selectedWaliId),
+    );
+    return found || petugasInfo;
+  }, [isAllClassesMode, selectedWaliId, availableClasses, petugasInfo]);
+
+  // Kunci stabil daftar kelas: efek tidak berjalan ulang hanya karena array baru dengan isi sama
+  const classesKey = useMemo(
+    () =>
+      (availableClasses || [])
+        .map((c) => `${c.idWali}:${(c.daftarSiswa || []).length}`)
+        .join("|"),
+    [availableClasses],
+  );
+  const allModeRef = useRef(false);
+  allModeRef.current = isAllClassesMode;
+
   const [loadingData, setLoadingData] = useState(true);
   const [syncingFaces, setSyncingFaces] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
@@ -272,7 +333,137 @@ export default function ModalScanWajahPetugas({
     if (!isOpen || !petugasInfo?.idWali || !petugasInfo?.idGuru) return;
 
     let isMounted = true;
-    const waliId = petugasInfo.idWali;
+
+    // A. MODE SEMUA KELAS (SCAN PINTAR)
+    if (isAllClassesMode) {
+      const combinedSiswa = [];
+      const combinedMap = {};
+      const allOfflineRecords = [];
+      let combinedDraft = {};
+
+      let classesToProcess =
+        Array.isArray(availableClasses) && availableClasses.length > 0
+          ? availableClasses
+          : [];
+
+      if (classesToProcess.length === 0 && typeof window !== "undefined") {
+        try {
+          const rawCls = localStorage.getItem(
+            "portal_sekolah_daftar_kelas_cache",
+          );
+          if (rawCls) {
+            const parsed = JSON.parse(rawCls);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              classesToProcess = parsed;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (classesToProcess.length === 0) {
+        classesToProcess = [petugasInfo];
+      }
+
+      classesToProcess.forEach((cls) => {
+        const wId = cls?.idWali;
+        const gId = cls?.idGuru;
+        if (!wId) return;
+
+        let list = MEMORY_SISWA_CACHE[wId];
+        if (!list && typeof window !== "undefined") {
+          try {
+            const raw = localStorage.getItem(`cache_scan_siswa_${wId}`);
+            if (raw) list = JSON.parse(raw);
+          } catch (_) {}
+        }
+        if (!list || list.length === 0) {
+          list = cls.daftarSiswa || [];
+        }
+
+        if (Array.isArray(list)) {
+          list.forEach((s) => {
+            const sid = String(s.idSiswa || s.id || "").trim();
+            if (sid && !combinedMap[sid]) {
+              const obj = {
+                idSiswa: sid,
+                nama: (s.nama || s.namaSiswa || "").trim(),
+                kelas: s.kelas || cls.namaKelas || "",
+                idWali: wId,
+                idGuru: gId,
+              };
+              combinedMap[sid] = obj;
+              combinedSiswa.push(obj);
+            }
+          });
+        }
+
+        // Kumpulkan antrian offline
+        const q = getOfflineQueue(wId);
+        allOfflineRecords.push(...q);
+
+        // Kumpulkan draft
+        try {
+          const rawDraft = localStorage.getItem(
+            `draft_scan_${wId}_${todayISO}`,
+          );
+          if (rawDraft) {
+            const parsed = JSON.parse(rawDraft);
+            if (parsed && typeof parsed === "object") {
+              combinedDraft = { ...combinedDraft, ...parsed };
+            }
+          }
+        } catch (_) {}
+      });
+
+      combinedSiswa.sort((a, b) => a.nama.localeCompare(b.nama));
+      setSiswaList(combinedSiswa);
+      setLoadingData(false);
+
+      setPendingOfflineRecords(
+        allOfflineRecords.filter(
+          (item) => item.tanggal && item.tanggal !== todayISO,
+        ),
+      );
+
+      const todayOfflineScan = {};
+      const todayOfflineManual = {};
+      allOfflineRecords
+        .filter((item) => !item.tanggal || item.tanggal === todayISO)
+        .forEach((item) => {
+          if (item.status === "Hadir") {
+            todayOfflineScan[item.idSiswa] = {
+              status: "Hadir",
+              waktuScan:
+                String(item.keterangan || "").match(
+                  /(\d{2}[:.]\d{2}(?:[:.]\d{2})?)/,
+                )?.[1] || "Offline",
+              timestamp: item.timestamp || Date.now(),
+            };
+          } else if (item.status) {
+            todayOfflineManual[item.idSiswa] = item.status;
+          }
+        });
+
+      setScannedMap((prev) => ({
+        ...combinedDraft,
+        ...todayOfflineScan,
+        ...prev,
+      }));
+      setManualStatusMap((prev) => ({
+        ...todayOfflineManual,
+        ...prev,
+      }));
+
+      // Siapkan profil wajah seluruh siswa dari cache
+      loadStudentFaceProfilesParallel(combinedSiswa, false);
+      return;
+    }
+
+    // B. MODE PER KELAS TERTENTU
+    const waliId = activeClass?.idWali || petugasInfo?.idWali;
+    const guruId = activeClass?.idGuru || petugasInfo?.idGuru;
+    if (!waliId || !guruId) return;
+
     const storageKeySiswa = `cache_scan_siswa_${waliId}`;
 
     // Baca draft scan lokal untuk hari ini
@@ -300,6 +491,22 @@ export default function ModalScanWajahPetugas({
           const raw = localStorage.getItem(storageKeySiswa);
           if (raw) localSiswa = JSON.parse(raw);
         } catch (_) {}
+      }
+
+      if (
+        (!localSiswa || localSiswa.length === 0) &&
+        Array.isArray(activeClass?.daftarSiswa) &&
+        activeClass.daftarSiswa.length > 0
+      ) {
+        localSiswa = activeClass.daftarSiswa
+          .map((s) => ({
+            idSiswa: String(s.idSiswa || s.id || "").trim(),
+            nama: (s.nama || s.namaSiswa || "").trim(),
+            kelas: s.kelas || activeClass.namaKelas || "",
+            idWali: waliId,
+            idGuru: guruId,
+          }))
+          .filter((s) => s.idSiswa);
       }
 
       // Muat waktu simpan online terakhir jika ada
@@ -381,10 +588,7 @@ export default function ModalScanWajahPetugas({
 
       // 2. Cobalah sinkronisasi data terbaru dari server jika online
       try {
-        const res = await getPresensiWaliGrid(
-          petugasInfo.idGuru,
-          petugasInfo.idWali,
-        );
+        const res = await getPresensiWaliGrid(guruId, waliId);
         if (!isMounted) return;
 
         if (res && res.success) {
@@ -393,7 +597,9 @@ export default function ModalScanWajahPetugas({
             .map((s) => ({
               idSiswa: String(s.idSiswa || s.id || "").trim(),
               nama: (s.nama || s.namaSiswa || "").trim(),
-              kelas: s.kelas || "",
+              kelas: s.kelas || activeClass.namaKelas || "",
+              idWali: waliId,
+              idGuru: guruId,
             }))
             .filter((s) => s.idSiswa)
             .sort((a, b) => a.nama.localeCompare(b.nama));
@@ -450,10 +656,11 @@ export default function ModalScanWajahPetugas({
           setManualKetMap((prev) => ({ ...existingKetMap, ...prev }));
 
           // Jika petugas baru pertama kali menggunakan -> auto sinkronisasi penuh
-          // Daftar siswa dari server berbeda dengan cache (siswa masuk/keluar kelas):
-          // profil wajah harus dibangun ulang agar siswa baru dikenali.
           const idsOf = (arr) =>
-            (arr || []).map((s) => s.idSiswa).sort().join("|");
+            (arr || [])
+              .map((s) => s.idSiswa)
+              .sort()
+              .join("|");
           const rosterChanged =
             Array.isArray(localSiswa) &&
             localSiswa.length > 0 &&
@@ -464,7 +671,6 @@ export default function ModalScanWajahPetugas({
           } else if (rosterChanged) {
             loadStudentFaceProfilesParallel(normalizedSiswa, true);
           } else if (!localSiswa || localSiswa.length === 0) {
-            // Jika sebelumnya belum ada cache lokal tapi sekarang sudah dapat dari server
             loadStudentFaceProfilesParallel(normalizedSiswa, false);
             if (isFirstOpenToday) {
               setSyncPromptOpen(true);
@@ -475,7 +681,6 @@ export default function ModalScanWajahPetugas({
           }
         }
       } catch (netErr) {
-        // Mode Offline: Jaringan terputus / server tidak terjangkau
         console.warn(
           "Koneksi offline atau server tidak terjangkau, menggunakan data cache lokal:",
           netErr,
@@ -495,7 +700,16 @@ export default function ModalScanWajahPetugas({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, petugasInfo, todayISO]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    activeClass?.idWali,
+    activeClass?.idGuru,
+    isAllClassesMode,
+    selectedWaliId,
+    todayISO,
+    classesKey,
+  ]);
 
   // Ringkasan status template (untuk header & peringatan di layar)
   function syncTemplateInfo(profiles) {
@@ -525,8 +739,13 @@ export default function ModalScanWajahPetugas({
         setEngineNonce((n) => n + 1);
       }
     }
-    const waliId = petugasInfo?.idWali || "unknown";
-    const localCacheKey = `cached_face_urls_${waliId}`;
+    const effectiveWaliId = isAllClassesMode
+      ? "ALL_CLASSES"
+      : selectedWaliId ||
+        activeClass?.idWali ||
+        petugasInfo?.idWali ||
+        "unknown";
+    const localCacheKey = `cached_face_urls_${effectiveWaliId}`;
 
     try {
       let urlCache = {};
@@ -535,27 +754,53 @@ export default function ModalScanWajahPetugas({
         if (saved) urlCache = JSON.parse(saved) || {};
       } catch (_) {}
 
+      let globalCache = {};
+      try {
+        const savedG = localStorage.getItem("portal_sekolah_known_face_urls");
+        if (savedG) globalCache = JSON.parse(savedG) || {};
+      } catch (_) {}
+
+      // Cache rombel per-wali untuk siswa yang berasal dari kelas lain
+      const waliCaches = {};
+
       // --- URL awal dari cache lokal ---
       const urlsA = {};
       siswaArray.forEach((s) => {
-        let u = urlCache[s.idSiswa] || null;
+        const sid = String(s.idSiswa).trim();
+        let u = urlCache[sid] || globalCache[sid] || null;
+        if (!u && s.idWali) {
+          if (!waliCaches[s.idWali]) {
+            try {
+              const rawW = localStorage.getItem(`cached_face_urls_${s.idWali}`);
+              waliCaches[s.idWali] = rawW ? JSON.parse(rawW) : {};
+            } catch (_) {
+              waliCaches[s.idWali] = {};
+            }
+          }
+          u = waliCaches[s.idWali]?.[sid] || null;
+        }
         if (!u) {
           try {
-            const saved = localStorage.getItem(`face_reg_${s.idSiswa}`);
+            const saved = localStorage.getItem(`face_reg_${sid}`);
             if (saved) u = JSON.parse(saved)?.fotoWajah || null;
           } catch (_) {}
         }
-        if (u) urlsA[s.idSiswa] = u;
+        if (u && u !== "NO_PHOTO") urlsA[sid] = u;
       });
 
       const applyProfiles = async (urlMap, isSyncingWithModal = false) => {
         const jobId = ++templateJobRef.current;
         const profiles = siswaArray.map((s) => {
-          const url = urlMap[s.idSiswa] || null;
-          const cached = url ? readCachedDescriptor(s.idSiswa, url) : null;
+          const sid = String(s.idSiswa).trim();
+          const rawUrl = urlMap[sid] || null;
+          const url = rawUrl && rawUrl !== "NO_PHOTO" ? rawUrl : null;
+          const cached = url ? readCachedDescriptor(sid, url) : null;
           return {
-            idSiswa: s.idSiswa,
+            idSiswa: sid,
             nama: s.nama,
+            kelas: s.kelas || "",
+            idWali: s.idWali || activeClass?.idWali,
+            idGuru: s.idGuru || activeClass?.idGuru,
             fotoWajah: url,
             descriptor: cached,
             status: !url ? "nophoto" : cached ? "ok" : "pending",
@@ -656,14 +901,13 @@ export default function ModalScanWajahPetugas({
       const firstRun = applyProfiles(urlsA, false);
 
       // --- Validasi URL ke server ---
-      // Aturan: Hanya unduh dari server jika pertama kali pakai (!hasEverSynced) atau ditekan Ulang Sinkron (forceRefresh)
-      const hasEverSyncedKey = `face_sync_completed_${waliId}`;
+      const hasEverSyncedKey = `face_sync_completed_${effectiveWaliId}`;
       let hasEverSynced = false;
       try {
         hasEverSynced = localStorage.getItem(hasEverSyncedKey) === "true";
       } catch (_) {}
 
-      const lastSyncKey = `face_last_sync_date_${waliId}`;
+      const lastSyncKey = `face_last_sync_date_${effectiveWaliId}`;
       const isOnlineNow =
         typeof navigator === "undefined" || navigator.onLine !== false;
       if (forceRefresh && !isOnlineNow) {
@@ -671,66 +915,139 @@ export default function ModalScanWajahPetugas({
           "📴 Tidak ada koneksi internet. Sinkron wajah dibatalkan, kamera memakai data yang sudah tersimpan di perangkat.",
         );
       }
-      const mustCheck = (forceRefresh || !hasEverSynced) && isOnlineNow;
+
+      // Periksa apakah ada siswa yang belum diketahui status fotonya
+      const unknownStudents = siswaArray.filter((s) => {
+        const sid = String(s.idSiswa).trim();
+        if (urlsA[sid]) return false;
+        if (
+          !forceRefresh &&
+          (urlCache[sid] === "NO_PHOTO" || globalCache[sid] === "NO_PHOTO")
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+      const mustCheck =
+        isOnlineNow &&
+        (forceRefresh || !hasEverSynced || unknownStudents.length > 0);
+
       if (mustCheck) {
         updateProfileLoadingState("reading_photos");
+        const studentsToFetch = forceRefresh ? siswaArray : unknownStudents;
+
         setSyncModalProgress({
           show: true,
           stage: 1,
           totalStages: 3,
           pct: 10,
-          title: "Sinkronisasi Foto Wajah Siswa",
-          desc: "Memeriksa pembaruan foto wajah siswa kelas dari server...",
-          detail: `0 dari ${siswaArray.length} siswa`,
+          title: isAllClassesMode
+            ? "Sinkronisasi Foto Wajah (Semua Kelas)"
+            : "Sinkronisasi Foto Wajah Siswa",
+          desc: "Memeriksa pembaruan foto wajah siswa dari server...",
+          detail: `0 dari ${studentsToFetch.length} siswa`,
         });
 
-        const urlsB = {};
-        const BATCH_SIZE = 5;
+        const urlsB = { ...urlsA };
+        const BATCH_SIZE = 8;
         let allOk = true;
-        for (let i = 0; i < siswaArray.length; i += BATCH_SIZE) {
-          const batch = siswaArray.slice(i, i + BATCH_SIZE);
+
+        // Cepat: ambil SEMUA foto wajah dalam 1 panggilan. Bila server belum mendukung
+        // (atau gagal), otomatis kembali ke cara lama per siswa.
+        let bulkMap = null;
+        try {
+          const bulk = await getWajahBulk(
+            studentsToFetch.map((s) => String(s.idSiswa).trim()),
+          );
+          if (
+            bulk &&
+            bulk.success &&
+            bulk.data &&
+            typeof bulk.data === "object"
+          ) {
+            bulkMap = bulk.data;
+          }
+        } catch (_) {}
+        const fetchFoto = async (sid) =>
+          bulkMap
+            ? { success: true, data: { fotoWajah: bulkMap[sid] || "" } }
+            : getBiodataSiswa(sid);
+
+        for (let i = 0; i < studentsToFetch.length; i += BATCH_SIZE) {
+          const batch = studentsToFetch.slice(i, i + BATCH_SIZE);
           await Promise.allSettled(
             batch.map(async (s) => {
+              const sid = String(s.idSiswa).trim();
               try {
-                const bio = await getBiodataSiswa(s.idSiswa);
+                const bio = await fetchFoto(sid);
                 if (bio?.success) {
-                  if (bio.data?.fotoWajah)
-                    urlsB[s.idSiswa] = bio.data.fotoWajah;
+                  if (bio.data?.fotoWajah) {
+                    urlsB[sid] = bio.data.fotoWajah;
+                    urlCache[sid] = bio.data.fotoWajah;
+                    globalCache[sid] = bio.data.fotoWajah;
+                    if (s.idWali) {
+                      try {
+                        const rawW = localStorage.getItem(
+                          `cached_face_urls_${s.idWali}`,
+                        );
+                        const wObj = rawW ? JSON.parse(rawW) : {};
+                        wObj[sid] = bio.data.fotoWajah;
+                        localStorage.setItem(
+                          `cached_face_urls_${s.idWali}`,
+                          JSON.stringify(wObj),
+                        );
+                      } catch (_) {}
+                    }
+                  } else {
+                    urlCache[sid] = "NO_PHOTO";
+                    globalCache[sid] = "NO_PHOTO";
+                  }
                 } else {
                   allOk = false;
-                  if (urlsA[s.idSiswa]) urlsB[s.idSiswa] = urlsA[s.idSiswa];
+                  if (urlsA[sid]) urlsB[sid] = urlsA[sid];
                 }
               } catch (_) {
                 allOk = false;
-                if (urlsA[s.idSiswa]) urlsB[s.idSiswa] = urlsA[s.idSiswa];
+                if (urlsA[sid]) urlsB[sid] = urlsA[sid];
               }
             }),
           );
 
-          const currentProcessed = Math.min(i + BATCH_SIZE, siswaArray.length);
+          const currentProcessed = Math.min(
+            i + BATCH_SIZE,
+            studentsToFetch.length,
+          );
           const stage1Pct =
-            10 + Math.round((currentProcessed / siswaArray.length) * 35); // 10% - 45%
+            10 + Math.round((currentProcessed / studentsToFetch.length) * 35); // 10% -> 45%
           setSyncModalProgress({
             show: true,
             stage: 1,
             totalStages: 3,
             pct: stage1Pct,
-            title: "Mengunduh Foto Wajah Siswa",
-            desc: "Memvalidasi foto wajah siswa kelas dari database server...",
-            detail: `${currentProcessed} dari ${siswaArray.length} siswa diperiksa`,
+            title: isAllClassesMode
+              ? "Mengunduh Foto Wajah (Semua Kelas)"
+              : "Mengunduh Foto Wajah Siswa",
+            desc: "Memvalidasi foto wajah siswa dari database server...",
+            detail: `${currentProcessed} dari ${studentsToFetch.length} siswa diperiksa`,
           });
         }
+
+        try {
+          localStorage.setItem(localCacheKey, JSON.stringify(urlCache));
+          localStorage.setItem(
+            "portal_sekolah_known_face_urls",
+            JSON.stringify(globalCache),
+          );
+        } catch (_) {}
+
         if (allOk) {
-          SESSION_URL_CHECKED[waliId] = true;
+          SESSION_URL_CHECKED[effectiveWaliId] = true;
           try {
             localStorage.setItem(hasEverSyncedKey, "true");
             localStorage.setItem(lastSyncKey, todayISO);
           } catch (_) {}
         }
-
-        try {
-          localStorage.setItem(localCacheKey, JSON.stringify(urlsB));
-        } catch (_) {}
 
         const changed = siswaArray.some(
           (s) => (urlsA[s.idSiswa] || null) !== (urlsB[s.idSiswa] || null),
@@ -750,7 +1067,6 @@ export default function ModalScanWajahPetugas({
           });
           setTimeout(() => setSyncModalProgress(null), 600);
         }
-        // Tanda "pernah sinkron" hanya bila SEMUA siswa berhasil diperiksa
         if (allOk) {
           try {
             localStorage.setItem(hasEverSyncedKey, "true");
@@ -772,18 +1088,14 @@ export default function ModalScanWajahPetugas({
 
   // Sinkronisasi instan jika ada pendaftaran foto baru di perangkat yang sama
   useEffect(() => {
-    if (!isOpen || !petugasInfo?.idWali) return;
-    const waliId = petugasInfo.idWali;
+    if (!isOpen) return;
 
     let bc = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       try {
         bc = new BroadcastChannel("portal_face_sync");
         bc.onmessage = (event) => {
-          if (
-            event.data?.waliId === waliId &&
-            event.data?.type === "FACE_UPDATED"
-          ) {
+          if (event.data?.type === "FACE_UPDATED") {
             if (
               studentProfilesRef.current &&
               studentProfilesRef.current.length > 0
@@ -796,7 +1108,7 @@ export default function ModalScanWajahPetugas({
     }
 
     const handleStorage = (e) => {
-      if (e.key === `face_updated_at_${waliId}` && e.newValue) {
+      if (e.key && e.key.startsWith("face_updated_at_") && e.newValue) {
         if (
           studentProfilesRef.current &&
           studentProfilesRef.current.length > 0
@@ -815,18 +1127,48 @@ export default function ModalScanWajahPetugas({
       }
       window.removeEventListener("storage", handleStorage);
     };
-  }, [isOpen, petugasInfo?.idWali]);
+  }, [isOpen]);
 
-  // Simpan draft lokal
+  // Simpan draft lokal (dipetakan per wali kelas saat mode Semua Kelas agar data aman meski reload/offline)
   useEffect(() => {
-    if (!petugasInfo?.idWali || isSubmittedToday) return;
-    const draftKey = `draft_scan_${petugasInfo.idWali}_${todayISO}`;
-    try {
-      if (Object.keys(scannedMap).length > 0) {
-        localStorage.setItem(draftKey, JSON.stringify(scannedMap));
-      }
-    } catch (_) {}
-  }, [scannedMap, petugasInfo?.idWali, isSubmittedToday, todayISO]);
+    if (isSubmittedToday) return;
+    if (isAllClassesMode) {
+      const byWali = {};
+      Object.entries(scannedMap).forEach(([sid, entry]) => {
+        const s = siswaList.find((x) => x.idSiswa === sid);
+        const wId = s?.idWali || petugasInfo?.idWali;
+        if (wId) {
+          if (!byWali[wId]) byWali[wId] = {};
+          byWali[wId][sid] = entry;
+        }
+      });
+      Object.entries(byWali).forEach(([wId, draft]) => {
+        try {
+          localStorage.setItem(
+            `draft_scan_${wId}_${todayISO}`,
+            JSON.stringify(draft),
+          );
+        } catch (_) {}
+      });
+    } else {
+      const waliId = activeClass?.idWali || petugasInfo?.idWali;
+      if (!waliId) return;
+      const draftKey = `draft_scan_${waliId}_${todayISO}`;
+      try {
+        if (Object.keys(scannedMap).length > 0) {
+          localStorage.setItem(draftKey, JSON.stringify(scannedMap));
+        }
+      } catch (_) {}
+    }
+  }, [
+    scannedMap,
+    siswaList,
+    activeClass?.idWali,
+    isAllClassesMode,
+    petugasInfo?.idWali,
+    isSubmittedToday,
+    todayISO,
+  ]);
 
   // 2. MODEL PENGENALAN WAJAH (dimuat sekali per sesi halaman, lalu di-cache browser)
   useEffect(() => {
@@ -1276,7 +1618,16 @@ export default function ModalScanWajahPetugas({
     if (!st.alive) return;
 
     const { best, d1, d2 } = matchFace(desc, profiles);
-    const confident = best && isConfident(d1, d2);
+    // Mode Semua Kelas: kandidat jauh lebih banyak, jadi ambang dibuat lebih ketat
+    const strict = allModeRef.current;
+    const confident =
+      best &&
+      isConfident(
+        d1,
+        d2,
+        strict ? 0.45 : MATCH_DIST,
+        strict ? 0.09 : MARGIN_MIN,
+      );
 
     if (showDebugRef.current && best) {
       setDebugLine(
@@ -1304,7 +1655,7 @@ export default function ModalScanWajahPetugas({
       confident ? best.idSiswa : null,
       now,
       IDENT_WINDOW_MS,
-      VOTES_NEEDED,
+      allModeRef.current ? VOTES_NEEDED + 1 : VOTES_NEEDED,
     );
     if (st.lock && confident && best.idSiswa === st.lock.id) {
       st.lock.at = now; // pencocokan segar: perbarui
@@ -1361,13 +1712,16 @@ export default function ModalScanWajahPetugas({
       return;
     }
 
-    // Siswa yang sudah tidak terdaftar di kelas ini tidak boleh dicatat
-    if (!siswaList.some((s) => s.idSiswa === scannedId)) {
+    // Siswa yang sudah tidak terdaftar di daftar aktif tidak boleh dicatat
+    const matchedStudent = siswaList.find((s) => s.idSiswa === scannedId);
+    if (!matchedStudent) {
       lastSuccessScanAt.current = Date.now();
       setScanOverlay({
         type: "unknown",
         nama: studentName,
-        pesan: "Bukan siswa kelas ini. Sinkron ulang data wajah bila perlu.",
+        pesan: isAllClassesMode
+          ? "Siswa belum terdaftar di database sekolah."
+          : `Bukan siswa kelas ${activeClass?.namaKelas || "ini"}.`,
       });
       return;
     }
@@ -1378,7 +1732,7 @@ export default function ModalScanWajahPetugas({
       lastSuccessScanAt.current = Date.now();
       setScanOverlay({
         type: "duplicate",
-        nama: studentName,
+        nama: `${studentName}${matchedStudent.kelas ? ` • ${matchedStudent.kelas}` : ""}`,
         waktu: existing.waktuScan,
         pesan: `Sudah tercatat hadir pada pukul ${existing.waktuScan} WIB.`,
       });
@@ -1398,6 +1752,9 @@ export default function ModalScanWajahPetugas({
       waktuScan: jamScan,
       timestamp: Date.now(),
       metode: "Wajah",
+      idWali: matchedStudent.idWali || activeClass?.idWali,
+      idGuru: matchedStudent.idGuru || activeClass?.idGuru,
+      kelas: matchedStudent.kelas || activeClass?.namaKelas,
     };
 
     setScannedMap((prev) => ({
@@ -1411,11 +1768,12 @@ export default function ModalScanWajahPetugas({
       return copy;
     });
 
-    // Simpan ke antrian offline lokal multi-hari
+    // Simpan ke antrian offline lokal multi-hari (diteruskan ke wali kelas siswa yang bersangkutan)
     try {
-      const waliId = petugasInfo?.idWali;
-      if (waliId) {
-        const q = getOfflineQueue(waliId);
+      const targetWaliId =
+        matchedStudent.idWali || activeClass?.idWali || petugasInfo?.idWali;
+      if (targetWaliId) {
+        const q = getOfflineQueue(targetWaliId);
         const filtered = q.filter(
           (item) => !(item.idSiswa === scannedId && item.tanggal === todayISO),
         );
@@ -1426,8 +1784,10 @@ export default function ModalScanWajahPetugas({
           status: "Hadir",
           keterangan: `Presensi Wajah: ${jamScan} WIB`,
           timestamp: Date.now(),
+          idWali: targetWaliId,
+          idGuru: matchedStudent.idGuru || activeClass?.idGuru,
         });
-        saveOfflineQueue(waliId, filtered);
+        saveOfflineQueue(targetWaliId, filtered);
       }
     } catch (_) {}
 
@@ -1439,7 +1799,7 @@ export default function ModalScanWajahPetugas({
 
     setScanOverlay({
       type: "success",
-      nama: studentName,
+      nama: `${studentName}${matchedStudent.kelas ? ` • ${matchedStudent.kelas}` : ""}`,
       waktu: jamScan,
       pesan: `hadir pada pukul ${jamScan} WIB via Presensi Wajah`,
     });
@@ -1454,12 +1814,16 @@ export default function ModalScanWajahPetugas({
     }));
 
     try {
-      const waliId = petugasInfo?.idWali;
-      if (waliId) {
+      // Kelas milik SISWA yang bersangkutan (bukan kelas petugas) agar tidak masuk lembar yang salah
+      const waliId =
+        targetSiswa.idWali || activeClass?.idWali || petugasInfo?.idWali;
+      if (waliId && waliId !== "ALL_CLASSES") {
         const q = getOfflineQueue(waliId);
         const filtered = q.filter(
           (item) =>
-            !(item.idSiswa === targetSiswa.idSiswa && item.tanggal === todayISO),
+            !(
+              item.idSiswa === targetSiswa.idSiswa && item.tanggal === todayISO
+            ),
         );
         const ket =
           manualKetMap[targetSiswa.idSiswa] ||
@@ -1473,6 +1837,8 @@ export default function ModalScanWajahPetugas({
           status: st,
           keterangan: ket,
           timestamp: Date.now(),
+          idWali: waliId,
+          idGuru: targetSiswa.idGuru || activeClass?.idGuru,
         });
         saveOfflineQueue(waliId, filtered);
       }
@@ -1532,46 +1898,72 @@ export default function ModalScanWajahPetugas({
   // - Aman diulang: server melakukan upsert per siswa+tanggal.
   const flushingRef = useRef(false);
   async function flushOfflineQueue() {
-    const waliId = petugasInfo?.idWali;
-    const guruId = petugasInfo?.idGuru;
-    if (!waliId || !guruId || flushingRef.current) return;
+    if (flushingRef.current) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
-    const lockedNow = checkIsPastTimeLimit();
-    const cells = getOfflineQueue(waliId).filter(
-      (it) => it && it.idSiswa && it.tanggal && (it.tanggal !== todayISO || lockedNow),
-    );
-    if (cells.length === 0) return;
+    const wIdsToFlush = new Set();
+    if (petugasInfo?.idWali) wIdsToFlush.add(petugasInfo.idWali);
+    if (Array.isArray(availableClasses)) {
+      availableClasses.forEach((c) => {
+        if (c.idWali) wIdsToFlush.add(c.idWali);
+      });
+    }
 
     flushingRef.current = true;
     try {
-      const res = await savePresensiWaliKelas({ idGuru: guruId, idWali: waliId, cells });
-      if (res && res.success) {
-        const keyOf = (it) => `${it.idSiswa}|${it.tanggal}|${it.timestamp || ""}|${it.status}`;
-        const sent = new Set(cells.map(keyOf));
-        // Baca ulang antrian: catatan baru yang masuk saat mengirim tidak ikut terhapus
-        saveOfflineQueue(
-          waliId,
-          getOfflineQueue(waliId).filter((it) => !sent.has(keyOf(it))),
+      const lockedNow = checkIsPastTimeLimit();
+      await runSerial([...wIdsToFlush], async (wId) => {
+        const q = getOfflineQueue(wId);
+        const cells = q.filter(
+          (it) =>
+            it &&
+            it.idSiswa &&
+            it.tanggal &&
+            (it.tanggal !== todayISO || lockedNow),
         );
-        setPendingOfflineRecords((prev) => prev.filter((it) => !sent.has(keyOf(it))));
-        const nowIso = new Date().toISOString();
+        if (cells.length === 0) return;
+
+        const targetGuru =
+          availableClasses.find((c) => String(c.idWali) === String(wId))
+            ?.idGuru || petugasInfo?.idGuru;
+        if (!targetGuru) return;
+
         try {
-          localStorage.setItem(`last_online_save_${waliId}`, nowIso);
+          const res = await savePresensiWaliKelas({
+            idGuru: targetGuru,
+            idWali: wId,
+            cells,
+          });
+          if (res && res.success) {
+            const keyOf = (it) =>
+              `${it.idSiswa}|${it.tanggal}|${it.timestamp || ""}|${it.status}`;
+            const sent = new Set(cells.map(keyOf));
+            saveOfflineQueue(
+              wId,
+              getOfflineQueue(wId).filter((it) => !sent.has(keyOf(it))),
+            );
+            if (String(wId) === String(activeClass?.idWali)) {
+              setPendingOfflineRecords((prev) =>
+                prev.filter((it) => !sent.has(keyOf(it))),
+              );
+            }
+            const nowIso = new Date().toISOString();
+            try {
+              localStorage.setItem(`last_online_save_${wId}`, nowIso);
+            } catch (_) {}
+            if (String(wId) === String(activeClass?.idWali)) {
+              setLastOnlineSaveTime(nowIso);
+            }
+          }
         } catch (_) {}
-        setLastOnlineSaveTime(nowIso);
-      } else if (res && !res.networkError) {
-        console.warn("Server menolak kiriman antrian offline:", res.message);
-      }
-    } catch (e) {
-      console.warn("Kirim antrian offline gagal:", e);
+      });
     } finally {
       flushingRef.current = false;
     }
   }
 
   useEffect(() => {
-    if (!isOpen || !petugasInfo?.idWali) return;
+    if (!isOpen) return;
     const t0 = setTimeout(flushOfflineQueue, 1500);
     const onOnline = () => flushOfflineQueue();
     window.addEventListener("online", onOnline);
@@ -1582,7 +1974,7 @@ export default function ModalScanWajahPetugas({
       window.removeEventListener("online", onOnline);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, petugasInfo?.idWali, petugasInfo?.idGuru, todayISO]);
+  }, [isOpen, activeClass?.idWali, activeClass?.idGuru, todayISO]);
 
   // 6. KIRIM / SIMPAN PRESENSI KE BACKEND DENGAN PROGRESS BAR (OFFLINE & ONLINE)
   async function handleSubmitPresensi() {
@@ -1604,32 +1996,239 @@ export default function ModalScanWajahPetugas({
         ? `\n\n📌 Terdeteksi ${pendingCount} data presensi offline hari kemarin yang belum tersimpan online dan akan dimasukkan bersama.`
         : "";
 
-    const confirmText =
-      (isOffline
-        ? `📱 KONFIRMASI SIMPAN PRESENSI (MODE OFFLINE)\n\n`
-        : `📋 KONFIRMASI PENGIRIMAN PRESENSI KELAS\n\n`) +
-      `Kelas: ${petugasInfo?.namaKelas}\n` +
-      `Total Siswa Hari Ini: ${stats.total}\n` +
-      `• Hadir: ${stats.hadir}\n` +
-      `• Sakit: ${stats.sakit}\n` +
-      `• Izin: ${stats.izin}\n` +
-      `• Alfa: ${stats.alfa + stats.belumScan} (${stats.belumScan} siswa belum hadir otomatis Alfa)` +
-      offlineNote +
-      (isOffline
-        ? `\n\nJaringan internet sedang mati. Data diamankan OFFLINE di HP dan dikirim otomatis ke Spreadsheet begitu internet kembali (selama aplikasi terbuka).\nSimpan presensi sekarang?`
-        : `\n\nApakah Anda ingin menyimpan data presensi ini sekarang?`);
+    let confirmText = "";
+    if (isAllClassesMode) {
+      confirmText =
+        (isOffline
+          ? `📱 KONFIRMASI SIMPAN SCAN PINTAR (MODE OFFLINE)\n\n`
+          : `📋 KONFIRMASI PENGIRIMAN SCAN PINTAR (SEMUA KELAS)\n\n`) +
+        `Total Siswa Hadir Terpindai: ${stats.hadir}\n` +
+        `Data kehadiran akan diteruskan otomatis ke masing-masing lembar wali kelas terkait.` +
+        offlineNote +
+        `\n\nApakah Anda ingin menyimpan data presensi ini sekarang?`;
+    } else {
+      confirmText =
+        (isOffline
+          ? `📱 KONFIRMASI SIMPAN PRESENSI (MODE OFFLINE)\n\n`
+          : `📋 KONFIRMASI PENGIRIMAN PRESENSI KELAS\n\n`) +
+        `Kelas: ${activeClass?.namaKelas || petugasInfo?.namaKelas}\n` +
+        `Total Siswa Hari Ini: ${stats.total}\n` +
+        `• Hadir: ${stats.hadir}\n` +
+        `• Sakit: ${stats.sakit}\n` +
+        `• Izin: ${stats.izin}\n` +
+        `• Alfa: ${stats.alfa + stats.belumScan} (${stats.belumScan} siswa belum hadir otomatis Alfa)` +
+        offlineNote +
+        (isOffline
+          ? `\n\nJaringan internet sedang mati. Data diamankan OFFLINE di HP dan dikirim otomatis ke Spreadsheet begitu internet kembali (selama aplikasi terbuka).\nSimpan presensi sekarang?`
+          : `\n\nApakah Anda ingin menyimpan data presensi ini sekarang?`);
+    }
 
     if (!window.confirm(confirmText)) return;
 
     setSaving(true);
-    setSaveProgress({
-      pct: 20,
-      label: "Menyusun data presensi...",
-      done: false,
-      error: false,
-    });
-
     try {
+      // --- LOGIKA SIMPAN MODE SEMUA KELAS (SCAN PINTAR) ---
+      if (isAllClassesMode) {
+        const activeRecorded = siswaList.filter(
+          (s) => scannedMap[s.idSiswa] || manualStatusMap[s.idSiswa],
+        );
+
+        if (activeRecorded.length === 0 && pendingOfflineRecords.length === 0) {
+          alert("Belum ada siswa yang discan untuk disimpan.");
+          setSaving(false);
+          setSaveProgress(null);
+          return;
+        }
+
+        const todayCells = activeRecorded.map((s) => {
+          const scan = scannedMap[s.idSiswa];
+          if (scan) {
+            return {
+              idSiswa: s.idSiswa,
+              namaSiswa: s.nama,
+              tanggal: todayISO,
+              status: "Hadir",
+              keterangan: `Presensi Wajah: ${scan.waktuScan} WIB`,
+              idWali: s.idWali,
+              idGuru: s.idGuru,
+              source: "scan_pintar",
+              overwriteOnlyIf: ["", "Alfa"],
+            };
+          }
+          const explicit = manualStatusMap[s.idSiswa] || "Alfa";
+          const ket =
+            manualKetMap[s.idSiswa] || `Petugas: ${user?.nama || "Siswa"}`;
+          return {
+            idSiswa: s.idSiswa,
+            namaSiswa: s.nama,
+            tanggal: todayISO,
+            status: explicit,
+            keterangan: ket,
+            idWali: s.idWali,
+            idGuru: s.idGuru,
+            source: "scan_pintar",
+            overwriteOnlyIf: ["", "Alfa"],
+          };
+        });
+
+        const groups = {};
+        [...pendingOfflineRecords, ...todayCells].forEach((cell) => {
+          const s = siswaList.find((x) => x.idSiswa === cell.idSiswa);
+          const wId = cell.idWali || s?.idWali || petugasInfo?.idWali;
+          const gId = cell.idGuru || s?.idGuru || petugasInfo?.idGuru;
+          if (!wId) return;
+          if (!groups[wId])
+            groups[wId] = { idWali: wId, idGuru: gId, cells: [] };
+          groups[wId].cells.push(cell);
+        });
+
+        // Simpan ke offline queue per wali kelas (merge aman tanpa menghapus antrian hari lain)
+        Object.entries(groups).forEach(([wId, grp]) => {
+          try {
+            const existingQ = getOfflineQueue(wId);
+            const keyOf = (c) => `${c.idSiswa}|${c.tanggal}`;
+            const map = new Map();
+            existingQ.forEach((c) => map.set(keyOf(c), c));
+            grp.cells.forEach((c) =>
+              map.set(keyOf(c), { ...c, timestamp: c.timestamp || Date.now() }),
+            );
+            saveOfflineQueue(wId, Array.from(map.values()));
+          } catch (_) {}
+        });
+
+        const groupEntries = Object.entries(groups);
+        const totalGroups = groupEntries.length;
+
+        const getNamaKelas = (wId) => {
+          const found = availableClasses.find(
+            (c) => String(c.idWali) === String(wId),
+          );
+          return found?.namaKelas || found?.kelas || `Kelas (${wId})`;
+        };
+
+        const initDetails = groupEntries.map(([wId]) => ({
+          wId,
+          namaKelas: getNamaKelas(wId),
+          status: "pending",
+        }));
+
+        if (isOffline) {
+          setSaveProgress({
+            phase: "error",
+            label: "📱 Offline — presensi wajah tersimpan di antrian HP",
+            pct: 100,
+            details: initDetails.map((d) => ({ ...d, status: "offline" })),
+            allSuccess: false,
+          });
+          if (typeof onPresensiSubmitted === "function") onPresensiSubmitted();
+          setTimeout(() => {
+            setSaveProgress(null);
+            if (checkIsPastTimeLimit()) {
+              setIsSubmittedToday(true);
+              onClose();
+            }
+          }, 2500);
+          return;
+        }
+
+        setSaveProgress({
+          phase: "sending",
+          label: `Menyimpan presensi wajah ke ${totalGroups} lembar wali kelas...`,
+          pct: 10,
+          details: initDetails,
+          allSuccess: null,
+        });
+
+        let doneCount = 0;
+        const detailsRef = [...initDetails];
+
+        const saveResults = await runSerial(
+          groupEntries,
+          async ([wId, grp], idx) => {
+            try {
+              const res = await savePresensiWaliKelas({
+                idGuru: grp.idGuru,
+                idWali: wId,
+                cells: grp.cells,
+              });
+
+              detailsRef[idx] = {
+                ...detailsRef[idx],
+                status: res?.success ? "ok" : "error",
+              };
+              doneCount++;
+
+              setSaveProgress((prev) => ({
+                ...prev,
+                label: `Mengirim... (${doneCount}/${totalGroups} kelas)`,
+                pct: Math.round(10 + (doneCount / totalGroups) * 85),
+                details: [...detailsRef],
+              }));
+
+              if (res?.success) {
+                // Bersihkan HANYA data yang sudah terkirim, sisakan antrian hari lain
+                const sKey = (c) =>
+                  `${String(c.idSiswa).trim()}|${String(c.tanggal).trim()}|${String(c.status).trim()}`;
+                const sentKeys = new Set(grp.cells.map(sKey));
+                const remaining = getOfflineQueue(wId).filter(
+                  (c) => !sentKeys.has(sKey(c)),
+                );
+                saveOfflineQueue(wId, remaining);
+
+                const nowIso = new Date().toISOString();
+                try {
+                  localStorage.setItem(`last_online_save_${wId}`, nowIso);
+                  localStorage.removeItem(`draft_scan_${wId}_${todayISO}`);
+                } catch (_) {}
+                return true;
+              }
+              return false;
+            } catch (_) {
+              detailsRef[idx] = { ...detailsRef[idx], status: "error" };
+              doneCount++;
+              setSaveProgress((prev) => ({
+                ...prev,
+                label: `Mengirim... (${doneCount}/${totalGroups} kelas)`,
+                pct: Math.round(10 + (doneCount / totalGroups) * 85),
+                details: [...detailsRef],
+              }));
+              return false;
+            }
+          },
+        );
+
+        const allSuccess = saveResults.every(Boolean);
+
+        if (typeof onPresensiSubmitted === "function") {
+          onPresensiSubmitted();
+        }
+
+        setSaveProgress({
+          phase: allSuccess ? "done" : "error",
+          label: allSuccess
+            ? "✅ Presensi Scan Pintar wajah berhasil disimpan ke masing-masing wali kelas!"
+            : "📱 Sebagian presensi tersimpan online dan sisanya di antrian HP.",
+          pct: 100,
+          details: [...detailsRef],
+          allSuccess,
+        });
+
+        setTimeout(() => {
+          setSaveProgress(null);
+          if (checkIsPastTimeLimit()) {
+            setIsSubmittedToday(true);
+            onClose();
+          }
+        }, 2500);
+        return;
+      }
+
+      // --- LOGIKA SIMPAN MODE PER KELAS TERTENTU ---
+      const waliId = activeClass?.idWali || petugasInfo?.idWali;
+      const guruId = activeClass?.idGuru || petugasInfo?.idGuru;
+      const namaKelasNow =
+        activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas ini";
+
       const todayCells = siswaList.map((s) => {
         const scan = scannedMap[s.idSiswa];
         if (scan) {
@@ -1665,17 +2264,20 @@ export default function ModalScanWajahPetugas({
 
       // Amankan dulu ke antrian lokal HP agar data terjamin tidak hilang
       try {
-        saveOfflineQueue(petugasInfo.idWali, allCells);
+        if (waliId) saveOfflineQueue(waliId, allCells);
       } catch (_) {}
 
       // KASUS 1: Perangkat sedang offline (jaringan dimatikan)
       if (isOffline) {
         setSaveProgress({
-          pct: 100,
+          phase: "error",
           label:
-            "📱 Presensi berhasil disimpan secara Offline di HP! Data aman dan akan otomatis dikirim ke Spreadsheet saat online.",
-          done: true,
-          error: false,
+            "📱 Offline — presensi disimpan di antrian HP dan dikirim otomatis saat online",
+          pct: 100,
+          details: [
+            { wId: waliId, namaKelas: namaKelasNow, status: "offline" },
+          ],
+          allSuccess: false,
         });
 
         if (typeof onPresensiSubmitted === "function") {
@@ -1688,23 +2290,24 @@ export default function ModalScanWajahPetugas({
             setIsSubmittedToday(true);
             onClose();
           }
-        }, 1800);
+        }, 2500);
         return;
       }
 
       // KASUS 2: Mencoba simpan secara Online ke Spreadsheet
       setSaveProgress({
-        pct: 60,
-        label: `Menyimpan ${allCells.length} data presensi ke Google Sheets...`,
-        done: false,
-        error: false,
+        phase: "sending",
+        label: `Menyimpan presensi wajah ke lembar ${namaKelasNow}...`,
+        pct: 35,
+        details: [{ wId: waliId, namaKelas: namaKelasNow, status: "pending" }],
+        allSuccess: null,
       });
 
       let res;
       try {
         res = await savePresensiWaliKelas({
-          idGuru: petugasInfo.idGuru,
-          idWali: petugasInfo.idWali,
+          idGuru: guruId,
+          idWali: waliId,
           cells: allCells,
         });
       } catch (netErr) {
@@ -1716,45 +2319,67 @@ export default function ModalScanWajahPetugas({
       }
 
       if (res && res.success) {
-        const nowIso = new Date().toISOString();
-        try {
-          localStorage.setItem(`last_online_save_${petugasInfo.idWali}`, nowIso);
-          localStorage.removeItem(`draft_scan_${petugasInfo.idWali}_${todayISO}`);
-          // Bersihkan antrian offline karena seluruhnya telah berhasil tersimpan online
-          saveOfflineQueue(petugasInfo.idWali, []);
-        } catch (_) {}
+        if (waliId) {
+          const q = getOfflineQueue(waliId);
+          const remaining = q.filter(
+            (c) =>
+              c.tanggal &&
+              c.tanggal !== todayISO &&
+              !allCells.some(
+                (a) => a.idSiswa === c.idSiswa && a.tanggal === c.tanggal,
+              ),
+          );
+          saveOfflineQueue(waliId, remaining);
+          setPendingOfflineRecords(remaining);
 
-        setLastOnlineSaveTime(nowIso);
-        setPendingOfflineRecords([]);
+          const nowIso = new Date().toISOString();
+          try {
+            localStorage.setItem(`last_online_save_${waliId}`, nowIso);
+            localStorage.removeItem(`draft_scan_${waliId}_${todayISO}`);
+          } catch (_) {}
+          setLastOnlineSaveTime(nowIso);
+        }
+
         setHasPreviousSubmission(true);
 
         if (typeof onPresensiSubmitted === "function") {
           onPresensiSubmitted();
         }
 
+        const pastLimit = checkIsPastTimeLimit();
+
         setSaveProgress({
+          phase: "done",
+          label: pastLimit
+            ? "✅ Tersimpan! Waktu pengisian hari ini telah ditutup."
+            : "✅ Presensi wajah berhasil disimpan ke Spreadsheet!",
           pct: 100,
-          label: "✅ Presensi kelas berhasil disimpan ke Spreadsheet secara online!",
-          done: true,
-          error: false,
+          details: [{ wId: waliId, namaKelas: namaKelasNow, status: "ok" }],
+          allSuccess: true,
         });
 
         setTimeout(() => {
           setSaveProgress(null);
-          if (checkIsPastTimeLimit()) {
+          if (pastLimit) {
             setIsSubmittedToday(true);
+            setIsLockedByTime(true);
             onClose();
           }
-        }, 1500);
+        }, 2200);
       } else if (!res || res.networkError) {
-        // Jaringan putus / server tak terjangkau: data aman di antrian HP, dikirim otomatis nanti
-        console.warn("Gagal simpan online (jaringan), data tetap di antrian:", res?.message);
+        console.warn(
+          "Gagal simpan online (jaringan), data tetap di antrian:",
+          res?.message,
+        );
         setSaveProgress({
-          pct: 100,
+          phase: "error",
           label:
-            "📱 Server tidak terjangkau. Presensi tersimpan aman di HP dan akan dikirim otomatis saat online.",
-          done: true,
-          error: false,
+            "📱 Koneksi terputus. Presensi tersimpan aman di HP dan akan dikirim otomatis saat online.",
+          pct: 100,
+          details: [
+            { wId: waliId, namaKelas: namaKelasNow, status: "offline" },
+          ],
+          allSuccess: false,
         });
 
         if (typeof onPresensiSubmitted === "function") {
@@ -1767,27 +2392,28 @@ export default function ModalScanWajahPetugas({
             setIsSubmittedToday(true);
             onClose();
           }
-        }, 2000);
+        }, 2500);
       } else {
-        // Server MENOLAK (bukan masalah jaringan): jangan tampilkan seolah-olah sukses
         console.warn("Server menolak penyimpanan presensi:", res?.message);
         setSaveProgress({
+          phase: "error",
+          label: `⛔ Gagal disimpan: ${res?.message || "kesalahan di server"}. Data masih aman di HP.`,
           pct: 100,
-          label: `⛔ Gagal disimpan: ${res?.message || "kesalahan di server"}. Data masih aman di HP — hubungi admin bila berulang.`,
-          done: true,
-          error: true,
+          details: [{ wId: waliId, namaKelas: namaKelasNow, status: "error" }],
+          allSuccess: false,
         });
-        setTimeout(() => setSaveProgress(null), 6000);
+        setTimeout(() => setSaveProgress(null), 5000);
       }
     } catch (err) {
       console.warn("Penyimpanan offline:", err);
       setSaveProgress({
-        pct: 100,
+        phase: "error",
         label: "📱 Presensi berhasil diamankan di penyimpanan lokal perangkat.",
-        done: true,
-        error: false,
+        pct: 100,
+        details: [],
+        allSuccess: false,
       });
-      setTimeout(() => setSaveProgress(null), 2000);
+      setTimeout(() => setSaveProgress(null), 2500);
     } finally {
       setSaving(false);
     }
@@ -1803,6 +2429,160 @@ export default function ModalScanWajahPetugas({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
+      {/* ===== OVERLAY PROGRESS SIMPAN SPREADSHEET (DI TENGAH LAYAR) ===== */}
+      {saveProgress && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm pointer-events-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header overlay */}
+            <div
+              className={`px-5 py-3.5 flex items-center gap-2.5 ${
+                saveProgress.phase === "done"
+                  ? "bg-emerald-600"
+                  : saveProgress.phase === "error"
+                    ? "bg-amber-600"
+                    : "bg-teal-700"
+              } text-white`}
+            >
+              {saveProgress.phase === "sending" && (
+                <svg
+                  className="animate-spin h-5 w-5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"
+                  />
+                </svg>
+              )}
+              {saveProgress.phase === "done" && (
+                <span className="text-lg shrink-0">✅</span>
+              )}
+              {saveProgress.phase === "error" && (
+                <span className="text-lg shrink-0">⚠️</span>
+              )}
+              <div className="font-bold text-sm leading-snug">
+                {saveProgress.phase === "sending"
+                  ? "Menyimpan ke Spreadsheet..."
+                  : saveProgress.phase === "done"
+                    ? "Penyimpanan Selesai"
+                    : "Status Penyimpanan"}
+              </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-3.5">
+              {/* Progress bar */}
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs text-slate-600 font-medium line-clamp-1">
+                    {saveProgress.label}
+                  </span>
+                  <span className="text-xs font-black text-slate-800 ml-2">
+                    {saveProgress.pct}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      saveProgress.phase === "done"
+                        ? "bg-emerald-500"
+                        : saveProgress.phase === "error"
+                          ? "bg-amber-500"
+                          : "bg-teal-600"
+                    }`}
+                    style={{ width: `${saveProgress.pct}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Detail per kelas */}
+              {saveProgress.details && saveProgress.details.length > 0 && (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {saveProgress.details.map((d, i) => (
+                    <div
+                      key={d.wId || i}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                        d.status === "ok"
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          : d.status === "error"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : d.status === "offline"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : "bg-slate-50 text-slate-600 border border-slate-200"
+                      }`}
+                    >
+                      <span className="shrink-0 text-sm">
+                        {d.status === "ok" ? (
+                          "✅"
+                        ) : d.status === "error" ? (
+                          "❌"
+                        ) : d.status === "offline" ? (
+                          "📱"
+                        ) : (
+                          <svg
+                            className="animate-spin h-3.5 w-3.5 text-teal-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v8z"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="truncate">{d.namaKelas}</span>
+                      <span className="ml-auto shrink-0 text-[10px] font-semibold opacity-75">
+                        {d.status === "ok"
+                          ? "Tersimpan"
+                          : d.status === "error"
+                            ? "Gagal"
+                            : d.status === "offline"
+                              ? "Antrian HP"
+                              : "Mengirim..."}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Footer info */}
+              {saveProgress.phase === "done" && (
+                <p className="text-[11px] text-emerald-600 text-center font-medium">
+                  Menutup otomatis dalam beberapa detik...
+                </p>
+              )}
+              {saveProgress.phase === "error" && (
+                <button
+                  type="button"
+                  onClick={() => setSaveProgress(null)}
+                  className="w-full text-xs py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh] relative">
         {/* MODAL DIALOG PILIHAN SINKRONISASI ULANG */}
         {syncPromptOpen && (
@@ -1816,10 +2596,12 @@ export default function ModalScanWajahPetugas({
                   Sinkronisasi Data Wajah
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
-                  Ulang sinkron data jika ada foto siswa di daftarkan oleh guru wali kelas?
+                  Ulang sinkron data jika ada foto siswa di daftarkan oleh guru
+                  wali kelas?
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Pilih &quot;Tidak&quot; jika tidak ada penambahan foto siswa baru, agar kamera langsung siap digunakan.
+                  Pilih &quot;Tidak&quot; jika tidak ada penambahan foto siswa
+                  baru, agar kamera langsung siap digunakan.
                 </p>
               </div>
 
@@ -1865,9 +2647,139 @@ export default function ModalScanWajahPetugas({
                 <h3 className="text-xs sm:text-sm font-black tracking-tight truncate">
                   Scan Presensi Wajah
                 </h3>
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-400/20 text-teal-200 font-bold border border-teal-300/30 shrink-0">
-                  {petugasInfo?.namaKelas || "Rombel"}
-                </span>
+                {/* PEMILIH KELAS / SCAN PINTAR */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowClassDropdown((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                    title="Pilih Kelas atau Mode Scan Pintar"
+                  >
+                    <span>
+                      {isAllClassesMode
+                        ? "🌟 Semua Kelas (Pintar)"
+                        : `🏫 ${activeClass?.namaKelas || petugasInfo?.namaKelas || "Rombel"}`}
+                    </span>
+                    <span className="text-[8px] opacity-75">▾</span>
+                  </button>
+
+                  {showClassDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setShowClassDropdown(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="p-1">
+                          <p className="text-[10px] font-bold text-teal-300 uppercase tracking-wider px-2 py-1">
+                            Mode Pemindaian
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedWaliId("ALL_CLASSES");
+                              setShowClassDropdown(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                              isAllClassesMode
+                                ? "bg-teal-600 text-white"
+                                : "hover:bg-slate-800 text-teal-100"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🌟</span>
+                              <div>
+                                <p className="text-xs font-black">
+                                  Semua Kelas (Scan Pintar)
+                                </p>
+                                <p className="text-[9.5px] font-normal text-teal-200">
+                                  Pindai otomatis wajah siswa dari kelas mana
+                                  pun
+                                </p>
+                              </div>
+                            </div>
+                            {isAllClassesMode && <span>✓</span>}
+                          </button>
+                        </div>
+
+                        <div className="p-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                            Pilih Per Kelas
+                          </p>
+                          {/* Kelas Asal Petugas */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedWaliId(petugasInfo?.idWali);
+                              setShowClassDropdown(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                              !isAllClassesMode &&
+                              String(selectedWaliId) ===
+                                String(petugasInfo?.idWali)
+                                ? "bg-emerald-600 text-white"
+                                : "hover:bg-slate-800 text-slate-200"
+                            }`}
+                          >
+                            <div className="truncate">
+                              <span className="mr-1.5">📌</span>
+                              <span>
+                                {petugasInfo?.namaKelas || "Kelas Petugas"}
+                              </span>
+                              <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                                Kelas Anda
+                              </span>
+                            </div>
+                            {!isAllClassesMode &&
+                              String(selectedWaliId) ===
+                                String(petugasInfo?.idWali) && <span>✓</span>}
+                          </button>
+
+                          {/* Kelas Lainnya */}
+                          {availableClasses
+                            .filter(
+                              (c) =>
+                                String(c.idWali) !==
+                                String(petugasInfo?.idWali),
+                            )
+                            .map((c) => {
+                              const isSelected =
+                                !isAllClassesMode &&
+                                String(selectedWaliId) === String(c.idWali);
+                              return (
+                                <button
+                                  key={c.idWali}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedWaliId(c.idWali);
+                                    setShowClassDropdown(false);
+                                  }}
+                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
+                                    isSelected
+                                      ? "bg-teal-600 text-white font-bold"
+                                      : "hover:bg-slate-800 text-slate-300"
+                                  }`}
+                                >
+                                  <div className="truncate">
+                                    <span className="mr-1.5">🏫</span>
+                                    <span>{c.namaKelas}</span>
+                                    {c.namaGuru && (
+                                      <span className="text-[10px] text-slate-400 block truncate ml-5">
+                                        {c.namaGuru}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isSelected && (
+                                    <span className="font-bold">✓</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="text-[9px] text-teal-200 truncate mt-0.5">
                 {templateInfo.ready}/{registeredFaceCount} siap • {stats.hadir}/
@@ -2030,6 +2942,33 @@ export default function ModalScanWajahPetugas({
           </div>
 
           {/* TAB 1: KAMERA SCAN WAJAH */}
+          {activeTab === "kamera" && isLockedByTime && (
+            <div className="rounded-2xl p-6 bg-slate-900 border-2 border-slate-700 text-center text-white space-y-3 min-h-[350px] flex flex-col items-center justify-center shadow-lg">
+              <span className="text-4xl">⛔</span>
+              <h3 className="text-base font-black text-rose-300">
+                Batas Waktu Presensi Berakhir
+              </h3>
+              <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                Presensi ditutup setelah pukul 08.30 WIB sesuai ketentuan
+                sekolah.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("portal_bypass_time_limit", "true");
+                  } catch (_) {}
+                  setIsLockedByTime(false);
+                  setIsSubmittedToday(false);
+                }}
+                className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5"
+              >
+                <span>🔓</span>
+                <span>Buka Kamera (Mode Uji Coba / Testing)</span>
+              </button>
+            </div>
+          )}
+
           {activeTab === "kamera" && !isLockedByTime && (
             <div className="space-y-1.5 relative">
               {/* STATUS KRITIS MODEL AI / FOTO GAGAL */}
@@ -2062,7 +3001,8 @@ export default function ModalScanWajahPetugas({
               {templateInfo.failed.length > 0 && (
                 <div className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
                   <span className="truncate">
-                    ⚠️ {templateInfo.failed.length} foto siswa perlu didaftarkan ulang (harus lurus & jelas).
+                    ⚠️ {templateInfo.failed.length} foto siswa perlu didaftarkan
+                    ulang (harus lurus & jelas).
                   </span>
                 </div>
               )}
@@ -2470,8 +3410,13 @@ export default function ModalScanWajahPetugas({
                         className="p-2.5 rounded-xl border border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                       >
                         <div>
-                          <div className="font-bold text-slate-900">
-                            {s.nama}
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                            <span>{s.nama}</span>
+                            {s.kelas && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-normal">
+                                {s.kelas}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[10px] font-mono text-slate-500">
                             ID: {s.idSiswa}
@@ -2521,6 +3466,11 @@ export default function ModalScanWajahPetugas({
                       <div className="truncate">
                         <span className="font-bold text-slate-900 truncate block">
                           {s.nama}
+                          {s.kelas && (
+                            <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-normal">
+                              {s.kelas}
+                            </span>
+                          )}
                         </span>
                         <span className="text-[9px] text-slate-500 font-mono">
                           {s.idSiswa}
@@ -2532,32 +3482,6 @@ export default function ModalScanWajahPetugas({
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Progress Bar Penyimpanan */}
-          {saveProgress && (
-            <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                <span className={saveProgress.error ? "text-rose-700" : ""}>
-                  {saveProgress.label}
-                </span>
-                <span className="font-mono text-teal-700 ml-2">
-                  {saveProgress.pct}%
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    saveProgress.error
-                      ? "bg-rose-500"
-                      : saveProgress.done
-                        ? "bg-emerald-500"
-                        : "bg-teal-600"
-                  }`}
-                  style={{ width: `${saveProgress.pct}%` }}
-                />
               </div>
             </div>
           )}
@@ -2595,7 +3519,8 @@ export default function ModalScanWajahPetugas({
                 <div className="text-[9.5px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
                   <span>⚠️</span>
                   <span>
-                    +{pendingOfflineRecords.length} presensi offline belum tersimpan online
+                    +{pendingOfflineRecords.length} presensi offline belum
+                    tersimpan online
                   </span>
                 </div>
               )}

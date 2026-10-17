@@ -12,6 +12,8 @@ import {
   getBiodataSiswa,
   getSiswaById,
   getDashboardKepsekWaliKelas,
+  getKelasPetugas,
+  getGuruWaliSiswa,
 } from "../lib/api";
 
 import { getSession, saveSession, isLoggedIn, logout } from "../lib/auth";
@@ -36,7 +38,10 @@ import {
   parseKeteranganWali,
   cachePetugasLocal,
 } from "../lib/petugasPresensiHelper";
-import { autoPushSubscribe, runPesanCleanupBackground } from "../lib/pushHelper";
+import {
+  autoPushSubscribe,
+  runPesanCleanupBackground,
+} from "../lib/pushHelper";
 
 // --- HELPER FORMAT WAKTU & TANGGAL ---
 function formatWaktu(timestamp) {
@@ -207,6 +212,7 @@ export default function DashboardSiswa() {
   const [showInfoRegistrasiWajah, setShowInfoRegistrasiWajah] = useState(false);
   const [pesanInitialTarget, setPesanInitialTarget] = useState(null);
   const [showModalPesan, setShowModalPesan] = useState(false);
+  const [availableClasses, setAvailableClasses] = useState([]);
   const [unreadPesanCount, refreshPesanCount] = useJumlahPesanSekolah({
     userId: user?.id,
     enabled: !!user?.id,
@@ -245,8 +251,31 @@ export default function DashboardSiswa() {
       if (saved) {
         cachedKelas = JSON.parse(saved);
         if (cachedKelas && isMountedRef.current) {
-          if (cachedKelas.statistikKelas) setStatistikKelas(cachedKelas.statistikKelas);
-          if (cachedKelas.petugasWaliData) setPetugasWaliData(cachedKelas.petugasWaliData);
+          if (cachedKelas.statistikKelas)
+            setStatistikKelas(cachedKelas.statistikKelas);
+          if (cachedKelas.petugasWaliData)
+            setPetugasWaliData(cachedKelas.petugasWaliData);
+        }
+      }
+    } catch (_) {}
+
+    // Baca cache seluruh daftar kelas untuk fitur petugas presensi cerdas
+    try {
+      const savedCls = localStorage.getItem(
+        "portal_sekolah_daftar_kelas_cache",
+      );
+      if (savedCls) {
+        const parsedCls = JSON.parse(savedCls);
+        if (
+          Array.isArray(parsedCls) &&
+          parsedCls.length > 0 &&
+          isMountedRef.current
+        ) {
+          setAvailableClasses((prev) =>
+            JSON.stringify(prev) === JSON.stringify(parsedCls)
+              ? prev
+              : parsedCls,
+          );
         }
       }
     } catch (_) {}
@@ -276,7 +305,13 @@ export default function DashboardSiswa() {
       } catch (_) {}
 
       if (cards.length === 0) {
-        const res = await getDashboardKepsekWaliKelas(false);
+        // Endpoint khusus petugas (data minimal & diperiksa server). Jika server belum
+        // diperbarui, sementara memakai cara lama.
+        let res = await getKelasPetugas(sid);
+        if (!res?.success && !res?.networkError) {
+          // Jika ditolak karena bukan petugas atau action belum ada di GAS lama, fallback ke data wali kelas
+          res = await getDashboardKepsekWaliKelas(false);
+        }
         if (res && res.success && Array.isArray(res.data?.cards)) {
           cards = res.data.cards;
           try {
@@ -286,6 +321,32 @@ export default function DashboardSiswa() {
       }
 
       if (cards.length > 0) {
+        // Simpan seluruh daftar rombel yang ada agar bisa dipilih oleh petugas kelas
+        const cleanClasses = cards.map((c) => ({
+          idWali: c.idWali,
+          idGuru: c.idGuru,
+          namaKelas: c.namaKelas || c.kelas || "Kelas",
+          namaGuru: c.namaGuru || "",
+          jumlahSiswa:
+            c.jumlahSiswa ||
+            (Array.isArray(c.daftarSiswa) ? c.daftarSiswa.length : 0),
+          daftarSiswa: c.daftarSiswa || [],
+          keterangan: c.keterangan || "",
+        }));
+        if (isMountedRef.current) {
+          setAvailableClasses((prev) =>
+            JSON.stringify(prev) === JSON.stringify(cleanClasses)
+              ? prev
+              : cleanClasses,
+          );
+        }
+        try {
+          localStorage.setItem(
+            "portal_sekolah_daftar_kelas_cache",
+            JSON.stringify(cleanClasses),
+          );
+        } catch (_) {}
+
         const sid = String(sess.id).trim();
 
         // Cari kelas siswa di antara seluruh rombel
@@ -402,259 +463,284 @@ export default function DashboardSiswa() {
     }
   }, []);
 
-  const loadDashboard = useCallback(async (isSilent = false) => {
-    if (!isLoggedIn()) {
-      router.replace("/magang/login");
-      return;
-    }
-
-    const session = getSession();
-
-    if (!session || session.role !== "siswa") {
-      router.replace("/magang/login");
-      return;
-    }
-
-    if (isMountedRef.current) {
-      setUser(session);
-      setLoadFailed(false);
-      setLoadFailedMessage("");
-      if (!isSilent) {
-        setLoadProgress(8);
-      } else {
-        setIsUpdatingOnline(true);
+  const loadDashboard = useCallback(
+    async (isSilent = false) => {
+      if (!isLoggedIn()) {
+        router.replace("/magang/login");
+        return;
       }
 
-      // Cek apakah siswa merupakan petugas presensi kelas & ambil statistik kelas
-      loadDataKelasSiswa(session);
+      const session = getSession();
 
-      autoPushSubscribe({
-        userId: String(session.id || "").trim(),
-        role: "siswa",
-      }).catch(() => {});
-      runPesanCleanupBackground();
-    }
+      if (!session || session.role !== "siswa") {
+        router.replace("/magang/login");
+        return;
+      }
 
-    // Cek preference lokal tanggal presensi hari ini
-    const lastPresensiDate = localStorage.getItem("magang_last_presensi_date");
-    const todayStr = new Date().toLocaleDateString("id-ID");
-    if (lastPresensiDate === todayStr && isMountedRef.current) {
-      setHasPresensiTodayLocal(true);
-    }
-
-    let fallbackStatistik = null;
-    let fallbackRiwayat = [];
-    let fallbackPresensi = null;
-    let fallbackGuruWali = "-";
-    let fallbackCatatanWali = null;
-    let usedCache = false;
-
-    // 1. BACA CACHE & INSTANT RENDER
-    const cachedDataStr = localStorage.getItem(CACHE_KEY);
-    if (cachedDataStr && isMountedRef.current) {
-      try {
-        const cachedData = JSON.parse(cachedDataStr);
-        const isValid =
-          cachedData &&
-          typeof cachedData === "object" &&
-          Array.isArray(cachedData.riwayat);
-
-        if (isValid) {
-          fallbackStatistik = cachedData.statistik || null;
-          fallbackRiwayat = cachedData.riwayat || [];
-          fallbackPresensi = cachedData.presensiHariIni || null;
-          fallbackGuruWali = cachedData.guruWali || "-";
-          fallbackCatatanWali = cachedData.catatanWali || null;
-
-          setStatistik(fallbackStatistik);
-          setRiwayat(fallbackRiwayat);
-          setPresensiHariIni(fallbackPresensi);
-          setGuruWali(fallbackGuruWali);
-          setCatatanWali(fallbackCatatanWali);
-          setLoading(false);
-          usedCache = true;
+      if (isMountedRef.current) {
+        setUser(session);
+        setLoadFailed(false);
+        setLoadFailedMessage("");
+        if (!isSilent) {
+          setLoadProgress(8);
         } else {
+          setIsUpdatingOnline(true);
+        }
+
+        // Cek apakah siswa merupakan petugas presensi kelas & ambil statistik kelas
+        loadDataKelasSiswa(session);
+
+        autoPushSubscribe({
+          userId: String(session.id || "").trim(),
+          role: "siswa",
+        }).catch(() => {});
+        runPesanCleanupBackground();
+      }
+
+      // Cek preference lokal tanggal presensi hari ini
+      const lastPresensiDate = localStorage.getItem(
+        "magang_last_presensi_date",
+      );
+      const todayStr = new Date().toLocaleDateString("id-ID");
+      if (lastPresensiDate === todayStr && isMountedRef.current) {
+        setHasPresensiTodayLocal(true);
+      }
+
+      let fallbackStatistik = null;
+      let fallbackRiwayat = [];
+      let fallbackPresensi = null;
+      let fallbackGuruWali = "-";
+      let fallbackCatatanWali = null;
+      let usedCache = false;
+
+      // 1. BACA CACHE & INSTANT RENDER
+      const cachedDataStr = localStorage.getItem(CACHE_KEY);
+      if (cachedDataStr && isMountedRef.current) {
+        try {
+          const cachedData = JSON.parse(cachedDataStr);
+          const isValid =
+            cachedData &&
+            typeof cachedData === "object" &&
+            Array.isArray(cachedData.riwayat);
+
+          if (isValid) {
+            fallbackStatistik = cachedData.statistik || null;
+            fallbackRiwayat = cachedData.riwayat || [];
+            fallbackPresensi = cachedData.presensiHariIni || null;
+            fallbackGuruWali = cachedData.guruWali || "-";
+            fallbackCatatanWali = cachedData.catatanWali || null;
+
+            setStatistik(fallbackStatistik);
+            setRiwayat(fallbackRiwayat);
+            setPresensiHariIni(fallbackPresensi);
+            setGuruWali(fallbackGuruWali);
+            setCatatanWali(fallbackCatatanWali);
+            setLoading(false);
+            usedCache = true;
+          } else {
+            localStorage.removeItem(CACHE_KEY);
+          }
+        } catch (error) {
+          console.error("Gagal membaca cache dashboard siswa:", error);
           localStorage.removeItem(CACHE_KEY);
         }
-      } catch (error) {
-        console.error("Gagal membaca cache dashboard siswa:", error);
-        localStorage.removeItem(CACHE_KEY);
-      }
-    }
-
-    // 2. FETCH DATA SECARA PARALEL DENGAN PROGRESS BERTINGKAT
-    const totalSteps = 6;
-    let doneSteps = 0;
-    const bumpProgress = () => {
-      doneSteps += 1;
-      if (isMountedRef.current) {
-        setLoadProgress(10 + Math.round((doneSteps / totalSteps) * 85));
-      }
-    };
-
-    try {
-      const [stat, history, today, waliResult, biodataResult, siswaResult] =
-        await Promise.allSettled([
-          fetchStepWithRetry(() => getStatistikSiswa(session.id)).finally(
-            bumpProgress,
-          ),
-          fetchStepWithRetry(() => getRiwayatSiswa(session.id)).finally(
-            bumpProgress,
-          ),
-          fetchStepWithRetry(() => getPresensiHariIni(session.idGuru)).finally(
-            bumpProgress,
-          ),
-          fetchStepWithRetry(() => getDataSiswaWali("ALL")).finally(
-            bumpProgress,
-          ),
-          fetchStepWithRetry(() => getBiodataSiswa(session.id)).finally(
-            bumpProgress,
-          ),
-          fetchStepWithRetry(() => getSiswaById(session.id)).finally(
-            bumpProgress,
-          ),
-        ]);
-
-      if (!isMountedRef.current) return;
-
-      let currentStatistik = fallbackStatistik;
-      let currentRiwayat = fallbackRiwayat;
-      let currentPresensi = fallbackPresensi;
-      let currentGuruWali = fallbackGuruWali;
-      let currentCatatanWali = fallbackCatatanWali;
-
-      // Hasil Sinkronisasi Data Siswa (Tempat Magang & Status Terbaru)
-      if (
-        siswaResult.status === "fulfilled" &&
-        siswaResult.value?.success &&
-        siswaResult.value.data
-      ) {
-        const sData = siswaResult.value.data;
-        const freshTempat = sData.TEMPAT_MAGANG || sData.tempatMagang || "";
-        const freshStatus = sData.STATUS || sData.status || "";
-        const freshGuru = sData.NAMA_GURU || sData.namaGuru || "";
-        const freshIdGuru = sData.ID_GURU || sData.idGuru || "";
-
-        setUser((prev) => {
-          const updated = {
-            ...prev,
-            tempatMagang:
-              freshTempat !== undefined ? freshTempat : prev?.tempatMagang,
-            status: freshStatus !== undefined ? freshStatus : prev?.status,
-            namaGuru: freshGuru || prev?.namaGuru,
-            idGuru: freshIdGuru || prev?.idGuru,
-          };
-          try {
-            saveSession(updated);
-          } catch (e) {}
-          return updated;
-        });
       }
 
-      // Hasil Statistik
-      if (stat.status === "fulfilled" && stat.value?.success) {
-        currentStatistik = stat.value.data;
-        setStatistik(currentStatistik);
-      }
-
-      // Hasil Riwayat
-      if (history.status === "fulfilled" && history.value?.success) {
-        currentRiwayat = (history.value.data || []).slice(0, 5);
-        setRiwayat(currentRiwayat);
-      }
-
-      // Hasil Presensi Hari Ini
-      if (today.status === "fulfilled" && today.value?.success) {
-        const dataSaya = (today.value.data || []).find(
-          (x) => String(x.ID_SISWA).trim() === String(session.id).trim(),
-        );
-        if (dataSaya) {
-          currentPresensi = dataSaya;
-          setPresensiHariIni(currentPresensi);
-          setHasPresensiTodayLocal(true);
-        } else {
-          currentPresensi = null;
-          setPresensiHariIni(null);
+      // 2. FETCH DATA SECARA PARALEL DENGAN PROGRESS BERTINGKAT
+      const totalSteps = 6;
+      let doneSteps = 0;
+      const bumpProgress = () => {
+        doneSteps += 1;
+        if (isMountedRef.current) {
+          setLoadProgress(10 + Math.round((doneSteps / totalSteps) * 85));
         }
-      }
-
-      // Hasil Guru Wali
-      if (
-        waliResult.status === "fulfilled" &&
-        waliResult.value?.success &&
-        Array.isArray(waliResult.value.data)
-      ) {
-        const siswaSaya = waliResult.value.data.find(
-          (item) => String(item.idSiswa).trim() === String(session.id).trim(),
-        );
-        if (siswaSaya?.namaGuru && siswaSaya.namaGuru !== "Tanpa Guru Wali") {
-          currentGuruWali = siswaSaya.namaGuru;
-        } else {
-          currentGuruWali = "-";
-        }
-        setGuruWali(currentGuruWali);
-      }
-
-      // Hasil Biodata & Catatan Perkembangan Wali
-      if (
-        biodataResult.status === "fulfilled" &&
-        biodataResult.value?.success
-      ) {
-        const bioData = biodataResult.value.data || {};
-        currentCatatanWali = {
-          periodeAwal: bioData.periodeAwal || "",
-          periodeAkhir: bioData.periodeAkhir || "",
-          desAkademik: bioData.desAkademik || "",
-          tinAkademik: bioData.tinAkademik || "",
-          ketAkademik: bioData.ketAkademik || "",
-          desKarakter: bioData.desKarakter || "",
-          tinKarakter: bioData.tinKarakter || "",
-          ketKarakter: bioData.ketKarakter || "",
-          desSosial: bioData.desSosial || "",
-          tinSosial: bioData.tinSosial || "",
-          ketSosial: bioData.ketSosial || "",
-          desDisiplin: bioData.desDisiplin || "",
-          tinDisiplin: bioData.tinDisiplin || "",
-          ketDisiplin: bioData.ketDisiplin || "",
-          desPotensi: bioData.desPotensi || "",
-          tinPotensi: bioData.tinPotensi || "",
-          ketPotensi: bioData.ketPotensi || "",
-        };
-        setCatatanWali(currentCatatanWali);
-      }
-
-      setLoadProgress(100);
-
-      // Simpan Cache Lengkap Terbaru
-      const serverData = {
-        statistik: currentStatistik,
-        riwayat: currentRiwayat,
-        presensiHariIni: currentPresensi,
-        guruWali: currentGuruWali,
-        catatanWali: currentCatatanWali,
       };
 
       try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
-      } catch (cacheErr) {
-        console.warn("Cache dashboard siswa dilewati:", cacheErr);
-      }
-    } catch (err) {
-      console.warn("Koneksi server gagal/offline saat mengambil data siswa:", err);
-      // Jika pernah login dan punya cache lokal atau data session, jangan pernah tampilkan layar error yang memblokir
-      if (!usedCache && !session?.nama) {
-        setLoadFailed(true);
-        setLoadFailedMessage(
-          "Terjadi kendala saat mengambil data siswa dari server. Periksa koneksi internet Anda.",
+        const [stat, history, today, waliResult, biodataResult, siswaResult] =
+          await Promise.allSettled([
+            fetchStepWithRetry(() => getStatistikSiswa(session.id)).finally(
+              bumpProgress,
+            ),
+            fetchStepWithRetry(() => getRiwayatSiswa(session.id)).finally(
+              bumpProgress,
+            ),
+            fetchStepWithRetry(() =>
+              getPresensiHariIni(session.idGuru),
+            ).finally(bumpProgress),
+            fetchStepWithRetry(async () => {
+              // Hanya nama guru wali milik siswa ini (bukan data seluruh siswa)
+              const r = await getGuruWaliSiswa(session.id);
+              if (r && r.success) {
+                return {
+                  success: true,
+                  data: [
+                    { idSiswa: session.id, namaGuru: r.data?.namaGuru || "" },
+                  ],
+                };
+              }
+              if (
+                r &&
+                !r.networkError &&
+                String(r.message || "").includes("tidak dikenali")
+              ) {
+                return getDataSiswaWali("ALL");
+              }
+              return r;
+            }).finally(bumpProgress),
+            fetchStepWithRetry(() => getBiodataSiswa(session.id)).finally(
+              bumpProgress,
+            ),
+            fetchStepWithRetry(() => getSiswaById(session.id)).finally(
+              bumpProgress,
+            ),
+          ]);
+
+        if (!isMountedRef.current) return;
+
+        let currentStatistik = fallbackStatistik;
+        let currentRiwayat = fallbackRiwayat;
+        let currentPresensi = fallbackPresensi;
+        let currentGuruWali = fallbackGuruWali;
+        let currentCatatanWali = fallbackCatatanWali;
+
+        // Hasil Sinkronisasi Data Siswa (Tempat Magang & Status Terbaru)
+        if (
+          siswaResult.status === "fulfilled" &&
+          siswaResult.value?.success &&
+          siswaResult.value.data
+        ) {
+          const sData = siswaResult.value.data;
+          const freshTempat = sData.TEMPAT_MAGANG || sData.tempatMagang || "";
+          const freshStatus = sData.STATUS || sData.status || "";
+          const freshGuru = sData.NAMA_GURU || sData.namaGuru || "";
+          const freshIdGuru = sData.ID_GURU || sData.idGuru || "";
+
+          setUser((prev) => {
+            const updated = {
+              ...prev,
+              tempatMagang:
+                freshTempat !== undefined ? freshTempat : prev?.tempatMagang,
+              status: freshStatus !== undefined ? freshStatus : prev?.status,
+              namaGuru: freshGuru || prev?.namaGuru,
+              idGuru: freshIdGuru || prev?.idGuru,
+            };
+            try {
+              saveSession(updated);
+            } catch (e) {}
+            return updated;
+          });
+        }
+
+        // Hasil Statistik
+        if (stat.status === "fulfilled" && stat.value?.success) {
+          currentStatistik = stat.value.data;
+          setStatistik(currentStatistik);
+        }
+
+        // Hasil Riwayat
+        if (history.status === "fulfilled" && history.value?.success) {
+          currentRiwayat = (history.value.data || []).slice(0, 5);
+          setRiwayat(currentRiwayat);
+        }
+
+        // Hasil Presensi Hari Ini
+        if (today.status === "fulfilled" && today.value?.success) {
+          const dataSaya = (today.value.data || []).find(
+            (x) => String(x.ID_SISWA).trim() === String(session.id).trim(),
+          );
+          if (dataSaya) {
+            currentPresensi = dataSaya;
+            setPresensiHariIni(currentPresensi);
+            setHasPresensiTodayLocal(true);
+          } else {
+            currentPresensi = null;
+            setPresensiHariIni(null);
+          }
+        }
+
+        // Hasil Guru Wali
+        if (
+          waliResult.status === "fulfilled" &&
+          waliResult.value?.success &&
+          Array.isArray(waliResult.value.data)
+        ) {
+          const siswaSaya = waliResult.value.data.find(
+            (item) => String(item.idSiswa).trim() === String(session.id).trim(),
+          );
+          if (siswaSaya?.namaGuru && siswaSaya.namaGuru !== "Tanpa Guru Wali") {
+            currentGuruWali = siswaSaya.namaGuru;
+          } else {
+            currentGuruWali = "-";
+          }
+          setGuruWali(currentGuruWali);
+        }
+
+        // Hasil Biodata & Catatan Perkembangan Wali
+        if (
+          biodataResult.status === "fulfilled" &&
+          biodataResult.value?.success
+        ) {
+          const bioData = biodataResult.value.data || {};
+          currentCatatanWali = {
+            periodeAwal: bioData.periodeAwal || "",
+            periodeAkhir: bioData.periodeAkhir || "",
+            desAkademik: bioData.desAkademik || "",
+            tinAkademik: bioData.tinAkademik || "",
+            ketAkademik: bioData.ketAkademik || "",
+            desKarakter: bioData.desKarakter || "",
+            tinKarakter: bioData.tinKarakter || "",
+            ketKarakter: bioData.ketKarakter || "",
+            desSosial: bioData.desSosial || "",
+            tinSosial: bioData.tinSosial || "",
+            ketSosial: bioData.ketSosial || "",
+            desDisiplin: bioData.desDisiplin || "",
+            tinDisiplin: bioData.tinDisiplin || "",
+            ketDisiplin: bioData.ketDisiplin || "",
+            desPotensi: bioData.desPotensi || "",
+            tinPotensi: bioData.tinPotensi || "",
+            ketPotensi: bioData.ketPotensi || "",
+          };
+          setCatatanWali(currentCatatanWali);
+        }
+
+        setLoadProgress(100);
+
+        // Simpan Cache Lengkap Terbaru
+        const serverData = {
+          statistik: currentStatistik,
+          riwayat: currentRiwayat,
+          presensiHariIni: currentPresensi,
+          guruWali: currentGuruWali,
+          catatanWali: currentCatatanWali,
+        };
+
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+        } catch (cacheErr) {
+          console.warn("Cache dashboard siswa dilewati:", cacheErr);
+        }
+      } catch (err) {
+        console.warn(
+          "Koneksi server gagal/offline saat mengambil data siswa:",
+          err,
         );
+        // Jika pernah login dan punya cache lokal atau data session, jangan pernah tampilkan layar error yang memblokir
+        if (!usedCache && !session?.nama) {
+          setLoadFailed(true);
+          setLoadFailedMessage(
+            "Terjadi kendala saat mengambil data siswa dari server. Periksa koneksi internet Anda.",
+          );
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+          setIsUpdatingOnline(false);
+        }
       }
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-        setIsUpdatingOnline(false);
-      }
-    }
-  }, [router, CACHE_KEY, loadDataKelasSiswa]);
+    },
+    [router, CACHE_KEY, loadDataKelasSiswa],
+  );
 
   const hasLoadedDashboardRef = useRef(false);
 
@@ -970,7 +1056,9 @@ export default function DashboardSiswa() {
               : parseKeteranganWali(statistikKelas?.keterangan).petugasNama ||
                 "Belum Ditunjuk"
           }
-          textColor={petugasWaliData ? "text-amber-600 font-bold" : "text-amber-950"}
+          textColor={
+            petugasWaliData ? "text-amber-600 font-bold" : "text-amber-950"
+          }
         />
       </div>
 
@@ -983,8 +1071,12 @@ export default function DashboardSiswa() {
         >
           <span className="text-xl sm:text-2xl shrink-0">🧏</span>
           <div className="text-left min-w-0">
-            <div className="text-xs sm:text-sm font-black leading-tight">Registrasi Wajah</div>
-            <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">Pesan ke Wali Kelas</div>
+            <div className="text-xs sm:text-sm font-black leading-tight">
+              Registrasi Wajah
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">
+              Pesan ke Wali Kelas
+            </div>
           </div>
         </button>
 
@@ -995,8 +1087,12 @@ export default function DashboardSiswa() {
         >
           <span className="text-xl sm:text-2xl shrink-0">🪪</span>
           <div className="text-left min-w-0">
-            <div className="text-xs sm:text-sm font-black leading-tight">Barcode Siswa</div>
-            <div className="text-[10px] sm:text-[11px] text-amber-700 font-medium mt-0.5 truncate">Kartu barcode presensi</div>
+            <div className="text-xs sm:text-sm font-black leading-tight">
+              Barcode Siswa
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-amber-700 font-medium mt-0.5 truncate">
+              Kartu barcode presensi
+            </div>
           </div>
         </button>
 
@@ -1008,16 +1104,24 @@ export default function DashboardSiswa() {
           >
             <span className="text-xl sm:text-2xl shrink-0">📷</span>
             <div className="text-left min-w-0">
-              <div className="text-xs sm:text-sm font-black leading-tight">Scan Presensi</div>
-              <div className="text-[10px] sm:text-[11px] text-emerald-100 font-medium mt-0.5 truncate">Wajah & barcode</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">
+                Scan Presensi
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-emerald-100 font-medium mt-0.5 truncate">
+                Wajah & barcode
+              </div>
             </div>
           </button>
         ) : (
           <div className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
             <span className="text-xl sm:text-2xl shrink-0 opacity-50">📷</span>
             <div className="text-left min-w-0">
-              <div className="text-xs sm:text-sm font-black leading-tight">Scan Presensi</div>
-              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">Khusus petugas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">
+                Scan Presensi
+              </div>
+              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">
+                Khusus petugas
+              </div>
             </div>
           </div>
         )}
@@ -1030,23 +1134,30 @@ export default function DashboardSiswa() {
           >
             <span className="text-xl sm:text-2xl shrink-0">📋</span>
             <div className="text-left min-w-0">
-              <div className="text-xs sm:text-sm font-black leading-tight">Presensi Reguler</div>
-              <div className="text-[10px] sm:text-[11px] text-amber-800 font-medium mt-0.5 truncate">Form manual kelas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">
+                Presensi Reguler
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-amber-800 font-medium mt-0.5 truncate">
+                Form manual kelas
+              </div>
             </div>
           </button>
         ) : (
           <div className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed">
             <span className="text-xl sm:text-2xl shrink-0 opacity-50">📋</span>
             <div className="text-left min-w-0">
-              <div className="text-xs sm:text-sm font-black leading-tight">Presensi Reguler</div>
-              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">Khusus petugas</div>
+              <div className="text-xs sm:text-sm font-black leading-tight">
+                Presensi Reguler
+              </div>
+              <div className="text-[10px] sm:text-[11px] font-medium mt-0.5 truncate">
+                Khusus petugas
+              </div>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-
 
   return (
     <main className="min-h-screen bg-slate-50 space-y-4 sm:space-y-6 pb-12 relative">
@@ -1349,7 +1460,9 @@ export default function DashboardSiswa() {
                   className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-emerald-400/50 text-center"
                 >
                   <span className="text-xl sm:text-2xl">🧏</span>
-                  <span className="text-[10px] sm:text-xs leading-tight">Scan Wajah</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">
+                    Scan Wajah
+                  </span>
                 </button>
 
                 {/* Scan Barcode */}
@@ -1358,7 +1471,9 @@ export default function DashboardSiswa() {
                   className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 hover:brightness-110 active:scale-95 text-white font-black shadow-md transition-all cursor-pointer border border-teal-400/50 text-center"
                 >
                   <span className="text-xl sm:text-2xl">📷</span>
-                  <span className="text-[10px] sm:text-xs leading-tight">Scan Barcode</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">
+                    Scan Barcode
+                  </span>
                 </button>
 
                 {/* Isi Reguler */}
@@ -1367,7 +1482,9 @@ export default function DashboardSiswa() {
                   className="flex flex-col items-center justify-center gap-1 p-2 sm:p-3 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 text-amber-950 font-black shadow-md transition-all cursor-pointer border border-amber-400/50 text-center"
                 >
                   <span className="text-xl sm:text-2xl">📋</span>
-                  <span className="text-[10px] sm:text-xs leading-tight">Isi Reguler</span>
+                  <span className="text-[10px] sm:text-xs leading-tight">
+                    Isi Reguler
+                  </span>
                 </button>
               </div>
             </div>
@@ -1627,12 +1744,16 @@ export default function DashboardSiswa() {
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed space-y-2.5">
               <p>
-                Untuk menjaga keamanan data biometrik dan mencegah duplikasi, pendaftaran foto wajah siswa dilakukan langsung oleh <strong>Bapak/Ibu Wali Kelas</strong> di kelas.
+                Untuk menjaga keamanan data biometrik dan mencegah duplikasi,
+                pendaftaran foto wajah siswa dilakukan langsung oleh{" "}
+                <strong>Bapak/Ibu Wali Kelas</strong> di kelas.
               </p>
               {statistikKelas?.namaGuru && (
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
                   <span className="text-slate-500">Guru Wali Kelas:</span>
-                  <span className="font-bold text-teal-800">{statistikKelas.namaGuru}</span>
+                  <span className="font-bold text-teal-800">
+                    {statistikKelas.namaGuru}
+                  </span>
                 </div>
               )}
             </div>
@@ -1675,6 +1796,7 @@ export default function DashboardSiswa() {
           isOpen={showModalScanWajah}
           onClose={() => setShowModalScanWajah(false)}
           petugasInfo={petugasWaliData}
+          availableClasses={availableClasses}
           user={user}
           onOpenBarcode={() => {
             setShowModalScanWajah(false);
@@ -1696,6 +1818,7 @@ export default function DashboardSiswa() {
           isOpen={showModalScanBarcode}
           onClose={() => setShowModalScanBarcode(false)}
           petugasInfo={petugasWaliData}
+          availableClasses={availableClasses}
           user={user}
           onOpenScanWajah={() => {
             setShowModalScanBarcode(false);
@@ -1717,6 +1840,7 @@ export default function DashboardSiswa() {
           isOpen={showModalPresensiPetugas}
           onClose={() => setShowModalPresensiPetugas(false)}
           petugasInfo={petugasWaliData}
+          availableClasses={availableClasses}
           user={user}
           onOpenScanner={() => {
             setShowModalPresensiPetugas(false);

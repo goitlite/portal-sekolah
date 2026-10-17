@@ -89,14 +89,37 @@ function saveOfflineQueueReguler(waliId, queue) {
   } catch (_) {}
 }
 
+async function runSerial(items, fn) {
+  const out = [];
+  for (let i = 0; i < items.length; i++) out.push(await fn(items[i], i));
+  return out;
+}
+
 export default function ModalPresensiPetugasSiswa({
   isOpen,
   onClose,
   petugasInfo, // { idWali, idGuru, namaKelas, kelas }
+  availableClasses = [],
   user, // { id, nama }
   onOpenScanner,
   onPresensiSubmitted,
 }) {
+  const [selectedWaliId, setSelectedWaliId] = useState(petugasInfo?.idWali);
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && petugasInfo?.idWali && !selectedWaliId) {
+      setSelectedWaliId(petugasInfo.idWali);
+    }
+  }, [isOpen, petugasInfo?.idWali]);
+
+  const activeClass = useMemo(() => {
+    const found = availableClasses.find(
+      (c) => String(c.idWali) === String(selectedWaliId),
+    );
+    return found || petugasInfo;
+  }, [selectedWaliId, availableClasses, petugasInfo]);
+
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [siswaList, setSiswaList] = useState([]);
@@ -126,17 +149,18 @@ export default function ModalPresensiPetugasSiswa({
   }, []);
 
   useEffect(() => {
-    if (isOpen && petugasInfo?.idWali && petugasInfo?.idGuru) {
+    if (isOpen && activeClass?.idWali && activeClass?.idGuru) {
       loadDataKelas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, petugasInfo?.idWali, petugasInfo?.idGuru]);
+  }, [isOpen, activeClass?.idWali, activeClass?.idGuru]);
 
   async function loadDataKelas() {
     setLoading(true);
     setErrorMessage("");
 
-    const waliId = petugasInfo?.idWali;
+    const waliId = activeClass?.idWali || petugasInfo?.idWali;
+    const guruId = activeClass?.idGuru || petugasInfo?.idGuru;
     const storageKeySiswa = `cache_reguler_siswa_${waliId}`;
 
     // 1. Cek kuota pengisian reguler khusus hari ini (maksimal 2x sehari)
@@ -173,11 +197,16 @@ export default function ModalPresensiPetugasSiswa({
       }
     } catch (_) {}
 
+    if ((!cachedSiswa || cachedSiswa.length === 0) && Array.isArray(activeClass?.daftarSiswa) && activeClass.daftarSiswa.length > 0) {
+      cachedSiswa = activeClass.daftarSiswa.map((s) => ({
+        idSiswa: String(s.idSiswa || s.id || "").trim(),
+        nama: (s.nama || s.namaSiswa || "").trim(),
+        kelas: s.kelas || activeClass.namaKelas || "",
+      })).filter((s) => s.idSiswa);
+    }
+
     try {
-      const res = await getPresensiWaliGrid(
-        petugasInfo.idGuru,
-        petugasInfo.idWali,
-      );
+      const res = await getPresensiWaliGrid(guruId, waliId);
 
       if (!res.success) {
         // Jika server menolak (bukan masalah jaringan), lempar error
@@ -419,12 +448,15 @@ export default function ModalPresensiPetugasSiswa({
         return;
       }
 
+      const guruId = activeClass?.idGuru || petugasInfo?.idGuru;
+      const targetNamaKelas = activeClass?.namaKelas || petugasInfo?.namaKelas;
+
       // Kirim ke server
       let res;
       try {
         res = await savePresensiWaliKelas({
-          idGuru: petugasInfo.idGuru,
-          idWali: petugasInfo.idWali,
+          idGuru: guruId,
+          idWali: waliId,
           cells: allCells,
         });
       } catch (_) {
@@ -464,13 +496,13 @@ export default function ModalPresensiPetugasSiswa({
           setIsSubmittedToday(true);
           setSubmittedData({ ...presensiMap });
           alert(
-            `✅ ALHAMDULILLAH! Presensi reguler ke-2 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+            `✅ ALHAMDULILLAH! Presensi reguler ke-2 kelas ${targetNamaKelas} berhasil dikirim.\n\n` +
               `Batas 2 kali pengisian presensi reguler hari ini telah selesai. Terima kasih telah menjalankan tugas presensi hari ini.`,
           );
         } else {
           setIsSubmittedToday(false);
           alert(
-            `✅ ALHAMDULILLAH! Presensi reguler ke-1 kelas ${petugasInfo.namaKelas} berhasil dikirim.\n\n` +
+            `✅ ALHAMDULILLAH! Presensi reguler ke-1 kelas ${targetNamaKelas} berhasil dikirim.\n\n` +
               `💡 Anda masih dapat mengisi presensi reguler 1 kali lagi untuk hari ini jika ada pembaruan.`,
           );
         }
@@ -502,38 +534,58 @@ export default function ModalPresensiPetugasSiswa({
 
   // AUTO-FLUSH: Kirim antrian offline reguler ke server saat ada koneksi
   async function flushOfflineQueueReguler() {
-    const waliId = petugasInfo?.idWali;
-    if (!waliId || flushingRef.current) return;
-    const q = getOfflineQueueReguler(waliId);
-    if (q.length === 0) return;
+    if (flushingRef.current) return;
+    const wIdsToFlush = new Set();
+    if (petugasInfo?.idWali) wIdsToFlush.add(petugasInfo.idWali);
+    if (Array.isArray(availableClasses)) {
+      availableClasses.forEach((c) => {
+        if (c.idWali) wIdsToFlush.add(c.idWali);
+      });
+    }
 
     flushingRef.current = true;
     try {
-      const res = await savePresensiWaliKelas({
-        idGuru: petugasInfo.idGuru,
-        idWali: waliId,
-        cells: q,
-      });
-      if (res?.success) {
-        saveOfflineQueueReguler(waliId, []);
-        setPendingOfflineRecords([]);
-        const nowISO = new Date().toISOString();
+      await runSerial([...wIdsToFlush], async (wId) => {
+        const q = getOfflineQueueReguler(wId);
+        if (q.length === 0) return;
+        const targetGuru =
+          availableClasses.find((c) => String(c.idWali) === String(wId))?.idGuru ||
+          petugasInfo?.idGuru;
+        if (!targetGuru) return;
+
         try {
-          localStorage.setItem(`last_online_save_reguler_${waliId}`, nowISO);
+          const res = await savePresensiWaliKelas({
+            idGuru: targetGuru,
+            idWali: wId,
+            cells: q,
+          });
+          if (res?.success) {
+            const sKey = (c) =>
+              `${String(c.idSiswa).trim()}|${String(c.tanggal).trim()}|${String(c.status).trim()}`;
+            const sentKeys = new Set(q.map(sKey));
+            const remaining = getOfflineQueueReguler(wId).filter(
+              (c) => !sentKeys.has(sKey(c)),
+            );
+            saveOfflineQueueReguler(wId, remaining);
+
+            const nowISO = new Date().toISOString();
+            try {
+              localStorage.setItem(`last_online_save_reguler_${wId}`, nowISO);
+            } catch (_) {}
+            if (String(wId) === String(activeClass?.idWali)) {
+              setPendingOfflineRecords(remaining);
+              setLastOnlineSaveTime(nowISO);
+            }
+          }
         } catch (_) {}
-        setLastOnlineSaveTime(nowISO);
-      } else if (res && !res.networkError) {
-        console.warn("[flushReguler] Server menolak:", res.message);
-      }
-    } catch (_) {
-      // Jaringan error → biarkan antrian
+      });
     } finally {
       flushingRef.current = false;
     }
   }
 
   useEffect(() => {
-    if (!isOpen || !petugasInfo?.idWali) return;
+    if (!isOpen) return;
     const t0 = setTimeout(flushOfflineQueueReguler, 1500);
     window.addEventListener("online", flushOfflineQueueReguler);
     const iv = setInterval(flushOfflineQueueReguler, 60000);
@@ -543,7 +595,7 @@ export default function ModalPresensiPetugasSiswa({
       window.removeEventListener("online", flushOfflineQueueReguler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, petugasInfo?.idWali, petugasInfo?.idGuru, todayISO]);
+  }, [isOpen, activeClass?.idWali, activeClass?.idGuru, todayISO]);
 
   if (!isOpen) return null;
 
@@ -573,11 +625,92 @@ export default function ModalPresensiPetugasSiswa({
                     Petugas Siswa
                   </span>
                 </div>
-                <p className="text-xs text-teal-100 font-medium flex items-center gap-1 mt-0.5">
-                  <span>🏫 {petugasInfo?.namaKelas || "Kelas Wali"}</span>
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowClassDropdown((v) => !v)}
+                      className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95"
+                      title="Pilih Kelas yang Ingin Diabsen"
+                    >
+                      <span>🏫 {activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas Wali"}</span>
+                      <span className="text-[8px] opacity-75">▾</span>
+                    </button>
+
+                    {showClassDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setShowClassDropdown(false)}
+                        />
+                        <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="p-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                              Pilih Kelas Reguler
+                            </p>
+                            {/* Kelas Asal Petugas */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWaliId(petugasInfo?.idWali);
+                                setShowClassDropdown(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                                String(selectedWaliId) === String(petugasInfo?.idWali)
+                                  ? "bg-emerald-600 text-white"
+                                  : "hover:bg-slate-800 text-slate-200"
+                              }`}
+                            >
+                              <div className="truncate">
+                                <span className="mr-1.5">📌</span>
+                                <span>{petugasInfo?.namaKelas || "Kelas Petugas"}</span>
+                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                                  Kelas Anda
+                                </span>
+                              </div>
+                              {String(selectedWaliId) === String(petugasInfo?.idWali) && <span>✓</span>}
+                            </button>
+
+                            {/* Kelas Lainnya */}
+                            {availableClasses
+                              .filter((c) => String(c.idWali) !== String(petugasInfo?.idWali))
+                              .map((c) => {
+                                const isSelected = String(selectedWaliId) === String(c.idWali);
+                                return (
+                                  <button
+                                    key={c.idWali}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedWaliId(c.idWali);
+                                      setShowClassDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
+                                      isSelected
+                                        ? "bg-teal-600 text-white font-bold"
+                                        : "hover:bg-slate-800 text-slate-300"
+                                    }`}
+                                  >
+                                    <div className="truncate">
+                                      <span className="mr-1.5">🏫</span>
+                                      <span>{c.namaKelas}</span>
+                                      {c.namaGuru && (
+                                        <span className="text-[10px] text-slate-400 block truncate ml-5">
+                                          {c.namaGuru}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isSelected && <span className="font-bold">✓</span>}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <span>•</span>
-                  <span>📅 {todayFormatted}</span>
-                </p>
+                  <span className="text-xs text-teal-100 font-medium">📅 {todayFormatted}</span>
+                </div>
               </div>
             </div>
 

@@ -704,6 +704,21 @@ export async function savePresensiWaliKelas(data) {
   );
 }
 
+// Foto wajah banyak siswa dalam 1 panggilan: { [idSiswa]: urlFoto | "" }
+export async function getWajahBulk(idSiswaList) {
+  return request("getWajahBulk", { idSiswaList: idSiswaList || [] });
+}
+
+// Daftar kelas khusus petugas presensi (data minimal; server memeriksa status petugas)
+export async function getKelasPetugas(idSiswa) {
+  return request("getKelasPetugas", { idSiswa });
+}
+
+// Nama guru wali satu siswa (menggantikan getDataSiswaWali("ALL") di dashboard siswa)
+export async function getGuruWaliSiswa(idSiswa) {
+  return request("getGuruWaliSiswa", { idSiswa });
+}
+
 // Simpan jurnal bimbingan wali kelas (+ foto)
 export async function saveJurnalWaliKelas(data) {
   return request("saveJurnalWaliKelas", {
