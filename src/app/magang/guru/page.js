@@ -2446,7 +2446,7 @@ function DashboardGuruContent() {
 
     if (!forceRefresh) {
       const cached = readGuruSessionCache(cacheKey);
-      if (cached.hit && cached.fresh && Array.isArray(cached.data)) {
+      if (cached.hit && cached.fresh && Array.isArray(cached.data) && cached.data.length > 0) {
         setDataMasterSiswa(cached.data);
         setLoadingMasterSiswa(false);
         return cached.data;
@@ -2461,10 +2461,22 @@ function DashboardGuruContent() {
         forceRefresh,
       });
 
-      if (res?.success && Array.isArray(res.data)) {
-        setDataMasterSiswa(res.data);
-        writeGuruSessionCache(cacheKey, res.data);
-        return res.data;
+      let list = null;
+      if (Array.isArray(res)) {
+        list = res;
+      } else if (Array.isArray(res?.data)) {
+        list = res.data;
+      } else if (Array.isArray(res?.data?.data)) {
+        list = res.data.data;
+      }
+
+      if (Array.isArray(list) && list.length > 0) {
+        setDataMasterSiswa(list);
+        writeGuruSessionCache(cacheKey, list);
+        return list;
+      } else if (res?.success && Array.isArray(list)) {
+        setDataMasterSiswa([]);
+        return [];
       }
     } catch (err) {
       console.error("Error load master siswa Guru:", err);

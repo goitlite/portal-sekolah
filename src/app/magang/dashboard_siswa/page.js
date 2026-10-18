@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -29,6 +29,7 @@ import ModalPresensiPetugasSiswa from "./ModalPresensiPetugasSiswa";
 import ModalKartuBarcodeSiswa from "./ModalKartuBarcodeSiswa";
 import ModalScanPresensiPetugas from "./ModalScanPresensiPetugas";
 import ModalScanWajahPetugas from "./ModalScanWajahPetugas";
+import ModalDaftarWajahSementaraSiswa from "./ModalDaftarWajahSementaraSiswa";
 import PesanSekolahModal, {
   useJumlahPesanSekolah,
 } from "../components/PesanSekolahModal";
@@ -89,12 +90,30 @@ const NAMA_BULAN_INDO = [
   "Desember",
 ];
 
+// ============================================================================
+// KONFIGURASI AKSES LINTAS KELAS UNTUK PETUGAS PRESENSI
+// ============================================================================
+// Atur ke `true` jika di masa depan ingin membuka kembali akses kelas lain untuk Scan Barcode / Presensi Reguler.
+// Default: false (DITUTUP) -> Petugas HANYA bisa scan barcode & isi presensi reguler untuk KELASNYA SENDIRI.
+// Scan wajah TETAP mempertahankan akses ke seluruh kelas yang ditugaskan.
+export const IZINKAN_LINTAS_KELAS_BARCODE = false;
+export const IZINKAN_LINTAS_KELAS_REGULER = false;
+
 function formatBulanTahun(nilaiBulan) {
   if (!nilaiBulan) return "-";
   const [tahun, bulan] = String(nilaiBulan).split("-");
   const indexBulan = Number(bulan) - 1;
   const namaBulan = NAMA_BULAN_INDO[indexBulan] || bulan;
   return `${namaBulan} ${tahun}`;
+}
+
+// Ubah link Drive jadi thumbnail yang aman ditampilkan di <img>
+function driveThumb(url) {
+  if (!url) return "";
+  let id = "";
+  if (url.includes("/file/d/")) id = url.split("/file/d/")[1].split("/")[0];
+  else if (url.includes("id=")) id = url.split("id=")[1].split("&")[0];
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : url;
 }
 
 // Timeout helper agar Apps Script tidak menggantung tanpa batas
@@ -210,6 +229,11 @@ export default function DashboardSiswa() {
   const [showModalScanBarcode, setShowModalScanBarcode] = useState(false);
   const [showModalScanWajah, setShowModalScanWajah] = useState(false);
   const [showInfoRegistrasiWajah, setShowInfoRegistrasiWajah] = useState(false);
+  // Foto wajah resmi dari server (didaftarkan wali kelas). Jika ada → daftar sementara ditutup.
+  const [fotoWajahResmi, setFotoWajahResmi] = useState(null);
+  // Modal daftar sementara (siswa meregistrasi wajahnya sendiri sementara wali belum daftar)
+  const [showModalDaftarSementara, setShowModalDaftarSementara] =
+    useState(false);
   const [pesanInitialTarget, setPesanInitialTarget] = useState(null);
   const [showModalPesan, setShowModalPesan] = useState(false);
   const [availableClasses, setAvailableClasses] = useState([]);
@@ -236,7 +260,92 @@ export default function DashboardSiswa() {
   const [statistikKelas, setStatistikKelas] = useState(null);
   const [loadingStatistikKelas, setLoadingStatistikKelas] = useState(false);
 
+  // Filter kelas untuk Petugas Presensi (bisa dibuka/tutup dengan toggle di atas file)
+  const availableClassesOwnOnly = useMemo(() => {
+    if (!petugasWaliData) return [];
+    const own = availableClasses.filter(
+      (c) => String(c.idWali) === String(petugasWaliData.idWali),
+    );
+    return own.length > 0 ? own : [petugasWaliData];
+  }, [availableClasses, petugasWaliData]);
+
+  const classesForScanBarcode = useMemo(() => {
+    return IZINKAN_LINTAS_KELAS_BARCODE
+      ? availableClasses
+      : availableClassesOwnOnly;
+  }, [availableClasses, availableClassesOwnOnly]);
+
+  const classesForPresensiReguler = useMemo(() => {
+    return IZINKAN_LINTAS_KELAS_REGULER
+      ? availableClasses
+      : availableClassesOwnOnly;
+  }, [availableClasses, availableClassesOwnOnly]);
+
+  // ── Kumpulkan seluruh siswa (kelas sendiri + kelas lain) untuk anti-duplikat wajah ──
+  const allRosterStudents = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(statistikKelas?.daftarSiswa)) {
+      statistikKelas.daftarSiswa.forEach((s) => {
+        const id = String(s.idSiswa || s.id || "").trim();
+        if (id)
+          map.set(id, {
+            idSiswa: id,
+            nama: s.nama || id,
+            fotoWajah: s.fotoWajah || "",
+          });
+      });
+    }
+    if (Array.isArray(availableClasses)) {
+      availableClasses.forEach((c) => {
+        if (Array.isArray(c.daftarSiswa)) {
+          c.daftarSiswa.forEach((s) => {
+            const id = String(s.idSiswa || s.id || "").trim();
+            if (id && !map.has(id))
+              map.set(id, {
+                idSiswa: id,
+                nama: s.nama || id,
+                fotoWajah: s.fotoWajah || "",
+              });
+          });
+        }
+      });
+    }
+    return Array.from(map.values()).filter(
+      (s) => String(s.idSiswa) !== String(user?.id),
+    );
+  }, [statistikKelas?.daftarSiswa, availableClasses, user?.id]);
+
+  // ── Apakah foto yang tersimpan berasal dari daftar sementara mandiri siswa? ──
+  const isDaftarSementara = useMemo(() => {
+    if (!fotoWajahResmi || !user?.id) return false;
+    try {
+      const raw = localStorage.getItem(`face_reg_source_${user.id}`);
+      if (raw) {
+        const info = JSON.parse(raw);
+        return info?.source === "mandiri_sementara";
+      }
+    } catch (_) {}
+    return false;
+  }, [fotoWajahResmi, user?.id]);
+
+  // ── Boleh daftar sementara? Tidak jika wali kelas sudah register. 1x sehari jika sementara. ──
+  const canRegisterSementara = useMemo(() => {
+    if (fotoWajahResmi && !isDaftarSementara) return false; // Wali kelas sudah register → tutup permanen
+    if (!fotoWajahResmi) return true; // Belum ada foto sama sekali → boleh
+    // Sudah daftar sementara: cek apakah sudah lewat 1 hari
+    try {
+      const raw = localStorage.getItem(`face_reg_${user?.id}`);
+      if (raw) {
+        const info = JSON.parse(raw);
+        const today = new Date().toLocaleDateString("id-ID");
+        return info?.registeredDate !== today; // Bisa daftar ulang keesokan harinya
+      }
+    } catch (_) {}
+    return true;
+  }, [fotoWajahResmi, isDaftarSementara, user?.id]);
+
   // Ambil data Wali Kelas siswa dari backend & cek mandat petugas presensi (Dukungan Offline-First)
+
   const loadDataKelasSiswa = useCallback(async (currentSession) => {
     const sess = currentSession || getSession();
     if (!sess || !sess.id) return;
@@ -702,6 +811,17 @@ export default function DashboardSiswa() {
             ketPotensi: bioData.ketPotensi || "",
           };
           setCatatanWali(currentCatatanWali);
+          // Sinkronisasi fotoWajah dari server ke state
+          if ("fotoWajah" in bioData) {
+            const serverFoto = bioData.fotoWajah || null;
+            setFotoWajahResmi(serverFoto);
+            // Jika server tidak punya foto, hapus cache lokal yang usang
+            if (!serverFoto) {
+              try {
+                localStorage.removeItem(`face_reg_source_${session.id}`);
+              } catch (_) {}
+            }
+          }
         }
 
         setLoadProgress(100);
@@ -1072,10 +1192,10 @@ export default function DashboardSiswa() {
           <span className="text-xl sm:text-2xl shrink-0">🧏</span>
           <div className="text-left min-w-0">
             <div className="text-xs sm:text-sm font-black leading-tight">
-              Registrasi Wajah
+              DAFTARKAN WAJAH
             </div>
             <div className="text-[10px] sm:text-[11px] text-teal-100 font-medium mt-0.5 truncate">
-              Pesan ke Wali Kelas
+              Digunakan Untuk Presensi Wajah
             </div>
           </div>
         </button>
@@ -1091,7 +1211,7 @@ export default function DashboardSiswa() {
               Barcode Siswa
             </div>
             <div className="text-[10px] sm:text-[11px] text-amber-700 font-medium mt-0.5 truncate">
-              Kartu barcode presensi
+              Gunakan untuk Presensi Barkode
             </div>
           </div>
         </button>
@@ -1728,6 +1848,7 @@ export default function DashboardSiswa() {
       {showInfoRegistrasiWajah && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="relative w-full max-w-md rounded-2xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl border border-teal-100 space-y-4">
+            {/* Header */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center text-2xl shrink-0 shadow-md">
                 🧏
@@ -1737,35 +1858,120 @@ export default function DashboardSiswa() {
                   Pendaftaran Presensi Wajah
                 </h3>
                 <p className="text-xs text-teal-700 font-bold">
-                  Terpusat melalui Guru Wali Kelas
+                  {fotoWajahResmi && !isDaftarSementara
+                    ? "✅ Sudah Terdaftar Resmi"
+                    : fotoWajahResmi && isDaftarSementara
+                      ? "⏳ Terdaftar Sementara"
+                      : "Belum Terdaftar"}
                 </p>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed space-y-2.5">
-              <p>
-                Untuk menjaga keamanan data biometrik dan mencegah duplikasi,
-                pendaftaran foto wajah siswa dilakukan langsung oleh{" "}
-                <strong>Bapak/Ibu Wali Kelas</strong> di kelas.
-              </p>
-              {statistikKelas?.namaGuru && (
-                <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500">Guru Wali Kelas:</span>
-                  <span className="font-bold text-teal-800">
-                    {statistikKelas.namaGuru}
-                  </span>
+            {/* Konten 3 kondisi */}
+            {fotoWajahResmi && !isDaftarSementara ? (
+              /* ── Kondisi A: Sudah terdaftar resmi oleh Wali Kelas ── */
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 leading-relaxed space-y-2">
+                <p className="font-bold text-emerald-800">
+                  🎉 Wajah kamu sudah terdaftar secara resmi oleh Wali Kelas.
+                </p>
+                <p>
+                  Presensi scan wajah dapat digunakan. Tidak perlu mendaftar
+                  ulang.
+                </p>
+                {statistikKelas?.namaGuru && (
+                  <div className="pt-2 border-t border-emerald-200 flex items-center justify-between text-[11px]">
+                    <span className="text-emerald-600">Didaftarkan oleh:</span>
+                    <span className="font-bold text-emerald-900">
+                      {statistikKelas.namaGuru}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : fotoWajahResmi && isDaftarSementara ? (
+              /* ── Kondisi C: Sudah daftar sementara ── */
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700 leading-relaxed space-y-2">
+                  <p className="font-bold text-amber-800">
+                    ⏳ Kamu sudah mendaftar sementara hari ini.
+                  </p>
+                  <p>
+                    Pendaftaran sementara berlaku hingga Wali Kelas mendaftarkan
+                    wajah secara resmi. Kamu dapat mendaftar ulang keesokan
+                    harinya.
+                  </p>
+                  {statistikKelas?.namaGuru && (
+                    <div className="pt-2 border-t border-amber-200 flex items-center justify-between text-[11px]">
+                      <span className="text-amber-600">Guru Wali Kelas:</span>
+                      <span className="font-bold text-amber-900">
+                        {statistikKelas.namaGuru}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+                {canRegisterSementara && (
+                  <p className="text-[11px] text-center text-slate-500">
+                    Kamu bisa mendaftar ulang karena sudah lewat 1 hari.
+                  </p>
+                )}
+              </div>
+            ) : (
+              /* ── Kondisi B: Belum ada foto sama sekali ── */
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed space-y-2.5">
+                <p>
+                  Untuk menjaga keamanan data biometrik dan mencegah duplikasi,
+                  pendaftaran foto wajah siswa dilakukan langsung oleh{" "}
+                  <strong>Bapak/Ibu Wali Kelas</strong> di kelas.
+                </p>
+                <p className="text-amber-700 font-semibold">
+                  💡 Jika belum sempat, kamu bisa daftar sementara sendiri
+                  sekarang (1×/hari).
+                </p>
+                {statistikKelas?.namaGuru && (
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">Guru Wali Kelas:</span>
+                    <span className="font-bold text-teal-800">
+                      {statistikKelas.namaGuru}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            {/* Tombol aksi responsif & menarik */}
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => setShowInfoRegistrasiWajah(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 hover:bg-slate-100 hover:border-slate-400 active:scale-95 text-slate-700 text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs group"
               >
-                Tutup
+                <span className="w-6 h-6 rounded-lg bg-slate-200/80 group-hover:bg-slate-300 flex items-center justify-center text-xs font-black text-slate-600 transition-colors">
+                  ✕
+                </span>
+                <span>Tutup</span>
               </button>
+
+              {/* Tombol Daftar Sementara – hanya muncul jika belum ada foto resmi wali dan boleh daftar */}
+              {canRegisterSementara && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInfoRegistrasiWajah(false);
+                    setShowModalDaftarSementara(true);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 hover:brightness-105 active:scale-98 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all cursor-pointer flex items-center justify-center gap-2.5 border border-amber-300/30 group"
+                >
+                  <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/25 flex items-center justify-center text-base sm:text-xl shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                    📸
+                  </span>
+                  <span className="text-xs sm:text-sm font-black tracking-wide">
+                    {isDaftarSementara
+                      ? "Daftar Ulang Sementara"
+                      : "Daftar Sementara"}
+                  </span>
+                </button>
+              )}
+
+              {/* Tombol Kirim Pesan – selalu tersedia */}
               <button
                 type="button"
                 onClick={() => {
@@ -1780,14 +1986,33 @@ export default function DashboardSiswa() {
                   }
                   setShowModalPesan(true);
                 }}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-700 hover:brightness-110 active:scale-95 text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                className="w-full sm:w-auto px-4 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 hover:from-teal-800 hover:to-emerald-800 hover:brightness-105 active:scale-98 text-white shadow-lg shadow-teal-700/25 hover:shadow-teal-700/40 transition-all cursor-pointer flex items-center justify-center gap-2.5 border border-teal-300/30 group"
               >
-                <span>💬</span>
-                <span>Kirim Pesan ke Wali Kelas</span>
+                <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/25 flex items-center justify-center text-base sm:text-xl shadow-inner group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                  💬
+                </span>
+                <span className="text-xs sm:text-sm font-bold tracking-wide">
+                  Pesan
+                </span>
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL DAFTAR WAJAH SEMENTARA MANDIRI SISWA */}
+      {showModalDaftarSementara && canRegisterSementara && user && (
+        <ModalDaftarWajahSementaraSiswa
+          isOpen={showModalDaftarSementara}
+          onClose={() => setShowModalDaftarSementara(false)}
+          user={user}
+          fotoLama={fotoWajahResmi}
+          otherStudents={allRosterStudents}
+          onFaceRegistered={(newUrl) => {
+            setFotoWajahResmi(newUrl);
+            setShowModalDaftarSementara(false);
+          }}
+        />
       )}
 
       {/* MODAL SCAN PRESENSI WAJAH UNTUK PETUGAS KELAS */}
@@ -1818,7 +2043,7 @@ export default function DashboardSiswa() {
           isOpen={showModalScanBarcode}
           onClose={() => setShowModalScanBarcode(false)}
           petugasInfo={petugasWaliData}
-          availableClasses={availableClasses}
+          availableClasses={classesForScanBarcode}
           user={user}
           onOpenScanWajah={() => {
             setShowModalScanBarcode(false);
@@ -1840,7 +2065,7 @@ export default function DashboardSiswa() {
           isOpen={showModalPresensiPetugas}
           onClose={() => setShowModalPresensiPetugas(false)}
           petugasInfo={petugasWaliData}
-          availableClasses={availableClasses}
+          availableClasses={classesForPresensiReguler}
           user={user}
           onOpenScanner={() => {
             setShowModalPresensiPetugas(false);

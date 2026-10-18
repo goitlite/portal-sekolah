@@ -111,12 +111,16 @@ export default function ModalScanPresensiPetugas({
   const [selectedWaliId, setSelectedWaliId] = useState(petugasInfo?.idWali);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
 
-  // Sinkronkan selectedWaliId jika modal dibuka ulang
+  // Sinkronkan selectedWaliId jika modal dibuka ulang atau jika lintas kelas tidak diizinkan
   useEffect(() => {
-    if (isOpen && petugasInfo?.idWali && !selectedWaliId) {
-      setSelectedWaliId(petugasInfo.idWali);
+    if (isOpen) {
+      if (!Array.isArray(availableClasses) || availableClasses.length <= 1) {
+        setSelectedWaliId(petugasInfo?.idWali);
+      } else if (!selectedWaliId && petugasInfo?.idWali) {
+        setSelectedWaliId(petugasInfo.idWali);
+      }
     }
-  }, [isOpen, petugasInfo?.idWali]);
+  }, [isOpen, petugasInfo?.idWali, availableClasses]);
 
   const isAllClassesMode = selectedWaliId === "ALL_CLASSES";
 
@@ -1570,138 +1574,147 @@ export default function ModalScanPresensiPetugas({
                   Scan Presensi Siswa
                 </h3>
                 {/* PEMILIH KELAS / SCAN PINTAR */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowClassDropdown((v) => !v)}
-                    className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-                    title="Pilih Kelas atau Mode Scan Pintar"
-                  >
-                    <span>
-                      {isAllClassesMode
-                        ? "🌟 Semua Kelas (Pintar)"
-                        : `🏫 ${activeClass?.namaKelas || petugasInfo?.namaKelas || "Rombel"}`}
-                    </span>
-                    <span className="text-[8px] opacity-75">▾</span>
-                  </button>
+                {Array.isArray(availableClasses) && availableClasses.length > 1 ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowClassDropdown((v) => !v)}
+                      className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95"
+                      title="Pilih Kelas atau Mode Scan Pintar"
+                    >
+                      <span>
+                        {isAllClassesMode
+                          ? "🌟 Semua Kelas (Pintar)"
+                          : `🏫 ${activeClass?.namaKelas || petugasInfo?.namaKelas || "Rombel"}`}
+                      </span>
+                      <span className="text-[8px] opacity-75">▾</span>
+                    </button>
 
-                  {showClassDropdown && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-30"
-                        onClick={() => setShowClassDropdown(false)}
-                      />
-                      <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
-                        <div className="p-1">
-                          <p className="text-[10px] font-bold text-teal-300 uppercase tracking-wider px-2 py-1">
-                            Mode Pemindaian
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedWaliId("ALL_CLASSES");
-                              setShowClassDropdown(false);
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                              isAllClassesMode
-                                ? "bg-teal-600 text-white"
-                                : "hover:bg-slate-800 text-teal-100"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">🌟</span>
-                              <div>
-                                <p className="text-xs font-black">
-                                  Semua Kelas (Scan Pintar)
-                                </p>
-                                <p className="text-[9.5px] font-normal text-teal-200">
-                                  Pindai otomatis kartu siswa dari kelas mana
-                                  pun
-                                </p>
+                    {showClassDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setShowClassDropdown(false)}
+                        />
+                        <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="p-1">
+                            <p className="text-[10px] font-bold text-teal-300 uppercase tracking-wider px-2 py-1">
+                              Mode Pemindaian
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWaliId("ALL_CLASSES");
+                                setShowClassDropdown(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-2 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                                isAllClassesMode
+                                  ? "bg-teal-600 text-white"
+                                  : "hover:bg-slate-800 text-teal-100"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🌟</span>
+                                <div>
+                                  <p className="text-xs font-black">
+                                    Semua Kelas (Scan Pintar)
+                                  </p>
+                                  <p className="text-[9.5px] font-normal text-teal-200">
+                                    Pindai otomatis kartu siswa dari kelas mana
+                                    pun
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                            {isAllClassesMode && <span>✓</span>}
-                          </button>
-                        </div>
+                              {isAllClassesMode && <span>✓</span>}
+                            </button>
+                          </div>
 
-                        <div className="p-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                            Pilih Per Kelas
-                          </p>
-                          {/* Kelas Asal Petugas */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedWaliId(petugasInfo?.idWali);
-                              setShowClassDropdown(false);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                              !isAllClassesMode &&
-                              String(selectedWaliId) ===
-                                String(petugasInfo?.idWali)
-                                ? "bg-emerald-600 text-white"
-                                : "hover:bg-slate-800 text-slate-200"
-                            }`}
-                          >
-                            <div className="truncate">
-                              <span className="mr-1.5">📌</span>
-                              <span>
-                                {petugasInfo?.namaKelas || "Kelas Petugas"}
-                              </span>
-                              <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
-                                Kelas Anda
-                              </span>
-                            </div>
-                            {!isAllClassesMode &&
-                              String(selectedWaliId) ===
-                                String(petugasInfo?.idWali) && <span>✓</span>}
-                          </button>
-
-                          {/* Kelas Lainnya */}
-                          {availableClasses
-                            .filter(
-                              (c) =>
-                                String(c.idWali) !==
-                                String(petugasInfo?.idWali),
-                            )
-                            .map((c) => {
-                              const isSelected =
+                          <div className="p-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                              Pilih Per Kelas
+                            </p>
+                            {/* Kelas Asal Petugas */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWaliId(petugasInfo?.idWali);
+                                setShowClassDropdown(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
                                 !isAllClassesMode &&
-                                String(selectedWaliId) === String(c.idWali);
-                              return (
-                                <button
-                                  key={c.idWali}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedWaliId(c.idWali);
-                                    setShowClassDropdown(false);
-                                  }}
-                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
-                                    isSelected
-                                      ? "bg-teal-600 text-white font-bold"
-                                      : "hover:bg-slate-800 text-slate-300"
-                                  }`}
-                                >
-                                  <div className="truncate">
-                                    <span className="mr-1.5">🏫</span>
-                                    <span>{c.namaKelas}</span>
-                                    {c.namaGuru && (
-                                      <span className="text-[10px] text-slate-400 block truncate ml-5">
-                                        {c.namaGuru}
-                                      </span>
+                                String(selectedWaliId) ===
+                                  String(petugasInfo?.idWali)
+                                  ? "bg-emerald-600 text-white"
+                                  : "hover:bg-slate-800 text-slate-200"
+                              }`}
+                            >
+                              <div className="truncate">
+                                <span className="mr-1.5">📌</span>
+                                <span>
+                                  {petugasInfo?.namaKelas || "Kelas Petugas"}
+                                </span>
+                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                                  Kelas Anda
+                                </span>
+                              </div>
+                              {!isAllClassesMode &&
+                                String(selectedWaliId) ===
+                                  String(petugasInfo?.idWali) && <span>✓</span>}
+                            </button>
+
+                            {/* Kelas Lainnya */}
+                            {availableClasses
+                              .filter(
+                                (c) =>
+                                  String(c.idWali) !==
+                                  String(petugasInfo?.idWali),
+                              )
+                              .map((c) => {
+                                const isSelected =
+                                  !isAllClassesMode &&
+                                  String(selectedWaliId) === String(c.idWali);
+                                return (
+                                  <button
+                                    key={c.idWali}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedWaliId(c.idWali);
+                                      setShowClassDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
+                                      isSelected
+                                        ? "bg-teal-600 text-white font-bold"
+                                        : "hover:bg-slate-800 text-slate-300"
+                                    }`}
+                                  >
+                                    <div className="truncate">
+                                      <span className="mr-1.5">🏫</span>
+                                      <span>{c.namaKelas}</span>
+                                      {c.namaGuru && (
+                                        <span className="text-[10px] text-slate-400 block truncate ml-5">
+                                          {c.namaGuru}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isSelected && (
+                                      <span className="font-bold">✓</span>
                                     )}
-                                  </div>
-                                  {isSelected && (
-                                    <span className="font-bold">✓</span>
-                                  )}
-                                </button>
-                              );
-                            })}
+                                  </button>
+                                );
+                              })}
+                          </div>
                         </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 text-teal-100 font-black border border-teal-300/40 shadow-2xs"
+                    title={`Khusus Kelas ${activeClass?.namaKelas || petugasInfo?.namaKelas || ""}`}
+                  >
+                    <span>🏫 {activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas Petugas"}</span>
+                  </span>
+                )}
               </div>
               <p className="text-[9px] sm:text-[10px] text-teal-200 truncate">
                 Pindai kartu kertas siswa • Simpan berulang s.d 08.30 WIB

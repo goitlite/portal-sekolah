@@ -108,10 +108,14 @@ export default function ModalPresensiPetugasSiswa({
   const [showClassDropdown, setShowClassDropdown] = useState(false);
 
   useEffect(() => {
-    if (isOpen && petugasInfo?.idWali && !selectedWaliId) {
-      setSelectedWaliId(petugasInfo.idWali);
+    if (isOpen) {
+      if (!Array.isArray(availableClasses) || availableClasses.length <= 1) {
+        setSelectedWaliId(petugasInfo?.idWali);
+      } else if (!selectedWaliId && petugasInfo?.idWali) {
+        setSelectedWaliId(petugasInfo.idWali);
+      }
     }
-  }, [isOpen, petugasInfo?.idWali]);
+  }, [isOpen, petugasInfo?.idWali, availableClasses]);
 
   const activeClass = useMemo(() => {
     const found = availableClasses.find(
@@ -626,88 +630,97 @@ export default function ModalPresensiPetugasSiswa({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowClassDropdown((v) => !v)}
-                      className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95"
-                      title="Pilih Kelas yang Ingin Diabsen"
+                  {Array.isArray(availableClasses) && availableClasses.length > 1 ? (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowClassDropdown((v) => !v)}
+                        className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95"
+                        title="Pilih Kelas yang Ingin Diabsen"
+                      >
+                        <span>🏫 {activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas Wali"}</span>
+                        <span className="text-[8px] opacity-75">▾</span>
+                      </button>
+
+                      {showClassDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-30"
+                            onClick={() => setShowClassDropdown(false)}
+                          />
+                          <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="p-1">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                                Pilih Kelas Reguler
+                              </p>
+                              {/* Kelas Asal Petugas */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedWaliId(petugasInfo?.idWali);
+                                  setShowClassDropdown(false);
+                                }}
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                                  String(selectedWaliId) === String(petugasInfo?.idWali)
+                                    ? "bg-emerald-600 text-white"
+                                    : "hover:bg-slate-800 text-slate-200"
+                                }`}
+                              >
+                                <div className="truncate">
+                                  <span className="mr-1.5">📌</span>
+                                  <span>{petugasInfo?.namaKelas || "Kelas Petugas"}</span>
+                                  <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                                    Kelas Anda
+                                  </span>
+                                </div>
+                                {String(selectedWaliId) === String(petugasInfo?.idWali) && <span>✓</span>}
+                              </button>
+
+                              {/* Kelas Lainnya */}
+                              {availableClasses
+                                .filter((c) => String(c.idWali) !== String(petugasInfo?.idWali))
+                                .map((c) => {
+                                  const isSelected = String(selectedWaliId) === String(c.idWali);
+                                  return (
+                                    <button
+                                      key={c.idWali}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedWaliId(c.idWali);
+                                        setShowClassDropdown(false);
+                                      }}
+                                      className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
+                                        isSelected
+                                          ? "bg-teal-600 text-white font-bold"
+                                          : "hover:bg-slate-800 text-slate-300"
+                                      }`}
+                                    >
+                                      <div className="truncate">
+                                        <span className="mr-1.5">🏫</span>
+                                        <span>{c.namaKelas}</span>
+                                        {c.namaGuru && (
+                                          <span className="text-[10px] text-slate-400 block truncate ml-5">
+                                            {c.namaGuru}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isSelected && <span className="font-bold">✓</span>}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-teal-400/25 text-teal-100 font-black border border-teal-300/40 shadow-2xs"
+                      title={`Khusus Kelas ${activeClass?.namaKelas || petugasInfo?.namaKelas || ""}`}
                     >
                       <span>🏫 {activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas Wali"}</span>
-                      <span className="text-[8px] opacity-75">▾</span>
-                    </button>
-
-                    {showClassDropdown && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-30"
-                          onClick={() => setShowClassDropdown(false)}
-                        />
-                        <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
-                          <div className="p-1">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                              Pilih Kelas Reguler
-                            </p>
-                            {/* Kelas Asal Petugas */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedWaliId(petugasInfo?.idWali);
-                                setShowClassDropdown(false);
-                              }}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                String(selectedWaliId) === String(petugasInfo?.idWali)
-                                  ? "bg-emerald-600 text-white"
-                                  : "hover:bg-slate-800 text-slate-200"
-                              }`}
-                            >
-                              <div className="truncate">
-                                <span className="mr-1.5">📌</span>
-                                <span>{petugasInfo?.namaKelas || "Kelas Petugas"}</span>
-                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
-                                  Kelas Anda
-                                </span>
-                              </div>
-                              {String(selectedWaliId) === String(petugasInfo?.idWali) && <span>✓</span>}
-                            </button>
-
-                            {/* Kelas Lainnya */}
-                            {availableClasses
-                              .filter((c) => String(c.idWali) !== String(petugasInfo?.idWali))
-                              .map((c) => {
-                                const isSelected = String(selectedWaliId) === String(c.idWali);
-                                return (
-                                  <button
-                                    key={c.idWali}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedWaliId(c.idWali);
-                                      setShowClassDropdown(false);
-                                    }}
-                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
-                                      isSelected
-                                        ? "bg-teal-600 text-white font-bold"
-                                        : "hover:bg-slate-800 text-slate-300"
-                                    }`}
-                                  >
-                                    <div className="truncate">
-                                      <span className="mr-1.5">🏫</span>
-                                      <span>{c.namaKelas}</span>
-                                      {c.namaGuru && (
-                                        <span className="text-[10px] text-slate-400 block truncate ml-5">
-                                          {c.namaGuru}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {isSelected && <span className="font-bold">✓</span>}
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                    </span>
+                  )}
                   <span>•</span>
                   <span className="text-xs text-teal-100 font-medium">📅 {todayFormatted}</span>
                 </div>
