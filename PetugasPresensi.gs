@@ -1,12 +1,17 @@
 /**
- * PetugasPresensi.gs   (VERSI OPTIMAL & BEBAS BUG)
+ * PetugasPresensi.gs   (FILE BARU — tempel sebagai file terpisah di Apps Script)
  *
- * Perbaikan yang diterapkan:
- *  1. getKelasPetugas_ menyertakan presensiHariIni (agar statistik kelas siswa tampil normal)
- *  2. Siswa biasa tetap menerima data kelasnya sendiri secara hemat data (tidak error 400)
- *  3. hapusSiswaWaliAman_ bebas dari dependensi isEmpty eksternal
- *  4. getWajahBulk_ toleran terhadap variasi penamaan kolom ID_SISWA
- *  5. savePresensiWaliKelasAman_ toleran terhadap status sel kosong ("")
+ * Isi:
+ *  1. savePresensiWaliKelasAman_  : pembungkus savePresensiWaliKelas
+ *       - LockService (tidak ada lagi tabrakan tulis dari beberapa HP)
+ *       - menghormati  onlyIfEmpty / overwriteOnlyIf  (scan petugas TIDAK menimpa
+ *         Hadir/Sakit/Izin yang sudah diisi wali kelas)
+ *  2. getWajahBulk_               : foto wajah banyak siswa dalam 1 panggilan
+ *  3. getKelasPetugas_            : daftar kelas khusus petugas presensi (data minimal)
+ *  4. getGuruWaliSiswa_           : nama guru wali SATU siswa (ganti getDataSiswaWali("ALL"))
+ *  5. hapusSiswaWaliAman_         : hapusSiswaWali dengan lock + baca data segar
+ *
+ * Tidak mengubah satu pun fungsi lama. Fungsi lama tetap ada sebagai cadangan.
  */
 
 function ppCleanId_(val) {
@@ -37,8 +42,10 @@ function savePresensiWaliKelasAman_(params) {
     var out = cells;
 
     if (perluCek) {
+      // Baca status yang sudah ada di server (fungsi yang sama dipakai aplikasi)
       var grid = getPresensiWaliGrid(params.idGuru, params.idWali);
       if (!grid || !grid.success || !grid.data) {
+        // Gagal baca -> JANGAN menulis sembarangan (klien menyimpan antrian & mencoba lagi)
         return errorResponse("Tidak dapat memeriksa data yang sudah ada. Coba lagi.");
       }
 
@@ -69,6 +76,7 @@ function savePresensiWaliKelasAman_(params) {
       });
     }
 
+    // Buang field kontrol sebelum diteruskan ke fungsi lama
     var bersih = out.map(function (c) {
       var o = {};
       Object.keys(c).forEach(function (key) {
@@ -101,6 +109,8 @@ function savePresensiWaliKelasAman_(params) {
 
 // ------------------------------------------------------------
 // 2. FOTO WAJAH BANYAK SISWA (1 panggilan)
+//    params: { idSiswaList: ["123","456",...] }
+//    hasil : { "123": "https://...", "456": "" }   ("" = belum ada foto)
 // ------------------------------------------------------------
 function getWajahBulk_(params) {
   var list = (params && Array.isArray(params.idSiswaList)) ? params.idSiswaList : [];
@@ -115,6 +125,7 @@ function getWajahBulk_(params) {
 
   var rows = getAllData(SHEETS.DATA_SISWA_WALI) || [];
 
+  // Cari nama kolom foto wajah secara fleksibel (FOTO_WAJAH / FOTO WAJAH / FotoWajah)
   var fotoKey = null;
   if (rows.length > 0) {
     Object.keys(rows[0]).forEach(function (k) {
@@ -140,7 +151,11 @@ function getWajahBulk_(params) {
 }
 
 // ------------------------------------------------------------
-// 3. KELAS UNTUK PETUGAS PRESENSI (serta fallback siswa biasa)
+// 3. KELAS UNTUK SISWA / PETUGAS PRESENSI (data minimal)
+//    params: { idSiswa }
+//    - Petugas presensi  : semua kelas (id, nama, daftar siswa ringkas)
+//    - Siswa biasa       : HANYA kelasnya sendiri (tanpa kelas lain)
+//    - Kelas milik sendiri membawa presensiHariIni + presensi (statistik dashboard)
 // ------------------------------------------------------------
 function getKelasPetugas_(params) {
   var sid = ppCleanId_(params && params.idSiswa);
@@ -158,37 +173,57 @@ function getKelasPetugas_(params) {
 
   var tagA = "[PETUGAS:" + sid + ":";
   var tagB = "[PETUGAS:" + sid + "]";
-  var petugas = cards.some(function (c) {
+
+  function punyaTagSaya(c) {
     var ket = String(c.keterangan || "");
     return ket.indexOf(tagA) !== -1 || ket.indexOf(tagB) !== -1;
-  });
-
-  // Jika siswa biasa (bukan petugas), kembalikan data kelas siswa tersebut saja
-  var sourceCards = cards;
-  if (!petugas) {
-    sourceCards = cards.filter(function (c) {
-      return (c.daftarSiswa || []).some(function (s) { return ppCleanId_(s.idSiswa) === sid; }) ||
-             String(c.keterangan || "").indexOf(sid) !== -1;
+  }
+  function siswaAdaDiKelas(c) {
+    return (c.daftarSiswa || []).some(function (s) {
+      return ppCleanId_(s.idSiswa || s.id) === sid;
     });
-    if (sourceCards.length === 0) sourceCards = cards; // fallback jika belum terpetakan
   }
 
-  var minimal = sourceCards.map(function (c) {
+  var petugas = cards.some(punyaTagSaya);
+
+  // Kelas milik siswa ini: utamakan keanggotaan di daftarSiswa, lalu tag petugas
+  var idWaliSaya = "";
+  for (var i = 0; i < cards.length; i++) {
+    if (siswaAdaDiKelas(cards[i])) { idWaliSaya = String(cards[i].idWali); break; }
+  }
+  if (idWaliSaya === "") {
+    for (var j = 0; j < cards.length; j++) {
+      if (punyaTagSaya(cards[j])) { idWaliSaya = String(cards[j].idWali); break; }
+    }
+  }
+
+  // Siswa biasa tidak boleh menerima data kelas lain
+  var sumber = petugas
+    ? cards
+    : cards.filter(function (c) { return idWaliSaya !== "" && String(c.idWali) === idWaliSaya; });
+
+  var minimal = sumber.map(function (c) {
+    var milikSaya = idWaliSaya !== "" && String(c.idWali) === idWaliSaya;
+    // Sembunyikan tag petugas milik siswa lain
     var ket = String(c.keterangan || "").replace(/\[PETUGAS:[^\]]*\]/g, function (m) {
       return (m.indexOf(tagA) === 0 || m === tagB) ? m : "";
     });
-    return {
+    var item = {
       idWali: c.idWali,
       idGuru: c.idGuru,
       namaKelas: c.namaKelas || c.kelas || "Kelas",
       namaGuru: c.namaGuru || "",
       jumlahSiswa: c.jumlahSiswa || (Array.isArray(c.daftarSiswa) ? c.daftarSiswa.length : 0),
-      presensiHariIni: c.presensiHariIni, // <-- PENTING: statistik kelas tetap muncul!
       daftarSiswa: (c.daftarSiswa || []).map(function (s) {
         return { idSiswa: s.idSiswa, nama: s.nama || s.namaSiswa || "", kelas: s.kelas || "" };
       }),
       keterangan: ket
     };
+    if (milikSaya) {
+      item.presensiHariIni = c.presensiHariIni;
+      item.presensi = c.presensi;
+    }
+    return item;
   });
 
   return successResponse(petugas ? "Daftar kelas petugas" : "Data kelas siswa", {
@@ -198,7 +233,8 @@ function getKelasPetugas_(params) {
 }
 
 // ------------------------------------------------------------
-// 4. GURU WALI SATU SISWA
+// 4. GURU WALI SATU SISWA (pengganti getDataSiswaWali("ALL") di dashboard siswa)
+//    params: { idSiswa }
 // ------------------------------------------------------------
 function getGuruWaliSiswa_(params) {
   var sid = ppCleanId_(params && params.idSiswa);
@@ -226,10 +262,11 @@ function getGuruWaliSiswa_(params) {
 }
 
 // ------------------------------------------------------------
-// 5. HAPUS SISWA WALI (lock + data segar)
+// 5. HAPUS SISWA WALI (lock + data segar, bukan cache)
+//    Perilaku sama dengan hapusSiswaWali lama.
 // ------------------------------------------------------------
 function hapusSiswaWaliAman_(params) {
-  var idSiswa = ppCleanId_(params && (params.idSiswa || params.id));
+  var idSiswa = ppCleanId_(params && params.idSiswa);
   var idGuruWali = ppCleanId_(params && params.idGuru);
   if (!idSiswa || !idGuruWali) {
     return errorResponse("ID Siswa atau ID Guru Wali tidak boleh kosong");
@@ -245,6 +282,7 @@ function hapusSiswaWaliAman_(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
+    // Hanya boleh menghapus relasi milik guru wali yang meminta
     var sheetGW = ss.getSheetByName(SHEETS.GURU_WALI);
     var gw = sheetGW.getDataRange().getValues();
     var hGW = gw[0].map(function (h) { return String(h).trim(); });
@@ -263,6 +301,7 @@ function hapusSiswaWaliAman_(params) {
       return errorResponse("Siswa ini bukan siswa wali guru tersebut.");
     }
 
+    // Biodata
     var sheetBio = ss.getSheetByName(SHEETS.DATA_SISWA_WALI);
     if (sheetBio) {
       var bio = sheetBio.getDataRange().getValues();
@@ -277,6 +316,7 @@ function hapusSiswaWaliAman_(params) {
       }
     }
 
+    // Sheet SISWA: hapus fisik hanya bila belum punya guru pembimbing
     var sheetS = ss.getSheetByName(SHEETS.SISWA);
     var sd = sheetS.getDataRange().getValues();
     var hS = sd[0].map(function (h) { return String(h).trim(); });

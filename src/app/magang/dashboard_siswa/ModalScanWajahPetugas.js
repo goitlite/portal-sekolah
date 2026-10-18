@@ -46,17 +46,19 @@ import {
 // =====================================================================
 // KONFIGURASI BATAS WAKTU PRESENSI
 // =====================================================================
-// Batas resmi presensi adalah pukul 08:30 WIB.
-// Di luar jam sekolah (setelah pukul 18:00 atau sebelum 06:00 WIB) atau
-// jika bypass aktif di penyimpanan lokal, mode uji coba dibuka agar
-// petugas/admin dapat melakukan pengujian fitur kapan pun.
-const BATAS_JAM = 8;
-const BATAS_MENIT = 30;
+// Batas resmi presensi scan wajah adalah dibuka pukul 06:30 WIB dan ditutup pukul 08:00 WIB.
+const WAJAH_OPEN_H = 6;
+const WAJAH_OPEN_M = 30; // 06:30 WIB
+const WAJAH_CLOSE_H = 8;
+const WAJAH_CLOSE_M = 0; // 08:00 WIB
 
 function checkIsPastTimeLimit() {
   try {
     if (typeof window !== "undefined") {
-      if (localStorage.getItem("portal_bypass_time_limit") === "true") {
+      if (
+        localStorage.getItem("portal_bypass_wajah_time") === "true" ||
+        localStorage.getItem("portal_bypass_time_limit") === "true"
+      ) {
         return false;
       }
     }
@@ -65,14 +67,13 @@ function checkIsPastTimeLimit() {
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
+  const currentTotal = hours * 60 + minutes;
+  const openTotal = WAJAH_OPEN_H * 60 + WAJAH_OPEN_M; // 390 (06:30 WIB)
+  const closeTotal = WAJAH_CLOSE_H * 60 + WAJAH_CLOSE_M; // 480 (08:00 WIB)
 
-  // Jika di luar jam sekolah (sore/malam s.d dini hari), izinkan mode pengujian
-  if (hours >= 18 || hours < 6) {
-    return false;
-  }
-
-  // Jam operasional sekolah pagi: kunci jika lewat 08:30 WIB
-  return hours > BATAS_JAM || (hours === BATAS_JAM && minutes >= BATAS_MENIT);
+  // Buka tepat jam 06:30 sampai 08:00 WIB
+  const isOpen = currentTotal >= openTotal && currentTotal < closeTotal;
+  return !isOpen;
 }
 
 function withTimeout(promise, ms) {
@@ -261,6 +262,66 @@ export default function ModalScanWajahPetugas({
   const [hasPreviousSubmission, setHasPreviousSubmission] = useState(false);
   const [activeTab, setActiveTab] = useState("kamera"); // "kamera" | "daftar"
 
+  // Input kode 1230 untuk buka akses jika di luar jam
+  const [unlockCodeInput, setUnlockCodeInput] = useState("");
+  const [unlockError, setUnlockError] = useState("");
+
+  function handleUnlockWajahWithCode() {
+    if (unlockCodeInput.trim() === "1230") {
+      try {
+        localStorage.setItem("portal_bypass_wajah_time", "true");
+        localStorage.setItem("portal_bypass_time_limit", "true");
+      } catch (_) {}
+      setIsLockedByTime(false);
+      setIsSubmittedToday(false);
+      setUnlockError("");
+      setUnlockCodeInput("");
+      if (activeTab === "kamera") {
+        setTimeout(() => {
+          try {
+            startCamera();
+          } catch (_) {}
+        }, 150);
+      }
+    } else {
+      setUnlockError("Kode akses salah! Masukkan kode untuk membuka.");
+    }
+  }
+
+  // Fitur Verifikasi Cepat (Hanya Tahap 1 & 3 Tanpa Toleh dengan Kode 1230)
+  const [isFastVerify, setIsFastVerify] = useState(false);
+  const isFastVerifyRef = useRef(false);
+  const [showFastVerifyModal, setShowFastVerifyModal] = useState(false);
+  const [fastVerifyCodeInput, setFastVerifyCodeInput] = useState("");
+  const [fastVerifyError, setFastVerifyError] = useState("");
+
+  useEffect(() => {
+    isFastVerifyRef.current = isFastVerify;
+  }, [isFastVerify]);
+
+  function handleToggleFastVerify() {
+    if (isFastVerify) {
+      setIsFastVerify(false);
+    } else {
+      setFastVerifyCodeInput("");
+      setFastVerifyError("");
+      setShowFastVerifyModal(true);
+    }
+  }
+
+  function handleConfirmFastVerifyCode() {
+    if (fastVerifyCodeInput.trim() === "1230") {
+      setIsFastVerify(true);
+      setShowFastVerifyModal(false);
+      setFastVerifyCodeInput("");
+      setFastVerifyError("");
+    } else {
+      setFastVerifyError(
+        "Kode salah! Masukkan kode 1230 untuk mengaktifkan Verifikasi Cepat.",
+      );
+    }
+  }
+
   // Ref untuk kamera & pengenalan wajah
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -307,7 +368,7 @@ export default function ModalScanWajahPetugas({
     };
   }, [scanOverlay]);
 
-  // Pantau batas waktu 08:30 WIB
+  // Pantau batas waktu operasional wajah (06:30 – 08:00 WIB)
   useEffect(() => {
     if (!isOpen) return;
     const check = () => {
@@ -1503,26 +1564,54 @@ export default function ModalScanWajahPetugas({
       return;
     }
 
-    // D. LIVENESS (tantangan toleh) — BERJALAN PARALEL dengan pengenalan identitas.
-    // Siswa cukup menghadap kamera, menoleh sekali, lalu hadap lurus. Identitas
-    // sudah dikumpulkan dari frame-frame lurus sebelum/selama tantangan, sehingga
-    // begitu kembali lurus langsung selesai (tidak perlu mengulang pencocokan dari nol).
+    // D. LIVENESS (tantangan toleh atau verifikasi cepat) — BERJALAN PARALEL dengan pengenalan identitas.
     const now = Date.now();
-    st.liveness = updateHeadTurnTracker(st.liveness, pose.yaw, now);
-    const live = st.liveness;
-    const step = headTurnStep(live);
-    if (step !== st.lastStep) {
-      if (
-        step > st.lastStep &&
-        step > 0 &&
-        typeof navigator !== "undefined" &&
-        navigator.vibrate
-      ) {
-        navigator.vibrate(30); // getar singkat tiap langkah berhasil
+    let live;
+    if (isFastVerifyRef.current) {
+      // MODE VERIFIKASI CEPAT: hanya tahap 1 (hadap) dan tahap 3 (lurus) tanpa toleh
+      if (!st.liveness) {
+        st.liveness = {
+          base: pose.yaw,
+          phase: "center",
+          relYaw: 0,
+          isMotionVerified: false,
+          startedAt: now,
+          verifiedAt: 0,
+        };
+        st.lastStep = 0;
+        setChallengeStep(0); // Tahap 1: Hadap
+      } else {
+        // Otomatis verifikasi tahap 3 (lurus) jika posisi stabil
+        st.liveness.phase = "verified";
+        st.liveness.isMotionVerified = true;
+        if (!st.liveness.verifiedAt) st.liveness.verifiedAt = now;
+        if (st.lastStep !== 2) {
+          st.lastStep = 2;
+          setChallengeStep(2); // Tahap 3: Lurus / Terverifikasi
+          if (typeof navigator !== "undefined" && navigator.vibrate) {
+            navigator.vibrate(30);
+          }
+        }
       }
-      st.lastStep = step;
-      setChallengeStep(step);
+      live = st.liveness;
+    } else {
+      st.liveness = updateHeadTurnTracker(st.liveness, pose.yaw, now);
+      live = st.liveness;
+      const step = headTurnStep(live);
+      if (step !== st.lastStep) {
+        if (
+          step > st.lastStep &&
+          step > 0 &&
+          typeof navigator !== "undefined" &&
+          navigator.vibrate
+        ) {
+          navigator.vibrate(30); // getar singkat tiap langkah berhasil
+        }
+        st.lastStep = step;
+        setChallengeStep(step);
+      }
     }
+
     if (st.lock && now - st.lock.at > IDENT_LOCK_TTL_MS) st.lock = null;
     if (showDebugRef.current && !live.isMotionVerified) {
       setDebugLine(
@@ -1533,11 +1622,17 @@ export default function ModalScanWajahPetugas({
     }
 
     // Petunjuk sesuai kondisi saat ini (dipakai di beberapa cabang di bawah)
-    const guideText = live.isMotionVerified
-      ? "✨ Tahan lurus ke kamera sebentar..."
-      : st.lock
-        ? `👤 ${st.lock.nama} dikenali — ${headTurnHint(live)}`
-        : headTurnHint(live);
+    const guideText = isFastVerifyRef.current
+      ? live.isMotionVerified
+        ? "✨ Tahan posisi hadap lurus..."
+        : st.lock
+          ? `👤 ${st.lock.nama} terdeteksi — tahan lurus`
+          : "😐 Hadap lurus ke kamera"
+      : live.isMotionVerified
+        ? "✨ Tahan lurus ke kamera sebentar..."
+        : st.lock
+          ? `👤 ${st.lock.nama} dikenali — ${headTurnHint(live)}`
+          : headTurnHint(live);
 
     // Stabilitas gerakan: wajah yang sedang bergerak cepat buram, jadi
     // pembuatan deskriptor dilewati (suara yang sudah terkumpul TIDAK dihapus).
@@ -1672,7 +1767,9 @@ export default function ModalScanWajahPetugas({
         setChallengeStep(-1);
         setScanZoneState("adjust");
         setLiveFaceStatus(
-          "🔄 Ulangi: toleh kepala sekali lagi lalu hadap lurus",
+          isFastVerifyRef.current
+            ? "🔄 Tahan hadap lurus ke kamera untuk dicocokkan"
+            : "🔄 Ulangi: toleh kepala sekali lagi lalu hadap lurus",
         );
         return;
       }
@@ -1708,7 +1805,7 @@ export default function ModalScanWajahPetugas({
       setIsSubmittedToday(true);
       setIsLockedByTime(true);
       stopCamera();
-      alert("⛔ Batas waktu presensi telah berakhir (Pukul 08.30 WIB).");
+      alert("⛔ Batas waktu presensi telah berakhir (Pukul 08.00 WIB).");
       return;
     }
 
@@ -2428,816 +2525,913 @@ export default function ModalScanWajahPetugas({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
-      {/* ===== OVERLAY PROGRESS SIMPAN SPREADSHEET (DI TENGAH LAYAR) ===== */}
-      {saveProgress && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm pointer-events-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Header overlay */}
-            <div
-              className={`px-5 py-3.5 flex items-center gap-2.5 ${
-                saveProgress.phase === "done"
-                  ? "bg-emerald-600"
-                  : saveProgress.phase === "error"
-                    ? "bg-amber-600"
-                    : "bg-teal-700"
-              } text-white`}
-            >
-              {saveProgress.phase === "sending" && (
-                <svg
-                  className="animate-spin h-5 w-5 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  />
-                </svg>
-              )}
-              {saveProgress.phase === "done" && (
-                <span className="text-lg shrink-0">✅</span>
-              )}
-              {saveProgress.phase === "error" && (
-                <span className="text-lg shrink-0">⚠️</span>
-              )}
-              <div className="font-bold text-sm leading-snug">
-                {saveProgress.phase === "sending"
-                  ? "Menyimpan ke Spreadsheet..."
-                  : saveProgress.phase === "done"
-                    ? "Penyimpanan Selesai"
-                    : "Status Penyimpanan"}
-              </div>
-            </div>
-
-            <div className="px-5 py-4 space-y-3.5">
-              {/* Progress bar */}
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs text-slate-600 font-medium line-clamp-1">
-                    {saveProgress.label}
-                  </span>
-                  <span className="text-xs font-black text-slate-800 ml-2">
-                    {saveProgress.pct}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      saveProgress.phase === "done"
-                        ? "bg-emerald-500"
-                        : saveProgress.phase === "error"
-                          ? "bg-amber-500"
-                          : "bg-teal-600"
-                    }`}
-                    style={{ width: `${saveProgress.pct}%` }}
-                  />
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
+        {/* ===== OVERLAY PROGRESS SIMPAN SPREADSHEET (DI TENGAH LAYAR) ===== */}
+        {saveProgress && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm pointer-events-auto">
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              {/* Header overlay */}
+              <div
+                className={`px-5 py-3.5 flex items-center gap-2.5 ${
+                  saveProgress.phase === "done"
+                    ? "bg-emerald-600"
+                    : saveProgress.phase === "error"
+                      ? "bg-amber-600"
+                      : "bg-teal-700"
+                } text-white`}
+              >
+                {saveProgress.phase === "sending" && (
+                  <svg
+                    className="animate-spin h-5 w-5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
+                  </svg>
+                )}
+                {saveProgress.phase === "done" && (
+                  <span className="text-lg shrink-0">✅</span>
+                )}
+                {saveProgress.phase === "error" && (
+                  <span className="text-lg shrink-0">⚠️</span>
+                )}
+                <div className="font-bold text-sm leading-snug">
+                  {saveProgress.phase === "sending"
+                    ? "Menyimpan ke Spreadsheet..."
+                    : saveProgress.phase === "done"
+                      ? "Penyimpanan Selesai"
+                      : "Status Penyimpanan"}
                 </div>
               </div>
 
-              {/* Detail per kelas */}
-              {saveProgress.details && saveProgress.details.length > 0 && (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {saveProgress.details.map((d, i) => (
+              <div className="px-5 py-4 space-y-3.5">
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-xs text-slate-600 font-medium line-clamp-1">
+                      {saveProgress.label}
+                    </span>
+                    <span className="text-xs font-black text-slate-800 ml-2">
+                      {saveProgress.pct}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
                     <div
-                      key={d.wId || i}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
-                        d.status === "ok"
-                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                          : d.status === "error"
-                            ? "bg-rose-50 text-rose-700 border border-rose-200"
-                            : d.status === "offline"
-                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                              : "bg-slate-50 text-slate-600 border border-slate-200"
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        saveProgress.phase === "done"
+                          ? "bg-emerald-500"
+                          : saveProgress.phase === "error"
+                            ? "bg-amber-500"
+                            : "bg-teal-600"
                       }`}
-                    >
-                      <span className="shrink-0 text-sm">
-                        {d.status === "ok" ? (
-                          "✅"
-                        ) : d.status === "error" ? (
-                          "❌"
-                        ) : d.status === "offline" ? (
-                          "📱"
-                        ) : (
-                          <svg
-                            className="animate-spin h-3.5 w-3.5 text-teal-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8v8z"
-                            />
-                          </svg>
-                        )}
-                      </span>
-                      <span className="truncate">{d.namaKelas}</span>
-                      <span className="ml-auto shrink-0 text-[10px] font-semibold opacity-75">
-                        {d.status === "ok"
-                          ? "Tersimpan"
-                          : d.status === "error"
-                            ? "Gagal"
-                            : d.status === "offline"
-                              ? "Antrian HP"
-                              : "Mengirim..."}
-                      </span>
-                    </div>
-                  ))}
+                      style={{ width: `${saveProgress.pct}%` }}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {/* Footer info */}
-              {saveProgress.phase === "done" && (
-                <p className="text-[11px] text-emerald-600 text-center font-medium">
-                  Menutup otomatis dalam beberapa detik...
-                </p>
-              )}
-              {saveProgress.phase === "error" && (
-                <button
-                  type="button"
-                  onClick={() => setSaveProgress(null)}
-                  className="w-full text-xs py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
-                >
-                  Tutup
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh] relative">
-        {/* MODAL DIALOG PILIHAN SINKRONISASI ULANG */}
-        {syncPromptOpen && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-xs">
-            <div className="bg-white rounded-2xl sm:rounded-3xl p-5 max-w-sm sm:max-w-md w-full shadow-2xl border border-slate-200 text-center space-y-3.5">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center text-2xl shadow-inner">
-                🔄
-              </div>
-              <div className="space-y-1.5">
-                <h4 className="text-sm sm:text-base font-black text-slate-900">
-                  Sinkronisasi Data Wajah
-                </h4>
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
-                  Ulang sinkron data jika ada foto siswa di daftarkan oleh guru
-                  wali kelas?
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  Pilih &quot;Tidak&quot; jika tidak ada penambahan foto siswa
-                  baru, agar kamera langsung siap digunakan.
-                </p>
-              </div>
+                {/* Detail per kelas */}
+                {saveProgress.details && saveProgress.details.length > 0 && (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {saveProgress.details.map((d, i) => (
+                      <div
+                        key={d.wId || i}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                          d.status === "ok"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : d.status === "error"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : d.status === "offline"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-slate-50 text-slate-600 border border-slate-200"
+                        }`}
+                      >
+                        <span className="shrink-0 text-sm">
+                          {d.status === "ok" ? (
+                            "✅"
+                          ) : d.status === "error" ? (
+                            "❌"
+                          ) : d.status === "offline" ? (
+                            "📱"
+                          ) : (
+                            <svg
+                              className="animate-spin h-3.5 w-3.5 text-teal-600"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="truncate">{d.namaKelas}</span>
+                        <span className="ml-auto shrink-0 text-[10px] font-semibold opacity-75">
+                          {d.status === "ok"
+                            ? "Tersimpan"
+                            : d.status === "error"
+                              ? "Gagal"
+                              : d.status === "offline"
+                                ? "Antrian HP"
+                                : "Mengirim..."}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-              <div className="flex flex-col-reverse sm:flex-row items-center gap-2 pt-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSyncPromptOpen(false);
-                    loadStudentFaceProfilesParallel(
-                      studentProfilesRef.current?.length
-                        ? studentProfilesRef.current
-                        : siswaList,
-                      true,
-                    );
-                  }}
-                  className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-                >
-                  Ya, Sinkron Ulang
-                </button>
-
-                <button
-                  type="button"
-                  autoFocus
-                  onClick={() => setSyncPromptOpen(false)}
-                  className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 ring-2 ring-emerald-400/50"
-                >
-                  <span>✓</span>
-                  <span>Tidak (Default)</span>
-                </button>
+                {/* Footer info */}
+                {saveProgress.phase === "done" && (
+                  <p className="text-[11px] text-emerald-600 text-center font-medium">
+                    Menutup otomatis dalam beberapa detik...
+                  </p>
+                )}
+                {saveProgress.phase === "error" && (
+                  <button
+                    type="button"
+                    onClick={() => setSaveProgress(null)}
+                    className="w-full text-xs py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                )}
               </div>
             </div>
           </div>
         )}
-
-        {/* HEADER MODAL */}
-        <div className="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="p-1 rounded-md bg-teal-400/20 text-teal-300 text-sm shrink-0">
-              🧏
-            </span>
-            <div className="leading-tight min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-xs sm:text-sm font-black tracking-tight truncate">
-                  Scan Presensi Wajah
-                </h3>
-                {/* PEMILIH KELAS / SCAN PINTAR */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowClassDropdown((v) => !v)}
-                    className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
-                    title="Pilih Kelas atau Mode Scan Pintar"
-                  >
-                    <span>
-                      {isAllClassesMode
-                        ? "🌟 Semua Kelas (Pintar)"
-                        : `🏫 ${activeClass?.namaKelas || petugasInfo?.namaKelas || "Rombel"}`}
-                    </span>
-                    <span className="text-[8px] opacity-75">▾</span>
-                  </button>
-
-                  {showClassDropdown && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-30"
-                        onClick={() => setShowClassDropdown(false)}
-                      />
-                      <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
-                        <div className="p-1">
-                          <p className="text-[10px] font-bold text-teal-300 uppercase tracking-wider px-2 py-1">
-                            Mode Pemindaian
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedWaliId("ALL_CLASSES");
-                              setShowClassDropdown(false);
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                              isAllClassesMode
-                                ? "bg-teal-600 text-white"
-                                : "hover:bg-slate-800 text-teal-100"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">🌟</span>
-                              <div>
-                                <p className="text-xs font-black">
-                                  Semua Kelas (Scan Pintar)
-                                </p>
-                                <p className="text-[9.5px] font-normal text-teal-200">
-                                  Pindai otomatis wajah siswa dari kelas mana
-                                  pun
-                                </p>
-                              </div>
-                            </div>
-                            {isAllClassesMode && <span>✓</span>}
-                          </button>
-                        </div>
-
-                        <div className="p-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                            Pilih Per Kelas
-                          </p>
-                          {/* Kelas Asal Petugas */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedWaliId(petugasInfo?.idWali);
-                              setShowClassDropdown(false);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                              !isAllClassesMode &&
-                              String(selectedWaliId) ===
-                                String(petugasInfo?.idWali)
-                                ? "bg-emerald-600 text-white"
-                                : "hover:bg-slate-800 text-slate-200"
-                            }`}
-                          >
-                            <div className="truncate">
-                              <span className="mr-1.5">📌</span>
-                              <span>
-                                {petugasInfo?.namaKelas || "Kelas Petugas"}
-                              </span>
-                              <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
-                                Kelas Anda
-                              </span>
-                            </div>
-                            {!isAllClassesMode &&
-                              String(selectedWaliId) ===
-                                String(petugasInfo?.idWali) && <span>✓</span>}
-                          </button>
-
-                          {/* Kelas Lainnya */}
-                          {availableClasses
-                            .filter(
-                              (c) =>
-                                String(c.idWali) !==
-                                String(petugasInfo?.idWali),
-                            )
-                            .map((c) => {
-                              const isSelected =
-                                !isAllClassesMode &&
-                                String(selectedWaliId) === String(c.idWali);
-                              return (
-                                <button
-                                  key={c.idWali}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedWaliId(c.idWali);
-                                    setShowClassDropdown(false);
-                                  }}
-                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
-                                    isSelected
-                                      ? "bg-teal-600 text-white font-bold"
-                                      : "hover:bg-slate-800 text-slate-300"
-                                  }`}
-                                >
-                                  <div className="truncate">
-                                    <span className="mr-1.5">🏫</span>
-                                    <span>{c.namaKelas}</span>
-                                    {c.namaGuru && (
-                                      <span className="text-[10px] text-slate-400 block truncate ml-5">
-                                        {c.namaGuru}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {isSelected && (
-                                    <span className="font-bold">✓</span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    </>
-                  )}
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[94vh] relative">
+          {/* MODAL DIALOG PILIHAN SINKRONISASI ULANG */}
+          {syncPromptOpen && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-xs">
+              <div className="bg-white rounded-2xl sm:rounded-3xl p-5 max-w-sm sm:max-w-md w-full shadow-2xl border border-slate-200 text-center space-y-3.5">
+                <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center text-2xl shadow-inner">
+                  🔄
                 </div>
-              </div>
-              <p className="text-[9px] text-teal-200 truncate mt-0.5">
-                {templateInfo.ready}/{registeredFaceCount} siap • {stats.hadir}/
-                {stats.total} hadir
-              </p>
-            </div>
-          </div>
+                <div className="space-y-1.5">
+                  <h4 className="text-sm sm:text-base font-black text-slate-900">
+                    Sinkronisasi Data Wajah
+                  </h4>
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
+                    Ulang sinkron data jika ada foto siswa di daftarkan oleh
+                    guru wali kelas?
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Pilih &quot;Tidak&quot; jika tidak ada penambahan foto siswa
+                    baru, agar kamera langsung siap digunakan.
+                  </p>
+                </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => {
-                loadStudentFaceProfilesParallel(siswaList, true);
-              }}
-              disabled={syncingFaces}
-              className="px-2 py-1 rounded-lg bg-teal-500/25 hover:bg-teal-500/40 border border-teal-300/40 text-teal-100 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
-              title="Sinkronkan foto wajah terbaru"
-            >
-              <span className={syncingFaces ? "animate-spin" : ""}>🔄</span>
-              <span className="hidden sm:inline">
-                {syncingFaces ? "Sinkron..." : "Sinkron"}
-              </span>
-            </button>
-            <button
-              onClick={toggleCameraFacing}
-              className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-              title="Ganti Kamera Depan / Belakang"
-            >
-              <span>📷</span>
-              <span>{cameraFacing === "environment" ? "Blkg" : "Dpn"}</span>
-            </button>
-            <button
-              onClick={() => {
-                stopCamera();
-                onClose();
-              }}
-              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
-              aria-label="Tutup"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* TAB NAVIGASI & SWITCH KE BARCODE / REGULER */}
-        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 sm:px-4 py-1.5 shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab("kamera")}
-              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                activeTab === "kamera"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              <span>🧏</span>
-              <span>Kamera</span>
-              <span
-                className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
-                  activeTab === "kamera"
-                    ? "bg-white/25 text-white"
-                    : "bg-emerald-100 text-emerald-800"
-                }`}
-              >
-                {stats.hadir}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("daftar")}
-              className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                activeTab === "daftar"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              <span>📋</span>
-              <span>Daftar</span>
-              {stats.belumScan > 0 && (
-                <span
-                  className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
-                    activeTab === "daftar"
-                      ? "bg-white/25 text-white"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {stats.belumScan}
-                </span>
-              )}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 ml-auto">
-            {typeof onOpenBarcode === "function" && (
-              <button
-                type="button"
-                onClick={() => {
-                  stopCamera();
-                  onOpenBarcode();
-                }}
-                className="px-2 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold text-[10px] sm:text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                title="Beralih ke Scan Barcode"
-              >
-                <span>📷</span>
-                <span>Barcode</span>
-              </button>
-            )}
-            {typeof onOpenReguler === "function" && (
-              <button
-                type="button"
-                onClick={() => {
-                  stopCamera();
-                  onOpenReguler();
-                }}
-                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[10px] sm:text-[11px] border border-amber-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                title="Beralih ke Presensi Reguler"
-              >
-                <span>📋</span>
-                <span>Reguler</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* BODY AREA */}
-        <div className="p-2 sm:p-3.5 overflow-y-auto space-y-2 flex-1 bg-slate-50/50">
-          {/* STATISTIK RINGKAS */}
-          <div className="grid grid-cols-4 gap-1.5 text-center">
-            <div className="py-1 px-1 rounded-lg bg-slate-100 border border-slate-200">
-              <div className="text-[8.5px] text-slate-500 font-bold uppercase">
-                Total
-              </div>
-              <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
-                {stats.total}
-              </div>
-            </div>
-            <div className="py-1 px-1 rounded-lg bg-emerald-50 border border-emerald-200">
-              <div className="text-[8.5px] text-emerald-700 font-bold uppercase">
-                Hadir
-              </div>
-              <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">
-                {stats.hadir}
-              </div>
-            </div>
-            <div className="py-1 px-1 rounded-lg bg-amber-50 border border-amber-200">
-              <div className="text-[8.5px] text-amber-700 font-bold uppercase">
-                Sakit/Izin
-              </div>
-              <div className="text-xs sm:text-sm font-black text-amber-700 mt-0.5">
-                {stats.sakit + stats.izin}
-              </div>
-            </div>
-            <div className="py-1 px-1 rounded-lg bg-rose-50 border border-rose-200">
-              <div className="text-[8.5px] text-rose-700 font-bold uppercase">
-                Belum
-              </div>
-              <div className="text-xs sm:text-sm font-black text-rose-700 mt-0.5">
-                {stats.belumScan + stats.alfa + stats.cabut}
-              </div>
-            </div>
-          </div>
-
-          {/* TAB 1: KAMERA SCAN WAJAH */}
-          {activeTab === "kamera" && isLockedByTime && (
-            <div className="rounded-2xl p-6 bg-slate-900 border-2 border-slate-700 text-center text-white space-y-3 min-h-[350px] flex flex-col items-center justify-center shadow-lg">
-              <span className="text-4xl">⛔</span>
-              <h3 className="text-base font-black text-rose-300">
-                Batas Waktu Presensi Berakhir
-              </h3>
-              <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
-                Presensi ditutup setelah pukul 08.30 WIB sesuai ketentuan
-                sekolah.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    localStorage.setItem("portal_bypass_time_limit", "true");
-                  } catch (_) {}
-                  setIsLockedByTime(false);
-                  setIsSubmittedToday(false);
-                }}
-                className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5"
-              >
-                <span>🔓</span>
-                <span>Buka Kamera (Mode Uji Coba / Testing)</span>
-              </button>
-            </div>
-          )}
-
-          {activeTab === "kamera" && !isLockedByTime && (
-            <div className="space-y-1.5 relative">
-              {/* STATUS KRITIS MODEL AI / FOTO GAGAL */}
-              {engineStatus === "fallback" && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center justify-between gap-1.5 shadow-xs">
-                  <span className="truncate font-semibold">
-                    ⚠️ Model AI gagal dimuat. Periksa koneksi internet.
-                  </span>
+                <div className="flex flex-col-reverse sm:flex-row items-center gap-2 pt-1.5">
                   <button
                     type="button"
                     onClick={() => {
-                      resetFaceApiPromise();
-                      setEngine("loading");
-                      setEngineNonce((n) => n + 1);
+                      setSyncPromptOpen(false);
+                      loadStudentFaceProfilesParallel(
+                        studentProfilesRef.current?.length
+                          ? studentProfilesRef.current
+                          : siswaList,
+                        true,
+                      );
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-all shadow-xs"
+                    className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
                   >
-                    🔄 Ulangi
+                    Ya, Sinkron Ulang
+                  </button>
+
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => setSyncPromptOpen(false)}
+                    className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 ring-2 ring-emerald-400/50"
+                  >
+                    <span>✓</span>
+                    <span>Tidak (Default)</span>
                   </button>
                 </div>
-              )}
-              {engineStatus === "loading" && (
-                <div className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] flex items-center gap-1.5 shadow-xs animate-pulse">
-                  <span className="animate-spin text-xs">⏳</span>
-                  <span className="font-semibold">
-                    Sedang memuat model kecerdasan buatan (AI)...
-                  </span>
-                </div>
-              )}
-              {templateInfo.failed.length > 0 && (
-                <div className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
-                  <span className="truncate">
-                    ⚠️ {templateInfo.failed.length} foto siswa perlu didaftarkan
-                    ulang (harus lurus & jelas).
-                  </span>
-                </div>
-              )}
+              </div>
+            </div>
+          )}
 
-              {/* CONTAINER KAMERA PEMINDAI (MOBILE-OPTIMIZED VIEWPORT) */}
-              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[58vh] sm:h-[430px] min-h-[350px] max-h-[520px] flex items-center justify-center shadow-lg">
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  autoPlay
-                  className={`w-full h-full object-cover ${cameraFacing === "user" ? "-scale-x-100" : ""}`}
-                />
+          {/* HEADER MODAL */}
+          <div className="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="p-1 rounded-md bg-teal-400/20 text-teal-300 text-sm shrink-0">
+                🧏
+              </span>
+              <div className="leading-tight min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h3 className="text-xs sm:text-sm font-black tracking-tight truncate">
+                    Scan Presensi Wajah
+                  </h3>
+                  {/* PEMILIH KELAS / SCAN PINTAR */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowClassDropdown((v) => !v)}
+                      className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 hover:bg-teal-400/40 text-teal-100 font-black border border-teal-300/40 transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                      title="Pilih Kelas atau Mode Scan Pintar"
+                    >
+                      <span>
+                        {isAllClassesMode
+                          ? "🌟 Semua Kelas (Pintar)"
+                          : `🏫 ${activeClass?.namaKelas || petugasInfo?.namaKelas || "Rombel"}`}
+                      </span>
+                      <span className="text-[8px] opacity-75">▾</span>
+                    </button>
 
-                {/* OVERLAY PANDUAN PENGAMBILAN WAJAH */}
-                {cameraActive && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* TOP HUD: PANDUAN SISWA & STEPPER TANTANGAN (BEBAS TUMPANG TINDIH) */}
-                    <div className="absolute top-2.5 inset-x-2 flex flex-col items-center gap-1 z-20 pointer-events-none">
-                      {/* Kartu Status Panduan Utama */}
-                      <div
-                        className={`max-w-[92%] text-center px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-black shadow-xl backdrop-blur-md transition-all border ${
-                          scanZoneState === "multiple"
-                            ? "bg-rose-950/95 text-rose-200 border-rose-500 shadow-rose-500/30"
-                            : scanZoneState === "adjust" ||
-                                scanZoneState === "moving"
-                              ? "bg-amber-950/95 text-amber-200 border-amber-400 shadow-amber-400/30"
-                              : scanZoneState === "verifying" ||
-                                  scanZoneState === "success"
-                                ? "bg-emerald-950/95 text-emerald-200 border-emerald-400 shadow-emerald-400/30"
-                                : "bg-slate-950/85 text-teal-200 border-teal-400/40"
-                        }`}
-                      >
-                        {liveFaceStatus}
-                      </div>
+                    {showClassDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setShowClassDropdown(false)}
+                        />
+                        <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-h-80 overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-xl shadow-2xl p-1.5 z-40 text-white text-xs divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="p-1">
+                            <p className="text-[10px] font-bold text-teal-300 uppercase tracking-wider px-2 py-1">
+                              Mode Pemindaian
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWaliId("ALL_CLASSES");
+                                setShowClassDropdown(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-2 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                                isAllClassesMode
+                                  ? "bg-teal-600 text-white"
+                                  : "hover:bg-slate-800 text-teal-100"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🌟</span>
+                                <div>
+                                  <p className="text-xs font-black">
+                                    Semua Kelas (Scan Pintar)
+                                  </p>
+                                  <p className="text-[9.5px] font-normal text-teal-200">
+                                    Pindai otomatis wajah siswa dari kelas mana
+                                    pun
+                                  </p>
+                                </div>
+                              </div>
+                              {isAllClassesMode && <span>✓</span>}
+                            </button>
+                          </div>
 
-                      {/* Stepper Tantangan Toleh (3 Kapsul Mini Kompak) */}
-                      {challengeStep >= 0 && (
-                        <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
-                          {[
-                            { num: "1", label: "Hadap" },
-                            { num: "2", label: "Toleh" },
-                            { num: "3", label: "Lurus" },
-                          ].map((stepItem, i) => {
-                            const done = i < challengeStep;
-                            const active = i === challengeStep;
-                            return (
-                              <span
-                                key={stepItem.label}
-                                className={`px-2 py-0.5 rounded-full text-[9.5px] font-black border backdrop-blur-md transition-all ${
-                                  done
-                                    ? "bg-emerald-500 text-black border-emerald-300 shadow-xs"
-                                    : active
-                                      ? "bg-amber-400 text-black border-amber-200 animate-pulse shadow-xs ring-1 ring-amber-300"
-                                      : "bg-black/60 text-slate-300 border-white/20"
-                                }`}
-                              >
-                                {done ? "✓" : stepItem.num} {stepItem.label}
-                              </span>
-                            );
-                          })}
+                          <div className="p-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                              Pilih Per Kelas
+                            </p>
+                            {/* Kelas Asal Petugas */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWaliId(petugasInfo?.idWali);
+                                setShowClassDropdown(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                                !isAllClassesMode &&
+                                String(selectedWaliId) ===
+                                  String(petugasInfo?.idWali)
+                                  ? "bg-emerald-600 text-white"
+                                  : "hover:bg-slate-800 text-slate-200"
+                              }`}
+                            >
+                              <div className="truncate">
+                                <span className="mr-1.5">📌</span>
+                                <span>
+                                  {petugasInfo?.namaKelas || "Kelas Petugas"}
+                                </span>
+                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                                  Kelas Anda
+                                </span>
+                              </div>
+                              {!isAllClassesMode &&
+                                String(selectedWaliId) ===
+                                  String(petugasInfo?.idWali) && <span>✓</span>}
+                            </button>
+
+                            {/* Kelas Lainnya */}
+                            {availableClasses
+                              .filter(
+                                (c) =>
+                                  String(c.idWali) !==
+                                  String(petugasInfo?.idWali),
+                              )
+                              .map((c) => {
+                                const isSelected =
+                                  !isAllClassesMode &&
+                                  String(selectedWaliId) === String(c.idWali);
+                                return (
+                                  <button
+                                    key={c.idWali}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedWaliId(c.idWali);
+                                      setShowClassDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer mt-0.5 ${
+                                      isSelected
+                                        ? "bg-teal-600 text-white font-bold"
+                                        : "hover:bg-slate-800 text-slate-300"
+                                    }`}
+                                  >
+                                    <div className="truncate">
+                                      <span className="mr-1.5">🏫</span>
+                                      <span>{c.namaKelas}</span>
+                                      {c.namaGuru && (
+                                        <span className="text-[10px] text-slate-400 block truncate ml-5">
+                                          {c.namaGuru}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isSelected && (
+                                      <span className="font-bold">✓</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                          </div>
                         </div>
-                      )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[9px] text-teal-200 truncate mt-0.5">
+                  {templateInfo.ready}/{registeredFaceCount} siap •{" "}
+                  {stats.hadir}/{stats.total} hadir
+                </p>
+              </div>
+            </div>
 
-                      {/* Baris Kalibrasi / Debug (Hanya saat diaktifkan) */}
-                      {showDebug && debugLine && (
-                        <div className="max-w-[94%] text-center px-2 py-0.5 rounded-md bg-black/85 text-yellow-300 text-[9px] font-mono border border-yellow-400/40 shadow-md backdrop-blur-sm truncate">
-                          🔍 {debugLine}
-                        </div>
-                      )}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => {
+                  loadStudentFaceProfilesParallel(siswaList, true);
+                }}
+                disabled={syncingFaces}
+                className="px-2 py-1 rounded-lg bg-teal-500/25 hover:bg-teal-500/40 border border-teal-300/40 text-teal-100 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+                title="Sinkronkan foto wajah terbaru"
+              >
+                <span className={syncingFaces ? "animate-spin" : ""}>🔄</span>
+                <span className="hidden sm:inline">
+                  {syncingFaces ? "Sinkron..." : "Sinkron"}
+                </span>
+              </button>
+              <button
+                onClick={toggleCameraFacing}
+                className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                title="Ganti Kamera Depan / Belakang"
+              >
+                <span>📷</span>
+                <span>{cameraFacing === "environment" ? "Blkg" : "Dpn"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleFastVerify}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  isFastVerify
+                    ? "bg-violet-500 text-white shadow-md"
+                    : "bg-white/10 hover:bg-white/20 text-white"
+                }`}
+                title="Verifikasi Cepat (tanpa toleh, kode 1230)"
+              >
+                <span>⚡</span>
+                <span>{isFastVerify ? "Cepat ON" : "Cepat"}</span>
+              </button>
+              <button
+                onClick={() => {
+                  stopCamera();
+                  onClose();
+                }}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
+                aria-label="Tutup"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* TAB NAVIGASI & SWITCH KE BARCODE / REGULER */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 sm:px-4 py-1.5 shrink-0">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab("kamera")}
+                className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  activeTab === "kamera"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                }`}
+              >
+                <span>🧏</span>
+                <span>Kamera</span>
+                <span
+                  className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                    activeTab === "kamera"
+                      ? "bg-white/25 text-white"
+                      : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {stats.hadir}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("daftar")}
+                className={`px-2.5 py-1 text-[11px] sm:text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  activeTab === "daftar"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                }`}
+              >
+                <span>📋</span>
+                <span>Daftar</span>
+                {stats.belumScan > 0 && (
+                  <span
+                    className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                      activeTab === "daftar"
+                        ? "bg-white/25 text-white"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {stats.belumScan}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 ml-auto">
+              {typeof onOpenBarcode === "function" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCamera();
+                    onOpenBarcode();
+                  }}
+                  className="px-2 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold text-[10px] sm:text-[11px] border border-teal-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                  title="Beralih ke Scan Barcode"
+                >
+                  <span>📷</span>
+                  <span>Barcode</span>
+                </button>
+              )}
+              {typeof onOpenReguler === "function" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCamera();
+                    onOpenReguler();
+                  }}
+                  className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[10px] sm:text-[11px] border border-amber-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                  title="Beralih ke Presensi Reguler"
+                >
+                  <span>📋</span>
+                  <span>Reguler</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* BODY AREA */}
+          <div className="p-2 sm:p-3.5 overflow-y-auto space-y-2 flex-1 bg-slate-50/50">
+            {/* STATISTIK RINGKAS */}
+            <div className="grid grid-cols-4 gap-1.5 text-center">
+              <div className="py-1 px-1 rounded-lg bg-slate-100 border border-slate-200">
+                <div className="text-[8.5px] text-slate-500 font-bold uppercase">
+                  Total
+                </div>
+                <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
+                  {stats.total}
+                </div>
+              </div>
+              <div className="py-1 px-1 rounded-lg bg-emerald-50 border border-emerald-200">
+                <div className="text-[8.5px] text-emerald-700 font-bold uppercase">
+                  Hadir
+                </div>
+                <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">
+                  {stats.hadir}
+                </div>
+              </div>
+              <div className="py-1 px-1 rounded-lg bg-amber-50 border border-amber-200">
+                <div className="text-[8.5px] text-amber-700 font-bold uppercase">
+                  Sakit/Izin
+                </div>
+                <div className="text-xs sm:text-sm font-black text-amber-700 mt-0.5">
+                  {stats.sakit + stats.izin}
+                </div>
+              </div>
+              <div className="py-1 px-1 rounded-lg bg-rose-50 border border-rose-200">
+                <div className="text-[8.5px] text-rose-700 font-bold uppercase">
+                  Belum
+                </div>
+                <div className="text-xs sm:text-sm font-black text-rose-700 mt-0.5">
+                  {stats.belumScan + stats.alfa + stats.cabut}
+                </div>
+              </div>
+            </div>
+
+            {/* TAB 1: KAMERA SCAN WAJAH — DITUTUP (DI LUAR JAM OPERASIONAL) */}
+            {activeTab === "kamera" && isLockedByTime && (
+              <div className="relative rounded-2xl overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-slate-700 w-full h-[58vh] sm:h-[430px] min-h-[350px] max-h-[520px] flex flex-col items-center justify-center p-6 shadow-lg text-white text-center space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-3xl shadow-inner animate-pulse">
+                  🔒
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-wide">
+                    Presensi Wajah Ditutup
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                    Presensi Scan Wajah dibuka pukul{" "}
+                    <strong className="text-teal-300">06.30 – 08.00 WIB</strong>
+                    .
+                  </p>
+                </div>
+
+                <div className="w-full max-w-xs pt-1 space-y-2">
+                  <div className="text-[11px] text-slate-400 font-medium text-left"></div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      value={unlockCodeInput}
+                      onChange={(e) => {
+                        setUnlockCodeInput(e.target.value);
+                        if (unlockError) setUnlockError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUnlockWajahWithCode();
+                      }}
+                      placeholder="Masukkan kode ..."
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-xs font-mono text-center tracking-widest focus:outline-hidden focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUnlockWajahWithCode}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-black transition-all cursor-pointer shadow-md shrink-0 flex items-center gap-1"
+                    >
+                      <span>🔓</span>
+                      <span>Buka</span>
+                    </button>
+                  </div>
+                  {unlockError && (
+                    <div className="text-[11px] text-rose-400 font-semibold animate-in fade-in">
+                      ⚠️ {unlockError}
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                    {/* ZONA PEMINDAIAN WAJAH (RETICLE ERGONOMIS PONSEL — BERSIH TANPA TEKS PENUTUP MATA) */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
-                      <div
-                        className={`relative w-[205px] h-[255px] sm:w-[245px] sm:h-[305px] rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between p-2.5 ${
-                          scanZoneState === "multiple"
-                            ? "border-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.6)] bg-rose-950/20"
-                            : scanZoneState === "adjust" ||
-                                scanZoneState === "moving"
-                              ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)] bg-amber-950/15"
-                              : scanZoneState === "verifying" ||
-                                  scanZoneState === "success"
-                                ? "border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7)] bg-emerald-950/20"
-                                : "border-teal-400/40 shadow-[0_0_15px_rgba(45,212,191,0.2)] bg-black/10"
-                        }`}
-                      >
-                        {/* Sudut Fokus (Corner Brackets Minimalis) */}
-                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 rounded-tl-xl border-current opacity-90" />
-                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 rounded-tr-xl border-current opacity-90" />
-                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 rounded-bl-xl border-current opacity-90" />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 rounded-br-xl border-current opacity-90" />
+            {activeTab === "kamera" && !isLockedByTime && (
+              <div className="space-y-1.5 relative">
+                {/* STATUS KRITIS MODEL AI / FOTO GAGAL */}
+                {engineStatus === "fallback" && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center justify-between gap-1.5 shadow-xs">
+                    <span className="truncate font-semibold">
+                      ⚠️ Model AI gagal dimuat. Periksa koneksi internet.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetFaceApiPromise();
+                        setEngine("loading");
+                        setEngineNonce((n) => n + 1);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-all shadow-xs"
+                    >
+                      🔄 Ulangi
+                    </button>
+                  </div>
+                )}
+                {engineStatus === "loading" && (
+                  <div className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] flex items-center gap-1.5 shadow-xs animate-pulse">
+                    <span className="animate-spin text-xs">⏳</span>
+                    <span className="font-semibold">
+                      Sedang memuat model kecerdasan buatan (AI)...
+                    </span>
+                  </div>
+                )}
+                {templateInfo.failed.length > 0 && (
+                  <div className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] flex items-center justify-between gap-1.5">
+                    <span className="truncate">
+                      ⚠️ {templateInfo.failed.length} foto siswa perlu
+                      didaftarkan ulang (harus lurus & jelas).
+                    </span>
+                  </div>
+                )}
+                {/* BANNER VERIFIKASI CEPAT */}
+                {isFastVerify && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-violet-50 border border-violet-300 text-violet-800 text-[11px] flex items-center justify-between gap-1.5 shadow-xs">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span>⚡</span>
+                      <span className="font-bold">
+                        Mode Verifikasi Cepat aktif
+                      </span>
+                      <span className="text-violet-600 truncate">
+                        – Tahap toleh dilewati
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFastVerify(false)}
+                      className="px-2 py-0.5 rounded-lg bg-violet-200 hover:bg-violet-300 text-violet-900 font-bold text-[10px] shrink-0 cursor-pointer transition-all shadow-xs"
+                    >
+                      Matikan
+                    </button>
+                  </div>
+                )}
 
-                        {/* Indikator Ping di Sudut Kanan Atas */}
-                        <div className="w-full flex justify-end">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              scanZoneState === "multiple"
-                                ? "bg-rose-500 animate-ping"
+                {/* CONTAINER KAMERA PEMINDAI (MOBILE-OPTIMIZED VIEWPORT) */}
+                <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black border-2 border-slate-700 w-full h-[58vh] sm:h-[430px] min-h-[350px] max-h-[520px] flex items-center justify-center shadow-lg">
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    className={`w-full h-full object-cover ${cameraFacing === "user" ? "-scale-x-100" : ""}`}
+                  />
+
+                  {/* OVERLAY PANDUAN PENGAMBILAN WAJAH */}
+                  {cameraActive && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* TOP HUD: PANDUAN SISWA & STEPPER TANTANGAN (BEBAS TUMPANG TINDIH) */}
+                      <div className="absolute top-2.5 inset-x-2 flex flex-col items-center gap-1 z-20 pointer-events-none">
+                        {/* Kartu Status Panduan Utama */}
+                        <div
+                          className={`max-w-[92%] text-center px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-black shadow-xl backdrop-blur-md transition-all border ${
+                            scanZoneState === "multiple"
+                              ? "bg-rose-950/95 text-rose-200 border-rose-500 shadow-rose-500/30"
+                              : scanZoneState === "adjust" ||
+                                  scanZoneState === "moving"
+                                ? "bg-amber-950/95 text-amber-200 border-amber-400 shadow-amber-400/30"
                                 : scanZoneState === "verifying" ||
                                     scanZoneState === "success"
-                                  ? "bg-emerald-400 animate-ping"
-                                  : "bg-teal-400/50"
-                            }`}
-                          />
+                                  ? "bg-emerald-950/95 text-emerald-200 border-emerald-400 shadow-emerald-400/30"
+                                  : "bg-slate-950/85 text-teal-200 border-teal-400/40"
+                          }`}
+                        >
+                          {liveFaceStatus}
                         </div>
 
-                        {/* Garis Pemindai Halus Animasi */}
-                        {(scanZoneState === "verifying" ||
-                          scanZoneState === "standby") && (
-                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent opacity-65 animate-pulse my-auto" />
+                        {/* Stepper Tantangan Toleh / Verifikasi Cepat */}
+                        {challengeStep >= 0 && (
+                          <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                            {isFastVerify ? (
+                              // Mode Verifikasi Cepat: Hanya Tahap 1 (Hadap) dan 3 (Lurus)
+                              <>
+                                {[
+                                  { num: "1", label: "Hadap" },
+                                  { num: "3", label: "Lurus" },
+                                ].map((stepItem, i) => {
+                                  // challengeStep 0=Hadap, 2=Lurus
+                                  const done =
+                                    (i === 0 && challengeStep > 0) ||
+                                    (i === 1 && challengeStep >= 2);
+                                  const active =
+                                    (i === 0 && challengeStep === 0) ||
+                                    (i === 1 && challengeStep === 2);
+                                  return (
+                                    <span
+                                      key={stepItem.label}
+                                      className={`px-2 py-0.5 rounded-full text-[9.5px] font-black border backdrop-blur-md transition-all ${
+                                        done
+                                          ? "bg-emerald-500 text-black border-emerald-300 shadow-xs"
+                                          : active
+                                            ? "bg-violet-400 text-black border-violet-200 animate-pulse shadow-xs ring-1 ring-violet-300"
+                                            : "bg-black/60 text-slate-300 border-white/20"
+                                      }`}
+                                    >
+                                      {done ? "✓" : stepItem.num}{" "}
+                                      {stepItem.label}
+                                    </span>
+                                  );
+                                })}
+                                <span className="text-[9px] text-violet-200 font-bold bg-violet-900/60 border border-violet-500/30 px-1.5 py-0.5 rounded-full">
+                                  ⚡ Cepat
+                                </span>
+                              </>
+                            ) : (
+                              // Mode Normal: 3 tahap
+                              [
+                                { num: "1", label: "Hadap" },
+                                { num: "2", label: "Toleh" },
+                                { num: "3", label: "Lurus" },
+                              ].map((stepItem, i) => {
+                                const done = i < challengeStep;
+                                const active = i === challengeStep;
+                                return (
+                                  <span
+                                    key={stepItem.label}
+                                    className={`px-2 py-0.5 rounded-full text-[9.5px] font-black border backdrop-blur-md transition-all ${
+                                      done
+                                        ? "bg-emerald-500 text-black border-emerald-300 shadow-xs"
+                                        : active
+                                          ? "bg-amber-400 text-black border-amber-200 animate-pulse shadow-xs ring-1 ring-amber-300"
+                                          : "bg-black/60 text-slate-300 border-white/20"
+                                    }`}
+                                  >
+                                    {done ? "✓" : stepItem.num} {stepItem.label}
+                                  </span>
+                                );
+                              })
+                            )}
+                          </div>
                         )}
 
-                        {/* Titik Pusat Fokus */}
-                        <div className="flex justify-center items-center w-full">
-                          <div className="w-2 h-2 rounded-full border border-teal-300/40 opacity-60" />
+                        {/* Baris Kalibrasi / Debug (Hanya saat diaktifkan) */}
+                        {showDebug && debugLine && (
+                          <div className="max-w-[94%] text-center px-2 py-0.5 rounded-md bg-black/85 text-yellow-300 text-[9px] font-mono border border-yellow-400/40 shadow-md backdrop-blur-sm truncate">
+                            🔍 {debugLine}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ZONA PEMINDAIAN WAJAH (RETICLE ERGONOMIS PONSEL — BERSIH TANPA TEKS PENUTUP MATA) */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
+                        <div
+                          className={`relative w-[205px] h-[255px] sm:w-[245px] sm:h-[305px] rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between p-2.5 ${
+                            scanZoneState === "multiple"
+                              ? "border-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.6)] bg-rose-950/20"
+                              : scanZoneState === "adjust" ||
+                                  scanZoneState === "moving"
+                                ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)] bg-amber-950/15"
+                                : scanZoneState === "verifying" ||
+                                    scanZoneState === "success"
+                                  ? "border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7)] bg-emerald-950/20"
+                                  : "border-teal-400/40 shadow-[0_0_15px_rgba(45,212,191,0.2)] bg-black/10"
+                          }`}
+                        >
+                          {/* Sudut Fokus (Corner Brackets Minimalis) */}
+                          <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 rounded-tl-xl border-current opacity-90" />
+                          <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 rounded-tr-xl border-current opacity-90" />
+                          <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 rounded-bl-xl border-current opacity-90" />
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 rounded-br-xl border-current opacity-90" />
+
+                          {/* Indikator Ping di Sudut Kanan Atas */}
+                          <div className="w-full flex justify-end">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                scanZoneState === "multiple"
+                                  ? "bg-rose-500 animate-ping"
+                                  : scanZoneState === "verifying" ||
+                                      scanZoneState === "success"
+                                    ? "bg-emerald-400 animate-ping"
+                                    : "bg-teal-400/50"
+                              }`}
+                            />
+                          </div>
+
+                          {/* Garis Pemindai Halus Animasi */}
+                          {(scanZoneState === "verifying" ||
+                            scanZoneState === "standby") && (
+                            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent opacity-65 animate-pulse my-auto" />
+                          )}
+
+                          {/* Titik Pusat Fokus */}
+                          <div className="flex justify-center items-center w-full">
+                            <div className="w-2 h-2 rounded-full border border-teal-300/40 opacity-60" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LIVE FACE TRACKING BOX */}
+                      {liveFaceBox && (
+                        <div
+                          className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)] transition-all duration-75 flex flex-col justify-between p-1 pointer-events-none"
+                          style={{
+                            left: `${liveFaceBox.leftPct}%`,
+                            top: `${liveFaceBox.topPct}%`,
+                            width: `${liveFaceBox.widthPct}%`,
+                            height: `${liveFaceBox.heightPct}%`,
+                          }}
+                        >
+                          <span className="text-[8px] font-mono font-bold bg-emerald-950/85 text-emerald-200 px-1 py-0.2 rounded w-fit">
+                            SISWA
+                          </span>
+                          <div className="w-full flex justify-end">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* BOTTOM HUD: STATUS AMAN TANPA MENABRAK RETICLE */}
+                      <div className="absolute bottom-2.5 inset-x-0 flex justify-center pointer-events-none z-10">
+                        <div className="px-3 py-0.5 rounded-full bg-black/75 text-emerald-300 text-[9px] font-mono font-bold border border-emerald-500/25 backdrop-blur-xs shadow-xs">
+                          Deteksi Wajah Aktif • Cooldown 3s
                         </div>
                       </div>
                     </div>
+                  )}
 
-                    {/* LIVE FACE TRACKING BOX */}
-                    {liveFaceBox && (
-                      <div
-                        className="absolute rounded-xl border-2 border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)] transition-all duration-75 flex flex-col justify-between p-1 pointer-events-none"
-                        style={{
-                          left: `${liveFaceBox.leftPct}%`,
-                          top: `${liveFaceBox.topPct}%`,
-                          width: `${liveFaceBox.widthPct}%`,
-                          height: `${liveFaceBox.heightPct}%`,
-                        }}
-                      >
-                        <span className="text-[8px] font-mono font-bold bg-emerald-950/85 text-emerald-200 px-1 py-0.2 rounded w-fit">
-                          SISWA
-                        </span>
-                        <div className="w-full flex justify-end">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  {/* MODAL NOTIFIKASI LOADING BAR BERTINGKAT DI TENGAH LAYAR (SINKRON HARIAN PERTAMA KALI) */}
+                  {syncModalProgress && syncModalProgress.show && (
+                    <div className="absolute inset-0 z-30 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                      <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl border border-slate-100 flex flex-col items-center text-center space-y-3.5">
+                        {/* Ikon Tahap */}
+                        <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-3xl shadow-inner">
+                          {syncModalProgress.pct === 100
+                            ? "✅"
+                            : syncModalProgress.stage === 1
+                              ? "📥"
+                              : syncModalProgress.stage === 2
+                                ? "🧠"
+                                : "⚡"}
                         </div>
-                      </div>
-                    )}
 
-                    {/* BOTTOM HUD: STATUS AMAN TANPA MENABRAK RETICLE */}
-                    <div className="absolute bottom-2.5 inset-x-0 flex justify-center pointer-events-none z-10">
-                      <div className="px-3 py-0.5 rounded-full bg-black/75 text-emerald-300 text-[9px] font-mono font-bold border border-emerald-500/25 backdrop-blur-xs shadow-xs">
-                        Deteksi Wajah Aktif • Cooldown 3s
+                        {/* Judul & Keterangan */}
+                        <div className="space-y-1 w-full">
+                          <div className="flex items-center justify-between text-[10px] font-black text-teal-700 uppercase tracking-wider">
+                            <span>
+                              Tahap {syncModalProgress.stage} dari{" "}
+                              {syncModalProgress.totalStages}
+                            </span>
+                            <span className="font-mono text-xs font-bold text-teal-800">
+                              {syncModalProgress.pct}%
+                            </span>
+                          </div>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                            {syncModalProgress.title}
+                          </h4>
+                          <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                            {syncModalProgress.desc}
+                          </p>
+                        </div>
+
+                        {/* Loading Bar Bertingkat */}
+                        <div className="w-full space-y-1.5">
+                          <div className="w-full h-3 rounded-full bg-slate-100 p-0.5 border border-slate-200 overflow-hidden shadow-inner">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                syncModalProgress.pct === 100
+                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                                  : "bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 animate-pulse"
+                              }`}
+                              style={{ width: `${syncModalProgress.pct}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                            <span className="truncate mr-2">
+                              {syncModalProgress.detail ||
+                                "Sedang memproses..."}
+                            </span>
+                            <span className="font-bold shrink-0">
+                              {syncModalProgress.pct}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Indikator Tahap (Step Dots) */}
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          {[1, 2, 3].map((stg) => (
+                            <div
+                              key={stg}
+                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                                stg < syncModalProgress.stage ||
+                                syncModalProgress.pct === 100
+                                  ? "w-6 bg-emerald-500"
+                                  : stg === syncModalProgress.stage
+                                    ? "w-8 bg-teal-600 animate-pulse"
+                                    : "w-3 bg-slate-200"
+                              }`}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* MODAL NOTIFIKASI LOADING BAR BERTINGKAT DI TENGAH LAYAR (SINKRON HARIAN PERTAMA KALI) */}
-                {syncModalProgress && syncModalProgress.show && (
-                  <div className="absolute inset-0 z-30 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl border border-slate-100 flex flex-col items-center text-center space-y-3.5">
-                      {/* Ikon Tahap */}
-                      <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-3xl shadow-inner">
-                        {syncModalProgress.pct === 100
-                          ? "✅"
-                          : syncModalProgress.stage === 1
-                            ? "📥"
-                            : syncModalProgress.stage === 2
-                              ? "🧠"
-                              : "⚡"}
-                      </div>
-
-                      {/* Judul & Keterangan */}
-                      <div className="space-y-1 w-full">
-                        <div className="flex items-center justify-between text-[10px] font-black text-teal-700 uppercase tracking-wider">
-                          <span>
-                            Tahap {syncModalProgress.stage} dari{" "}
-                            {syncModalProgress.totalStages}
-                          </span>
-                          <span className="font-mono text-xs font-bold text-teal-800">
-                            {syncModalProgress.pct}%
-                          </span>
-                        </div>
-                        <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
-                          {syncModalProgress.title}
-                        </h4>
-                        <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-                          {syncModalProgress.desc}
-                        </p>
-                      </div>
-
-                      {/* Loading Bar Bertingkat */}
-                      <div className="w-full space-y-1.5">
-                        <div className="w-full h-3 rounded-full bg-slate-100 p-0.5 border border-slate-200 overflow-hidden shadow-inner">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              syncModalProgress.pct === 100
-                                ? "bg-gradient-to-r from-emerald-500 to-teal-500"
-                                : "bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 animate-pulse"
-                            }`}
-                            style={{ width: `${syncModalProgress.pct}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                          <span className="truncate mr-2">
-                            {syncModalProgress.detail || "Sedang memproses..."}
-                          </span>
-                          <span className="font-bold shrink-0">
-                            {syncModalProgress.pct}%
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Indikator Tahap (Step Dots) */}
-                      <div className="flex items-center gap-1.5 pt-0.5">
-                        {[1, 2, 3].map((stg) => (
-                          <div
-                            key={stg}
-                            className={`h-1.5 rounded-full transition-all duration-300 ${
-                              stg < syncModalProgress.stage ||
-                              syncModalProgress.pct === 100
-                                ? "w-6 bg-emerald-500"
-                                : stg === syncModalProgress.stage
-                                  ? "w-8 bg-teal-600 animate-pulse"
-                                  : "w-3 bg-slate-200"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* OVERLAY NOTIFIKASI BESAR DI TENGAH LAYAR */}
-                {scanOverlay && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center z-20 px-4 cursor-pointer"
-                    style={{ animation: "fadeInScale 0.18s ease-out" }}
-                    onClick={() => setScanOverlay(null)}
-                  >
-                    <style
-                      dangerouslySetInnerHTML={{
-                        __html: `
+                  {/* OVERLAY NOTIFIKASI BESAR DI TENGAH LAYAR */}
+                  {scanOverlay && (
+                    <div
+                      className="absolute inset-0 flex items-center justify-center z-20 px-4 cursor-pointer"
+                      style={{ animation: "fadeInScale 0.18s ease-out" }}
+                      onClick={() => setScanOverlay(null)}
+                    >
+                      <style
+                        dangerouslySetInnerHTML={{
+                          __html: `
                       @keyframes fadeInScale {
                         from { opacity: 0; transform: scale(0.82); }
                         to   { opacity: 1; transform: scale(1); }
@@ -3247,313 +3441,374 @@ export default function ModalScanWajahPetugas({
                         50%       { box-shadow: 0 0 0 16px rgba(16,185,129,0); }
                       }
                     `,
-                      }}
-                    />
-                    <div
-                      className={`w-full max-w-xs rounded-2xl px-5 py-5 flex flex-col items-center gap-2 text-center shadow-2xl border-2 backdrop-blur-md ${
-                        scanOverlay.type === "success"
-                          ? "bg-emerald-950/92 border-emerald-400 text-white"
-                          : scanOverlay.type === "duplicate"
-                            ? "bg-blue-950/92 border-blue-400 text-white"
-                            : "bg-rose-950/92 border-rose-400 text-white"
-                      }`}
-                      style={
-                        scanOverlay.type === "success"
-                          ? { animation: "overlayPulse 0.8s ease-out 1" }
-                          : {}
-                      }
-                    >
+                        }}
+                      />
                       <div
-                        className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 ${
+                        className={`w-full max-w-xs rounded-2xl px-5 py-5 flex flex-col items-center gap-2 text-center shadow-2xl border-2 backdrop-blur-md ${
                           scanOverlay.type === "success"
-                            ? "bg-emerald-500 border-emerald-300"
+                            ? "bg-emerald-950/92 border-emerald-400 text-white"
                             : scanOverlay.type === "duplicate"
-                              ? "bg-blue-500 border-blue-300"
-                              : "bg-rose-500 border-rose-300"
+                              ? "bg-blue-950/92 border-blue-400 text-white"
+                              : "bg-rose-950/92 border-rose-400 text-white"
                         }`}
-                      >
-                        {scanOverlay.type === "success"
-                          ? "✅"
-                          : scanOverlay.type === "duplicate"
-                            ? "ℹ️"
-                            : "⚠️"}
-                      </div>
-
-                      <div
-                        className={`text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full ${
+                        style={
                           scanOverlay.type === "success"
-                            ? "bg-emerald-500/40 text-emerald-200"
-                            : scanOverlay.type === "duplicate"
-                              ? "bg-blue-500/40 text-blue-200"
-                              : "bg-rose-500/40 text-rose-200"
-                        }`}
+                            ? { animation: "overlayPulse 0.8s ease-out 1" }
+                            : {}
+                        }
                       >
-                        {scanOverlay.type === "success"
-                          ? "Hadir Terverifikasi"
-                          : scanOverlay.type === "duplicate"
-                            ? "Sudah Hadir"
-                            : "Tidak Dikenal"}
-                      </div>
-
-                      {scanOverlay.nama && (
-                        <div className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-white drop-shadow-md">
-                          {scanOverlay.nama}
+                        <div
+                          className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 ${
+                            scanOverlay.type === "success"
+                              ? "bg-emerald-500 border-emerald-300"
+                              : scanOverlay.type === "duplicate"
+                                ? "bg-blue-500 border-blue-300"
+                                : "bg-rose-500 border-rose-300"
+                          }`}
+                        >
+                          {scanOverlay.type === "success"
+                            ? "✅"
+                            : scanOverlay.type === "duplicate"
+                              ? "ℹ️"
+                              : "⚠️"}
                         </div>
-                      )}
 
-                      <div
-                        className={`text-sm font-bold leading-snug ${
-                          scanOverlay.type === "success"
-                            ? "text-emerald-200"
+                        <div
+                          className={`text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full ${
+                            scanOverlay.type === "success"
+                              ? "bg-emerald-500/40 text-emerald-200"
+                              : scanOverlay.type === "duplicate"
+                                ? "bg-blue-500/40 text-blue-200"
+                                : "bg-rose-500/40 text-rose-200"
+                          }`}
+                        >
+                          {scanOverlay.type === "success"
+                            ? "Hadir Terverifikasi"
                             : scanOverlay.type === "duplicate"
-                              ? "text-blue-200"
-                              : "text-rose-200"
-                        }`}
-                      >
-                        {scanOverlay.pesan}
-                      </div>
-
-                      {scanOverlay.type === "success" && (
-                        <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-300 tracking-wide drop-shadow-lg">
-                          {scanOverlay.waktu} WIB
+                              ? "Sudah Hadir"
+                              : "Tidak Dikenal"}
                         </div>
-                      )}
+
+                        {scanOverlay.nama && (
+                          <div className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-white drop-shadow-md">
+                            {scanOverlay.nama}
+                          </div>
+                        )}
+
+                        <div
+                          className={`text-sm font-bold leading-snug ${
+                            scanOverlay.type === "success"
+                              ? "text-emerald-200"
+                              : scanOverlay.type === "duplicate"
+                                ? "text-blue-200"
+                                : "text-rose-200"
+                          }`}
+                        >
+                          {scanOverlay.pesan}
+                        </div>
+
+                        {scanOverlay.type === "success" && (
+                          <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-300 tracking-wide drop-shadow-lg">
+                            {scanOverlay.waktu} WIB
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Kamera */}
+                  {cameraError && (
+                    <div className="absolute inset-0 p-4 bg-slate-900/90 text-white flex flex-col items-center justify-center text-center space-y-2">
+                      <span className="text-3xl">📷</span>
+                      <p className="text-xs text-rose-300 max-w-sm">
+                        {cameraError}
+                      </p>
+                      <button
+                        onClick={startCamera}
+                        className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Coba Buka Kamera Lagi
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showDebug}
+                    onChange={(e) => setShowDebug(e.target.checked)}
+                    className="rounded w-3.5 h-3.5"
+                  />
+                  <span>
+                    Tampilkan jarak kemiripan (untuk uji coba / kalibrasi)
+                  </span>
+                </label>
+
+                {/* LIST SISWA TERAKHIR DISCAN */}
+                {siswaSudahDiscan.length > 0 && (
+                  <div className="space-y-1 pt-0.5">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                      <span>Terakhir Hadir:</span>
+                      <span className="text-emerald-700 font-black">
+                        {siswaSudahDiscan.length} Siswa Terdata
+                      </span>
+                    </div>
+                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                      {siswaSudahDiscan
+                        .slice(-4)
+                        .reverse()
+                        .map((s) => (
+                          <div
+                            key={s.idSiswa}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950"
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="text-emerald-600 font-bold">
+                                ✓
+                              </span>
+                              <span className="font-bold truncate">
+                                {s.nama}
+                              </span>
+                            </div>
+                            <span className="text-[9.5px] font-mono text-emerald-800 shrink-0 ml-1">
+                              {scannedMap[s.idSiswa]?.waktuScan} WIB
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}
-
-                {/* Error Kamera */}
-                {cameraError && (
-                  <div className="absolute inset-0 p-4 bg-slate-900/90 text-white flex flex-col items-center justify-center text-center space-y-2">
-                    <span className="text-3xl">📷</span>
-                    <p className="text-xs text-rose-300 max-w-sm">
-                      {cameraError}
-                    </p>
-                    <button
-                      onClick={startCamera}
-                      className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer"
-                    >
-                      Coba Buka Kamera Lagi
-                    </button>
-                  </div>
-                )}
               </div>
+            )}
 
-              <label className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showDebug}
-                  onChange={(e) => setShowDebug(e.target.checked)}
-                  className="rounded w-3.5 h-3.5"
-                />
-                <span>
-                  Tampilkan jarak kemiripan (untuk uji coba / kalibrasi)
-                </span>
-              </label>
-
-              {/* LIST SISWA TERAKHIR DISCAN */}
-              {siswaSudahDiscan.length > 0 && (
-                <div className="space-y-1 pt-0.5">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                    <span>Terakhir Hadir:</span>
-                    <span className="text-emerald-700 font-black">
-                      {siswaSudahDiscan.length} Siswa Terdata
+            {/* TAB 2: DAFTAR SISWA & STATUS MANUAL */}
+            {activeTab === "daftar" && (
+              <div className="space-y-4">
+                {/* Siswa Belum Discan */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <span>Siswa Belum Hadir ({siswaBelumDiscan.length})</span>
+                    </h4>
+                    <span className="text-[10px] text-slate-500">
+                      Tandai Sakit / Izin
                     </span>
                   </div>
-                  <div className="space-y-1 max-h-24 overflow-y-auto">
-                    {siswaSudahDiscan
-                      .slice(-4)
-                      .reverse()
-                      .map((s) => (
+
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {siswaBelumDiscan.map((s) => {
+                      const curStatus = manualStatusMap[s.idSiswa] || "Alfa";
+                      return (
                         <div
                           key={s.idSiswa}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950"
+                          className="p-2.5 rounded-xl border border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                         >
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-emerald-600 font-bold">
-                              ✓
-                            </span>
-                            <span className="font-bold truncate">{s.nama}</span>
+                          <div>
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                              <span>{s.nama}</span>
+                              {s.kelas && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-normal">
+                                  {s.kelas}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500">
+                              ID: {s.idSiswa}
+                            </div>
                           </div>
-                          <span className="text-[9.5px] font-mono text-emerald-800 shrink-0 ml-1">
-                            {scannedMap[s.idSiswa]?.waktuScan} WIB
-                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {["Sakit", "Izin", "Alfa", "Cabut"].map((st) => (
+                              <button
+                                key={st}
+                                disabled={isLockedByTime}
+                                onClick={() => handleUpdateManualStatus(s, st)}
+                                className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                                  curStatus === st
+                                    ? st === "Sakit"
+                                      ? "bg-blue-600 text-white"
+                                      : st === "Izin"
+                                        ? "bg-amber-500 text-white"
+                                        : st === "Alfa"
+                                          ? "bg-rose-600 text-white"
+                                          : "bg-violet-600 text-white"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                }`}
+                              >
+                                {st}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* TAB 2: DAFTAR SISWA & STATUS MANUAL */}
-          {activeTab === "daftar" && (
-            <div className="space-y-4">
-              {/* Siswa Belum Discan */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                {/* Siswa Hadir */}
+                <div className="space-y-2 pt-2 border-t border-slate-200">
                   <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span>Siswa Belum Hadir ({siswaBelumDiscan.length})</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Siswa Sudah Hadir ({siswaSudahDiscan.length})</span>
                   </h4>
-                  <span className="text-[10px] text-slate-500">
-                    Tandai Sakit / Izin
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                  {siswaBelumDiscan.map((s) => {
-                    const curStatus = manualStatusMap[s.idSiswa] || "Alfa";
-                    return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {siswaSudahDiscan.map((s) => (
                       <div
                         key={s.idSiswa}
-                        className="p-2.5 rounded-xl border border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                        className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-200 flex items-center justify-between text-xs"
                       >
-                        <div>
-                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
-                            <span>{s.nama}</span>
+                        <div className="truncate">
+                          <span className="font-bold text-slate-900 truncate block">
+                            {s.nama}
                             {s.kelas && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-normal">
+                              <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-normal">
                                 {s.kelas}
                               </span>
                             )}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-500">
-                            ID: {s.idSiswa}
-                          </div>
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            {s.idSiswa}
+                          </span>
                         </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {["Sakit", "Izin", "Alfa", "Cabut"].map((st) => (
-                            <button
-                              key={st}
-                              disabled={isLockedByTime}
-                              onClick={() => handleUpdateManualStatus(s, st)}
-                              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                curStatus === st
-                                  ? st === "Sakit"
-                                    ? "bg-blue-600 text-white"
-                                    : st === "Izin"
-                                      ? "bg-amber-500 text-white"
-                                      : st === "Alfa"
-                                        ? "bg-rose-600 text-white"
-                                        : "bg-violet-600 text-white"
-                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                              }`}
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Siswa Hadir */}
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Siswa Sudah Hadir ({siswaSudahDiscan.length})</span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {siswaSudahDiscan.map((s) => (
-                    <div
-                      key={s.idSiswa}
-                      className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-200 flex items-center justify-between text-xs"
-                    >
-                      <div className="truncate">
-                        <span className="font-bold text-slate-900 truncate block">
-                          {s.nama}
-                          {s.kelas && (
-                            <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-normal">
-                              {s.kelas}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-mono">
-                          {s.idSiswa}
+                        <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                          {scannedMap[s.idSiswa]?.waktuScan} WIB
                         </span>
                       </div>
-                      <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
-                        {scannedMap[s.idSiswa]?.waktuScan} WIB
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* FOOTER AKSI */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
-          <div className="flex items-center justify-between sm:justify-start gap-3">
-            <button
-              onClick={() => {
-                stopCamera();
-                onClose();
-              }}
-              className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-            >
-              Tutup
-            </button>
-
-            {/* Indikator Status Simpan Terakhir */}
-            <div className="text-[10px] sm:text-[11px] leading-tight text-slate-500">
-              {lastOnlineSaveTime ? (
-                <div className="flex items-center gap-1 text-emerald-700 font-semibold">
-                  <span className="text-xs">☁️</span>
-                  <span>
-                    Update Online: {formatLastSavedIndo(lastOnlineSaveTime)}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 text-slate-500">
-                  <span className="text-xs">📱</span>
-                  <span>Tersimpan Offline di HP</span>
-                </div>
-              )}
-              {pendingOfflineRecords.length > 0 && (
-                <div className="text-[9.5px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
-                  <span>⚠️</span>
-                  <span>
-                    +{pendingOfflineRecords.length} presensi offline belum
-                    tersimpan online
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
-          {!isLockedByTime && (
-            <button
-              onClick={handleSubmitPresensi}
-              disabled={saving || stats.total === 0}
-              className="px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-base">{saving ? "⏳" : "💾"}</span>
-              <div className="flex flex-col text-left">
-                <span>
-                  {saving
-                    ? "Menyimpan ke Spreadsheet..."
-                    : pendingOfflineRecords.length > 0
-                      ? `Simpan Online (${stats.hadir + stats.sakit + stats.izin} Siswa + ${pendingOfflineRecords.length} Offline)`
-                      : hasPreviousSubmission
-                        ? "Perbarui Presensi Kelas"
-                        : "Simpan Presensi Kelas"}
-                </span>
-                {lastOnlineSaveTime && !saving && (
-                  <span className="text-[9px] font-normal text-emerald-100 opacity-90 truncate">
-                    Update Terakhir: {formatLastSavedIndo(lastOnlineSaveTime)}
-                  </span>
+          {/* FOOTER AKSI */}
+          <div className="px-3 sm:px-6 py-2.5 sm:py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
+              <button
+                onClick={() => {
+                  stopCamera();
+                  onClose();
+                }}
+                className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                Tutup
+              </button>
+
+              {/* Indikator Status Simpan Terakhir */}
+              <div className="text-[10px] sm:text-[11px] leading-tight text-slate-500">
+                {lastOnlineSaveTime ? (
+                  <div className="flex items-center gap-1 text-emerald-700 font-semibold">
+                    <span className="text-xs">☁️</span>
+                    <span>
+                      Update Online: {formatLastSavedIndo(lastOnlineSaveTime)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-slate-500">
+                    <span className="text-xs">📱</span>
+                    <span>Tersimpan Offline di HP</span>
+                  </div>
+                )}
+                {pendingOfflineRecords.length > 0 && (
+                  <div className="text-[9.5px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
+                    <span>⚠️</span>
+                    <span>
+                      +{pendingOfflineRecords.length} presensi offline belum
+                      tersimpan online
+                    </span>
+                  </div>
                 )}
               </div>
-            </button>
-          )}
+            </div>
+
+            {!isLockedByTime && (
+              <button
+                onClick={handleSubmitPresensi}
+                disabled={saving || stats.total === 0}
+                className="px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <span className="text-base">{saving ? "⏳" : "💾"}</span>
+                <div className="flex flex-col text-left">
+                  <span>
+                    {saving
+                      ? "Menyimpan ke Spreadsheet..."
+                      : pendingOfflineRecords.length > 0
+                        ? `Simpan Online (${stats.hadir + stats.sakit + stats.izin} Siswa + ${pendingOfflineRecords.length} Offline)`
+                        : hasPreviousSubmission
+                          ? "Perbarui Presensi Kelas"
+                          : "Simpan Presensi Kelas"}
+                  </span>
+                  {lastOnlineSaveTime && !saving && (
+                    <span className="text-[9px] font-normal text-emerald-100 opacity-90 truncate">
+                      Update Terakhir: {formatLastSavedIndo(lastOnlineSaveTime)}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      {/* MODAL VERIFIKASI CEPAT — Input Kode 1230 */}
+      {showFastVerifyModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xs p-6 space-y-4">
+            <div className="text-center space-y-1">
+              <div className="text-3xl">⚡</div>
+              <h3 className="text-sm font-black text-slate-900">
+                Aktifkan Verifikasi Cepat
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-snug">
+                Mode ini melewati tahap toleh kepala. Masukkan kode untuk
+                mengaktifkan.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <input
+                type="password"
+                inputMode="numeric"
+                value={fastVerifyCodeInput}
+                onChange={(e) => {
+                  setFastVerifyCodeInput(e.target.value);
+                  if (fastVerifyError) setFastVerifyError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleConfirmFastVerifyCode();
+                }}
+                placeholder="Kode akses..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono text-center tracking-widest focus:outline-none focus:border-violet-400"
+                autoFocus
+              />
+              {fastVerifyError && (
+                <div className="text-[11px] text-rose-600 font-semibold">
+                  ⚠️ {fastVerifyError}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFastVerifyModal(false);
+                  setFastVerifyError("");
+                }}
+                className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmFastVerifyCode}
+                className="flex-1 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black cursor-pointer"
+              >
+                Aktifkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

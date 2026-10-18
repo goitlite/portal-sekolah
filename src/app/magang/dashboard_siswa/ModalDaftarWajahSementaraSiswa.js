@@ -18,6 +18,9 @@ import {
   mapBoxToContainer,
 } from "../lib/faceApiHelper";
 
+// Batas waktu pemeriksaan anti-duplikat (pertama kali bisa lama karena foto siswa lain diunduh satu per satu)
+const DUP_CHECK_TIMEOUT_MS = 40000;
+
 // Ukuran hasil pas foto (3:4)
 const OUT_W = 600;
 const OUT_H = 800;
@@ -62,6 +65,34 @@ function playBeepWarning() {
     osc.start(t);
     osc.stop(t + 0.24);
   } catch (_) {}
+}
+
+function driveFileId(url) {
+  if (!url) return "";
+  const s = String(url);
+  if (s.includes("/file/d/")) return s.split("/file/d/")[1].split("/")[0];
+  if (s.includes("id=")) return s.split("id=")[1].split("&")[0];
+  return "";
+}
+
+function samePhoto(a, b) {
+  if (!a || !b) return false;
+  const ia = driveFileId(a);
+  const ib = driveFileId(b);
+  if (ia && ib) return ia === ib;
+  return String(a).trim() === String(b).trim();
+}
+
+// URL foto sementara yang terakhir didaftarkan PERANGKAT ini untuk siswa tsb
+function readOwnTempPhoto(idSiswa) {
+  try {
+    const raw = localStorage.getItem(`face_reg_source_${idSiswa}`);
+    if (!raw) return "";
+    const info = JSON.parse(raw);
+    return info?.source === "mandiri_sementara" ? info?.fotoWajah || "" : "";
+  } catch (_) {
+    return "";
+  }
 }
 
 function driveThumb(url) {
@@ -166,18 +197,27 @@ export default function ModalDaftarWajahSementaraSiswa({
   // ── Fetch fotoWajah semua siswa dari server via getWajahBulk saat modal dibuka ──
   // Ini kritis untuk anti-duplikat lintas-perangkat: setiap siswa pakai device berbeda
   // sehingga localStorage tidak bisa diandalkan untuk data siswa lain.
+  // Kunci stabil: efek tidak jalan ulang hanya karena array baru berisi siswa yang sama
+  const rosterKey = otherStudents
+    .map((s) => String(s.idSiswa || s.id || "").trim())
+    .filter(Boolean)
+    .join(",");
+  const otherStudentsRef = useRef(otherStudents);
+  otherStudentsRef.current = otherStudents;
+
   useEffect(() => {
-    if (!isOpen || !Array.isArray(otherStudents) || otherStudents.length === 0) return;
+    const roster = otherStudentsRef.current;
+    if (!isOpen || !Array.isArray(roster) || roster.length === 0) return;
     let cancelled = false;
 
     (async () => {
       // 1. Perkaya dulu dari localStorage (cepat, offline-first)
-      const localEnriched = enrichWithFotoWajah(otherStudents);
+      const localEnriched = enrichWithFotoWajah(roster);
       if (!cancelled) enrichedStudentsRef.current = localEnriched;
 
       // 2. Fetch dari server untuk mendapat data terbaru (termasuk siswa di device lain)
       try {
-        const ids = otherStudents
+        const ids = roster
           .map((s) => String(s.idSiswa || s.id || "").trim())
           .filter(Boolean);
         if (ids.length === 0) return;
@@ -204,7 +244,7 @@ export default function ModalDaftarWajahSementaraSiswa({
     })();
 
     return () => { cancelled = true; };
-  }, [isOpen, otherStudents]);
+  }, [isOpen, rosterKey]);
 
   // Inisialisasi face-api & kamera
 
@@ -505,7 +545,7 @@ export default function ModalDaftarWajahSementaraSiswa({
       // 3. FITUR ANTI-DUPLIKAT (Pengecekan ke seluruh siswa sekolah)
       setProcessingState({
         step: "anti_duplicate",
-        label: "Memeriksa keunikan wajah (Anti-Duplikasi)...",
+        label: "Memeriksa keunikan wajah (pertama kali bisa 10–40 detik)...",
         error: false,
       });
 
@@ -518,15 +558,26 @@ export default function ModalDaftarWajahSementaraSiswa({
           ? enrichedStudentsRef.current
           : enrichWithFotoWajah(otherStudents);
 
-      const dupCheck = await checkFaceDuplicate({
-        currentStudentId: user.id,
-        descriptor,
-        otherStudents: studentsForDupCheck,
-        threshold: DUPLICATE_THRESHOLD, // 0.45 (batas identik stabil)
-      });
+      // Dibatasi waktu agar layar tidak menggantung. Jika lewat batas, pendaftaran sementara dilanjutkan
+      // (wali kelas tetap bisa mendaftarkan resmi yang otomatis menggantikannya).
+      const dupCheck = await Promise.race([
+        checkFaceDuplicate({
+          currentStudentId: user.id,
+          descriptor,
+          otherStudents: studentsForDupCheck,
+          threshold: DUPLICATE_THRESHOLD, // 0.45 (batas identik stabil)
+        }),
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve({ isDuplicate: false, timedOut: true }),
+            DUP_CHECK_TIMEOUT_MS,
+          ),
+        ),
+      ]);
 
       if (dupCheck.isDuplicate) {
         playBeepWarning();
+        stopCamera(); // layar hasil menggantikan kamera; lepas kamera agar tidak menyala terus
         setZoneState("error");
         setProcessingState({
           step: "duplicate_error",
@@ -538,6 +589,25 @@ export default function ModalDaftarWajahSementaraSiswa({
           },
         });
         return;
+      }
+
+      // 3b. Jangan menimpa foto RESMI wali kelas yang mungkin baru didaftarkan saat modal ini terbuka.
+      // Foto di server hanya boleh ditimpa bila itu masih foto sementara yang didaftarkan perangkat ini.
+      try {
+        const cur = await getBiodataSiswa(user.id);
+        const bd = cur && cur.data !== undefined ? cur.data : cur;
+        const serverFoto =
+          bd && typeof bd === "object" ? String(bd.fotoWajah || "").trim() : "";
+        if (serverFoto && !samePhoto(serverFoto, readOwnTempPhoto(user.id))) {
+          const e = new Error(
+            "Wajah Anda sudah didaftarkan secara resmi oleh Wali Kelas, jadi pendaftaran sementara dibatalkan.",
+          );
+          e.code = "RESMI";
+          throw e;
+        }
+      } catch (e) {
+        if (e && e.code === "RESMI") throw e;
+        // Gagal memeriksa (mis. jaringan): lanjutkan, unggah di bawah akan gagal sendiri bila memang offline
       }
 
       // 4. Unggah Foto ke Server (Google Drive / Apps Script)
@@ -604,6 +674,7 @@ export default function ModalDaftarWajahSementaraSiswa({
     } catch (err) {
       console.error("Gagal proses registrasi wajah:", err);
       playBeepWarning();
+      stopCamera();
       setZoneState("error");
       setProcessingState({
         step: "error",
@@ -933,4 +1004,3 @@ export default function ModalDaftarWajahSementaraSiswa({
     </div>
   );
 }
-

@@ -116,6 +116,27 @@ function driveThumb(url) {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : url;
 }
 
+// ID file Drive dari berbagai bentuk URL (untuk membandingkan foto yang sama)
+function driveFileId(url) {
+  if (!url) return "";
+  const s = String(url);
+  if (s.includes("/file/d/")) return s.split("/file/d/")[1].split("/")[0];
+  if (s.includes("id=")) return s.split("id=")[1].split("&")[0];
+  return "";
+}
+
+// Dua URL dianggap foto yang sama bila ID Drive-nya sama (atau string-nya identik)
+function samePhoto(a, b) {
+  if (!a || !b) return false;
+  const ia = driveFileId(a);
+  const ib = driveFileId(b);
+  if (ia && ib) return ia === ib;
+  return String(a).trim() === String(b).trim();
+}
+
+// Cache daftar kelas di sessionStorage: per siswa + kedaluwarsa (agar penunjukan petugas baru terbaca)
+const KELAS_CACHE_TTL_MS = 3 * 60 * 1000;
+
 // Timeout helper agar Apps Script tidak menggantung tanpa batas
 function fetchWithTimeout(fn, ms = 15000) {
   return Promise.race([
@@ -322,7 +343,10 @@ export default function DashboardSiswa() {
       const raw = localStorage.getItem(`face_reg_source_${user.id}`);
       if (raw) {
         const info = JSON.parse(raw);
-        return info?.source === "mandiri_sementara";
+        if (info?.source !== "mandiri_sementara") return false;
+        // Sementara HANYA bila foto di server masih foto yang didaftarkan perangkat ini.
+        // Jika wali kelas sudah mendaftarkan foto resmi (URL berbeda) → dianggap resmi, daftar sementara tertutup.
+        return samePhoto(info?.fotoWajah, fotoWajahResmi);
       }
     } catch (_) {}
     return false;
@@ -346,7 +370,8 @@ export default function DashboardSiswa() {
 
   // Ambil data Wali Kelas siswa dari backend & cek mandat petugas presensi (Dukungan Offline-First)
 
-  const loadDataKelasSiswa = useCallback(async (currentSession) => {
+  const loadDataKelasSiswa = useCallback(async (currentSession, opts) => {
+    const force = !!(opts && opts.force);
     const sess = currentSession || getSession();
     if (!sess || !sess.id) return;
 
@@ -368,30 +393,33 @@ export default function DashboardSiswa() {
       }
     } catch (_) {}
 
-    // Baca cache seluruh daftar kelas untuk fitur petugas presensi cerdas
-    try {
-      const savedCls = localStorage.getItem(
-        "portal_sekolah_daftar_kelas_cache",
-      );
-      if (savedCls) {
-        const parsedCls = JSON.parse(savedCls);
-        if (
-          Array.isArray(parsedCls) &&
-          parsedCls.length > 0 &&
-          isMountedRef.current
-        ) {
-          setAvailableClasses((prev) =>
-            JSON.stringify(prev) === JSON.stringify(parsedCls)
-              ? prev
-              : parsedCls,
-          );
-        }
-      }
-    } catch (_) {}
-
     const pInfoLocal = findPetugasWaliKelasForSiswa(sess.id);
     if (pInfoLocal && isMountedRef.current) {
       setPetugasWaliData(pInfoLocal);
+    }
+
+    // Daftar seluruh kelas hanya dibaca untuk akun yang memang petugas
+    // (perangkat sekolah sering dipakai bergantian oleh siswa lain).
+    if (pInfoLocal || cachedKelas?.petugasWaliData) {
+      try {
+        const savedCls = localStorage.getItem(
+          "portal_sekolah_daftar_kelas_cache",
+        );
+        if (savedCls) {
+          const parsedCls = JSON.parse(savedCls);
+          if (
+            Array.isArray(parsedCls) &&
+            parsedCls.length > 0 &&
+            isMountedRef.current
+          ) {
+            setAvailableClasses((prev) =>
+              JSON.stringify(prev) === JSON.stringify(parsedCls)
+                ? prev
+                : parsedCls,
+            );
+          }
+        }
+      } catch (_) {}
     }
 
     // Jika perangkat offline, cukup gunakan cache lokal
@@ -401,30 +429,45 @@ export default function DashboardSiswa() {
 
     setLoadingStatistikKelas(true);
     try {
-      const cacheKey = "dashboard_siswa_cache_walikelas";
-      let cards = [];
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed?.cards)) {
-            cards = parsed.cards;
+      // Cache per siswa + kedaluwarsa. Dilewati bila force (mis. setelah presensi dikirim / kembali online).
+      const cacheKey = `dashboard_siswa_cache_walikelas_${sid}`;
+      let cards = null;
+      if (!force) {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (
+              parsed &&
+              Array.isArray(parsed.cards) &&
+              Date.now() - Number(parsed.ts || 0) < KELAS_CACHE_TTL_MS
+            ) {
+              cards = parsed.cards;
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
-      if (cards.length === 0) {
-        // Endpoint khusus petugas (data minimal & diperiksa server). Jika server belum
-        // diperbarui, sementara memakai cara lama.
+      if (cards === null) {
+        cards = [];
+        // Endpoint khusus (data minimal & diperiksa server). Cara lama dipakai HANYA bila
+        // server belum diperbarui (action belum dikenali), bukan setiap kali ditolak.
         let res = await getKelasPetugas(sid);
-        if (!res?.success && !res?.networkError) {
-          // Jika ditolak karena bukan petugas atau action belum ada di GAS lama, fallback ke data wali kelas
+        if (
+          res &&
+          !res.success &&
+          !res.networkError &&
+          String(res.message || "").includes("tidak dikenali")
+        ) {
           res = await getDashboardKepsekWaliKelas(false);
         }
         if (res && res.success && Array.isArray(res.data?.cards)) {
           cards = res.data.cards;
           try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
+            sessionStorage.setItem(
+              cacheKey,
+              JSON.stringify({ ts: Date.now(), cards }),
+            );
           } catch (_) {}
         }
       }
@@ -442,24 +485,44 @@ export default function DashboardSiswa() {
           daftarSiswa: c.daftarSiswa || [],
           keterangan: c.keterangan || "",
         }));
+        const punyaTagSaya = (c) => {
+          const ket = String(c.keterangan || "");
+          return (
+            ket.includes(`[PETUGAS:${sid}:`) || ket.includes(`[PETUGAS:${sid}]`)
+          );
+        };
+        const petugasNow = cards.some(punyaTagSaya);
+        // Siswa biasa hanya membutuhkan kelasnya sendiri
+        const classesForState = petugasNow
+          ? cleanClasses
+          : cleanClasses.filter(
+              (c) =>
+                Array.isArray(c.daftarSiswa) &&
+                c.daftarSiswa.some((s) => String(s.idSiswa).trim() === sid),
+            );
         if (isMountedRef.current) {
           setAvailableClasses((prev) =>
-            JSON.stringify(prev) === JSON.stringify(cleanClasses)
+            JSON.stringify(prev) === JSON.stringify(classesForState)
               ? prev
-              : cleanClasses,
+              : classesForState,
           );
         }
         try {
-          localStorage.setItem(
-            "portal_sekolah_daftar_kelas_cache",
-            JSON.stringify(cleanClasses),
-          );
+          if (petugasNow) {
+            localStorage.setItem(
+              "portal_sekolah_daftar_kelas_cache",
+              JSON.stringify(cleanClasses),
+            );
+          } else {
+            // Bukan petugas: jangan tinggalkan daftar seluruh kelas di perangkat ini
+            localStorage.removeItem("portal_sekolah_daftar_kelas_cache");
+          }
         } catch (_) {}
 
-        const sid = String(sess.id).trim();
-
         // Cari kelas siswa di antara seluruh rombel
-        const myClass = cards.find((c) => {
+        // Dua tahap: keanggotaan/tag petugas lebih dulu di SEMUA kelas, pencocokan nama hanya cadangan.
+        // (Dulu satu putaran: kelas bernama mirip yang muncul lebih awal bisa menang atas kelas sebenarnya.)
+        const findMyClass = (allowNameMatch) => cards.find((c) => {
           // A. Cek di daftarSiswa
           if (
             Array.isArray(c.daftarSiswa) &&
@@ -477,6 +540,7 @@ export default function DashboardSiswa() {
           }
           // C. Fallback pencocokan nama kelas
           if (
+            allowNameMatch &&
             sess.kelas &&
             c.namaKelas &&
             (c.namaKelas.toLowerCase().includes(sess.kelas.toLowerCase()) ||
@@ -486,6 +550,7 @@ export default function DashboardSiswa() {
           }
           return false;
         });
+        const myClass = findMyClass(false) || findMyClass(true);
 
         if (myClass && isMountedRef.current) {
           setStatistikKelas({
@@ -820,6 +885,22 @@ export default function DashboardSiswa() {
               try {
                 localStorage.removeItem(`face_reg_source_${session.id}`);
               } catch (_) {}
+            } else {
+              // Foto di server sudah bukan foto sementara perangkat ini (wali kelas mendaftarkan resmi)
+              try {
+                const rawSrc = localStorage.getItem(
+                  `face_reg_source_${session.id}`,
+                );
+                if (rawSrc) {
+                  const infoSrc = JSON.parse(rawSrc);
+                  if (
+                    infoSrc?.source === "mandiri_sementara" &&
+                    !samePhoto(infoSrc?.fotoWajah, serverFoto)
+                  ) {
+                    localStorage.removeItem(`face_reg_source_${session.id}`);
+                  }
+                }
+              } catch (_) {}
             }
           }
         }
@@ -894,7 +975,7 @@ export default function DashboardSiswa() {
       const sess = getSession();
       if (sess?.id) {
         loadDashboard(true);
-        loadDataKelasSiswa(sess);
+        loadDataKelasSiswa(sess, { force: true });
       }
     };
 
@@ -1892,7 +1973,7 @@ export default function DashboardSiswa() {
               <div className="space-y-3">
                 <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700 leading-relaxed space-y-2">
                   <p className="font-bold text-amber-800">
-                    ⏳ Kamu sudah mendaftar sementara hari ini.
+                    ⏳ Kamu sudah mendaftar wajah secara sementara.
                   </p>
                   <p>
                     Pendaftaran sementara berlaku hingga Wali Kelas mendaftarkan
@@ -2032,7 +2113,7 @@ export default function DashboardSiswa() {
             setShowModalPresensiPetugas(true);
           }}
           onPresensiSubmitted={() => {
-            loadDataKelasSiswa();
+            loadDataKelasSiswa(undefined, { force: true });
           }}
         />
       )}
@@ -2054,7 +2135,7 @@ export default function DashboardSiswa() {
             setShowModalPresensiPetugas(true);
           }}
           onPresensiSubmitted={() => {
-            loadDataKelasSiswa();
+            loadDataKelasSiswa(undefined, { force: true });
           }}
         />
       )}
@@ -2072,7 +2153,7 @@ export default function DashboardSiswa() {
             setShowModalScanBarcode(true);
           }}
           onPresensiSubmitted={() => {
-            loadDataKelasSiswa();
+            loadDataKelasSiswa(undefined, { force: true });
           }}
         />
       )}

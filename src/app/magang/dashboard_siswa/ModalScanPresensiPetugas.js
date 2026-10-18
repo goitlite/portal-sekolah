@@ -23,11 +23,20 @@ function playBeepSuccess() {
   } catch (_) {}
 }
 
-// Helper cek apakah waktu lokal saat ini sudah melewati batas jam 08:30 WIB
+// Konfigurasi jam operasional presensi scan barcode (Buka 07.00 WIB, Tutup 07.15 WIB)
+const BARCODE_OPEN_H = 7;
+const BARCODE_OPEN_M = 0;
+const BARCODE_CLOSE_H = 7;
+const BARCODE_CLOSE_M = 15;
+
+// Helper cek apakah waktu lokal saat ini di luar batas operasional barcode (07:00 - 07:15 WIB)
 function checkIsPastTimeLimit() {
   try {
     if (typeof window !== "undefined") {
-      if (localStorage.getItem("portal_bypass_time_limit") === "true") {
+      if (
+        localStorage.getItem("portal_bypass_barcode_time") === "true" ||
+        localStorage.getItem("portal_bypass_time_limit") === "true"
+      ) {
         return false;
       }
     }
@@ -36,14 +45,13 @@ function checkIsPastTimeLimit() {
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
+  const currentTotal = hours * 60 + minutes;
+  const openTotal = BARCODE_OPEN_H * 60 + BARCODE_OPEN_M; // 420 (07:00 WIB)
+  const closeTotal = BARCODE_CLOSE_H * 60 + BARCODE_CLOSE_M; // 435 (07:15 WIB)
 
-  // Di luar jam sekolah (sore/malam/dini hari): izinkan pengujian
-  if (hours >= 18 || hours < 6) {
-    return false;
-  }
-
-  // Jam operasional sekolah pagi: kunci jika lewat 08:30 WIB
-  return hours > 8 || (hours === 8 && minutes >= 30);
+  // Buka hanya pada jam 07:00 s.d 07:15 WIB
+  const isOpen = currentTotal >= openTotal && currentTotal < closeTotal;
+  return !isOpen;
 }
 
 // In-memory cache internal modul agar scanner start instan saat modal dibuka kembali
@@ -139,6 +147,15 @@ export default function ModalScanPresensiPetugas({
     return found || petugasInfo;
   }, [isAllClassesMode, selectedWaliId, availableClasses, petugasInfo]);
 
+  // Kunci stabil daftar kelas: efek tidak berjalan ulang hanya karena array/objek baru berisi sama
+  const classesKey = useMemo(
+    () =>
+      (availableClasses || [])
+        .map((c) => `${c.idWali}:${(c.daftarSiswa || []).length}`)
+        .join("|"),
+    [availableClasses],
+  );
+
   const [loadingData, setLoadingData] = useState(true);
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerError, setScannerError] = useState("");
@@ -172,6 +189,33 @@ export default function ModalScanPresensiPetugas({
   const [hasPreviousSubmission, setHasPreviousSubmission] = useState(false);
   const [activeTab, setActiveTab] = useState("kamera"); // "kamera" | "daftar"
 
+  // Input kode 1230 untuk membuka akses jika sedang di luar jam (ditutup)
+  const [unlockCodeInput, setUnlockCodeInput] = useState("");
+  const [unlockError, setUnlockError] = useState("");
+
+  function handleUnlockWithCode() {
+    if (unlockCodeInput.trim() === "1230") {
+      try {
+        localStorage.setItem("portal_bypass_barcode_time", "true");
+        localStorage.setItem("portal_bypass_time_limit", "true");
+      } catch (_) {}
+      setIsLockedByTime(false);
+      setIsSubmittedToday(false);
+      setUnlockError("");
+      setUnlockCodeInput("");
+      // Jalankan scanner jika di tab kamera
+      if (activeTab === "kamera") {
+        setTimeout(() => {
+          try {
+            startScanner();
+          } catch (_) {}
+        }, 150);
+      }
+    } else {
+      setUnlockError("Kode akses salah! Masukkan kode untuk membuka.");
+    }
+  }
+
   const html5QrCodeRef = useRef(null);
   const scannedMapRef = useRef(scannedMap);
   const siswaMapRef = useRef({});
@@ -203,7 +247,7 @@ export default function ModalScanPresensiPetugas({
     };
   }, [scanOverlay]);
 
-  // Pantau pembatasan waktu (08:30 WIB) secara berkala
+  // Pantau pembatasan waktu operasional barcode (07:00 – 07:15 WIB) secara berkala
   useEffect(() => {
     if (!isOpen) return;
     const check = () => {
@@ -575,13 +619,15 @@ export default function ModalScanPresensiPetugas({
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isOpen,
-    activeClass,
+    activeClass?.idWali,
+    activeClass?.idGuru,
     isAllClassesMode,
     selectedWaliId,
     todayISO,
-    availableClasses,
+    classesKey,
   ]);
 
   // Simpan draft hasil scan ke localStorage jika ada penambahan
@@ -721,7 +767,7 @@ export default function ModalScanPresensiPetugas({
       setIsLockedByTime(true);
       stopScannerGracefully();
       alert(
-        "⛔ Batas waktu pengisian presensi barcode telah berakhir (Pukul 08.30 WIB).",
+        "⛔ Batas waktu pengisian presensi barcode telah berakhir (Buka pukul 07.00 – 07.15 WIB). Masukkan kode untuk membuka akses.",
       );
       return;
     }
@@ -961,7 +1007,7 @@ export default function ModalScanPresensiPetugas({
   async function handleSubmitPresensi() {
     if (isSubmittedToday || isLockedByTime) {
       alert(
-        "⛔ Waktu pengisian presensi barcode untuk hari ini telah berakhir (Pukul 08.30 WIB).",
+        "⛔ Waktu pengisian presensi barcode untuk hari ini telah berakhir (Buka pukul 07.00 – 07.15 WIB). Masukkan kode jika ingin membuka akses.",
       );
       return;
     }
@@ -976,7 +1022,7 @@ export default function ModalScanPresensiPetugas({
       setIsSubmittedToday(true);
       setIsLockedByTime(true);
       alert(
-        "⛔ Batas waktu pukul 08.30 WIB telah terlewati. Presensi sekarang dikunci.",
+        "⛔ Batas waktu pukul 07.15 WIB telah terlewati. Presensi barcode sekarang dikunci.",
       );
       return;
     }
@@ -999,7 +1045,7 @@ export default function ModalScanPresensiPetugas({
         `• Izin: ${stats.izin}\n` +
         `• Alfa: ${stats.alfa + stats.belumScan} (${stats.belumScan} siswa belum discan otomatis dijadikan Alfa)\n\n` +
         `⏰ INFORMASI PEMBATASAN WAKTU:\n` +
-        `Anda dapat menyimpan dan memperbarui data ini kembali jika ada siswa lain yang hadir menyusul hingga pukul 08.30 WIB.\n\n` +
+        `Presensi barcode dibuka pukul 07.00 – 07.15 WIB. Anda dapat memperbarui data jika diperlukan hingga batas waktu berakhir.\n\n` +
         `Apakah Anda ingin menyimpan data presensi ini sekarang?`;
     }
 
@@ -1269,9 +1315,7 @@ export default function ModalScanPresensiPetugas({
             {
               wId: waliId,
               namaKelas:
-                activeClass?.namaKelas ||
-                petugasInfo?.namaKelas ||
-                "Kelas ini",
+                activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas ini",
               status: "offline",
             },
           ],
@@ -1336,18 +1380,16 @@ export default function ModalScanPresensiPetugas({
           onPresensiSubmitted();
         }
 
-        // Cek apakah setelah simpan sudah lewat jam 08.30 WIB
+        // Cek apakah setelah simpan sudah lewat jam 07.15 WIB
         const pastLimit = checkIsPastTimeLimit();
 
         setSaveProgress({
           phase: "done",
           label: pastLimit
-            ? "✅ Tersimpan! Waktu pengisian hari ini telah ditutup."
-            : "✅ Presensi berhasil disimpan! Masih bisa update hingga 08.30 WIB.",
+            ? "✅ Tersimpan! Waktu pengisian barcode hari ini telah ditutup."
+            : "✅ Presensi berhasil disimpan! Masih bisa update hingga 07.15 WIB.",
           pct: 100,
-          details: [
-            { wId: waliId, namaKelas: namaKelasNow, status: "ok" },
-          ],
+          details: [{ wId: waliId, namaKelas: namaKelasNow, status: "ok" }],
           allSuccess: true,
         });
 
@@ -1378,9 +1420,7 @@ export default function ModalScanPresensiPetugas({
           phase: "error",
           label: `❌ ${res.message || "Server menolak pengiriman"}`,
           pct: 100,
-          details: [
-            { wId: waliId, namaKelas: namaKelasNow, status: "error" },
-          ],
+          details: [{ wId: waliId, namaKelas: namaKelasNow, status: "error" }],
           allSuccess: false,
         });
         setTimeout(() => setSaveProgress(null), 4000);
@@ -1404,7 +1444,6 @@ export default function ModalScanPresensiPetugas({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
-
       {/* ===== OVERLAY PROGRESS SIMPAN SPREADSHEET ===== */}
       {saveProgress && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm pointer-events-auto">
@@ -1498,33 +1537,33 @@ export default function ModalScanPresensiPetugas({
                     >
                       {/* Ikon status */}
                       <span className="shrink-0 text-sm">
-                        {d.status === "ok"
-                          ? "✅"
-                          : d.status === "error"
-                            ? "❌"
-                            : d.status === "offline"
-                              ? "📱"
-                              : (
-                                <svg
-                                  className="animate-spin h-3.5 w-3.5 text-teal-500"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                  />
-                                  <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8v8z"
-                                  />
-                                </svg>
-                              )}
+                        {d.status === "ok" ? (
+                          "✅"
+                        ) : d.status === "error" ? (
+                          "❌"
+                        ) : d.status === "offline" ? (
+                          "📱"
+                        ) : (
+                          <svg
+                            className="animate-spin h-3.5 w-3.5 text-teal-500"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v8z"
+                            />
+                          </svg>
+                        )}
                       </span>
                       <span className="truncate">{d.namaKelas}</span>
                       <span className="ml-auto shrink-0 text-[10px] opacity-70">
@@ -1574,7 +1613,8 @@ export default function ModalScanPresensiPetugas({
                   Scan Presensi Siswa
                 </h3>
                 {/* PEMILIH KELAS / SCAN PINTAR */}
-                {Array.isArray(availableClasses) && availableClasses.length > 1 ? (
+                {Array.isArray(availableClasses) &&
+                availableClasses.length > 1 ? (
                   <div className="relative">
                     <button
                       type="button"
@@ -1712,12 +1752,17 @@ export default function ModalScanPresensiPetugas({
                     className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-full bg-teal-400/25 text-teal-100 font-black border border-teal-300/40 shadow-2xs"
                     title={`Khusus Kelas ${activeClass?.namaKelas || petugasInfo?.namaKelas || ""}`}
                   >
-                    <span>🏫 {activeClass?.namaKelas || petugasInfo?.namaKelas || "Kelas Petugas"}</span>
+                    <span>
+                      🏫{" "}
+                      {activeClass?.namaKelas ||
+                        petugasInfo?.namaKelas ||
+                        "Kelas Petugas"}
+                    </span>
                   </span>
                 )}
               </div>
               <p className="text-[9px] sm:text-[10px] text-teal-200 truncate">
-                Pindai kartu kertas siswa • Simpan berulang s.d 08.30 WIB
+                Pindai kartu barcode siswa • Buka 07.00 – 07.15 WIB
               </p>
             </div>
           </div>
@@ -1816,46 +1861,36 @@ export default function ModalScanPresensiPetugas({
 
         {/* KONTEN BODY */}
         <div className="p-2.5 sm:p-4 overflow-y-auto space-y-2 sm:space-y-2.5 flex-1">
-          {/* BANNER NOTIFIKASI BATAS WAKTU SIMPEL */}
+          {/* BANNER NOTIFIKASI BATAS WAKTU BARCODE */}
           {isLockedByTime ? (
             <div className="px-2.5 py-2 bg-rose-50 rounded-xl border border-rose-300 text-rose-950 text-[11px] shadow-xs space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 truncate">
                   <span>⛔</span>
                   <span className="font-bold text-rose-900 truncate">
-                    Batas waktu 08.30 WIB telah berakhir. Data presensi barcode dikunci.
+                    Presensi barcode ditutup. Buka pukul 07.00 – 07.15 WIB.
                   </span>
                 </div>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-200 text-rose-900 font-bold shrink-0">
                   Terkunci
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    localStorage.setItem("portal_bypass_time_limit", "true");
-                  } catch (_) {}
-                  setIsLockedByTime(false);
-                  setIsSubmittedToday(false);
-                }}
-                className="w-full py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-black transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
-              >
-                <span>🔓</span>
-                <span>Buka Kamera (Mode Uji Coba / Testing)</span>
-              </button>
+              <p className="text-[10.5px] text-rose-800 leading-snug">
+                Gunakan kode akses <b>1230</b> pada layar kamera di bawah jika
+                ingin membuka akses seperti biasa.
+              </p>
             </div>
           ) : (
             <div className="px-2.5 py-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-lg border border-teal-200 text-teal-950 flex items-center justify-between text-[11px] shadow-2xs">
               <div className="flex items-center gap-1.5 truncate">
                 <span>⏰</span>
                 <span className="truncate">
-                  Bisa simpan &amp; scan berulang s.d <strong>08.30 WIB</strong>
+                  Bisa simpan &amp; scan berulang s.d <strong>07.15 WIB</strong>
                 </span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white border border-teal-300 font-bold text-teal-800 shadow-2xs">
-                  Batas: 08.30 WIB
+                  Batas: 07.15 WIB
                 </span>
                 {hasPreviousSubmission && (
                   <span className="text-[8.5px] px-1 py-0.5 rounded bg-emerald-600 text-white font-bold">
@@ -1906,6 +1941,56 @@ export default function ModalScanPresensiPetugas({
           </div>
 
           {/* TAB 1: KAMERA PEMINDAI */}
+          {activeTab === "kamera" && isLockedByTime && (
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-slate-700 w-full h-[54vh] sm:h-[430px] min-h-[320px] max-h-[550px] flex flex-col items-center justify-center p-6 shadow-md text-white text-center space-y-3.5">
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-3xl shadow-inner animate-pulse">
+                🔒
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base sm:text-lg font-black text-white tracking-wide">
+                  Presensi Barcode Ditutup
+                </h3>
+                <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                  Presensi Scan Barcode hanya dibuka pada pukul{" "}
+                  <strong className="text-amber-300">07.00 – 07.15 WIB</strong>.
+                </p>
+              </div>
+
+              <div className="w-full max-w-xs pt-1 space-y-2">
+                <div className="text-[11px] text-slate-400 font-medium text-left"></div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={unlockCodeInput}
+                    onChange={(e) => {
+                      setUnlockCodeInput(e.target.value);
+                      if (unlockError) setUnlockError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleUnlockWithCode();
+                    }}
+                    placeholder="Masukkan kode ..."
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-xs font-mono text-center tracking-widest focus:outline-hidden focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleUnlockWithCode}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-black transition-all cursor-pointer shadow-md shrink-0 flex items-center gap-1"
+                  >
+                    <span>🔓</span>
+                    <span>Buka</span>
+                  </button>
+                </div>
+                {unlockError && (
+                  <div className="text-[11px] text-rose-400 font-semibold animate-in fade-in">
+                    ⚠️ {unlockError}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === "kamera" && !isLockedByTime && (
             <div className="space-y-2">
               {/* FEEDBACK TERAKHIR HASIL SCAN (TOAST BANNER) */}
@@ -1976,7 +2061,7 @@ export default function ModalScanPresensiPetugas({
                     <div className="w-52 h-52 sm:w-60 sm:h-60 border-2 border-dashed border-emerald-400 rounded-2xl animate-pulse" />
 
                     <div className="px-2.5 py-0.5 rounded-md bg-emerald-950/85 text-emerald-300 text-[9.5px] font-mono font-bold shadow-xs">
-                      Scan Pertama Terkunci • Bisa Simpan Berulang s.d 08.30
+                      Scan Pertama Terkunci • Bisa Simpan Berulang s.d 07.15
                     </div>
                   </div>
                 )}
@@ -2294,8 +2379,8 @@ export default function ModalScanPresensiPetugas({
                   {saving
                     ? "Menyimpan ke Server..."
                     : hasPreviousSubmission
-                      ? "Perbarui Presensi Kelas (s.d 08.30)"
-                      : "Kirim Presensi Kelas (s.d 08.30)"}
+                      ? "Perbarui Presensi Kelas (s.d 07.15)"
+                      : "Kirim Presensi Kelas (s.d 07.15)"}
                 </span>
               </button>
             )}
