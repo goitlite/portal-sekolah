@@ -202,12 +202,24 @@ export default function RekapGuruWaliPage() {
       <div className="mx-auto max-w-[1400px]">
         {/* HEADER */}
         <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900 to-blue-700 p-4 sm:p-8 text-white shadow-xl flex flex-col gap-3 relative">
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 right-4 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm"
-          >
-            ⬅️ Kembali
-          </button>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <button
+              onClick={() => {
+                localStorage.removeItem("rekap_semua_siswa_cache");
+                loadDataRekap();
+              }}
+              className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+              title="Perbarui data terbaru dari server"
+            >
+              🔄 Segarkan Data
+            </button>
+            <button
+              onClick={() => router.back()}
+              className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm cursor-pointer"
+            >
+              ⬅️ Kembali
+            </button>
+          </div>
           <div>
             <div className="mb-1 flex items-center gap-2">
               <span className="text-2xl sm:text-3xl">📊</span>
@@ -318,10 +330,41 @@ export default function RekapGuruWaliPage() {
                   <div className="flex gap-1.5 flex-shrink-0">
                     <DocumentIndicator url={siswa.fotoProfil} label="FOTO" />
                     <DocumentIndicator url={siswa.ijazahSmp} label="Dokumen" />
+                    <DocumentIndicator url={siswa.kartuKeluarga} label="KK" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-3">
+                  {/* Rata-Rata Nilai Rapor & Semester 1 - 4 */}
+                  <div className="col-span-2 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-amber-900 uppercase tracking-wide flex items-center gap-1">
+                        📊 Rata-Rata Nilai Rapor
+                      </span>
+                      <span className="font-black text-xs text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                        {siswa.nilaiRaporRata ? `Rata-rata: ${siswa.nilaiRaporRata}` : "-"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 mt-2 text-center">
+                      <div className="bg-white/90 p-1.5 rounded-lg border border-amber-100 shadow-2xs">
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase">Sem 1</span>
+                        <span className="font-extrabold text-[11px] text-slate-800">{siswa.nilaiRapor1 || "-"}</span>
+                      </div>
+                      <div className="bg-white/90 p-1.5 rounded-lg border border-amber-100 shadow-2xs">
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase">Sem 2</span>
+                        <span className="font-extrabold text-[11px] text-slate-800">{siswa.nilaiRapor2 || "-"}</span>
+                      </div>
+                      <div className="bg-white/90 p-1.5 rounded-lg border border-amber-100 shadow-2xs">
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase">Sem 3</span>
+                        <span className="font-extrabold text-[11px] text-slate-800">{siswa.nilaiRapor3 || "-"}</span>
+                      </div>
+                      <div className="bg-white/90 p-1.5 rounded-lg border border-amber-100 shadow-2xs">
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase">Sem 4</span>
+                        <span className="font-extrabold text-[11px] text-slate-800">{siswa.nilaiRapor4 || "-"}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="col-span-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
                     <span className="block text-[9px] font-black text-slate-400 uppercase">
                       Tempat, Tgl Lahir & Alamat
@@ -395,6 +438,12 @@ export default function RekapGuruWaliPage() {
                   <th className="px-2 py-2 font-black border-b text-center">
                     Dokumen
                   </th>
+                  <th className="px-2 py-2 font-black border-b text-center">
+                    KK
+                  </th>
+                  <th className="px-3 py-2 font-black border-b text-center min-w-[120px]">
+                    RATA-RATA RAPOR
+                  </th>
                   <th className="px-3 py-2 font-black border-b">NO HP (WA)</th>
                   <th className="px-3 py-2 font-black border-b">TTL</th>
                   <th className="px-3 py-2 font-black border-b">ALAMAT</th>
@@ -414,7 +463,7 @@ export default function RekapGuruWaliPage() {
                 {filteredData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="11"
+                      colSpan="13"
                       className="px-4 py-8 text-center text-slate-500 font-medium"
                     >
                       Data siswa tidak ditemukan.
@@ -449,6 +498,27 @@ export default function RekapGuruWaliPage() {
                           url={siswa.ijazahSmp}
                           label="Dokumen"
                         />
+                      </td>
+                      <td className="px-2 py-2 border-b align-middle">
+                        <DocumentIndicator
+                          url={siswa.kartuKeluarga}
+                          label="KK"
+                        />
+                      </td>
+                      <td className="px-3 py-2 border-b text-center align-middle">
+                        <div className="inline-flex flex-col items-center">
+                          <span className="font-black text-xs text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                            {siswa.nilaiRaporRata || "-"}
+                          </span>
+                          {(siswa.nilaiRapor1 || siswa.nilaiRapor2 || siswa.nilaiRapor3 || siswa.nilaiRapor4) && (
+                            <span
+                              className="text-[9px] text-slate-500 font-semibold mt-0.5 tracking-tight"
+                              title={`S1: ${siswa.nilaiRapor1 || "-"} | S2: ${siswa.nilaiRapor2 || "-"} | S3: ${siswa.nilaiRapor3 || "-"} | S4: ${siswa.nilaiRapor4 || "-"}`}
+                            >
+                              S1-4: {siswa.nilaiRapor1 || "-"}/{siswa.nilaiRapor2 || "-"}/{siswa.nilaiRapor3 || "-"}/{siswa.nilaiRapor4 || "-"}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-3 py-2 border-b font-bold text-slate-700">

@@ -220,81 +220,121 @@ function _parseSiswaInfo_(siswa) {
 }
 
 /**
- * Normalisasi nama kelas: uppercase, TJKT→TKJ, TKRO→TKR, hapus non-alfanumerik.
+ * Normalisasi nama kelas kanonikal:
+ * Mengurai string kelas/nama siswa menjadi komponen:
+ * - level: 'X' | 'XI' | 'XII'
+ * - major: 'TKJ' | 'TKR' | 'TBSM' | 'TITL' | 'DPIB' | 'TAV' | 'GEOMATIKA' | 'TO' | 'TAB' | 'TPL' dll.
+ * - section: '1' | '2' | '3' | dll.
+ * - canonical: string identitas kelas unik, misal 'XI_TKJ_1'
  */
-function _cleanClass_(str) {
-  if (!str) return "";
-  return String(str)
-    .toUpperCase()
-    .replace(/TJKT/g, "TKJ")
-    .replace(/TKRO/g, "TKR")
-    .replace(/[^A-Z0-9]/g, "");
+function _parseCanonicalKelas_(str) {
+  if (!str) return null;
+  var s = String(str).toUpperCase().trim();
+
+  // Ekstrak isi di dalam kurung siku jika ada: "BUDI [XI TJKT 1]" -> "XI TJKT 1"
+  var bracketMatch = s.match(/\[(.*?)\]/);
+  if (bracketMatch) {
+    s = bracketMatch[1].trim();
+  }
+
+  // Hapus kata 'KELAS' atau 'KLS'
+  s = s.replace(/\b(KELAS|KLS)\b/g, " ").trim();
+
+  // 1. Ekstrak Level (XII, XI, X)
+  var level = "";
+  if (/\bXII\b|\b12\b|^XII\b|^12\b/.test(s) || s.indexOf("XII") === 0) {
+    level = "XII";
+    s = s.replace(/\bXII\b|\b12\b|^XII/, " ");
+  } else if (/\bXI\b|\b11\b|^XI\b|^11\b/.test(s) || s.indexOf("XI") === 0) {
+    level = "XI";
+    s = s.replace(/\bXI\b|\b11\b|^XI/, " ");
+  } else if (/\bX\b|\b10\b|^X\b|^10\b/.test(s) || s.indexOf("X") === 0) {
+    level = "X";
+    s = s.replace(/\bX\b|\b10\b|^X/, " ");
+  }
+
+  // 2. Ekstrak Section (angka rombel, e.g. 1, 2, 3, 4)
+  var section = "";
+  var matchSection = s.match(/(\d+)\s*$/);
+  if (matchSection) {
+    section = matchSection[1];
+    s = s.replace(/(\d+)\s*$/, " ");
+  }
+
+  // 3. Normalisasi Jurusan / Body
+  var normalizedS = s
+    .replace(/\bTJKT\b/g, "TKJ")
+    .replace(/\bTKRO\b/g, "TKR")
+    .replace(/\bTSM\b/g, "TBSM");
+
+  var body = "";
+  var majorMatch = normalizedS.match(/\b(TKJ|TKR|TBSM|TITL|DPIB|TAV|GEOMATIKA|TO|TAB|TPL|CONTOH)\b/);
+  if (majorMatch) {
+    body = majorMatch[1];
+  } else {
+    body = normalizedS.replace(/[^A-Z]/g, "").trim();
+  }
+
+  // Di SMKN 1, kelas tanpa awalan X / XI / XII adalah kelas XII (misal "TKJ 1", "DPIB", "TAV", "GEOMATIKA")
+  if (!level && body) {
+    level = "XII";
+  }
+
+  if (!body) return null;
+
+  return {
+    level: level,
+    major: body,
+    section: section,
+    canonical: level + "_" + body + (section ? "_" + section : "")
+  };
 }
 
 /**
- * Ekstrak { level, body } dari string kelas yang sudah di-clean.
- * Contoh: "XIITKJ1" → { level: "XII", body: "TKJ1" }
- *         "XITKJ1"  → { level: "XI",  body: "TKJ1" }
- *         "XTKJ1"   → { level: "X",   body: "TKJ1" }
- */
-function _extractLevel_(cleanStr) {
-  const m = cleanStr.match(/^(XII|XI|X)(.*)$/);
-  if (m) return { level: m[1], body: m[2] };
-  return { level: "", body: cleanStr };
-}
-
-/**
- * Pencocokan kelas siswa dengan kelas target.
- * Strategi:
- *  1. Exact / substring match pada string LENGKAP (termasuk level).
- *  2. Fallback short-class (tanpa level) — HANYA diizinkan bila level-nya SAMA.
- * Dengan demikian siswa "XI TJKT 1" TIDAK akan cocok dengan target "XII TJKT 1".
+ * Pencocokan kelas siswa dengan kelas target secara akurat dan ketat:
+ * - Level HARUS sama persis (X vs XI vs XII)
+ * - Jurusan HARUS sama persis (TKJ vs TKJ, dsb.)
+ * - Section/rombel HARUS sama persis jika ada angka (1 vs 1, 2 vs 2)
+ * Mencegah kebocoran siswa beda tingkatan/rombel masuk ke kelas lain.
  */
 function _matchKelas_(studentClass, studentRawName, targetClass) {
-  const targetClean = _cleanClass_(targetClass);
-  if (!targetClean) return false;
+  var target = _parseCanonicalKelas_(targetClass);
+  if (!target) return false;
 
-  const sClassClean = _cleanClass_(studentClass);
-  const rawClean = _cleanClass_(studentRawName);
+  var sParsed = _parseCanonicalKelas_(studentClass);
 
-  // --- Langkah 1: exact / substring match pada string LENGKAP (level ikut dicek) ---
-  if (sClassClean && sClassClean === targetClean) return true;
-  if (sClassClean && sClassClean.includes(targetClean)) return true;
-  if (sClassClean && targetClean.includes(sClassClean)) return true;
-  if (rawClean && rawClean.includes(targetClean)) return true;
-
-  // --- Langkah 2: fallback short-class — wajib level sama ---
-  const targetParts = _extractLevel_(targetClean);
-  const targetLevel = targetParts.level; // "XII" / "XI" / "X" / ""
-  const targetBody = targetParts.body; // "TKJ1", dll.
-
-  if (!targetBody) return false;
-
-  // Ekstrak level dari data siswa
-  const sParts = _extractLevel_(sClassClean);
-  const rawParts = _extractLevel_(rawClean);
-  const sLevel = sParts.level || rawParts.level || "";
-  const sBody = sParts.body || rawParts.body || sClassClean || rawClean;
-
-  // Jika KEDUA sisi memiliki level yang diketahui → level HARUS sama
-  if (targetLevel && sLevel && targetLevel !== sLevel) {
-    return false; // level berbeda, tolak (misal XII vs XI)
+  if (!sParsed && studentRawName) {
+    sParsed = _parseCanonicalKelas_(studentRawName);
   }
 
-  // Level cocok atau salah satu tidak diketahui → bandingkan body
-  if (
-    sBody &&
-    (sBody === targetBody ||
-      sBody.includes(targetBody) ||
-      targetBody.includes(sBody))
-  ) {
-    return true;
-  }
-  if (rawClean && rawClean.includes(targetBody)) {
-    return true;
+  if (!sParsed && studentRawName) {
+    var m = String(studentRawName).match(/\[(.*?)\]/);
+    if (m) {
+      sParsed = _parseCanonicalKelas_(m[1]);
+    }
   }
 
-  return false;
+  if (!sParsed) return false;
+
+  // Level HARUS sama
+  if (target.level && sParsed.level && target.level !== sParsed.level) {
+    return false;
+  }
+
+  // Jurusan / Major HARUS sama
+  if (target.major !== sParsed.major) {
+    return false;
+  }
+
+  // Section HARUS sama jika salah satu atau kedua menentukan section
+  // Contoh: target "XI TKJ 1" (section: 1) TIDAK boleh mencocokkan student "XI TKJ 2" (section: 2)
+  if (target.section || sParsed.section) {
+    if (target.section !== sParsed.section) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // ------------------------------------------------------------

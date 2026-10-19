@@ -351,3 +351,190 @@ function getWajahBulk(idSiswaList) {
     return errorResponse("Gagal memuat wajah bulk: " + err.message);
   }
 }
+
+/**
+ * Mengambil data lengkap seluruh biodata siswa untuk Rekap Guru Wali.
+ * Guru Wali dan Guru Pembimbing dipisah secara ketat. Siswa yang tidak punya Guru Wali
+ * tidak akan diisi nama Guru Pembimbing.
+ * @param {string} idGuru - ID Guru atau "ALL"
+ * @returns {Array<Object>} Daftar siswa lengkap beserta biodata
+ */
+function getDataSiswaWali(idGuru) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetSiswa = ss.getSheetByName(SHEETS.SISWA);
+    if (!sheetSiswa) return [];
+
+    const sheetBio = ss.getSheetByName(SHEETS.DATA_SISWA_WALI);
+    const sheetGW = ss.getSheetByName(SHEETS.GURU_WALI);
+
+    const siswaRows = sheetSiswa.getDataRange().getValues();
+    if (siswaRows.length < 2) return [];
+    const siswaHeaders = siswaRows[0];
+    const sIdCol = siswaHeaders.indexOf(COLUMNS.SISWA.ID);
+    const sNamaCol = siswaHeaders.indexOf(COLUMNS.SISWA.NAMA);
+    const sGuruMagangCol = siswaHeaders.indexOf(COLUMNS.SISWA.NAMA_GURU); // Guru Pembimbing Magang
+    const sMagangCol = siswaHeaders.indexOf(COLUMNS.SISWA.TEMPAT_MAGANG);
+
+    // 1. Map relasi Guru Wali HANYA dan EKSKLUSIF dari sheet GURU_WALI
+    // (JANGAN PERNAH menyatukan dengan Wali Kelas / SISWA_WALI_KELAS, karena Wali Kelas dan Guru Wali berbeda)
+    const waliMap = {};
+    if (sheetGW) {
+      const gwRows = sheetGW.getDataRange().getValues();
+      if (gwRows.length > 1) {
+        const gwHeaders = gwRows[0];
+        const gwSiswaCol = gwHeaders.indexOf(COLUMNS.GURU_WALI.ID_SISWA);
+        const gwGuruCol = gwHeaders.indexOf(COLUMNS.GURU_WALI.ID_GURU);
+        for (let i = 1; i < gwRows.length; i++) {
+          let sid = String(gwRows[i][gwSiswaCol] || "").trim();
+          if (sid.length > 2 && sid.slice(-2) === ".0") sid = sid.slice(0, -2);
+          let gid = String(gwRows[i][gwGuruCol] || "").trim();
+          if (gid.length > 2 && gid.slice(-2) === ".0") gid = gid.slice(0, -2);
+          if (sid && gid) waliMap[sid] = gid;
+        }
+      }
+    }
+
+    // 2. Nama guru lookup dari ADMIN_GURU / GURU
+    const guruNamaMap = {};
+    const sheetGuru = ss.getSheetByName(SHEETS.ADMIN_GURU) || ss.getSheetByName(SHEETS.GURU);
+    if (sheetGuru) {
+      const gRows = sheetGuru.getDataRange().getValues();
+      if (gRows.length > 1) {
+        const gHeaders = gRows[0];
+        const gIdCol = gHeaders.indexOf((COLUMNS.ADMIN_GURU && COLUMNS.ADMIN_GURU.ID) || "ID");
+        const gNamaCol = gHeaders.indexOf((COLUMNS.ADMIN_GURU && COLUMNS.ADMIN_GURU.NAMA_GURU) || "NAMA_GURU") !== -1
+          ? gHeaders.indexOf((COLUMNS.ADMIN_GURU && COLUMNS.ADMIN_GURU.NAMA_GURU) || "NAMA_GURU")
+          : gHeaders.indexOf("NAMA");
+        for (let i = 1; i < gRows.length; i++) {
+          let gid = String(gRows[i][gIdCol] || "").trim();
+          if (gid.length > 2 && gid.slice(-2) === ".0") gid = gid.slice(0, -2);
+          const gnm = String(gRows[i][gNamaCol] || "").trim();
+          if (gid) guruNamaMap[gid] = gnm;
+        }
+      }
+    }
+
+    // 4. Map biodata dari DATA_SISWA_WALI
+    const bioMap = {};
+    if (sheetBio) {
+      const bioRows = sheetBio.getDataRange().getValues();
+      if (bioRows.length > 1) {
+        const bioHeaders = bioRows[0];
+        const bIdCol = bioHeaders.indexOf(COLUMNS.DATA_SISWA_WALI.ID_SISWA);
+        for (let i = 1; i < bioRows.length; i++) {
+          const sid = String(bioRows[i][bIdCol] || "").trim();
+          if (sid) {
+            const row = bioRows[i];
+            const getVal = function(colName) {
+              if (!colName) return "";
+              let idx = bioHeaders.indexOf(colName);
+              if (idx === -1 && (colName === "FOTO_WAJAH" || colName === (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH))) {
+                idx = bioHeaders.indexOf("FOTO_WAJAH");
+                if (idx === -1) idx = bioHeaders.indexOf("FOTO WAJAH");
+                if (idx === -1) idx = bioHeaders.indexOf("fotoWajah");
+              }
+              return idx !== -1 ? (row[idx] || "") : "";
+            };
+
+            const colWajahTarget = (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH) || "FOTO_WAJAH";
+
+            const tglVal = getVal(COLUMNS.DATA_SISWA_WALI.TGL_LAHIR);
+            const tglLahirFormatted = typeof formatTanggalWali === "function" ? formatTanggalWali(tglVal) : (tglVal instanceof Date ? Utilities.formatDate(tglVal, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(tglVal || ""));
+
+            const kAyah = getVal(COLUMNS.DATA_SISWA_WALI.KONTAK_AYAH);
+            const kontakAyahFormatted = typeof formatKontakWali === "function" ? formatKontakWali(kAyah) : String(kAyah || "").replace(/^'/, "");
+
+            const kIbu = getVal(COLUMNS.DATA_SISWA_WALI.KONTAK_IBU);
+            const kontakIbuFormatted = typeof formatKontakWali === "function" ? formatKontakWali(kIbu) : String(kIbu || "").replace(/^'/, "");
+
+            bioMap[sid] = {
+              fotoProfil: getVal(COLUMNS.DATA_SISWA_WALI.FOTO_PROFIL),
+              fotoWajah: getVal(colWajahTarget),
+              noHp: getVal(COLUMNS.DATA_SISWA_WALI.NO_HP),
+              tempatLahir: getVal(COLUMNS.DATA_SISWA_WALI.TEMPAT_LAHIR),
+              tglLahir: tglLahirFormatted,
+              ayah: getVal(COLUMNS.DATA_SISWA_WALI.AYAH),
+              pekerjaanAyah: getVal(COLUMNS.DATA_SISWA_WALI.PEKERJAAN_AYAH),
+              kontakAyah: kontakAyahFormatted,
+              ibu: getVal(COLUMNS.DATA_SISWA_WALI.IBU),
+              pekerjaanIbu: getVal(COLUMNS.DATA_SISWA_WALI.PEKERJAAN_IBU),
+              kontakIbu: kontakIbuFormatted,
+              anakKe: getVal(COLUMNS.DATA_SISWA_WALI.ANAK_KE),
+              alamat: getVal(COLUMNS.DATA_SISWA_WALI.ALAMAT),
+              hobi: getVal(COLUMNS.DATA_SISWA_WALI.HOBI),
+              bakatKeahlian: getVal(COLUMNS.DATA_SISWA_WALI.BAKAT_KEAHLIAN),
+              transportasi: getVal(COLUMNS.DATA_SISWA_WALI.TRANSPORTASI),
+              pelajaranDisukai: getVal(COLUMNS.DATA_SISWA_WALI.PELAJARAN_DISUKAI),
+              alasanDisukai: getVal(COLUMNS.DATA_SISWA_WALI.ALASAN_DISUKAI),
+              pelajaranTidakDisukai: getVal(COLUMNS.DATA_SISWA_WALI.PELAJARAN_TIDAK_DISUKAI),
+              alasanTidakDisukai: getVal(COLUMNS.DATA_SISWA_WALI.ALASAN_TIDAK_DISUKAI),
+              harapan: getVal(COLUMNS.DATA_SISWA_WALI.HARAPAN_DI_SMKN1),
+              ijazahSmp: getVal(COLUMNS.DATA_SISWA_WALI.IJAZAH_SMP),
+              // TAMBAHAN KK & NILAI RAPOR
+              kartuKeluarga: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.KARTU_KELUARGA) || "KARTU_KELUARGA") || getVal("KARTU_KELUARGA") || getVal("kartuKeluarga"),
+              totalNilai1: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_1) || "TOTAL_NILAI_1") || getVal("TOTAL_NILAI_1") || getVal("totalNilai1"),
+              mapel1: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_1) || "MAPEL_1") || getVal("MAPEL_1") || getVal("mapel1"),
+              nilaiRapor1: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_1) || "NILAI_RAPOR_1") || getVal("NILAI_RAPOR_1") || getVal("nilaiRapor1"),
+              totalNilai2: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_2) || "TOTAL_NILAI_2") || getVal("TOTAL_NILAI_2") || getVal("totalNilai2"),
+              mapel2: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_2) || "MAPEL_2") || getVal("MAPEL_2") || getVal("mapel2"),
+              nilaiRapor2: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_2) || "NILAI_RAPOR_2") || getVal("NILAI_RAPOR_2") || getVal("nilaiRapor2"),
+              totalNilai3: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_3) || "TOTAL_NILAI_3") || getVal("TOTAL_NILAI_3") || getVal("totalNilai3"),
+              mapel3: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_3) || "MAPEL_3") || getVal("MAPEL_3") || getVal("mapel3"),
+              nilaiRapor3: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_3) || "NILAI_RAPOR_3") || getVal("NILAI_RAPOR_3") || getVal("nilaiRapor3"),
+              totalNilai4: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_4) || "TOTAL_NILAI_4") || getVal("TOTAL_NILAI_4") || getVal("totalNilai4"),
+              mapel4: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_4) || "MAPEL_4") || getVal("MAPEL_4") || getVal("mapel4"),
+              nilaiRapor4: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_4) || "NILAI_RAPOR_4") || getVal("NILAI_RAPOR_4") || getVal("nilaiRapor4"),
+              nilaiRaporRata: getVal((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_RATA) || "NILAI_RAPOR_RATA") || getVal("NILAI_RAPOR_RATA") || getVal("nilaiRaporRata"),
+            };
+          }
+        }
+      }
+    }
+
+    const hasil = [];
+    for (let i = 1; i < siswaRows.length; i++) {
+      const row = siswaRows[i];
+      let sid = String(row[sIdCol] || "").trim();
+      if (sid.length > 2 && sid.slice(-2) === ".0") sid = sid.slice(0, -2);
+      if (!sid) continue;
+
+      const guruWaliId = waliMap[sid] || "";
+      // Filter jika idGuru ditentukan dan bukan "ALL"
+      let cleanFilterGuru = idGuru ? String(idGuru).trim() : "";
+      if (cleanFilterGuru.length > 2 && cleanFilterGuru.slice(-2) === ".0") cleanFilterGuru = cleanFilterGuru.slice(0, -2);
+
+      if (cleanFilterGuru && cleanFilterGuru !== "ALL" && guruWaliId !== cleanFilterGuru) {
+        continue;
+      }
+
+      // HANYA ambil nama Guru Wali jika siswa memang punya relasi di sheet GURU_WALI
+      // JIKA TIDAK PUNYA GURU WALI, BIARKAN KOSONG "" (JANGAN gunakan Guru Pembimbing Magang!)
+      const namaGuruWali = guruWaliId ? (guruNamaMap[guruWaliId] || guruWaliId) : "";
+
+      const bio = bioMap[sid] || {};
+
+      const item = {
+        idSiswa: sid,
+        nama: row[sNamaCol] || "",
+        idGuru: guruWaliId, // ID Guru Wali dari sheet GURU_WALI
+        namaGuru: namaGuruWali, // HANYA Guru Wali (KOSONG jika belum ada Guru Wali)
+        guruPembimbing: (sGuruMagangCol !== -1 && row[sGuruMagangCol]) ? String(row[sGuruMagangCol]).trim() : "",
+        tempatMagang: (sMagangCol !== -1 && row[sMagangCol]) ? String(row[sMagangCol]).trim() : "",
+      };
+
+      Object.keys(bio).forEach(function(k) {
+        item[k] = bio[k];
+      });
+
+      hasil.push(item);
+    }
+
+    return hasil;
+  } catch (err) {
+    Logger.log("Error in getDataSiswaWali: " + err.message);
+    return [];
+  }
+}
+
+

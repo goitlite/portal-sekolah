@@ -299,12 +299,115 @@ function isSiswaAmanDihapusPermanen_(idSiswa, idMapelExclude) {
 // ============================================
 // HELPER — DATA SISWA & GURU WALI (spreadsheet MAGANG, tidak diubah)
 // ============================================
-function parseNamaKelasSiswa_(namaLengkap) {
+function parseNamaKelasSiswa_(namaLengkap, siswaObj) {
   const text = String(namaLengkap || '').trim();
   const match = text.match(/\[(.*?)\]/);
-  const kelas = match ? match[1].trim() : '';
+  let kelas = match ? match[1].trim() : '';
   const namaBersih = text.replace(/\s*\[.*?\]\s*/, '').trim();
-  return { namaBersih: namaBersih, kelas: kelas };
+
+  // Fallback: baca kolom KELAS dari objek siswa jika kelas dalam kurung siku kosong
+  if (!kelas && siswaObj) {
+    kelas = String(
+      siswaObj[COLUMNS.SISWA.KELAS] ||
+      siswaObj.KELAS ||
+      siswaObj.kelas ||
+      ''
+    ).trim();
+  }
+
+  return { namaBersih: namaBersih, kelas: kelas, rawName: text };
+}
+
+function _parseCanonicalKelasMapel_(str) {
+  if (typeof _parseCanonicalKelas_ === 'function') {
+    return _parseCanonicalKelas_(str);
+  }
+  if (!str) return null;
+  var s = String(str).toUpperCase().trim();
+  var bracketMatch = s.match(/\[(.*?)\]/);
+  if (bracketMatch) s = bracketMatch[1].trim();
+  s = s.replace(/\b(KELAS|KLS)\b/g, ' ').trim();
+
+  var level = '';
+  if (/\bXII\b|\b12\b|^XII\b|^12\b/.test(s) || s.indexOf('XII') === 0) {
+    level = 'XII';
+    s = s.replace(/\bXII\b|\b12\b|^XII/, ' ');
+  } else if (/\bXI\b|\b11\b|^XI\b|^11\b/.test(s) || s.indexOf('XI') === 0) {
+    level = 'XI';
+    s = s.replace(/\bXI\b|\b11\b|^XI/, ' ');
+  } else if (/\bX\b|\b10\b|^X\b|^10\b/.test(s) || s.indexOf('X') === 0) {
+    level = 'X';
+    s = s.replace(/\bX\b|\b10\b|^X/, ' ');
+  }
+
+  var section = '';
+  var matchSection = s.match(/(\d+)\s*$/);
+  if (matchSection) {
+    section = matchSection[1];
+    s = s.replace(/(\d+)\s*$/, ' ');
+  }
+
+  var normalizedS = s
+    .replace(/\bTJKT\b/g, 'TKJ')
+    .replace(/\bTKRO\b/g, 'TKR')
+    .replace(/\bTSM\b/g, 'TBSM');
+
+  var body = '';
+  var majorMatch = normalizedS.match(/\b(TKJ|TKR|TBSM|TITL|DPIB|TAV|GEOMATIKA|TO|TAB|TPL|CONTOH)\b/);
+  if (majorMatch) {
+    body = majorMatch[1];
+  } else {
+    body = normalizedS.replace(/[^A-Z]/g, '').trim();
+  }
+
+  if (!level && body) {
+    level = 'XII';
+  }
+
+  if (!body) return null;
+
+  return {
+    level: level,
+    major: body,
+    section: section,
+    canonical: level + '_' + body + (section ? '_' + section : '')
+  };
+}
+
+function _matchKelasMapel_(studentClass, studentRawName, targetClass) {
+  if (typeof _matchKelas_ === 'function') {
+    return _matchKelas_(studentClass, studentRawName, targetClass);
+  }
+
+  var target = _parseCanonicalKelasMapel_(targetClass);
+  if (!target) return false;
+
+  var sParsed = _parseCanonicalKelasMapel_(studentClass);
+  if (!sParsed && studentRawName) {
+    sParsed = _parseCanonicalKelasMapel_(studentRawName);
+  }
+  if (!sParsed && studentRawName) {
+    var m = String(studentRawName).match(/\[(.*?)\]/);
+    if (m) {
+      sParsed = _parseCanonicalKelasMapel_(m[1]);
+    }
+  }
+
+  if (!sParsed) return false;
+
+  if (target.level && sParsed.level && target.level !== sParsed.level) {
+    return false;
+  }
+  if (target.major !== sParsed.major) {
+    return false;
+  }
+  if (target.section || sParsed.section) {
+    if (target.section !== sParsed.section) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getNamaGuruWaliSiswa_(idSiswa) {
@@ -323,7 +426,7 @@ function getKelasSiswaMapel() {
     const semuaSiswa = getSiswa();
     const kelasSet = {};
     semuaSiswa.forEach(function (s) {
-      const info = parseNamaKelasSiswa_(s[COLUMNS.SISWA.NAMA]);
+      const info = parseNamaKelasSiswa_(s[COLUMNS.SISWA.NAMA], s);
       if (info.kelas) kelasSet[info.kelas] = true;
     });
     return Object.keys(kelasSet).sort();
@@ -339,13 +442,17 @@ function getSiswaByKelasMapel(kelas) {
     const semuaSiswa = getSiswa();
     const hasil = [];
     semuaSiswa.forEach(function (s) {
-      const info = parseNamaKelasSiswa_(s[COLUMNS.SISWA.NAMA]);
-      if (info.kelas === kelas) {
-        const idSiswa = s[COLUMNS.SISWA.ID];
+      const rawName = s[COLUMNS.SISWA.NAMA] || s.nama || s.NAMA || '';
+      const sKelas = s[COLUMNS.SISWA.KELAS] || s.kelas || s.KELAS || '';
+      const info = parseNamaKelasSiswa_(rawName, s);
+      const studentClass = sKelas || info.kelas || '';
+
+      if (_matchKelasMapel_(studentClass, rawName, kelas)) {
+        const idSiswa = s[COLUMNS.SISWA.ID] || s.id || s.ID;
         hasil.push({
           idSiswa: idSiswa,
-          nama: info.namaBersih,
-          kelas: info.kelas,
+          nama: info.namaBersih || rawName,
+          kelas: info.kelas || studentClass,
           namaGuruWali: getNamaGuruWaliSiswa_(idSiswa) || ''
         });
       }
@@ -384,11 +491,11 @@ function getSemuaSiswaUntukTambahMapel(idGuru, idMapel) {
       .filter(function (s) { return !sudahTerdaftar[s[COLUMNS.SISWA.ID]]; })
       .map(function (s) {
         const idSiswa = s[COLUMNS.SISWA.ID];
-        const info = parseNamaKelasSiswa_(s[COLUMNS.SISWA.NAMA]);
+        const info = parseNamaKelasSiswa_(s[COLUMNS.SISWA.NAMA], s);
         return {
           idSiswa: idSiswa,
           nama: info.namaBersih,
-          kelas: info.kelas,
+          kelas: info.kelas || s[COLUMNS.SISWA.KELAS] || s.kelas || '',
           namaGuruWali: waliMap[idSiswa] || ''
         };
       })
@@ -660,11 +767,11 @@ function getSiswaMapel(idGuru, idMapel) {
     const hasil = enrolled.map(function (e) {
       const idSiswa = e[MAPEL_COLUMNS.SISWA_MAPEL.ID_SISWA];
       const siswa = getSiswaById(idSiswa);
-      const info = parseNamaKelasSiswa_(siswa ? siswa[COLUMNS.SISWA.NAMA] : '');
+      const info = parseNamaKelasSiswa_(siswa ? siswa[COLUMNS.SISWA.NAMA] : '', siswa);
       return {
         idSiswa: idSiswa,
         nama: info.namaBersih || (siswa ? siswa[COLUMNS.SISWA.NAMA] : '(Siswa tidak ditemukan)'),
-        kelas: info.kelas,
+        kelas: info.kelas || (siswa ? siswa[COLUMNS.SISWA.KELAS] || siswa.kelas || '' : ''),
         namaGuruWali: getNamaGuruWaliSiswa_(idSiswa) || ''
       };
     });
@@ -1063,7 +1170,7 @@ function saveJurnalMapel(params) {
 
     daftarIdSiswa.forEach(function (idSiswa) {
       const siswa = getSiswaById(idSiswa);
-      const info = parseNamaKelasSiswa_(siswa ? siswa[COLUMNS.SISWA.NAMA] : '');
+      const info = parseNamaKelasSiswa_(siswa ? siswa[COLUMNS.SISWA.NAMA] : '', siswa);
 
       const obj = {};
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL] = generateRandomId();
