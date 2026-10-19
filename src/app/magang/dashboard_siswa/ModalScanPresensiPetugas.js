@@ -1876,7 +1876,7 @@ export default function ModalScanPresensiPetugas({
                 </span>
               </div>
               <p className="text-[10.5px] text-rose-800 leading-snug">
-                Gunakan kode akses <b>1230</b> pada layar kamera di bawah jika
+                Gunakan kode akses <b>.....</b> pada layar kamera di bawah jika
                 ingin membuka akses seperti biasa.
               </p>
             </div>
