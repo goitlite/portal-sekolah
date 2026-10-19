@@ -36,7 +36,7 @@ function getBiodataSiswa(idSiswa) {
   function value(columnName) {
     if (!columnName) return "";
     let index = col(columnName);
-    // Fallback pencarian fleksibel untuk kolom FOTO_WAJAH
+    // Pencarian kolom fleksibel untuk FOTO_WAJAH
     if (index === -1 && (columnName === "FOTO_WAJAH" || columnName === (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH))) {
       index = col("FOTO_WAJAH");
       if (index === -1) index = col("FOTO WAJAH");
@@ -54,9 +54,9 @@ function getBiodataSiswa(idSiswa) {
     namaGuru: siswa[COLUMNS.SISWA.NAMA_GURU] || "",
     tempatMagang: siswa[COLUMNS.SISWA.TEMPAT_MAGANG] || "",
 
-    // DATA BIODATA BARU
+    // DATA BIODATA
     fotoProfil: value(COLUMNS.DATA_SISWA_WALI.FOTO_PROFIL) || "",
-    fotoWajah: value(colWajahTarget) || "", // ---> DITAMBAHKAN AGAR WAJAH DAPAT DIBACA DARI SPREADSHEET
+    fotoWajah: value(colWajahTarget) || "", // Mengambil foto wajah presensi dari sheet
     noHp: value(COLUMNS.DATA_SISWA_WALI.NO_HP) || "", 
     tempatLahir: value(COLUMNS.DATA_SISWA_WALI.TEMPAT_LAHIR) || "",
     tglLahir: formatTanggalWali(value(COLUMNS.DATA_SISWA_WALI.TGL_LAHIR)),
@@ -81,28 +81,44 @@ function getBiodataSiswa(idSiswa) {
     harapan: value(COLUMNS.DATA_SISWA_WALI.HARAPAN_DI_SMKN1) || "",
     ijazahSmp: value(COLUMNS.DATA_SISWA_WALI.IJAZAH_SMP) || "",
 
+    // DOKUMEN & NILAI RAPOR TAMBAHAN
+    kartuKeluarga: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.KARTU_KELUARGA) || "KARTU_KELUARGA") || value("KARTU_KELUARGA") || value("kartuKeluarga") || "",
+    
+    totalNilai1: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_1) || "TOTAL_NILAI_1") || value("TOTAL_NILAI_1") || value("totalNilai1") || "",
+    mapel1: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_1) || "MAPEL_1") || value("MAPEL_1") || value("mapel1") || "",
+    nilaiRapor1: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_1) || "NILAI_RAPOR_1") || value("NILAI_RAPOR_1") || value("nilaiRapor1") || "",
+
+    totalNilai2: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_2) || "TOTAL_NILAI_2") || value("TOTAL_NILAI_2") || value("totalNilai2") || "",
+    mapel2: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_2) || "MAPEL_2") || value("MAPEL_2") || value("mapel2") || "",
+    nilaiRapor2: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_2) || "NILAI_RAPOR_2") || value("NILAI_RAPOR_2") || value("nilaiRapor2") || "",
+
+    totalNilai3: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_3) || "TOTAL_NILAI_3") || value("TOTAL_NILAI_3") || value("totalNilai3") || "",
+    mapel3: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_3) || "MAPEL_3") || value("MAPEL_3") || value("mapel3") || "",
+    nilaiRapor3: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_3) || "NILAI_RAPOR_3") || value("NILAI_RAPOR_3") || value("nilaiRapor3") || "",
+
+    totalNilai4: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_4) || "TOTAL_NILAI_4") || value("TOTAL_NILAI_4") || value("totalNilai4") || "",
+    mapel4: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_4) || "MAPEL_4") || value("MAPEL_4") || value("mapel4") || "",
+    nilaiRapor4: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_4) || "NILAI_RAPOR_4") || value("NILAI_RAPOR_4") || value("nilaiRapor4") || "",
+
+    nilaiRaporRata: value((COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_RATA) || "NILAI_RAPOR_RATA") || value("NILAI_RAPOR_RATA") || value("nilaiRaporRata") || "",
+
     // ===================================================
     // CATATAN PERKEMBANGAN MURID (LAMPIRAN B)
     // ===================================================
     periodeAwal: value(COLUMNS.DATA_SISWA_WALI.PERIODE_AWAL) || "",
     periodeAkhir: value(COLUMNS.DATA_SISWA_WALI.PERIODE_AKHIR) || "",
-
     desAkademik: value(COLUMNS.DATA_SISWA_WALI.DES_AKADEMIK) || "",
     tinAkademik: value(COLUMNS.DATA_SISWA_WALI.TIN_AKADEMIK) || "",
     ketAkademik: value(COLUMNS.DATA_SISWA_WALI.KET_AKADEMIK) || "",
-
     desKarakter: value(COLUMNS.DATA_SISWA_WALI.DES_KARAKTER) || "",
     tinKarakter: value(COLUMNS.DATA_SISWA_WALI.TIN_KARAKTER) || "",
     ketKarakter: value(COLUMNS.DATA_SISWA_WALI.KET_KARAKTER) || "",
-
     desSosial: value(COLUMNS.DATA_SISWA_WALI.DES_SOSIAL) || "",
     tinSosial: value(COLUMNS.DATA_SISWA_WALI.TIN_SOSIAL) || "",
     ketSosial: value(COLUMNS.DATA_SISWA_WALI.KET_SOSIAL) || "",
-
     desDisiplin: value(COLUMNS.DATA_SISWA_WALI.DES_DISIPLIN) || "",
     tinDisiplin: value(COLUMNS.DATA_SISWA_WALI.TIN_DISIPLIN) || "",
     ketDisiplin: value(COLUMNS.DATA_SISWA_WALI.KET_DISIPLIN) || "",
-
     desPotensi: value(COLUMNS.DATA_SISWA_WALI.DES_POTENSI) || "",
     tinPotensi: value(COLUMNS.DATA_SISWA_WALI.TIN_POTENSI) || "",
     ketPotensi: value(COLUMNS.DATA_SISWA_WALI.KET_POTENSI) || ""
@@ -128,12 +144,41 @@ function updateBiodataSiswa(idSiswa, data) {
   const idColumn = headers.indexOf(COLUMNS.DATA_SISWA_WALI.ID_SISWA);
   if (idColumn === -1) return errorResponse("Kolom ID_SISWA tidak ditemukan");
 
-  // Otomatis tambahkan header FOTO_WAJAH jika belum ada di sheet DATA_SISWA_WALI
+  // Otomatis buat header kolom FOTO_WAJAH jika belum ada di Sheet DATA_SISWA_WALI
   const colWajahTarget = (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH) || "FOTO_WAJAH";
   if (headers.indexOf(colWajahTarget) === -1 && headers.indexOf("FOTO WAJAH") === -1 && headers.indexOf("fotoWajah") === -1) {
     sheet.getRange(1, headers.length + 1).setValue("FOTO_WAJAH");
     headers.push("FOTO_WAJAH");
   }
+
+  // Otomatis buat header kolom dokumen & nilai rapor jika belum ada
+  const autoHeaders = [
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.KARTU_KELUARGA) || "KARTU_KELUARGA",
+    
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_1) || "TOTAL_NILAI_1",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_1) || "MAPEL_1",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_1) || "NILAI_RAPOR_1",
+
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_2) || "TOTAL_NILAI_2",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_2) || "MAPEL_2",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_2) || "NILAI_RAPOR_2",
+
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_3) || "TOTAL_NILAI_3",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_3) || "MAPEL_3",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_3) || "NILAI_RAPOR_3",
+
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_4) || "TOTAL_NILAI_4",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_4) || "MAPEL_4",
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_4) || "NILAI_RAPOR_4",
+
+    (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_RATA) || "NILAI_RAPOR_RATA"
+  ];
+  autoHeaders.forEach(function(h) {
+    if (headers.indexOf(h) === -1) {
+      sheet.getRange(1, headers.length + 1).setValue(h);
+      headers.push(h);
+    }
+  });
 
   let rowNumber = -1;
   for (let i = 1; i < values.length; i++) {
@@ -186,7 +231,7 @@ function getBiodataColumnName(key) {
   const colWajah = (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.FOTO_WAJAH) || "FOTO_WAJAH";
   const map = {
     fotoProfil: COLUMNS.DATA_SISWA_WALI.FOTO_PROFIL,
-    fotoWajah: colWajah, // ---> DITAMBAHKAN AGAR FOTO WAJAH TERSIMPAN KE SPREADSHEET
+    fotoWajah: colWajah, // Memetakan properti fotoWajah ke kolom FOTO_WAJAH
     noHp: COLUMNS.DATA_SISWA_WALI.NO_HP,
     tempatLahir: COLUMNS.DATA_SISWA_WALI.TEMPAT_LAHIR,
     tglLahir: COLUMNS.DATA_SISWA_WALI.TGL_LAHIR,
@@ -208,28 +253,44 @@ function getBiodataColumnName(key) {
     harapan: COLUMNS.DATA_SISWA_WALI.HARAPAN_DI_SMKN1,
     ijazahSmp: COLUMNS.DATA_SISWA_WALI.IJAZAH_SMP,
 
+    // DOKUMEN & NILAI RAPOR TAMBAHAN
+    kartuKeluarga: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.KARTU_KELUARGA) || "KARTU_KELUARGA",
+    
+    totalNilai1: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_1) || "TOTAL_NILAI_1",
+    mapel1: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_1) || "MAPEL_1",
+    nilaiRapor1: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_1) || "NILAI_RAPOR_1",
+
+    totalNilai2: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_2) || "TOTAL_NILAI_2",
+    mapel2: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_2) || "MAPEL_2",
+    nilaiRapor2: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_2) || "NILAI_RAPOR_2",
+
+    totalNilai3: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_3) || "TOTAL_NILAI_3",
+    mapel3: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_3) || "MAPEL_3",
+    nilaiRapor3: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_3) || "NILAI_RAPOR_3",
+
+    totalNilai4: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.TOTAL_NILAI_4) || "TOTAL_NILAI_4",
+    mapel4: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.MAPEL_4) || "MAPEL_4",
+    nilaiRapor4: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_4) || "NILAI_RAPOR_4",
+
+    nilaiRaporRata: (COLUMNS.DATA_SISWA_WALI && COLUMNS.DATA_SISWA_WALI.NILAI_RAPOR_RATA) || "NILAI_RAPOR_RATA",
+
     // ===================================================
     // CATATAN PERKEMBANGAN MURID (LAMPIRAN B)
     // ===================================================
     periodeAwal: COLUMNS.DATA_SISWA_WALI.PERIODE_AWAL,
     periodeAkhir: COLUMNS.DATA_SISWA_WALI.PERIODE_AKHIR,
-
     desAkademik: COLUMNS.DATA_SISWA_WALI.DES_AKADEMIK,
     tinAkademik: COLUMNS.DATA_SISWA_WALI.TIN_AKADEMIK,
     ketAkademik: COLUMNS.DATA_SISWA_WALI.KET_AKADEMIK,
-
     desKarakter: COLUMNS.DATA_SISWA_WALI.DES_KARAKTER,
     tinKarakter: COLUMNS.DATA_SISWA_WALI.TIN_KARAKTER,
     ketKarakter: COLUMNS.DATA_SISWA_WALI.KET_KARAKTER,
-
     desSosial: COLUMNS.DATA_SISWA_WALI.DES_SOSIAL,
     tinSosial: COLUMNS.DATA_SISWA_WALI.TIN_SOSIAL,
     ketSosial: COLUMNS.DATA_SISWA_WALI.KET_SOSIAL,
-
     desDisiplin: COLUMNS.DATA_SISWA_WALI.DES_DISIPLIN,
     tinDisiplin: COLUMNS.DATA_SISWA_WALI.TIN_DISIPLIN,
     ketDisiplin: COLUMNS.DATA_SISWA_WALI.KET_DISIPLIN,
-
     desPotensi: COLUMNS.DATA_SISWA_WALI.DES_POTENSI,
     tinPotensi: COLUMNS.DATA_SISWA_WALI.TIN_POTENSI,
     ketPotensi: COLUMNS.DATA_SISWA_WALI.KET_POTENSI
@@ -290,4 +351,3 @@ function getWajahBulk(idSiswaList) {
     return errorResponse("Gagal memuat wajah bulk: " + err.message);
   }
 }
-

@@ -319,9 +319,29 @@ export async function updateBiodataSiswa(data) {
       pelajaranTidakDisukai: data.pelajaranTidakDisukai,
       alasanTidakDisukai: data.alasanTidakDisukai,
 
-      // HARAPAN
+      // HARAPAN & DOKUMEN PENDUKUNG
       harapan: data.harapan,
-      ijazahSmp: data.ijazahSmp, // ---> TAMBAHKAN BARIS INI
+      ijazahSmp: data.ijazahSmp,
+      kartuKeluarga: data.kartuKeluarga,
+
+      // NILAI RAPOR (SEMESTER 1 - 4)
+      totalNilai1: data.totalNilai1,
+      mapel1: data.mapel1,
+      nilaiRapor1: data.nilaiRapor1,
+
+      totalNilai2: data.totalNilai2,
+      mapel2: data.mapel2,
+      nilaiRapor2: data.nilaiRapor2,
+
+      totalNilai3: data.totalNilai3,
+      mapel3: data.mapel3,
+      nilaiRapor3: data.nilaiRapor3,
+
+      totalNilai4: data.totalNilai4,
+      mapel4: data.mapel4,
+      nilaiRapor4: data.nilaiRapor4,
+
+      nilaiRaporRata: data.nilaiRaporRata,
 
       // ===================================================
       // CATATAN PERKEMBANGAN MURID (LAMPIRAN B) - TAMBAHAN BARU
