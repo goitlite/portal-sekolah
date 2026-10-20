@@ -399,7 +399,7 @@ export async function checkFaceDuplicate({
 //     wajah) diberi masa tenggang FACE_LOSS_GRACE_MS, bukan reset total.
 //  5) Status "terverifikasi" kedaluwarsa setelah LIVENESS_TTL_MS.
 // =====================================================================
-export const HEAD_TURN_REL = 0.2; // selisih yaw dari baseline agar dianggap menoleh (~20 derajat)
+export const HEAD_TURN_REL = 0.28; // selisih yaw dari baseline agar dianggap menoleh (~25-30 derajat)
 export const HEAD_CENTER_REL = 0.1; // selisih maksimum dari baseline agar dianggap sudah kembali
 export const MAX_CHALLENGE_YAW = 1.0; // batas yaw saat tantangan berlangsung (menoleh jauh diperbolehkan)
 export const HEAD_HOLD_MS = 300; // lama tahan minimal di posisi toleh / tengah (tahan sebentar ~0,3 dtk)

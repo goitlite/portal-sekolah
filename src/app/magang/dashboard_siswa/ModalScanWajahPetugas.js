@@ -52,12 +52,25 @@ const WAJAH_OPEN_M = 30; // 06:30 WIB
 const WAJAH_CLOSE_H = 8;
 const WAJAH_CLOSE_M = 0; // 08:00 WIB
 
+// Kode akses hanya berlaku untuk HARI INI di perangkat ini (tidak permanen)
+function localDateKey() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+function isBypassActiveToday(...names) {
+  try {
+    const t = localDateKey();
+    return names.some((n) => localStorage.getItem(n) === t);
+  } catch (_) {
+    return false;
+  }
+}
+
 function checkIsPastTimeLimit() {
   try {
     if (typeof window !== "undefined") {
       if (
-        localStorage.getItem("portal_bypass_wajah_time") === "true" ||
-        localStorage.getItem("portal_bypass_time_limit") === "true"
+        isBypassActiveToday("portal_bypass_wajah_time", "portal_bypass_time_limit")
       ) {
         return false;
       }
@@ -269,9 +282,10 @@ export default function ModalScanWajahPetugas({
   function handleUnlockWajahWithCode() {
     if (unlockCodeInput.trim() === "1230") {
       try {
-        localStorage.setItem("portal_bypass_wajah_time", "true");
-        localStorage.setItem("portal_bypass_time_limit", "true");
+        localStorage.setItem("portal_bypass_wajah_time", localDateKey());
+        localStorage.setItem("portal_bypass_time_limit", localDateKey());
       } catch (_) {}
+      timeLockedRef.current = false;
       setIsLockedByTime(false);
       setIsSubmittedToday(false);
       setUnlockError("");
@@ -298,6 +312,11 @@ export default function ModalScanWajahPetugas({
   useEffect(() => {
     isFastVerifyRef.current = isFastVerify;
   }, [isFastVerify]);
+
+  // Verifikasi Cepat tidak boleh "tertinggal menyala" saat modal ditutup lalu dibuka lagi
+  useEffect(() => {
+    if (!isOpen) setIsFastVerify(false);
+  }, [isOpen]);
 
   function handleToggleFastVerify() {
     if (isFastVerify) {
@@ -368,26 +387,54 @@ export default function ModalScanWajahPetugas({
     };
   }, [scanOverlay]);
 
-  // Pantau batas waktu operasional wajah (06:30 – 08:00 WIB)
-  useEffect(() => {
-    if (!isOpen) return;
-    const check = () => {
-      const past = checkIsPastTimeLimit();
-      setIsLockedByTime(past);
-      if (past) setIsSubmittedToday(true);
-    };
-    check();
-    const timer = setInterval(check, 15000);
-    return () => clearInterval(timer);
-  }, [isOpen]);
-
+  // Tanggal dihitung ulang setiap modal dibuka (halaman bisa dibiarkan terbuka semalaman)
   const todayISO = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Pergantian hari: buang sisa data kemarin agar scan hari ini tidak ditolak "sudah hadir"
+  const dayRef = useRef(null);
+  const timeLockedRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    if (dayRef.current !== null && dayRef.current !== todayISO) {
+      setScannedMap({});
+      setManualStatusMap({});
+      setManualKetMap({});
+      setIsSubmittedToday(false);
+      setHasPreviousSubmission(false);
+      timeLockedRef.current = false;
+    }
+    dayRef.current = todayISO;
+  }, [isOpen, todayISO]);
+
+  // Pantau batas waktu operasional wajah (06:30 – 08:00 WIB) secara berkala.
+  // Kunci "sudah submit" karena jam HANYA dicabut lagi bila memang dipasang oleh batas jam
+  // (mis. modal dibuka sebelum jam buka, lalu jam buka tiba).
+  useEffect(() => {
+    if (!isOpen) return;
+    const check = () => {
+      const past = checkIsPastTimeLimit();
+      setIsLockedByTime(past);
+      if (past) {
+        setIsSubmittedToday((prev) => {
+          if (!prev) timeLockedRef.current = true;
+          return true;
+        });
+      } else if (timeLockedRef.current) {
+        timeLockedRef.current = false;
+        setIsSubmittedToday(false);
+      }
+    };
+    check();
+    const timer = setInterval(check, 15000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   // 1. MUAT DATA SISWA & PROFIL FOTO WAJAH DARI SPREADSHEET (PARALEL CEPAT)
   useEffect(() => {
@@ -1577,11 +1624,13 @@ export default function ModalScanWajahPetugas({
           isMotionVerified: false,
           startedAt: now,
           verifiedAt: 0,
+          lastSeenAt: now,
         };
         st.lastStep = 0;
         setChallengeStep(0); // Tahap 1: Hadap
       } else {
         // Otomatis verifikasi tahap 3 (lurus) jika posisi stabil
+        st.liveness.lastSeenAt = now;
         st.liveness.phase = "verified";
         st.liveness.isMotionVerified = true;
         if (!st.liveness.verifiedAt) st.liveness.verifiedAt = now;
@@ -1760,20 +1809,19 @@ export default function ModalScanWajahPetugas({
 
     // Selesai: tantangan toleh lulus + identitas terkunci + ada pencocokan segar sesudahnya
     if (st.lock && live.isMotionVerified) {
-      if (st.lock.firstAt > live.verifiedAt + IDENT_LATE_LOCK_MS) {
+      if (
+        !isFastVerifyRef.current &&
+        st.lock.firstAt > live.verifiedAt + IDENT_LATE_LOCK_MS
+      ) {
         // Identitas baru terbentuk lama setelah tantangan: tidak dipercaya, ulangi toleh
         st.liveness = null;
         st.lastStep = -1;
         setChallengeStep(-1);
         setScanZoneState("adjust");
-        setLiveFaceStatus(
-          isFastVerifyRef.current
-            ? "🔄 Tahan hadap lurus ke kamera untuk dicocokkan"
-            : "🔄 Ulangi: toleh kepala sekali lagi lalu hadap lurus",
-        );
+        setLiveFaceStatus("🔄 Ulangi: toleh kepala sekali lagi lalu hadap lurus");
         return;
       }
-      if (st.lock.at >= live.verifiedAt) {
+      if (st.lock.at >= live.verifiedAt || isFastVerifyRef.current) {
         const { id, nama } = st.lock;
         st.votes.length = 0;
         st.lastCenter = null;
@@ -3083,7 +3131,7 @@ export default function ModalScanWajahPetugas({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleUnlockWajahWithCode();
                       }}
-                      placeholder="Masukkan kode ..."
+                      placeholder="Masukkan kode 1230..."
                       className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-xs font-mono text-center tracking-widest focus:outline-hidden focus:border-amber-400"
                     />
                     <button

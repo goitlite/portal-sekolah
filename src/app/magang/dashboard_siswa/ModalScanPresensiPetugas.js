@@ -30,12 +30,28 @@ const BARCODE_CLOSE_H = 7;
 const BARCODE_CLOSE_M = 15;
 
 // Helper cek apakah waktu lokal saat ini di luar batas operasional barcode (07:00 - 07:15 WIB)
+// Kode akses hanya berlaku untuk HARI INI di perangkat ini (tidak permanen)
+function localDateKey() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+function isBypassActiveToday(...names) {
+  try {
+    const t = localDateKey();
+    return names.some((n) => localStorage.getItem(n) === t);
+  } catch (_) {
+    return false;
+  }
+}
+
 function checkIsPastTimeLimit() {
   try {
     if (typeof window !== "undefined") {
       if (
-        localStorage.getItem("portal_bypass_barcode_time") === "true" ||
-        localStorage.getItem("portal_bypass_time_limit") === "true"
+        isBypassActiveToday(
+          "portal_bypass_barcode_time",
+          "portal_bypass_time_limit",
+        )
       ) {
         return false;
       }
@@ -196,9 +212,10 @@ export default function ModalScanPresensiPetugas({
   function handleUnlockWithCode() {
     if (unlockCodeInput.trim() === "1230") {
       try {
-        localStorage.setItem("portal_bypass_barcode_time", "true");
-        localStorage.setItem("portal_bypass_time_limit", "true");
+        localStorage.setItem("portal_bypass_barcode_time", localDateKey());
+        localStorage.setItem("portal_bypass_time_limit", localDateKey());
       } catch (_) {}
+      timeLockedRef.current = false;
       setIsLockedByTime(false);
       setIsSubmittedToday(false);
       setUnlockError("");
@@ -247,28 +264,54 @@ export default function ModalScanPresensiPetugas({
     };
   }, [scanOverlay]);
 
-  // Pantau pembatasan waktu operasional barcode (07:00 – 07:15 WIB) secara berkala
-  useEffect(() => {
-    if (!isOpen) return;
-    const check = () => {
-      const past = checkIsPastTimeLimit();
-      setIsLockedByTime(past);
-      if (past) {
-        setIsSubmittedToday(true);
-      }
-    };
-    check();
-    const timer = setInterval(check, 15000);
-    return () => clearInterval(timer);
-  }, [isOpen]);
-
+  // Tanggal dihitung ulang setiap modal dibuka (halaman bisa dibiarkan terbuka semalaman)
   const todayISO = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Pergantian hari: buang sisa data kemarin agar scan hari ini tidak ditolak "sudah hadir"
+  const dayRef = useRef(null);
+  const timeLockedRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    if (dayRef.current !== null && dayRef.current !== todayISO) {
+      setScannedMap({});
+      setManualStatusMap({});
+      setManualKetMap({});
+      setIsSubmittedToday(false);
+      setHasPreviousSubmission(false);
+      timeLockedRef.current = false;
+    }
+    dayRef.current = todayISO;
+  }, [isOpen, todayISO]);
+
+  // Pantau batas waktu operasional barcode (07:00 – 07:15 WIB) secara berkala.
+  // Kunci "sudah submit" karena jam HANYA dicabut lagi bila memang dipasang oleh batas jam
+  // (mis. modal dibuka sebelum jam buka, lalu jam buka tiba).
+  useEffect(() => {
+    if (!isOpen) return;
+    const check = () => {
+      const past = checkIsPastTimeLimit();
+      setIsLockedByTime(past);
+      if (past) {
+        setIsSubmittedToday((prev) => {
+          if (!prev) timeLockedRef.current = true;
+          return true;
+        });
+      } else if (timeLockedRef.current) {
+        timeLockedRef.current = false;
+        setIsSubmittedToday(false);
+      }
+    };
+    check();
+    const timer = setInterval(check, 15000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   // 1. Muat data siswa rombel secara instan dari internal storage/cache
   useEffect(() => {
@@ -1876,7 +1919,7 @@ export default function ModalScanPresensiPetugas({
                 </span>
               </div>
               <p className="text-[10.5px] text-rose-800 leading-snug">
-                Gunakan kode akses <b>.....</b> pada layar kamera di bawah jika
+                Gunakan kode akses <b>1230</b> pada layar kamera di bawah jika
                 ingin membuka akses seperti biasa.
               </p>
             </div>
@@ -1970,7 +2013,7 @@ export default function ModalScanPresensiPetugas({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleUnlockWithCode();
                     }}
-                    placeholder="Masukkan kode ..."
+                    placeholder="Masukkan kode 1230..."
                     className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-xs font-mono text-center tracking-widest focus:outline-hidden focus:border-amber-400"
                   />
                   <button

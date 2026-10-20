@@ -950,6 +950,7 @@ export default function ModalRegistrasiWajahSiswa({
     try {
       // 1. Ekstraksi biometrik wajah & Pemeriksaan Anti-Duplikasi
       let myDescriptor = null;
+      let faceApiFailed = false;
       try {
         const fa = await loadFaceApi();
         const img = await loadImage(previewImage);
@@ -965,7 +966,18 @@ export default function ModalRegistrasiWajahSiswa({
           myDescriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(aligned);
         }
       } catch (e) {
+        faceApiFailed = true;
         console.warn("Gagal menganalisis fitur biometrik wajah:", e);
+      }
+
+      // Foto TANPA wajah terbaca tidak boleh disimpan sebagai wajah resmi: tidak akan pernah
+      // cocok saat scan presensi dan pemeriksaan anti-duplikat akan terlewati.
+      if (!myDescriptor) {
+        throw new Error(
+          faceApiFailed
+            ? "Model pengenal wajah gagal dimuat. Periksa koneksi internet lalu tekan Coba Simpan Lagi."
+            : "Wajah tidak terbaca pada foto ini. Tekan Foto Ulang: hadap lurus, cahaya cukup, tanpa masker/topi.",
+        );
       }
 
       // Jika fitur biometrik wajah berhasil diekstrak, lakukan verifikasi anti-duplikasi

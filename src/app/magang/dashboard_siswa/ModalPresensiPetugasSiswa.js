@@ -146,11 +146,14 @@ export default function ModalPresensiPetugasSiswa({
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  }, []);
+    // Dihitung ulang tiap modal dibuka: halaman bisa dibiarkan terbuka lintas hari
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const todayFormatted = useMemo(() => {
     return formatTanggalIndo(new Date());
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeClass?.idWali && activeClass?.idGuru) {
