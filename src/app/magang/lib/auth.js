@@ -75,3 +75,13 @@ export function getId() {
 
   return user ? user.id : "";
 }
+
+/**
+ * Ambil token sesi user untuk autentikasi request ke server
+ * @returns {string|null}
+ */
+export function getToken() {
+  const user = getSession();
+
+  return user ? user.token || null : null;
+}

@@ -14,6 +14,7 @@ import {
   getDashboardKepsekWaliKelas,
   getKelasPetugas,
   getGuruWaliSiswa,
+  logoutSession,
 } from "../lib/api";
 
 import { getSession, saveSession, isLoggedIn, logout } from "../lib/auth";
@@ -1016,10 +1017,10 @@ export default function DashboardSiswa() {
     };
   }, [loadDataKelasSiswa]);
 
-  function handleLogout() {
+  async function handleLogout() {
     if (!confirm("Keluar dari portal sekolah?")) return;
     localStorage.removeItem(CACHE_KEY);
-    logout();
+    await logoutSession();
     router.replace("/magang/login");
   }
 

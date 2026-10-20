@@ -18,11 +18,89 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
     const params = payload.params || {};
+    const clientToken = payload.token || null;
     
     // Debug log
     // Catat nama aksi saja (params bisa berisi foto base64 / data pribadi)
     log('WebApp Request', { action: action });
-    
+
+    // ============================================
+    // 1. LOGOUT SESSION (MEMATIKAN TOKEN DI SERVER)
+    // ============================================
+    if (action === 'logout') {
+      if (clientToken) {
+        CacheService.getScriptCache().remove('sess_' + clientToken);
+      }
+      return ContentService.createTextOutput(JSON.stringify(
+        successResponse('Logout berhasil')
+      )).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ============================================
+    // 2. VERIFIKASI TOKEN SESI (CENTRAL AUTH GUARD)
+    // Semua aksi selain 'login' WAJIB membawa token sah
+    // ============================================
+    var sessionUser = null;
+    if (action !== 'login') {
+      if (!clientToken) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          tokenExpired: true,
+          message: 'Sesi tidak valid atau belum login. Silakan login kembali.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var cachedSession = CacheService.getScriptCache().get('sess_' + clientToken);
+      if (!cachedSession) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          tokenExpired: true,
+          message: 'Sesi Anda telah berakhir. Silakan login kembali.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      try {
+        sessionUser = JSON.parse(cachedSession);
+      } catch (errJson) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          tokenExpired: true,
+          message: 'Format sesi tidak valid. Silakan login kembali.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // ============================================
+      // 3. ROLE-BASED ACCESS CONTROL (RBAC)
+      // ============================================
+      var userRole = sessionUser.role || '';
+
+      // Aksi Super Admin -> Hanya role admin
+      var ADMIN_ACTIONS = ['getAdminGuru', 'addAdminGuru', 'deleteAdminGuru', 'addGuru', 'editGuru', 'deleteGuru', 'deleteSiswa'];
+      if (ADMIN_ACTIONS.indexOf(action) !== -1 && userRole !== 'admin') {
+        return ContentService.createTextOutput(JSON.stringify(
+          errorResponse('Akses ditolak: Operasi ini hanya diizinkan untuk Administrator.')
+        )).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // Aksi Presensi -> Dilarang jika bukan guru, admin, atau siswa (petugas)
+      if (action === 'savePresensiWaliKelas' || action === 'savePresensiMapel') {
+        if (userRole !== 'guru' && userRole !== 'admin' && userRole !== 'siswa') {
+          return ContentService.createTextOutput(JSON.stringify(
+            errorResponse('Akses ditolak: Anda tidak memiliki izin untuk menyimpan presensi.')
+          )).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      // Aksi Update Biodata -> Siswa hanya boleh edit miliknya sendiri
+      if (action === 'updateBiodataSiswa') {
+        if (userRole === 'siswa' && params.idSiswa && String(params.idSiswa).trim() !== String(sessionUser.id).trim()) {
+          return ContentService.createTextOutput(JSON.stringify(
+            errorResponse('Akses ditolak: Siswa hanya dapat memperbarui data biodata miliknya sendiri.')
+          )).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+
     // Handle request berdasarkan action
     let response;
     

@@ -19,6 +19,7 @@ import {
   getPresensiWaliGrid,
   getSiswa,
   getMonitoringGuru,
+  logoutSession,
 } from "../lib/api";
 import { generateLaporanWaliKelasPDF } from "../guru/guru-wali-kelas/generateLaporanWaliKelasPDF";
 import {
@@ -560,7 +561,7 @@ export default function DashboardKepalaSekolah() {
     sessionStorage.removeItem("kepsek_cache_mapel");
     sessionStorage.removeItem("kepsek_cache_walikelas");
     sessionStorage.removeItem("kepsek_cache_master_siswa");
-    logout();
+    logoutSession();
     router.replace("/magang/login");
   }
 

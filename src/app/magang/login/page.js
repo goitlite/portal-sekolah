@@ -58,6 +58,7 @@ export default function LoginMagang() {
   const [id, setId] = useState("");
   const [loading, setLoading] = useState(false);
   const [recentIds, setRecentIds] = useState([]);
+  const [isExpiredNotice, setIsExpiredNotice] = useState(false);
 
   // 2. STATE BARU: Untuk menahan tampilan form saat sedang mengecek sesi
   const [isChecking, setIsChecking] = useState(true);
@@ -207,6 +208,12 @@ export default function LoginMagang() {
     try {
       const ids = JSON.parse(localStorage.getItem("magang_recent_ids") || "[]");
       setRecentIds(Array.isArray(ids) ? ids : []);
+      if (typeof window !== "undefined" && window.location.search.includes("expired=1")) {
+        setIsExpiredNotice(true);
+        if (Array.isArray(ids) && ids.length > 0) {
+          setId(ids[0]);
+        }
+      }
     } catch (err) {
       setRecentIds([]);
     }
@@ -528,6 +535,14 @@ export default function LoginMagang() {
                   Terlalu banyak percobaan gagal. Silakan tunggu hingga waktu
                   habis.
                 </p>
+              </div>
+            )}
+
+            {/* --- NOTIFIKASI SESI HABIS (RAMAH & AUTO-FILL) --- */}
+            {isExpiredNotice && !isLocked && (
+              <div className="mb-5 rounded-2xl bg-blue-950 text-white px-4 py-3 text-center shadow-lg border border-white/20 text-xs font-bold flex items-center justify-center gap-2">
+                <span className="text-base">🔒</span>
+                <span>Sesi berakhir untuk keamanan. ID Anda telah terisi, silakan klik Masuk.</span>
               </div>
             )}
 

@@ -3,6 +3,8 @@
 // SMKN 1 Teluk Kuantan
 // ==========================================
 
+import { getToken } from "./auth";
+
 export const API_URL =
   "https://script.google.com/macros/s/AKfycbwL6gJ9rVKps7EmqKO0o928iwbFlqk-xQDY4za0PcIPh0f-kkRTyu5XCavvZ-9bsZA/exec";
 
@@ -12,6 +14,15 @@ export const API_URL =
 // ==========================================
 
 async function request(action, params = {}, { silent = false } = {}) {
+  const token = typeof window !== "undefined" ? getToken() : null;
+  const payload = {
+    action,
+    params,
+  };
+  if (token) {
+    payload.token = token;
+  }
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await fetch(API_URL, {
@@ -19,13 +30,22 @@ async function request(action, params = {}, { silent = false } = {}) {
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
         },
-        body: JSON.stringify({
-          action,
-          params,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
+
+      // Deteksi jika server Apps Script menandakan sesi habis / token expired
+      if (result && result.tokenExpired) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("magang:session-expired", {
+              detail: { action, message: result.message },
+            }),
+          );
+        }
+      }
+
       return result;
     } catch (err) {
       if (attempt === 0) {
@@ -48,6 +68,36 @@ async function request(action, params = {}, { silent = false } = {}) {
       };
     }
   }
+}
+
+// ==========================================
+// LOGOUT SESSION
+// Matikan token di server (CacheService) & hapus lokal
+// ==========================================
+export async function logoutSession() {
+  try {
+    await request("logout", {}, { silent: true });
+  } catch (err) {
+    // Abaikan jika server tak terjangkau saat offline
+  }
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("magang_session");
+  }
+}
+
+// ==========================================
+// SUPER ADMIN
+// ==========================================
+export async function getAdminGuru() {
+  return request("getAdminGuru");
+}
+
+export async function addAdminGuru(nama) {
+  return request("addAdminGuru", { nama });
+}
+
+export async function deleteAdminGuru(id) {
+  return request("deleteAdminGuru", { id });
 }
 
 // ==========================================
@@ -373,24 +423,7 @@ export async function updateBiodataSiswa(data) {
 }
 
 export async function getSiswa() {
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST", // Menggunakan POST sesuai requirement doPost() di WebApp.gs
-      headers: {
-        // Gunakan text/plain untuk menghindari preflight CORS error di Google Apps Script
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        action: "getSiswa",
-      }),
-    });
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error("Gagal mengambil data siswa:", error);
-    return { success: false, data: [] };
-  }
+  return request("getSiswa");
 }
 
 // =========================================================

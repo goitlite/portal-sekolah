@@ -31,6 +31,7 @@ import {
   getBiodataSiswa,
   updateBiodataSiswa,
   getSiswa, // ⬅️ Statistik Akun Siswa
+  logoutSession,
 } from "../lib/api";
 
 import { generateLaporanPDF } from "../rekap/pdf/laporanMagang"; // ⬅️ TAMBAHKAN
@@ -1201,7 +1202,7 @@ function DashboardGuruContent() {
     sessionStorage.removeItem("api:getSiswa");
     sessionStorage.removeItem("guru_cache_master_siswa");
 
-    logout();
+    logoutSession();
     router.replace("/magang/login");
   }
 

@@ -3,10 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { verifikasiPinLogin, verifikasiPinHapus } from "./actions"; // Memanggil fungsi aman dari server
-
-// Ganti URL ini dengan URL dari hasil "NEW DEPLOYMENT" yang aksesnya "Anyone"
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbwL6gJ9rVKps7EmqKO0o928iwbFlqk-xQDY4za0PcIPh0f-kkRTyu5XCavvZ-9bsZA/exec";
+import {
+  getAdminGuru,
+  addAdminGuru,
+  deleteAdminGuru,
+  login,
+} from "../lib/api";
+import { getSession, saveSession } from "../lib/auth";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -20,18 +23,7 @@ export default function AdminPage() {
     setIsMounted(true);
 
     // TRIK PEMANASAN (WARM UP): Menembak API secara diam-diam di latar belakang.
-    // Ini memaksa server Google Apps Script bangun dari 'tidur' (cold start)
-    // saat layar PIN masih tampil, sehingga saat PIN benar data langsung instan.
-    fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      redirect: "follow",
-      body: JSON.stringify({ action: "getAdminGuru" }),
-    }).catch(() => {
-      // Dibiarkan kosong/diabaikan karena ini hanya tembakan pemancing
-    });
+    getAdminGuru().catch(() => {});
   }, []);
 
   // ===========================
@@ -78,6 +70,16 @@ export default function AdminPage() {
 
     if (isPinBenar) {
       setIsAuthenticated(true);
+      // Pastikan ada token session admin di penyimpanan
+      const sess = getSession();
+      if (!sess || sess.role !== "admin" || !sess.token) {
+        try {
+          const resLogin = await login("TJKTADMIN2026");
+          if (resLogin?.success && resLogin?.data) {
+            saveSession(resLogin.data);
+          }
+        } catch (_) {}
+      }
       loadGuru();
     } else {
       showToast("Kode PIN salah!", "error");
@@ -92,18 +94,7 @@ export default function AdminPage() {
     try {
       setLoading(true);
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
-        redirect: "follow",
-        body: JSON.stringify({
-          action: "getAdminGuru",
-        }),
-      });
-
-      const json = await res.json();
+      const json = await getAdminGuru();
 
       if (json.success) {
         const sortedData = (json.data || []).sort((a, b) =>
@@ -116,7 +107,7 @@ export default function AdminPage() {
     } catch (err) {
       console.error("Error loadGuru:", err);
       showToast(
-        "Gagal mengambil data. Pastikan Apps Script diset 'Anyone'.",
+        "Gagal mengambil data.",
         "error",
       );
     } finally {
@@ -136,21 +127,7 @@ export default function AdminPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
-        redirect: "follow",
-        body: JSON.stringify({
-          action: "addAdminGuru",
-          params: {
-            nama: namaGuru,
-          },
-        }),
-      });
-
-      const json = await res.json();
+      const json = await addAdminGuru(namaGuru);
 
       if (!json.success) {
         showToast(json.message, "error");
@@ -506,21 +483,7 @@ export default function AdminPage() {
                       try {
                         setDeleting(true);
 
-                        const res = await fetch(API_URL, {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "text/plain;charset=utf-8",
-                          },
-                          redirect: "follow",
-                          body: JSON.stringify({
-                            action: "deleteAdminGuru",
-                            params: {
-                              id: hapusId,
-                            },
-                          }),
-                        });
-
-                        const json = await res.json();
+                        const json = await deleteAdminGuru(hapusId);
 
                         if (!json.success) {
                           showToast(json.message, "error");

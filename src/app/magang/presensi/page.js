@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { cleanupResources } from "../lib/navigation";
 import { getSession, isLoggedIn } from "../lib/auth";
-import { savePresensi } from "../lib/api";
+import { savePresensi, logoutSession } from "../lib/api";
 import QRCode from "qrcode";
 
 const NamaBadge = ({ rawName }) => {
@@ -551,15 +551,28 @@ export default function PresensiPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              cleanup();
-              router.replace("/magang/dashboard_siswa");
-            }}
-            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-indigo-900/30 border border-blue-500/30 transition-all flex items-center gap-1"
-          >
-            🏠 BERANDA PROFIL
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                cleanup();
+                router.replace("/magang/dashboard_siswa");
+              }}
+              className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-indigo-900/30 border border-blue-500/30 transition-all flex items-center gap-1"
+            >
+              🏠 BERANDA PROFIL
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm("Keluar dari akun siswa?")) return;
+                cleanup();
+                await logoutSession();
+                router.replace("/magang/login");
+              }}
+              className="rounded-xl bg-gradient-to-r from-rose-600 to-red-700 px-3 sm:px-4 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-red-900/30 border border-red-500/30 transition-all flex items-center gap-1"
+            >
+              ❌ KELUAR
+            </button>
+          </div>
         </div>
       </header>
 

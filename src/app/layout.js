@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import RegisterSW from "@/components/pwa/RegisterSW";
+import TokenGuard from "./components/TokenGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col">
         <RegisterSW />
+        <TokenGuard />
         {children}
       </body>
     </html>
