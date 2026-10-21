@@ -579,6 +579,10 @@ function doPost(e) {
       response = getJurnalWaliKelas(params.idGuru, params.idWali);
     }
 
+    else if (action === 'deleteJurnalWaliKelas') {
+      response = deleteJurnalWaliKelas(params);
+    }
+
     // ============================================
     // PETUGAS PRESENSI & EFISIENSI (PetugasPresensi.gs)
     // ============================================

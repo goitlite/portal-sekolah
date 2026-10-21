@@ -26,6 +26,7 @@ import { generateLaporanWaliKelasPDF } from "../generateLaporanWaliKelasPDF";
 import ModalTambahSiswaWali from "./ModalTambahSiswaWali";
 import ModalJurnalWaliKelas from "./ModalJurnalWaliKelas";
 import ModalPilihPetugasPresensi from "../ModalPilihPetugasPresensi";
+import CetakLaporanWaliKelasModal from "../CetakLaporanWaliKelasModal";
 import {
   getPetugasFromWali,
   parseKeteranganWali,
@@ -371,6 +372,7 @@ export default function KelolaWaliKelasPage() {
 
   // Cetak PDF
   const [cetakLoadingId, setCetakLoadingId] = useState(null);
+  const [waliCetakTarget, setWaliCetakTarget] = useState(null);
 
   async function handleCetakPDF(wali) {
     try {
@@ -962,7 +964,7 @@ export default function KelolaWaliKelasPage() {
 
                               <button
                                 type="button"
-                                onClick={() => handleCetakPDF(wali)}
+                                onClick={() => setWaliCetakTarget(wali)}
                                 disabled={cetakLoadingId === wali.idWali}
                                 title="Cetak Laporan Presensi PDF"
                                 className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:brightness-110 active:scale-95 px-3.5 py-2 sm:py-2.5 text-xs font-black text-white border border-fuchsia-400/40 shadow-md transition-all flex items-center gap-1.5 disabled:opacity-60"
@@ -1330,9 +1332,19 @@ export default function KelolaWaliKelasPage() {
           guru={guru}
           wali={waliJurnalTarget}
           onSaved={() => {
-            alert("✅ Jurnal bimbingan berhasil disimpan.");
+            // Sukses ditampilkan di dalam modal sebagai successMessage
           }}
         />
+
+                {/* MODAL CETAK LAPORAN WALI KELAS */}
+        {waliCetakTarget && (
+          <CetakLaporanWaliKelasModal
+            isOpen={!!waliCetakTarget}
+            onClose={() => setWaliCetakTarget(null)}
+            guru={guru}
+            targetWali={waliCetakTarget}
+          />
+        )}
 
         {/* MODAL PETUGAS PRESENSI */}
         {waliPetugasTarget && (

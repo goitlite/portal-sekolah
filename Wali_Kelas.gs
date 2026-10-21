@@ -956,10 +956,12 @@ function saveJurnalWaliKelas(params) {
 
     // Mode kelompok via siswaList
     if (Array.isArray(siswaList) && siswaList.length > 0) {
+      // SATU idJurnal untuk seluruh sesi kelompok — semua siswa berbagi ID yang sama
+      const idJurnalKelompok = generateRandomId();
       siswaList.forEach((s) => {
-        const idJurnal = generateRandomId();
         appendRowWali_(WALI_SHEETS.JURNAL_WALI_KELAS, {
-          [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL]: idJurnal,
+          [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL]: idJurnalKelompok,
+          [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL]: idJurnalKelompok,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_GURU]: idGuru,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_WALI]: idWali,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_SISWA]: s.idSiswa || "",
@@ -985,12 +987,13 @@ function saveJurnalWaliKelas(params) {
 
     // Mode kelompok via idSiswaList
     if (Array.isArray(idSiswaList) && idSiswaList.length > 0) {
+      // SATU idJurnal untuk seluruh sesi kelompok — semua siswa berbagi ID yang sama
+      const idJurnalKelompok2 = generateRandomId();
       idSiswaList.forEach((sid) => {
         const siswaData = getSiswaById(sid);
         const info = _parseSiswaInfo_(siswaData);
-        const idJurnal = generateRandomId();
         appendRowWali_(WALI_SHEETS.JURNAL_WALI_KELAS, {
-          [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL]: idJurnal,
+          [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL]: idJurnalKelompok2,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_GURU]: idGuru,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_WALI]: idWali,
           [WALI_COLUMNS.JURNAL_WALI_KELAS.ID_SISWA]: sid,
@@ -1103,6 +1106,48 @@ function getJurnalWaliKelas(idGuru, idWali) {
     });
 
     return successResponse("Data jurnal wali kelas ditemukan", result);
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+/**
+ * Hapus jurnal bimbingan wali kelas berdasarkan idJurnal.
+ * Menghapus SEMUA baris dengan idJurnal yang sama (untuk format kelompok).
+ * Action: deleteJurnalWaliKelas
+ */
+function deleteJurnalWaliKelas(params) {
+  try {
+    const idGuru = String(params.idGuru || "").trim();
+    const idJurnal = String(params.idJurnal || "").trim();
+
+    if (isEmpty(idGuru)) return errorResponse("idGuru wajib diisi.");
+    if (isEmpty(idJurnal)) return errorResponse("idJurnal wajib diisi.");
+
+    const sheet = getWaliSheet_(WALI_SHEETS.JURNAL_WALI_KELAS);
+    const headers = getWaliHeaders_(WALI_SHEETS.JURNAL_WALI_KELAS);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) return errorResponse("Jurnal tidak ditemukan.");
+
+    const colIdJurnal = headers.indexOf(WALI_COLUMNS.JURNAL_WALI_KELAS.ID_JURNAL);
+    const colIdGuru   = headers.indexOf(WALI_COLUMNS.JURNAL_WALI_KELAS.ID_GURU);
+    const rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+
+    let deleted = 0;
+    // Hapus dari bawah agar row index tidak geser
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (
+        String(rows[i][colIdJurnal]) === idJurnal &&
+        String(rows[i][colIdGuru])   === idGuru
+      ) {
+        sheet.deleteRow(i + 2);
+        deleted++;
+      }
+    }
+
+    if (deleted === 0) return errorResponse("Jurnal tidak ditemukan.");
+    return successResponse("Jurnal berhasil dihapus", { deleted });
   } catch (e) {
     return errorResponse(e.message);
   }

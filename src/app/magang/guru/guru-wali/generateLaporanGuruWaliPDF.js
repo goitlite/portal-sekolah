@@ -2,6 +2,22 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // ============================================================
+// HELPER: Pisahkan "Nama Siswa [Kelas]" -> { nama, kelas }
+// (Diperlukan oleh isSiswaPklExemptInSesi)
+// ============================================================
+const parseNamaKelas = (namaLengkap) => {
+  const text = String(namaLengkap || "").trim();
+  let nama = text;
+  let kelas = "";
+  const match = text.match(/\s*\[([^\]]+)\]\s*$/);
+  if (match) {
+    kelas = match[1].trim();
+    nama = text.replace(/\s*\[[^\]]+\]\s*$/, "").trim();
+  }
+  return { nama, kelas };
+};
+
+// ============================================================
 // HELPER: Mengambil Base64 + Dimensi Asli Gambar
 // ============================================================
 const getBase64Image = async (url) => {
@@ -118,14 +134,24 @@ const parseTanggal = (tanggalString) => {
 // HELPER: Kunci sesi pertemuan kelompok
 // ============================================================
 const getSesiKelompokKey = (item) => {
-  if (!item.idJurnal) return null;
-  const parts = String(item.idJurnal).split("-");
-  if (parts.length < 3) return null;
-  return `${parts[1]}-${parts[2]}`; // YYYYMMDD-HHMMSS
+  if (!item) return null;
+  const id = String(item.idJurnal || "").trim();
+  if (id) {
+    // Jika format seperti JP-YYYYMMDD-HHMMSS-xxx atau JGW-YYYYMMDD-HHMMSS-xxx
+    const parts = id.split("-");
+    if (parts.length >= 3 && /^\d{8}$/.test(parts[1])) {
+      return `${parts[1]}-${parts[2]}`;
+    }
+    return id;
+  }
+  const tgl = item.tanggal || item.createdAt || "";
+  const topik = item.topik || "";
+  return `${tgl}_${topik}`;
 };
 
 // ============================================================
 // HELPER: Cek apakah sesi kelompok memiliki pengecualian PKL
+// (dipakai untuk keterangan di Lampiran C — menampilkan teks "Siswa PKL dikecualikan")
 // ============================================================
 const isSesiPklExempt = (item) => {
   if (!item) return false;
@@ -133,43 +159,91 @@ const isSesiPklExempt = (item) => {
   const topik = String(item.topik || "").toLowerCase();
   return (
     ket.includes("[pkl_exempt") ||
+    ket.includes("[alpa_ids") ||
     ket.includes("pengecualian pkl") ||
+    ket.includes("sedang pkl") ||
     topik.includes("[pkl_exempt") ||
-    topik.includes("pengecualian pkl")
+    topik.includes("pengecualian pkl") ||
+    topik.includes("sedang pkl")
   );
 };
 
 // ============================================================
 // HELPER: Cek apakah siswa tertentu berstatus Sedang PKL di sesi ini
 // ============================================================
-const isSiswaPklExemptInSesi = (item, idSiswa) => {
+const isSiswaPklExemptInSesi = (item, siswa) => {
   if (!item) return false;
   const ket = String(item.keterangan || "");
   const topik = String(item.topik || "");
   const text = `${ket} ${topik}`;
 
-  // 1. Cek jika ada daftar ID spesifik: [PKL_EXEMPT_IDS:id1,id2,...]
-  const matchIds = text.match(/\[PKL_EXEMPT_IDS:([^\]]*)\]/i);
-  if (matchIds) {
-    const rawList = matchIds[1];
-    if (!rawList || rawList.toUpperCase() === "NONE") return false;
-    const ids = rawList
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    const targetId = String(idSiswa || "").trim().toLowerCase();
-    return ids.includes(targetId);
+  // Kumpulkan semua variasi identitas siswa (ID, nama asli, nama bersih tanpa kelas)
+  const targets = new Set();
+  const tambahTarget = (val) => {
+    if (!val) return;
+    const str = String(val).trim().toLowerCase();
+    if (str) targets.add(str);
+    const parsed = parseNamaKelas(str);
+    if (parsed.nama) targets.add(parsed.nama.trim().toLowerCase());
+  };
+
+  if (typeof siswa === "object" && siswa !== null) {
+    tambahTarget(siswa.idSiswa);
+    tambahTarget(siswa.namaSiswa);
+    tambahTarget(siswa.nama);
+    tambahTarget(siswa.namaBersih);
+  } else if (siswa) {
+    tambahTarget(siswa);
   }
 
-  // 2. Fallback untuk data sebelumnya yang menggunakan tag umum [PKL_EXEMPT]
+  // 1. Cek jika siswa secara spesifik ditandai TIDAK HADIR / ALPA
+  const matchAlpa = text.match(/\[(?:ALPA_IDS|TIDAK_HADIR_IDS):([^\]]*)\]/i);
+  if (matchAlpa) {
+    const rawList = matchAlpa[1];
+    if (rawList && rawList.toUpperCase() !== "NONE") {
+      const alpaList = rawList
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      for (const t of targets) {
+        if (alpaList.includes(t)) {
+          return false; // Siswa ini benar-benar Alpa -> kurangi persentase
+        }
+      }
+    }
+  }
+
+  // 2. Cek jika ada tag daftar ID / Nama spesifik PKL: [PKL_EXEMPT_IDS:...]
+  const matchIds = text.match(/\[(?:PKL_EXEMPT_IDS|PKL_EXEMPT_NAMES):([^\]]*)\]/i);
+  if (matchIds) {
+    const rawList = matchIds[1];
+    if (rawList && rawList.toUpperCase() !== "NONE") {
+      const ids = rawList
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      for (const t of targets) {
+        if (ids.includes(t)) {
+          return true; // Dikecualikan karena Sedang PKL (tidak kurangi %)
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: tag global sedang PKL
   if (
+    text.toLowerCase().includes("[pkl_exempt_all]") ||
     text.toLowerCase().includes("[pkl_exempt]") ||
-    text.toLowerCase().includes("pengecualian pkl")
+    text.toLowerCase().includes("pengecualian pkl") ||
+    text.toLowerCase().includes("sedang pkl")
   ) {
     return true;
   }
 
-  return false;
+  // 4. Default: Dalam sistem bimbingan Guru Wali saat masa PKL,
+  // siswa yang tidak dicentang dalam pertemuan kelompok otomatis berstatus Sedang PKL
+  // sehingga persentase kehadiran siswa TIDAK berkurang (kecuali jika eksplisit ditandai Alpa di atas).
+  return true;
 };
 
 // ============================================================
@@ -180,16 +254,18 @@ const susunBarisLaporanC = (data) => {
   const urutanKey = [];
 
   data.forEach((item, idx) => {
-    const key = item.idJurnal || `row-${idx}`;
+    const key =
+      item.idJurnal ||
+      `${item.tanggal}-${item.topik}-${item.createdAt || idx}`;
 
     if (!map.has(key)) {
       const rawKet = String(item.keterangan || "-").trim();
       const isExempt = isSesiPklExempt(item);
-      const cleanKet = rawKet.replace(/\[PKL_EXEMPT[^\]]*\]/gi, "").trim();
+      const cleanKet = rawKet.replace(/\[[A-Z0-9_:,|]+\]/gi, "").trim();
       const ketTampil = isExempt
         ? (cleanKet && cleanKet !== "-" ? `${cleanKet} • ` : "") +
           "Siswa PKL dikecualikan"
-        : (cleanKet || "-");
+        : cleanKet || "-";
 
       map.set(key, {
         tanggal: item.tanggal || "-",
@@ -207,7 +283,9 @@ const susunBarisLaporanC = (data) => {
     const namaLengkap = `${item.namaSiswa || "-"}${
       item.kelas && item.kelas !== "-" ? " [" + item.kelas + "]" : ""
     }`;
-    entry.siswaList.push(namaLengkap);
+    if (!entry.siswaList.includes(namaLengkap)) {
+      entry.siswaList.push(namaLengkap);
+    }
   });
 
   return urutanKey.map((key) => map.get(key));
@@ -249,7 +327,7 @@ const tentukanSemesterTahunAjaran = (data) => {
 // ============================================================
 // HELPER: Susun rekap bulanan per siswa
 // ============================================================
-const susunRekapBulananPerSiswa = (data) => {
+const susunRekapBulananPerSiswa = (data, daftarSiswa = []) => {
   // Catat seluruh sesi kelompok per bulan beserta data item sesinya
   const totalSesiKelompokPerBulan = new Map(); // bulanKey -> Map(sesiKey -> itemSesi)
 
@@ -272,14 +350,32 @@ const susunRekapBulananPerSiswa = (data) => {
 
   const perSiswa = new Map();
 
+  // Inisialisasi dari daftarSiswa jika ada
+  if (Array.isArray(daftarSiswa) && daftarSiswa.length > 0) {
+    daftarSiswa.forEach((s) => {
+      const idSiswa = String(s.idSiswa || s.id || s.nisn || s.nama || "").trim();
+      if (!idSiswa) return;
+      const parsed = parseNamaKelas(s.nama || s.namaSiswa || "");
+      perSiswa.set(idSiswa, {
+        idSiswa,
+        namaSiswa: parsed.nama || s.nama || "-",
+        kelas: parsed.kelas || s.kelas || "-",
+        bulan: new Map(),
+      });
+    });
+  }
+
+  // Tambahkan / lengkapi data siswa dari riwayat jurnal
   data.forEach((item) => {
-    const idSiswa = item.idSiswa || item.namaSiswa;
+    const idSiswa = String(item.idSiswa || item.namaSiswa || "").trim();
     if (!idSiswa) return;
 
     if (!perSiswa.has(idSiswa)) {
+      const parsed = parseNamaKelas(item.namaSiswa || "");
       perSiswa.set(idSiswa, {
-        namaSiswa: item.namaSiswa || "-",
-        kelas: item.kelas || "-",
+        idSiswa,
+        namaSiswa: parsed.nama || item.namaSiswa || "-",
+        kelas: item.kelas || parsed.kelas || "-",
         bulan: new Map(),
       });
     }
@@ -312,6 +408,25 @@ const susunRekapBulananPerSiswa = (data) => {
     }
   });
 
+  // Pastikan bulan-bulan yang memiliki sesi kelompok juga tercatat di siswaEntry.bulan
+  totalSesiKelompokPerBulan.forEach((mapSesi, bulanKey) => {
+    const [yStr, mStr] = bulanKey.split("-");
+    const year = parseInt(yStr, 10);
+    const month = parseInt(mStr, 10);
+
+    perSiswa.forEach((siswaEntry) => {
+      if (!siswaEntry.bulan.has(bulanKey)) {
+        siswaEntry.bulan.set(bulanKey, {
+          year,
+          month,
+          individu: 0,
+          kelompok: 0,
+          sesiKelompokDiikuti: new Set(),
+        });
+      }
+    });
+  });
+
   const hasil = [];
 
   perSiswa.forEach((siswaEntry) => {
@@ -342,14 +457,11 @@ const susunRekapBulananPerSiswa = (data) => {
           sesiTersedia++;
           sesiDiikuti++;
         } else {
-          const isExempt = isSiswaPklExemptInSesi(
-            itemSesi,
-            siswaEntry.namaSiswa || "",
-          );
+          const isExempt = isSiswaPklExemptInSesi(itemSesi, siswaEntry);
           if (isExempt) {
-            // Siswa berstatus Sedang PKL: tidak mengurangi persentase
+            // Siswa berstatus Sedang PKL: persentase kehadiran TIDAK berkurang!
           } else {
-            // Siswa berstatus Tidak Hadir: mengurangi persentase kehadiran
+            // Siswa berstatus Tidak Hadir / Alpa: mengurangi persentase kehadiran
             sesiTersedia++;
           }
         }
@@ -367,6 +479,7 @@ const susunRekapBulananPerSiswa = (data) => {
       if (sesiTersedia > 0) {
         persentase = `${Math.round((sesiDiikuti / sesiTersedia) * 100)}%`;
       } else if (sesiBulanMap.size > 0 && b.kelompok === 0) {
+        // Semua sesi kelompok bulan ini dikecualikan (Sedang PKL)
         persentase = "100% (PKL)";
       } else if (jumlahPertemuan > 0) {
         persentase = "100%";
@@ -383,8 +496,10 @@ const susunRekapBulananPerSiswa = (data) => {
     const persentaseTotal =
       totalSesiTersedia > 0
         ? `${Math.round((totalSesiDiikuti / totalSesiTersedia) * 100)}%`
-        : totalPertemuan > 0 || data.length > 0
-          ? "100%"
+        : totalPertemuan > 0 || totalSesiKelompokPerBulan.size > 0
+          ? totalPertemuan === 0
+            ? "100% (PKL)"
+            : "100%"
           : "-";
 
     hasil.push({
@@ -403,8 +518,8 @@ const susunRekapBulananPerSiswa = (data) => {
 // ============================================================
 // HALAMAN: LAMPIRAN D
 // ============================================================
-const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
-  const rekapSiswa = susunRekapBulananPerSiswa(data);
+const tambahHalamanLampiranD = (doc, { data, namaGuru, daftarSiswa = [] }) => {
+  const rekapSiswa = susunRekapBulananPerSiswa(data, daftarSiswa);
   if (rekapSiswa.length === 0) return;
 
   const { semester, tahunAjaran } = tentukanSemesterTahunAjaran(data);
@@ -524,7 +639,11 @@ const tambahHalamanLampiranD = (doc, { data, namaGuru }) => {
 /**
  * generateLaporanGuruWaliPDF
  */
-export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
+export const generateLaporanGuruWaliPDF = async ({
+  data,
+  namaGuru,
+  daftarSiswa = [],
+}) => {
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("Belum ada data jurnal guru wali untuk dicetak.");
   }
@@ -576,7 +695,9 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
 
   const BARCODE_COL_INDEX = 6;
   const body = barisLaporan.map((item, idx) => {
-    const isKelompok = item.siswaList.length > 1;
+    const isKelompok =
+      (item.formatPertemuan || "").toLowerCase() === "kelompok" ||
+      item.siswaList.length > 1;
     const namaMuridCell = isKelompok
       ? `Format Kelompok:\n${item.siswaList.map((nama) => `•  ${nama}`).join("\n")}`
       : item.siswaList[0] || "-";
@@ -699,8 +820,9 @@ export const generateLaporanGuruWaliPDF = async ({ data, namaGuru }) => {
   doc.setFont("helvetica", "normal");
   doc.text(`NIP. ${" ".repeat(20)}`, 230, ttdY + 27);
 
-  // Lampiran D
-  tambahHalamanLampiranD(doc, { data, namaGuru: teksNamaGuru });
+  // Lampiran D — kirim daftarSiswa supaya siswa yang belum punya jurnal individu
+  // tetap muncul dalam rekap (Sedang PKL sepanjang semester)
+  tambahHalamanLampiranD(doc, { data, namaGuru: teksNamaGuru, daftarSiswa });
 
   const namaFileAman = teksNamaGuru.replace(/[^a-zA-Z0-9_]/g, "_");
   doc.save(`Laporan_Jurnal_GuruWali_${namaFileAman}.pdf`);

@@ -849,6 +849,7 @@ function DashboardGuruContent() {
   const [waliRegistrasiWajahTarget, setWaliRegistrasiWajahTarget] =
     useState(null);
   const [showCetakWaliKelasModal, setShowCetakWaliKelasModal] = useState(false);
+  const [waliKelasCetakAktif, setWaliKelasCetakAktif] = useState(null);
   const [statsPresensiHariIniWali, setStatsPresensiHariIniWali] = useState({});
   const [loadingStatsWali, setLoadingStatsWali] = useState({});
 
@@ -1249,6 +1250,9 @@ function DashboardGuruContent() {
       await generateLaporanGuruWaliPDF({
         data: daftarJurnal,
         namaGuru: user?.nama || daftarJurnal[0]?.namaGuru,
+        // Sertakan daftar siswa wali agar rekap Lampiran D mencakup
+        // siswa yang sedang PKL sepanjang semester (tanpa jurnal individu)
+        daftarSiswa: Array.isArray(dataSiswaWali) ? dataSiswaWali : [],
       });
     } catch (error) {
       console.error("Gagal mencetak laporan guru wali:", error);
@@ -2320,17 +2324,10 @@ function DashboardGuruContent() {
     }
   };
 
-  // Handler cetak laporan PDF langsung dari kartu Wali Kelas
-  const handleCetakPdfWaliKelasDirect = async (wali) => {
-    try {
-      setCetakWaliKelasCardLoadingId(wali.idWali);
-      await generateLaporanWaliKelasPDF({ guru: user, wali });
-    } catch (err) {
-      console.error("Gagal cetak PDF wali kelas:", err);
-      alert(err?.message || "Gagal mencetak laporan PDF wali kelas.");
-    } finally {
-      setCetakWaliKelasCardLoadingId(null);
-    }
+  // Handler cetak laporan PDF dari kartu Wali Kelas (membuka modal cetak lengkap)
+  const handleCetakPdfWaliKelasDirect = (wali) => {
+    setWaliKelasCetakAktif(wali);
+    setShowCetakWaliKelasModal(true);
   };
 
   // --- AMBIL DAFTAR SISWA WALI (untuk pilihan cetak Lampiran A & B) ---
@@ -3097,7 +3094,10 @@ function DashboardGuruContent() {
                 desc="Unduh rekap presensi (PDF)"
                 icon="🖨️"
                 bgGrad="from-fuchsia-600 to-pink-600"
-                onClick={() => setShowCetakWaliKelasModal(true)}
+                onClick={() => {
+                  setWaliKelasCetakAktif(null);
+                  setShowCetakWaliKelasModal(true);
+                }}
               />
             </div>
           )}
@@ -4931,25 +4931,14 @@ function DashboardGuruContent() {
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleCetakPdfWaliKelasDirect(wali)
-                                }
-                                disabled={
-                                  cetakWaliKelasCardLoadingId === wali.idWali
-                                }
-                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[11px]"
+                                onClick={() => {
+                                  setWaliKelasCetakAktif(wali);
+                                  setShowCetakWaliKelasModal(true);
+                                }}
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 px-3 py-2 text-[10px] font-black text-white shadow-sm transition-all hover:brightness-105 active:scale-95 sm:text-[11px]"
                               >
-                                {cetakWaliKelasCardLoadingId === wali.idWali ? (
-                                  <>
-                                    <span className="animate-spin">⏳</span>
-                                    <span>Mencetak...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>🖨️</span>
-                                    <span>Cetak PDF</span>
-                                  </>
-                                )}
+                                <span>🖨️</span>
+                                <span>Cetak PDF</span>
                               </button>
 
                               <button
@@ -6344,8 +6333,12 @@ function DashboardGuruContent() {
       {/* MODAL CETAK LAPORAN WALI KELAS */}
       <CetakLaporanWaliKelasModal
         isOpen={showCetakWaliKelasModal}
-        onClose={() => setShowCetakWaliKelasModal(false)}
+        onClose={() => {
+          setShowCetakWaliKelasModal(false);
+          setWaliKelasCetakAktif(null);
+        }}
         guru={user}
+        targetWali={waliKelasCetakAktif}
       />
 
       {/* MODAL PROFIL LENGKAP SISWA WALI */}

@@ -357,18 +357,44 @@ export default function ModalJurnalGuruWali({
     try {
       let ketFinal = keterangan.trim();
       if (format === "Kelompok") {
-        // Cari siswa yang TIDAK dicentang hadir dan berstatus Sedang PKL
-        const pklIds = siswaList
-          .filter(
-            (s) =>
-              !idSiswaKelompok.includes(s.idSiswa) &&
-              idSiswaPkl.includes(s.idSiswa),
-          )
-          .map((s) => s.idSiswa);
+        // Siswa yang TIDAK dicentang hadir tapi Sedang PKL
+        const pklSiswa = siswaList.filter(
+          (s) =>
+            !idSiswaKelompok.includes(s.idSiswa) &&
+            idSiswaPkl.includes(s.idSiswa),
+        );
+        // Siswa yang TIDAK dicentang hadir dan berstatus Tidak Hadir / Alpa
+        const alpaSiswa = siswaList.filter(
+          (s) =>
+            !idSiswaKelompok.includes(s.idSiswa) &&
+            !idSiswaPkl.includes(s.idSiswa),
+        );
 
-        if (pklIds.length > 0) {
-          const tag = `[PKL_EXEMPT_IDS:${pklIds.join(",")}]`;
-          ketFinal = ketFinal ? `${ketFinal} ${tag}` : tag;
+        const pklTokens = [];
+        pklSiswa.forEach((s) => {
+          if (s.idSiswa) pklTokens.push(String(s.idSiswa).trim());
+          if (s.namaBersih) pklTokens.push(String(s.namaBersih).trim());
+        });
+
+        const alpaTokens = [];
+        alpaSiswa.forEach((s) => {
+          if (s.idSiswa) alpaTokens.push(String(s.idSiswa).trim());
+          if (s.namaBersih) alpaTokens.push(String(s.namaBersih).trim());
+        });
+
+        const tags = [];
+        if (pklTokens.length > 0) {
+          tags.push(`[PKL_EXEMPT_IDS:${pklTokens.join(",")}]`);
+        }
+        if (alpaTokens.length > 0) {
+          tags.push(`[ALPA_IDS:${alpaTokens.join(",")}]`);
+        }
+        if (alpaSiswa.length === 0 && pklSiswa.length > 0) {
+          tags.push("[PKL_EXEMPT_ALL]");
+        }
+
+        if (tags.length > 0) {
+          ketFinal = ketFinal ? `${ketFinal} ${tags.join(" ")}` : tags.join(" ");
         }
       }
 
@@ -590,38 +616,34 @@ export default function ModalJurnalGuruWali({
                   )}
                 </div>
 
-                {/* Card Opsi Pengecualian Sedang PKL (Khusus Format Kelompok) */}
-                {format === "Kelompok" && (
-                  <div className="mb-3 rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 space-y-2 shadow-sm">
-                    <div>
-                      <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
-                        🏢 Status Siswa yang Tidak Dicentang (Sedang PKL vs Tidak Hadir)
-                      </span>
-                      <span className="text-[11px] font-medium text-amber-800 leading-snug block mt-0.5">
-                        Klik tombol status pada setiap siswa di bawah:
-                        <br />• <strong>🏢 Sedang PKL</strong>: dikecualikan dan <strong>persentase kehadiran tetap aman</strong> (tidak berkurang).
-                        <br />• <strong>❌ Tidak Hadir</strong>: dianggap alpa dan <strong>persentase kehadiran berkurang saat dicetak</strong>.
+                {/* Status Siswa yang Tidak Dicentang (Simpel & Praktis) */}
+                {format === "Kelompok" && siswaList.length > 0 && (
+                  <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-600">
+                      <span className="font-bold text-slate-700">Status tidak dicentang:</span>
+                      <span className="text-[11px] text-slate-500 hidden sm:inline">
+                        (Otomatis <strong>Sedang PKL</strong> agar persentase aman)
                       </span>
                     </div>
 
-                    {siswaList.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-1 border-t border-amber-200/80">
-                        <button
-                          type="button"
-                          onClick={setSemuaUncheckedSebagaiPkl}
-                          className="text-[10.5px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                        >
-                          🏢 Jadikan Semua: Sedang PKL (Aman)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={setSemuaUncheckedSebagaiTidakHadir}
-                          className="text-[10.5px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                        >
-                          ❌ Jadikan Semua: Tidak Hadir (Kurangi %)
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={setSemuaUncheckedSebagaiPkl}
+                        className="text-[11px] font-bold text-amber-800 bg-amber-100/90 hover:bg-amber-200/90 border border-amber-300 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        title="Jadikan semua siswa yang tidak dicentang berstatus Sedang PKL (kehadiran aman)"
+                      >
+                        🏢 Semua PKL
+                      </button>
+                      <button
+                        type="button"
+                        onClick={setSemuaUncheckedSebagaiTidakHadir}
+                        className="text-[11px] font-bold text-rose-800 bg-rose-100/90 hover:bg-rose-200/90 border border-rose-300 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        title="Jadikan semua siswa yang tidak dicentang berstatus Alpa (mengurangi persentase)"
+                      >
+                        ❌ Semua Alpa
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -681,10 +703,10 @@ export default function ModalJurnalGuruWali({
                             </span>
                           </label>
 
-                          {/* Tombol Status Interaktif */}
+                          {/* Tombol Status Ringkas & Jelas */}
                           {isHadir ? (
-                            <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md">
-                              ✓ Hadir Kelompok
+                            <span className="shrink-0 text-[10.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                              ✓ Hadir
                             </span>
                           ) : (
                             <button
@@ -694,32 +716,18 @@ export default function ModalJurnalGuruWali({
                                 e.stopPropagation();
                                 toggleStatusPklSiswa(s.idSiswa);
                               }}
-                              className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold border transition-all cursor-pointer shadow-sm ${
+                              className={`shrink-0 text-[10.5px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                                 isPkl
-                                  ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300"
-                                  : "bg-rose-100 hover:bg-rose-200 text-rose-900 border-rose-300"
+                                  ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
+                                  : "bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300"
                               }`}
                               title={
                                 isPkl
-                                  ? "Klik tombol ini untuk ubah menjadi: Tidak Hadir (mengurangi persentase kehadiran)"
-                                  : "Klik tombol ini untuk ubah menjadi: Sedang PKL (tidak mengurangi persentase kehadiran)"
+                                  ? "Klik untuk ubah menjadi Tidak Hadir / Alpa"
+                                  : "Klik untuk ubah menjadi Sedang PKL (aman dari pengurangan persentase)"
                               }
                             >
-                              {isPkl ? (
-                                <>
-                                  <span>🏢 Sedang PKL</span>
-                                  <span className="text-[9px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-black">
-                                    Aman
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>❌ Tidak Hadir</span>
-                                  <span className="text-[9px] bg-rose-200 text-rose-900 px-1 py-0.2 rounded font-black">
-                                    Kurangi %
-                                  </span>
-                                </>
-                              )}
+                              {isPkl ? "🏢 Sedang PKL" : "❌ Tidak Hadir"}
                             </button>
                           )}
                         </div>
@@ -735,11 +743,11 @@ export default function ModalJurnalGuruWali({
                     </span>
                     <div className="flex flex-wrap gap-2">
                       <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        🏢 {siswaList.filter((s) => !idSiswaKelompok.includes(s.idSiswa) && idSiswaPkl.includes(s.idSiswa)).length} sedang PKL (aman)
+                        🏢 {siswaList.filter((s) => !idSiswaKelompok.includes(s.idSiswa) && idSiswaPkl.includes(s.idSiswa)).length} sedang PKL
                       </span>
                       {siswaList.filter((s) => !idSiswaKelompok.includes(s.idSiswa) && !idSiswaPkl.includes(s.idSiswa)).length > 0 && (
                         <span className="text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                          ❌ {siswaList.filter((s) => !idSiswaKelompok.includes(s.idSiswa) && !idSiswaPkl.includes(s.idSiswa)).length} tidak hadir (kurangi %)
+                          ❌ {siswaList.filter((s) => !idSiswaKelompok.includes(s.idSiswa) && !idSiswaPkl.includes(s.idSiswa)).length} tidak hadir
                         </span>
                       )}
                     </div>
@@ -992,17 +1000,17 @@ export default function ModalJurnalGuruWali({
                       )}
                       {j.keterangan && (
                         <div className="space-y-1">
-                          {j.keterangan.replace(/\[PKL_EXEMPT\]/gi, "").trim() && (
+                          {j.keterangan.replace(/\[[A-Z0-9_:,|]+\]/gi, "").trim() && (
                             <p className="text-slate-700">
                               <span className="font-black text-slate-500">
                                 Keterangan:{" "}
                               </span>
-                              {j.keterangan.replace(/\[PKL_EXEMPT\]/gi, "").trim()}
+                              {j.keterangan.replace(/\[[A-Z0-9_:,|]+\]/gi, "").trim()}
                             </p>
                           )}
-                          {j.keterangan.includes("[PKL_EXEMPT]") && (
+                          {j.keterangan.includes("[PKL_EXEMPT") && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-black text-amber-800">
-                              🏢 Pengecualian PKL Aktif (Siswa tidak dicentang aman dari pengurangan persentase)
+                              🏢 Siswa Sedang PKL dikecualikan (kehadiran aman)
                             </span>
                           )}
                         </div>

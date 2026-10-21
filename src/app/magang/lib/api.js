@@ -793,6 +793,11 @@ export async function getJurnalWaliKelas(idGuru, idWali) {
   return request("getJurnalWaliKelas", { idGuru, idWali: idWali || "" });
 }
 
+// Hapus jurnal bimbingan wali kelas berdasarkan idJurnal
+export async function deleteJurnalWaliKelas({ idGuru, idJurnal }) {
+  return request("deleteJurnalWaliKelas", { idGuru, idJurnal });
+}
+
 // ============================================================
 // DASHBOARD KEPALA SEKOLAH (Agregator Lintas Guru & Kelas)
 // ============================================================

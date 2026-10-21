@@ -172,9 +172,77 @@ function gambarTTD(doc, guru) {
   });
 }
 
-// === LAMPIRAN A — Rekap Presensi Harian ===
-async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
-  await gambarKop(doc, "LAPORAN PRESENSI HARIAN WALI KELAS");
+// ============================================================
+// HELPER: filter tanggal berdasarkan bulan & tahun
+// ============================================================
+function filterTanggalBulan(daftarTanggal, bulan, tahun) {
+  if (!bulan || !tahun) return daftarTanggal;
+  return daftarTanggal.filter((tgl) => {
+    const d = new Date(tgl);
+    return (
+      !isNaN(d) && d.getMonth() + 1 === bulan && d.getFullYear() === tahun
+    );
+  });
+}
+
+// ============================================================
+// HELPER: kelompokkan baris jurnal per sesi (idJurnal)
+// Mendukung data lama (tiap siswa punya idJurnal berbeda) dengan
+// fallback grouping: tanggal + topik + createdAt (resolusi menit)
+// ============================================================
+function kelompokkanJurnal(rows) {
+  const byIdJurnal = new Map();
+  rows.forEach((r) => {
+    if (!r.idJurnal) return;
+    if (!byIdJurnal.has(r.idJurnal)) byIdJurnal.set(r.idJurnal, []);
+    byIdJurnal.get(r.idJurnal).push(r);
+  });
+
+  const merged = new Map();
+
+  rows.forEach((r) => {
+    const jurnalId = r.idJurnal || "";
+    const rowsInGroup = byIdJurnal.get(jurnalId) || [];
+
+    let groupKey;
+    if (jurnalId && rowsInGroup.length > 1) {
+      groupKey = `id:${jurnalId}`;
+    } else {
+      const createdMinute = String(r.createdAt || "").substring(0, 16);
+      const topikKey = String(r.topik || "").trim().substring(0, 60);
+      groupKey = `legacy:${r.tanggal}|${topikKey}|${createdMinute}`;
+    }
+
+    if (!merged.has(groupKey)) {
+      merged.set(groupKey, {
+        idJurnal: jurnalId,
+        tanggal: r.tanggal,
+        formatPertemuan: r.formatPertemuan || "Individu",
+        topik: r.topik || "-",
+        tindakLanjut: r.tindakLanjut || "-",
+        keterangan: r.keterangan || "",
+        fotoUrl: r.fotoUrl || "",
+        siswaList: [],
+      });
+    }
+    const nama = r.namaSiswa || r.nama || "";
+    if (nama && !merged.get(groupKey).siswaList.includes(nama)) {
+      merged.get(groupKey).siswaList.push(nama);
+    }
+  });
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const ta = new Date(a.tanggal).getTime() || 0;
+    const tb = new Date(b.tanggal).getTime() || 0;
+    return ta - tb;
+  });
+}
+
+// ============================================================
+// === BAGIAN A.1 & A.2: KEHADIRAN (Presensi Harian & Rekap Total) ===
+// ============================================================
+async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal, bulanLabel }) {
+  await gambarKop(doc, "A. KEHADIRAN — LAPORAN PRESENSI HARIAN WALI KELAS");
 
   const ta = hitungTahunAjaran(daftarTanggal);
   doc.setFontSize(8.5);
@@ -192,9 +260,9 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
   doc.setFont("helvetica", "normal");
   doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
   doc.setFont("helvetica", "bold");
-  doc.text("Tanggal Cetak", 160, 41);
+  doc.text("Periode Laporan", 160, 41);
   doc.setFont("helvetica", "normal");
-  doc.text(`:  ${formatTanggalIndo(new Date())}`, 195, 41);
+  doc.text(`:  ${bulanLabel}`, 195, 41);
 
   // 3 Kartu statistik
   let totalH = 0,
@@ -212,7 +280,7 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
     totalCell > 0 ? `${Math.round((totalH / totalCell) * 100)}%` : "-";
   const cards = [
     { label: "Total Siswa", val: String(siswaList.length) },
-    { label: "Total Hari", val: String(daftarTanggal.length) },
+    { label: "Hari Efektif", val: String(daftarTanggal.length) },
     { label: "Rata-rata Kehadiran", val: rata },
   ];
   const cW = 55,
@@ -261,12 +329,12 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
   for (const chunkTgl of chunks) {
     if (!firstChunk) {
       doc.addPage("a4", "landscape");
-      await gambarKop(doc, "LAPORAN PRESENSI HARIAN WALI KELAS (Sambungan)");
+      await gambarKop(doc, "A. KEHADIRAN — LAPORAN PRESENSI HARIAN (Sambungan)");
       doc.setFontSize(8);
       doc.setFont("helvetica", "italic");
       doc.setTextColor(100, 116, 139);
       doc.text(
-        `Kelas: ${wali.namaKelas || "-"} — Guru: ${guru?.nama || "-"}`,
+        `Kelas: ${wali.namaKelas || "-"} — Guru: ${guru?.nama || "-"} — ${bulanLabel}`,
         14,
         36,
       );
@@ -442,10 +510,10 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
   }
 
   // ============================================================
-  // === REKAP TOTAL PRESENSI SISWA (HALAMAN TERSENDIRI 1 LEMBAR) ===
+  // REKAPITULASI TOTAL PRESENSI SISWA (halaman tersendiri)
   // ============================================================
   doc.addPage("a4", "landscape");
-  await gambarKop(doc, "REKAPITULASI TOTAL PRESENSI SISWA");
+  await gambarKop(doc, "A. KEHADIRAN — REKAPITULASI TOTAL PRESENSI SISWA");
 
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
@@ -462,9 +530,9 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
   doc.setFont("helvetica", "normal");
   doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
   doc.setFont("helvetica", "bold");
-  doc.text("Total Hari Efektif", 160, 41);
+  doc.text("Periode Laporan", 160, 41);
   doc.setFont("helvetica", "normal");
-  doc.text(`:  ${daftarTanggal.length} Hari`, 195, 41);
+  doc.text(`:  ${bulanLabel}`, 195, 41);
 
   const totalHeadCols = [
     [
@@ -556,15 +624,16 @@ async function lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal }) {
     didDrawPage: footerFn(doc),
   });
 
-  // Gambar TTD di bawah tabel Rekap Total
   gambarTTD(doc, guru);
 }
 
-// === LAMPIRAN B — Jurnal Bimbingan ===
-async function lampiranB(doc, { guru, wali, jurnalList }) {
+// ============================================================
+// === BAGIAN B: JURNAL BIMBINGAN WALI KELAS ===
+// ============================================================
+async function lampiranB(doc, { guru, wali, jurnalList, bulanLabel }) {
   doc.addPage("a4", "landscape");
   const pw = doc.internal.pageSize.getWidth();
-  await gambarKop(doc, "LAMPIRAN B — JURNAL BIMBINGAN WALI KELAS");
+  await gambarKop(doc, "B. JURNAL BIMBINGAN WALI KELAS");
 
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
@@ -577,21 +646,25 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
   doc.setFont("helvetica", "normal");
   doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
   doc.setFont("helvetica", "bold");
-  doc.text("Jumlah Entri", 14, 41);
+  doc.text("Periode Laporan", 14, 41);
   doc.setFont("helvetica", "normal");
-  doc.text(`:  ${jurnalList.length}`, 42, 41);
+  doc.text(`:  ${bulanLabel}`, 42, 41);
   doc.setFont("helvetica", "bold");
-  doc.text("Tanggal Cetak", 160, 41);
+  doc.text("Jumlah Entri", 160, 41);
   doc.setFont("helvetica", "normal");
-  doc.text(`:  ${formatTanggalIndo(new Date())}`, 195, 41);
+  doc.text(`:  ${jurnalList.length} Sesi Bimbingan`, 195, 41);
 
   if (!jurnalList || jurnalList.length === 0) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    doc.text("Tidak ada data jurnal bimbingan.", pw / 2, 60, {
-      align: "center",
-    });
+    doc.text(
+      `Tidak ada catatan jurnal bimbingan pada ${bulanLabel}.`,
+      pw / 2,
+      60,
+      { align: "center" },
+    );
+    gambarTTD(doc, guru);
     return;
   }
 
@@ -603,16 +676,28 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
   );
 
   const BARCODE_COL = 7;
-  const body = jurnalList.map((item, idx) => [
-    idx + 1,
-    item.tanggal || "-",
-    item.namaSiswa || "-",
-    item.formatPertemuan || "-",
-    item.topik || "-",
-    item.tindakLanjut || "-",
-    item.keterangan || "-",
-    "",
-  ]);
+  const body = jurnalList.map((item, idx) => {
+    const ketBersih = (item.keterangan || "")
+      .replace(/\[[A-Z0-9_:,|]+\]/gi, "")
+      .trim();
+
+    const isSemuaSiswa =
+      item.keterangan && item.keterangan.includes("[SEMUA_SISWA]");
+    const namaTampil = isSemuaSiswa
+      ? "Seluruh Siswa Kelas"
+      : (item.siswaList || []).join(", ") || item.namaSiswa || "-";
+
+    return [
+      idx + 1,
+      item.tanggal || "-",
+      namaTampil,
+      item.formatPertemuan || "-",
+      item.topik || "-",
+      item.tindakLanjut || "-",
+      ketBersih || "-",
+      "",
+    ];
+  });
 
   autoTable(doc, {
     startY: 46,
@@ -620,9 +705,9 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
       [
         "No",
         "Tanggal",
-        "Nama Siswa",
+        "Nama Siswa / Kelompok",
         "Format",
-        "Topik",
+        "Topik Pembahasan",
         "Tindak Lanjut",
         "Keterangan",
         "Barcode Foto",
@@ -652,8 +737,8 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
     columnStyles: {
       0: { cellWidth: 8, halign: "center" },
       1: { cellWidth: 20, halign: "center" },
-      2: { cellWidth: 40 },
-      3: { cellWidth: 20, halign: "center" },
+      2: { cellWidth: 42 },
+      3: { cellWidth: 18, halign: "center" },
       4: { cellWidth: "auto" },
       5: { cellWidth: 45 },
       6: { cellWidth: 35 },
@@ -695,6 +780,238 @@ async function lampiranB(doc, { guru, wali, jurnalList }) {
 }
 
 // ============================================================
+// === BAGIAN C: KONDISI KELAS & INVENTARIS ===
+// ============================================================
+async function lampiranC(doc, { guru, wali, kondisiKelas, bulanLabel }) {
+  doc.addPage("a4", "landscape");
+  await gambarKop(doc, "C. KONDISI KELAS & INVENTARIS");
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.text("Kelas", 14, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${wali.namaKelas || "-"}`, 42, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Guru Wali Kelas", 160, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Periode Laporan", 14, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${bulanLabel}`, 42, 41);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tanggal Evaluasi", 160, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${formatTanggalIndo(new Date())}`, 195, 41);
+
+  const listData = Array.isArray(kondisiKelas) && kondisiKelas.length > 0
+    ? kondisiKelas
+    : [
+        {
+          pelaksanaanPiket: "Regu Piket Kelas (Senin - Jumat) aktif membersihkan ruangan, membuang sampah, dan menata meja/kursi sebelum KBM & setelah pulang sekolah.",
+          inventarisKelas: "Meja Siswa (36 Baik), Kursi Siswa (36 Baik), Meja & Kursi Guru (1 Set Baik), Whiteboard & Spidol (Baik), Kipas Angin (2 Unit Berfungsi Baik), Jam Dinding (1 Unit Aktif).",
+          keterangan: "Ruangan bersih, tertib, dan sarana prasarana terpelihara dengan baik.",
+        },
+      ];
+
+  const tableBody = listData.map((row, idx) => [
+    idx + 1,
+    row.pelaksanaanPiket || "-",
+    row.inventarisKelas || "-",
+    row.keterangan || "-",
+  ]);
+
+  autoTable(doc, {
+    startY: 47,
+    head: [
+      [
+        "No",
+        "Pelaksanaan Piket Kebersihan",
+        "Inventaris & Sarana Prasarana Kelas",
+        "Keterangan / Evaluasi",
+      ],
+    ],
+    body: tableBody,
+    theme: "grid",
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+      textColor: [30, 41, 59],
+      lineColor: [203, 213, 225],
+      lineWidth: 0.15,
+      valign: "top",
+      minCellHeight: 14,
+    },
+    headStyles: {
+      fillColor: [37, 99, 235],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8.5,
+      halign: "center",
+      valign: "middle",
+      lineWidth: 0.15,
+      minCellHeight: 9,
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 90, halign: "left" },
+      2: { cellWidth: 95, halign: "left" },
+      3: { cellWidth: "auto", halign: "left" },
+    },
+    margin: { left: 14, right: 14, bottom: 18 },
+    didDrawPage: footerFn(doc),
+  });
+
+  gambarTTD(doc, guru);
+}
+
+// ============================================================
+// === BAGIAN D: REKAPITULASI MUTASI SISWA ===
+// ============================================================
+async function lampiranD(doc, { guru, wali, mutasiSiswa, totalSiswa, bulanLabel }) {
+  doc.addPage("a4", "landscape");
+  await gambarKop(doc, "D. REKAPITULASI MUTASI SISWA");
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.text("Kelas", 14, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${wali.namaKelas || "-"}`, 42, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Guru Wali Kelas", 160, 36);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${guru?.nama || "-"}`, 195, 36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Periode Laporan", 14, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${bulanLabel}`, 42, 41);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tanggal Cetak", 160, 41);
+  doc.setFont("helvetica", "normal");
+  doc.text(`:  ${formatTanggalIndo(new Date())}`, 195, 41);
+
+  const rawList = Array.isArray(mutasiSiswa) ? mutasiSiswa.filter(m => m && (m.nama || m.keterangan)) : [];
+
+  let countMasuk = 0;
+  let countKeluar = 0;
+  rawList.forEach((m) => {
+    if (String(m.jenis || "").toLowerCase().includes("masuk")) {
+      countMasuk++;
+    } else {
+      countKeluar++;
+    }
+  });
+
+  // Summary box
+  const cards = [
+    { label: "Total Siswa Terdaftar", val: String(totalSiswa || "-") },
+    { label: "Mutasi Masuk (+)", val: String(countMasuk) },
+    { label: "Mutasi Keluar (-)", val: String(countKeluar) },
+  ];
+  const cW = 55,
+    cH = 12,
+    cG = 8,
+    cX0 = 14,
+    cY = 44;
+  cards.forEach((k, i) => {
+    const x = cX0 + i * (cW + cG);
+    doc.setFillColor(37, 99, 235);
+    doc.setDrawColor(37, 99, 235);
+    doc.roundedRect(x, cY, cW, cH, 2, 2, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(255, 255, 255);
+    doc.text(k.label, x + cW / 2, cY + 4, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(k.val, x + cW / 2, cY + 9.5, { align: "center" });
+  });
+
+  let tableBody = [];
+  if (rawList.length === 0) {
+    tableBody = [
+      [
+        "-",
+        "NIHIL (Tidak ada mutasi siswa masuk atau keluar pada periode ini)",
+        "-",
+        "-",
+        "-",
+      ],
+    ];
+  } else {
+    tableBody = rawList.map((m, idx) => [
+      idx + 1,
+      m.nama || "-",
+      m.jenis || "Mutasi Keluar",
+      m.tanggal || "-",
+      m.keterangan || "-",
+    ]);
+  }
+
+  autoTable(doc, {
+    startY: 59,
+    head: [
+      [
+        "No",
+        "Nama Siswa",
+        "Jenis Mutasi",
+        "Tanggal Mutasi",
+        "Keterangan / Alasan / Asal / Tujuan",
+      ],
+    ],
+    body: tableBody,
+    theme: "grid",
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.5,
+      textColor: [30, 41, 59],
+      lineColor: [203, 213, 225],
+      lineWidth: 0.15,
+      valign: "middle",
+      minCellHeight: 8,
+    },
+    headStyles: {
+      fillColor: [37, 99, 235],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8.5,
+      halign: "center",
+      valign: "middle",
+      lineWidth: 0.15,
+      minCellHeight: 9,
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 70, halign: "left" },
+      2: { cellWidth: 32, halign: "center", fontStyle: "bold" },
+      3: { cellWidth: 32, halign: "center" },
+      4: { cellWidth: "auto", halign: "left" },
+    },
+    margin: { left: 14, right: 14, bottom: 18 },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      if (data.column.index === 2) {
+        const val = String(data.cell.raw).toLowerCase();
+        if (val.includes("masuk")) {
+          data.cell.styles.textColor = [22, 163, 74];
+          data.cell.styles.fillColor = [220, 252, 231];
+        } else if (val.includes("keluar")) {
+          data.cell.styles.textColor = [220, 38, 38];
+          data.cell.styles.fillColor = [254, 226, 226];
+        }
+      }
+    },
+    didDrawPage: footerFn(doc),
+  });
+
+  gambarTTD(doc, guru);
+}
+
+// ============================================================
 // EXPORT UTAMA
 // ============================================================
 export async function generateLaporanWaliKelasPDF({
@@ -704,12 +1021,20 @@ export async function generateLaporanWaliKelasPDF({
   grid: gridProp,
   daftarTanggal: daftarTanggalProp,
   jurnalList: jurnalListProp,
+  bulan, // 1-12, opsional (null jika cetakSemua)
+  tahun, // 4-digit year, opsional
+  cetakSemua = false,
+  kondisiKelas = [],
+  mutasiSiswa = [],
+  includeKondisiKelas = true,
+  includeMutasiSiswa = true,
 }) {
   let siswaList = siswaListProp;
   let grid = gridProp;
-  let daftarTanggal = daftarTanggalProp || [];
-  let jurnalList = jurnalListProp;
+  let daftarTanggalAll = daftarTanggalProp || [];
+  let jurnalListAll = jurnalListProp;
 
+  // Ambil data presensi jika belum ada
   if (!siswaList || !grid) {
     try {
       const res = await getPresensiWaliGrid(guru.id, wali.idWali);
@@ -731,7 +1056,7 @@ export async function generateLaporanWaliKelasPDF({
         };
       });
       grid = gridBaru;
-      daftarTanggal =
+      daftarTanggalAll =
         data.daftarTanggal && data.daftarTanggal.length > 0
           ? [...data.daftarTanggal].sort()
           : [...tanggalSet].sort();
@@ -740,14 +1065,43 @@ export async function generateLaporanWaliKelasPDF({
       throw new Error("Gagal mengambil data presensi untuk cetak laporan.");
     }
   }
-  if (!jurnalList) {
+
+  // Ambil data jurnal jika belum ada
+  if (!jurnalListAll) {
     try {
       const res = await getJurnalWaliKelas(guru.id, wali.idWali);
-      jurnalList = res.success ? res.data || [] : [];
+      jurnalListAll = res.success ? res.data || [] : [];
     } catch {
-      jurnalList = [];
+      jurnalListAll = [];
     }
   }
+
+  const isFilterBulan = !cetakSemua && !!bulan && !!tahun;
+
+  // Filter tanggal presensi berdasarkan bulan & tahun jika dipilih
+  const daftarTanggal = isFilterBulan
+    ? filterTanggalBulan(daftarTanggalAll, bulan, tahun)
+    : daftarTanggalAll;
+
+  // Filter jurnal berdasarkan bulan & tahun jika dipilih
+  let jurnalFiltered = jurnalListAll;
+  if (isFilterBulan) {
+    jurnalFiltered = jurnalListAll.filter((j) => {
+      if (!j.tanggal) return false;
+      const d = new Date(j.tanggal);
+      return (
+        !isNaN(d) && d.getMonth() + 1 === bulan && d.getFullYear() === tahun
+      );
+    });
+  }
+
+  // Label periode untuk kop
+  const bulanLabel = isFilterBulan
+    ? `${NAMA_BULAN[bulan - 1]} ${tahun}`
+    : "Semua Periode (Rekap Akumulatif)";
+
+  // Kelompokkan jurnal per sesi
+  const jurnalKelompok = kelompokkanJurnal(jurnalFiltered);
 
   const doc = new jsPDF({
     orientation: "landscape",
@@ -755,8 +1109,48 @@ export async function generateLaporanWaliKelasPDF({
     format: "a4",
   });
 
-  await lampiranA(doc, { guru, wali, siswaList, grid, daftarTanggal });
-  await lampiranB(doc, { guru, wali, jurnalList });
+  // Bagian A: Presensi Harian & Rekap Total
+  await lampiranA(doc, {
+    guru,
+    wali,
+    siswaList,
+    grid,
+    daftarTanggal,
+    bulanLabel,
+  });
 
-  doc.save(`Laporan_Wali_Kelas_${wali.namaKelas || "Kelas"}.pdf`);
+  // Bagian B: Jurnal Bimbingan Wali Kelas
+  await lampiranB(doc, {
+    guru,
+    wali,
+    jurnalList: jurnalKelompok,
+    bulanLabel,
+  });
+
+  // Bagian C: Kondisi Kelas (opsional)
+  if (includeKondisiKelas) {
+    await lampiranC(doc, {
+      guru,
+      wali,
+      kondisiKelas,
+      bulanLabel,
+    });
+  }
+
+  // Bagian D: Mutasi Siswa (opsional)
+  if (includeMutasiSiswa) {
+    await lampiranD(doc, {
+      guru,
+      wali,
+      mutasiSiswa,
+      totalSiswa: siswaList.length,
+      bulanLabel,
+    });
+  }
+
+  const namaFile = isFilterBulan
+    ? `Laporan_Wali_Kelas_${wali.namaKelas || "Kelas"}_${NAMA_BULAN[bulan - 1]}_${tahun}.pdf`
+    : `Laporan_Wali_Kelas_${wali.namaKelas || "Kelas"}_Semua_Periode.pdf`;
+
+  doc.save(namaFile);
 }
