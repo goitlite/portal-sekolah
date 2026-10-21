@@ -1186,7 +1186,7 @@ function DashboardGuruContent() {
     };
   }, [loadDashboard]);
 
-  function handleLogout() {
+  async function handleLogout() {
     if (!confirm("Keluar dari aplikasi?")) return;
 
     const currentUser = user?.id ? String(user.id) : "";
@@ -1202,7 +1202,7 @@ function DashboardGuruContent() {
     sessionStorage.removeItem("api:getSiswa");
     sessionStorage.removeItem("guru_cache_master_siswa");
 
-    logoutSession();
+    await logoutSession();
     router.replace("/magang/login");
   }
 

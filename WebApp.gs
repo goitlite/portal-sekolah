@@ -82,13 +82,27 @@ function doPost(e) {
         )).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // Aksi Presensi -> Dilarang jika bukan guru, admin, atau siswa (petugas)
-      if (action === 'savePresensiWaliKelas' || action === 'savePresensiMapel') {
+      // Aksi Presensi Mapel -> HANYA Guru dan Admin (Siswa tidak boleh mengabsenkan mapel!)
+      if (action === 'savePresensiMapel') {
+        if (userRole !== 'guru' && userRole !== 'admin') {
+          return ContentService.createTextOutput(JSON.stringify(
+            errorResponse('Akses ditolak: Hanya Guru Mata Pelajaran yang dapat menyimpan presensi kelas.')
+          )).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      // Aksi Presensi Wali Kelas -> Boleh guru, admin, atau siswa (petugas)
+      if (action === 'savePresensiWaliKelas') {
         if (userRole !== 'guru' && userRole !== 'admin' && userRole !== 'siswa') {
           return ContentService.createTextOutput(JSON.stringify(
             errorResponse('Akses ditolak: Anda tidak memiliki izin untuk menyimpan presensi.')
           )).setMimeType(ContentService.MimeType.JSON);
         }
+      }
+
+      // Aksi Presensi Kamera Mandiri (savePresensi) -> Jika siswa, paksa ID milik dirinya sendiri (cegah siswa A absenkan siswa B)
+      if (action === 'savePresensi' && userRole === 'siswa') {
+        params.idSiswa = sessionUser.id;
       }
 
       // Aksi Update Biodata -> Siswa hanya boleh edit miliknya sendiri
@@ -220,24 +234,10 @@ function doPost(e) {
     }
 
     else if (action === 'updateBiodataSiswa') {
-      Logger.log("=================================");
-      Logger.log("UPDATE BIODATA SISWA");
-      Logger.log("PARAMS:");
-      Logger.log(JSON.stringify(params));
-
-      Logger.log("ID SISWA:");
-      Logger.log(params.idSiswa);
-
-      Logger.log("DATA:");
-      Logger.log(JSON.stringify(params.data));
-
       response = updateBiodataSiswa(
         params.idSiswa,
         params.data
       );
-
-      Logger.log("HASIL UPDATE:");
-      Logger.log(JSON.stringify(response));
     }
 
     else if (action === 'hapusSiswaWali') {
@@ -633,27 +633,7 @@ function doGet(e) {
     success: true,
     message: 'Sistem Presensi Magang Online - Backend API',
     status: 'running',
-    version: '1.0.0',
-    endpoint: 'POST',
-    info: 'Kirim request POST dengan parameter action dan params dalam JSON format',
-    available_actions: [
-      'login',
-      'getAdminGuru', 'addAdminGuru', 'deleteAdminGuru',
-      'getGuru', 'addGuru', 'editGuru', 'deleteGuru',
-      'getSiswa', 'getSiswaByGuru', 'addSiswa', 'aktifkanSiswaMagang','editSiswa', 'deleteSiswa',
-      'getSiswaWali', 'getDataSiswaWali', 'getBiodataSiswa', 'updateBiodataSiswa',
-      'saveJurnalGuruWali', 'getJurnalGuruWali', 'getJurnalSiswa', 'deleteJurnalGuruWali', 
-      'savePresensi', 'getRiwayatSiswa', 'getPresensiGuru', 'getPresensiHariIni', 'rekapGuru', 'getStatistikSiswa',
-      'saveMonitoring','getMonitoringGuru','getMonitoringTerbaru','getStatistikMonitoring',
-      'uploadPhoto', 'uploadPhotoFromUrl',
-      'getMapelByGuru', 'addMapel', 'editMapel', 'deleteMapel',
-      'getKelasSiswaMapel', 'getSiswaByKelasMapel', 'getSiswaMapel', 'simpanSiswaMapel', 'hapusSiswaMapel',
-      'getSemuaSiswaUntukTambahMapel', 'getPresensiMapelGrid', 'savePresensiMapel', 'hapusPertemuanMapel', 'saveJurnalMapel', 'getJurnalMapel',
-      'uploadTugasMapel', 'getTugasMapel', 'uploadJawabanSiswa', 'getJawabanSiswa',
-      'getWaliKelasByGuru', 'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
-      'getSiswaWaliKelas', 'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'getSemuaSiswaUntukTambahWali',
-      'sinkronSiswaWaliKelas', 'getPresensiWaliGrid', 'savePresensiWaliKelas', 'saveJurnalWaliKelas', 'getJurnalWaliKelas'
-    ]
+    version: '2.0.0'
   };
   
   return ContentService.createTextOutput(JSON.stringify(response))

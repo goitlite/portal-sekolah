@@ -554,14 +554,14 @@ export default function DashboardKepalaSekolah() {
     return () => clearTimeout(timer);
   }, [isReady, loadedPkl, loadPklData, loadMasterSiswa]);
 
-  function handleLogout() {
+  async function handleLogout() {
     if (!confirm("Keluar dari Portal Kepala Sekolah?")) return;
     sessionStorage.removeItem("kepsek_cache_pkl");
     sessionStorage.removeItem("kepsek_cache_wali");
     sessionStorage.removeItem("kepsek_cache_mapel");
     sessionStorage.removeItem("kepsek_cache_walikelas");
     sessionStorage.removeItem("kepsek_cache_master_siswa");
-    logoutSession();
+    await logoutSession();
     router.replace("/magang/login");
   }
 

@@ -83,7 +83,48 @@ function loginById(id) {
   // Sisipkan token ke dalam userData agar otomatis disimpan oleh frontend
   userData.token = token;
 
+  // Catat riwayat login secara aman (Rolling Buffer maksimal 1000 baris)
+  catatRiwayatLogin_(userData.id, userData.nama, userData.role);
+
   return successResponse('Login berhasil', userData);
+}
+
+/**
+ * Catat riwayat login ke sheet LOG_LOGIN dengan batasan aman (Rolling Buffer)
+ * Otomatis menjaga maksimal 1.000 baris agar Spreadsheet tetap ringan & aman selamanya.
+ */
+function catatRiwayatLogin_(id, nama, role) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("LOG_LOGIN");
+    
+    // 1. Buat sheet dan baris header otomatis jika belum ada
+    if (!sheet) {
+      sheet = ss.insertSheet("LOG_LOGIN");
+      sheet.appendRow(["Waktu Login (WIB)", "ID Pengguna", "Nama Pengguna", "Peran / Role"]);
+      sheet.setFrozenRows(1);
+    }
+    
+    // 2. Tambahkan baris login baru
+    var waktuWIB = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss");
+    sheet.appendRow([waktuWIB, "'" + String(id), nama, role]);
+
+    // ============================================
+    // 3. PENGAMAN KAPASITAS (ROLLING BUFFER)
+    // Maksimal 1.000 baris riwayat terbaru.
+    // Jika tembus 1.050 baris, hapus 50 baris terlama (baris paling atas)
+    // ============================================
+    var MAX_LOG_ROWS = 1000;
+    var totalBaris = sheet.getLastRow();
+    
+    if (totalBaris > MAX_LOG_ROWS + 50) {
+      var barisDihapus = totalBaris - MAX_LOG_ROWS;
+      sheet.deleteRows(2, barisDihapus); // Hapus dari baris ke-2 (tepat setelah header)
+    }
+  } catch (err) {
+    // Pengaman silent: jangan biarkan pencatatan log mengganggu respon login pengguna
+    Logger.log("[catatRiwayatLogin_] Warning: " + err.message);
+  }
 }
 
 /**

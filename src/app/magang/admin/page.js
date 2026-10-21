@@ -8,6 +8,7 @@ import {
   addAdminGuru,
   deleteAdminGuru,
   login,
+  logoutSession,
 } from "../lib/api";
 import { getSession, saveSession } from "../lib/auth";
 
@@ -21,9 +22,6 @@ export default function AdminPage() {
 
   useEffect(() => {
     setIsMounted(true);
-
-    // TRIK PEMANASAN (WARM UP): Menembak API secara diam-diam di latar belakang.
-    getAdminGuru().catch(() => {});
   }, []);
 
   // ===========================
@@ -260,9 +258,10 @@ export default function AdminPage() {
             </div>
           </div>
           <button
-            onClick={() => {
+            onClick={async () => {
               setIsAuthenticated(false);
-              window.location.href = "/magang/login";
+              await logoutSession();
+              router.replace("/magang/login");
             }}
             className="rounded-lg sm:rounded-xl bg-white/10 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-white hover:text-blue-900 border border-white/30 transition-all shadow-sm"
           >

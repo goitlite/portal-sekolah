@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
 export default function TokenGuard() {
   const router = useRouter();
   const pathname = usePathname();
+  const isRedirectingRef = useRef(false);
 
   useEffect(() => {
     function handleSessionExpired(event) {
+      // Debounce: abaikan jika sedang dalam proses redirect
+      if (isRedirectingRef.current) {
+        return;
+      }
+
       // Jangan redirect jika pengguna sudah berada di halaman login
       if (pathname && pathname.includes("/login")) {
         return;
       }
+
+      isRedirectingRef.current = true;
 
       console.warn(
         "[TokenGuard] Sesi token telah kedaluwarsa. Mengarahkan ke halaman login...",
