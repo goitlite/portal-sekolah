@@ -23,7 +23,22 @@ async function request(action, params = {}, { silent = false } = {}) {
     payload.token = token;
   }
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // Hanya aksi BACA (idempotent) yang diulang otomatis saat gagal jaringan.
+  // Aksi tulis/mutasi (add, save, edit, delete, upload, kirim) TIDAK diulang otomatis
+  // agar tidak terjadi duplikasi data jika balasan server terpotong di jalan.
+  const isReadAction =
+    typeof action === "string" &&
+    (action.startsWith("get") ||
+      action.startsWith("rekap") ||
+      action === "login" ||
+      action === "adminLogin");
+
+  const maxAttempts = isReadAction ? 2 : 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
+
     try {
       const response = await fetch(API_URL, {
         method: "POST",
@@ -31,7 +46,10 @@ async function request(action, params = {}, { silent = false } = {}) {
           "Content-Type": "text/plain;charset=utf-8",
         },
         body: JSON.stringify(payload),
+        signal: controller ? controller.signal : undefined,
       });
+
+      if (timeoutId) clearTimeout(timeoutId);
 
       const result = await response.json();
 
@@ -48,8 +66,10 @@ async function request(action, params = {}, { silent = false } = {}) {
 
       return result;
     } catch (err) {
-      if (attempt === 0) {
-        // Beri jeda 600ms sebelum retry satu kali
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (attempt < maxAttempts - 1) {
+        // Beri jeda 600ms sebelum retry satu kali untuk aksi baca
         await new Promise((resolve) => setTimeout(resolve, 600));
         continue;
       }
@@ -57,14 +77,17 @@ async function request(action, params = {}, { silent = false } = {}) {
       if (!silent) {
         console.warn(
           `[API Info] Request "${action}" tidak terhubung:`,
-          err?.message || err,
+          err?.name === "AbortError" ? "Timeout 30 detik" : err?.message || err,
         );
       }
 
       return {
         success: false,
         networkError: true, // jaringan/server tak terjangkau (BUKAN penolakan server)
-        message: "Tidak dapat terhubung ke server.",
+        message:
+          err?.name === "AbortError"
+            ? "Koneksi ke server timeout (30s)."
+            : "Tidak dapat terhubung ke server.",
       };
     }
   }
@@ -88,6 +111,10 @@ export async function logoutSession() {
 // ==========================================
 // SUPER ADMIN
 // ==========================================
+export async function adminLogin(pin) {
+  return request("adminLogin", { pin });
+}
+
 export async function getAdminGuru() {
   return request("getAdminGuru");
 }

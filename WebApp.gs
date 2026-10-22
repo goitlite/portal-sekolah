@@ -38,10 +38,10 @@ function doPost(e) {
 
     // ============================================
     // 2. VERIFIKASI TOKEN SESI (CENTRAL AUTH GUARD)
-    // Semua aksi selain 'login' WAJIB membawa token sah
+    // Semua aksi selain 'login' & 'adminLogin' WAJIB membawa token sah
     // ============================================
     var sessionUser = null;
-    if (action !== 'login') {
+    if (action !== 'login' && action !== 'adminLogin') {
       if (!clientToken) {
         return ContentService.createTextOutput(JSON.stringify({
           success: false,
@@ -74,7 +74,7 @@ function doPost(e) {
       // ============================================
       var userRole = sessionUser.role || '';
 
-      // Aksi Super Admin -> Hanya role admin
+      // A. Aksi Khusus Super Admin
       var ADMIN_ACTIONS = ['getAdminGuru', 'addAdminGuru', 'deleteAdminGuru', 'addGuru', 'editGuru', 'deleteGuru', 'deleteSiswa'];
       if (ADMIN_ACTIONS.indexOf(action) !== -1 && userRole !== 'admin') {
         return ContentService.createTextOutput(JSON.stringify(
@@ -82,7 +82,40 @@ function doPost(e) {
         )).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // Aksi Presensi Mapel -> HANYA Guru dan Admin (Siswa tidak boleh mengabsenkan mapel!)
+      // B. Aksi Khusus Kepala Sekolah & Admin (Dashboard Eksekutif & Broadcast Pesan)
+      if ((action && action.indexOf('Kepsek') !== -1) || action === 'pesanKirimMassal') {
+        if (userRole !== 'kepsek' && userRole !== 'admin') {
+          return ContentService.createTextOutput(JSON.stringify(
+            errorResponse('Akses ditolak: Operasi ini hanya diizinkan untuk Kepala Sekolah.')
+          )).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      // C. Aksi Manajemen Guru & Staf (Ditolak jika pemanggil adalah Siswa)
+      var RESTRICTED_STAFF_ACTIONS = [
+        'addSiswa', 'editSiswa', 'aktifkanSiswaMagang',
+        'simpanGuruWaliSiswa', 'hapusSiswaWali',
+        'saveJurnalGuruWali', 'deleteJurnalGuruWali',
+        'saveJurnalPKL', 'deleteJurnalPKL',
+        'saveMonitoring', 'rekapGuru', 'getRekapSemua',
+        'addMapel', 'editMapel', 'deleteMapel',
+        'simpanSiswaMapel', 'hapusSiswaMapel', 'hapusPertemuanMapel',
+        'saveJurnalMapel', 'uploadTugasMapel',
+        'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
+        'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'sinkronSiswaWaliKelas',
+        'getSemuaSiswaUntukTambahWali', 'getSemuaSiswaUntukTambahMapel',
+        'saveJurnalWaliKelas', 'deleteJurnalWaliKelas',
+        'pesanKirim', 'pesanGetDaftar', 'uploadPhotoFromUrl', 'getSiswa',
+        'getJurnalGuruWali', 'getJurnalPKL', 'getMonitoringGuru',
+        'getMonitoringTerbaru', 'getStatistikMonitoring', 'getAktivitasGuru'
+      ];
+      if (RESTRICTED_STAFF_ACTIONS.indexOf(action) !== -1 && userRole === 'siswa') {
+        return ContentService.createTextOutput(JSON.stringify(
+          errorResponse('Akses ditolak: Siswa tidak memiliki izin untuk tindakan manajemen kelas/sekolah.')
+        )).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // D. Aksi Presensi Mapel -> HANYA Guru dan Admin (Siswa tidak boleh mengabsenkan mapel!)
       if (action === 'savePresensiMapel') {
         if (userRole !== 'guru' && userRole !== 'admin') {
           return ContentService.createTextOutput(JSON.stringify(
@@ -91,7 +124,8 @@ function doPost(e) {
         }
       }
 
-      // Aksi Presensi Wali Kelas -> Boleh guru, admin, atau siswa (petugas)
+      // E. Aksi Presensi Wali Kelas -> Diizinkan untuk Guru, Admin, dan Siswa Petugas Presensi
+      // (Mendukung scan barcode, scan wajah cepat, dan checklist reguler oleh petugas siswa)
       if (action === 'savePresensiWaliKelas') {
         if (userRole !== 'guru' && userRole !== 'admin' && userRole !== 'siswa') {
           return ContentService.createTextOutput(JSON.stringify(
@@ -100,17 +134,41 @@ function doPost(e) {
         }
       }
 
-      // Aksi Presensi Kamera Mandiri (savePresensi) -> Jika siswa, paksa ID milik dirinya sendiri (cegah siswa A absenkan siswa B)
-      if (action === 'savePresensi' && userRole === 'siswa') {
-        params.idSiswa = sessionUser.id;
+      // F. Proteksi Integritas Data Siswa
+      // Jika pemanggil adalah siswa, paksa parameter idSiswa selalu sesuai dengan ID pada token sesi
+      // Mencegah siswa memanipulasi parameter di DevTools untuk mengubah profil, submit tugas, atau mengabsenkan siswa lain
+      if (userRole === 'siswa') {
+        var STUDENT_OWN_ACTIONS = [
+          'savePresensi', 'updateBiodataSiswa', 'getBiodataSiswa',
+          'getRiwayatSiswa', 'getStatistikSiswa', 'getGuruWaliSiswa', 'getKelasPetugas',
+          'uploadJawabanSiswa', 'getJawabanSiswa', 'getJurnalSiswa'
+        ];
+        if (STUDENT_OWN_ACTIONS.indexOf(action) !== -1) {
+          params.idSiswa = sessionUser.id;
+        }
+        // getSiswaById memakai parameter 'id' (bukan idSiswa): paksa ke ID sendiri
+        if (action === 'getSiswaById') {
+          params.id = sessionUser.id;
+        }
       }
 
-      // Aksi Update Biodata -> Siswa hanya boleh edit miliknya sendiri
-      if (action === 'updateBiodataSiswa') {
-        if (userRole === 'siswa' && params.idSiswa && String(params.idSiswa).trim() !== String(sessionUser.id).trim()) {
-          return ContentService.createTextOutput(JSON.stringify(
-            errorResponse('Akses ditolak: Siswa hanya dapat memperbarui data biodata miliknya sendiri.')
-          )).setMimeType(ContentService.MimeType.JSON);
+      // G. Proteksi Guru-ke-Guru
+      // Guru hanya dapat menambah, mengedit, atau menghapus mapel/kelas/jurnal miliknya sendiri
+      if (userRole === 'guru') {
+        var GURU_OWN_ACTIONS = [
+          'deleteMapel', 'editMapel', 'addMapel',
+          'deleteWaliKelas', 'editWaliKelas', 'addWaliKelas',
+          'saveJurnalGuruWali', 'deleteJurnalGuruWali',
+          'saveJurnalPKL', 'deleteJurnalPKL',
+          'saveJurnalMapel', 'saveJurnalWaliKelas', 'deleteJurnalWaliKelas',
+          'saveMonitoring',
+          'savePresensiMapel', 'hapusSiswaWali', 'simpanGuruWaliSiswa',
+          'simpanSiswaMapel', 'hapusSiswaMapel', 'hapusPertemuanMapel',
+          'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'sinkronSiswaWaliKelas',
+          'uploadTugasMapel'
+        ];
+        if (GURU_OWN_ACTIONS.indexOf(action) !== -1) {
+          params.idGuru = sessionUser.id;
         }
       }
     }
@@ -123,6 +181,9 @@ function doPost(e) {
     // ============================================
     if (action === 'login') {
       response = loginById(params.id);
+    }
+    else if (action === 'adminLogin') {
+      response = adminLogin(params.pin);
     }
 
     // ============================================
@@ -568,7 +629,7 @@ function doPost(e) {
     }
 
     else if (action === 'savePresensiWaliKelas') {
-      response = savePresensiWaliKelasAman_(params);
+      response = savePresensiWaliKelasAman_(params, sessionUser);
     }
 
     else if (action === 'saveJurnalWaliKelas') {

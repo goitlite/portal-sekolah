@@ -22,9 +22,63 @@ function ppCleanId_(val) {
 }
 
 // ------------------------------------------------------------
+// Helper verifikasi hak akses siswa petugas presensi
+// Mendukung scan presensi lintas kelas dengan RAM Cache instan
+// ------------------------------------------------------------
+function isSiswaBerhakPresensiWaliKelas_(sid, idWali) {
+  if (!sid) return false;
+
+  var cache = CacheService.getScriptCache();
+  var key = 'petugas_' + sid;
+  var cached = cache.get(key);
+  if (cached === '1') return true;
+  if (cached === '0') return false;
+
+  try {
+    // Baca langsung daftar rombel dari sheet WALI_KELAS (ringan, hanya ~15-20 baris)
+    // JANGAN panggil getDashboardKepsekWaliKelas yang membaca ribuan data dan memperlambat sinkronisasi!
+    var rows = typeof getAllDataWali_ === 'function' 
+      ? getAllDataWali_(WALI_SHEETS.WALI_KELAS) 
+      : [];
+
+    var tagA = "[PETUGAS:" + sid + ":";
+    var tagB = "[PETUGAS:" + sid + "]";
+    var isPetugas = false;
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      var ket = String(
+        (typeof WALI_COLUMNS !== 'undefined' && WALI_COLUMNS.WALI_KELAS && r[WALI_COLUMNS.WALI_KELAS.KETERANGAN]) ||
+        r["KETERANGAN"] ||
+        r["keterangan"] ||
+        ""
+      );
+      if (ket.indexOf(tagA) !== -1 || ket.indexOf(tagB) !== -1) {
+        isPetugas = true;
+        break;
+      }
+    }
+
+    cache.put(key, isPetugas ? '1' : '0', 21600); // Simpan 6 jam
+    return isPetugas;
+  } catch (e) {
+    return true; // Fail-safe agar sinkronisasi presensi tidak pernah macet
+  }
+}
+
+// ------------------------------------------------------------
 // 1. SIMPAN PRESENSI WALI KELAS (aman & tidak menimpa)
 // ------------------------------------------------------------
-function savePresensiWaliKelasAman_(params) {
+function savePresensiWaliKelasAman_(params, sessionUser) {
+  // Jika pemanggil adalah role siswa, hanya siswa petugas presensi (tag [PETUGAS:id] di kelas mana pun) yang boleh
+  if (sessionUser && sessionUser.role === 'siswa') {
+    var sid = ppCleanId_(sessionUser.id);
+    var idWali = params && (params.idWali || params.ID_WALI);
+    if (!isSiswaBerhakPresensiWaliKelas_(sid, idWali)) {
+      return errorResponse("Akses ditolak: Anda bukan petugas presensi.");
+    }
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(25000);
@@ -185,6 +239,9 @@ function getKelasPetugas_(params) {
   }
 
   var petugas = cards.some(punyaTagSaya);
+  try {
+    CacheService.getScriptCache().put('petugas_' + sid, petugas ? '1' : '0', 21600);
+  } catch (_) {}
 
   // Kelas milik siswa ini: utamakan keanggotaan di daftarSiswa, lalu tag petugas
   var idWaliSaya = "";
@@ -353,3 +410,4 @@ function hapusSiswaWaliAman_(params) {
     try { lock.releaseLock(); } catch (e2) {}
   }
 }
+

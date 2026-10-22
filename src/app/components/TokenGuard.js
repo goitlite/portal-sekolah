@@ -8,6 +8,13 @@ export default function TokenGuard() {
   const pathname = usePathname();
   const isRedirectingRef = useRef(false);
 
+  // Reset flag redirect saat pengguna berada di halaman login
+  useEffect(() => {
+    if (pathname && pathname.includes("/login")) {
+      isRedirectingRef.current = false;
+    }
+  }, [pathname]);
+
   useEffect(() => {
     function handleSessionExpired(event) {
       // Debounce: abaikan jika sedang dalam proses redirect

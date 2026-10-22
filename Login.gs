@@ -15,27 +15,54 @@ function loginById(id) {
     return errorResponse('ID tidak boleh kosong');
   }
   
+  var cleanId = String(id).trim();
+
+  // Validasi bentuk ID (cegah input aneh/terlalu panjang & kunci cache > 250 karakter)
+  if (cleanId.length > 30) {
+    return errorResponse('Format ID tidak valid');
+  }
+
+  // Rate Limiting (Server-side Throttling via CacheService)
+  // Cegah serangan brute-force & enumerasi tebak ID tanpa membebani kuota Sheet
+  var cache = CacheService.getScriptCache();
+
+  // 1. Anti-Enumerasi Global (penghambat bot; BUKAN pertahanan utama - pertahanan utama = ID sulit ditebak)
+  //    Batas dibuat longgar (100 gagal/60 detik) agar jam sibuk (salah ketik massal) tidak
+  //    mengunci siswa yang benar. ID yang sudah sukses login dalam 6 jam terakhir ('known_')
+  //    tetap boleh masuk saat server sedang dalam mode terkunci, sehingga serangan tidak
+  //    bisa memblokir pengguna yang sedang aktif.
+  var GLOBAL_FAIL_LIMIT = 100;
+  var globalFailKey = 'login_fail_global';
+  var globalFails = parseInt(cache.get(globalFailKey) || '0', 10);
+  if (globalFails >= GLOBAL_FAIL_LIMIT && cache.get('known_' + cleanId) !== '1') {
+    return errorResponse('Terlalu banyak percobaan login gagal di server. Silakan tunggu 1 menit lalu coba lagi.');
+  }
+
+  // 2. Proteksi Per-ID (Kunci ID jika 5 kali salah berturut-turut)
+  var failKey = 'login_fail_' + cleanId;
+  var failCount = parseInt(cache.get(failKey) || '0', 10);
+  if (failCount >= 5) {
+    return errorResponse('Terlalu banyak percobaan login gagal untuk ID ini. Akun dikunci sementara selama 15 menit demi keamanan.');
+  }
+
   var userData = null;
 
-  // Cek Admin (hardcode)
-  if (id === ADMIN_ID) {
-    userData = {
-      role: 'admin',
-      id: id,
-      nama: 'Administrator'
-    };
+  // Cegah login admin lewat form ID biasa (wajib melalui verifikasi PIN khusus)
+  if ((typeof ADMIN_ID !== 'undefined' && cleanId === ADMIN_ID) || cleanId === 'TJKTADMIN2026') {
+    return errorResponse('Akun Administrator hanya dapat diakses melalui verifikasi PIN khusus di Panel Admin.');
   }
+
   // Cek Kepala Sekolah
-  else if (typeof KEPSEK_ID !== 'undefined' && id === KEPSEK_ID) {
+  if (typeof KEPSEK_ID !== 'undefined' && cleanId === KEPSEK_ID) {
     userData = {
       role: 'kepsek',
-      id: id,
+      id: cleanId,
       nama: typeof KEPSEK_NAMA !== 'undefined' ? KEPSEK_NAMA : 'Kepala SMKN 1 Teluk Kuantan'
     };
   }
   // Cek Guru & Siswa
   else {
-    const guru = findDataByColumn(SHEETS.ADMIN_GURU, COLUMNS.ADMIN_GURU.ID, id);
+    const guru = findDataByColumn(SHEETS.ADMIN_GURU, COLUMNS.ADMIN_GURU.ID, cleanId);
     if (guru) {
       userData = {
         role: 'guru',
@@ -43,7 +70,7 @@ function loginById(id) {
         nama: guru[COLUMNS.ADMIN_GURU.NAMA_GURU]
       };
     } else {
-      const siswa = findDataByColumn(SHEETS.SISWA, COLUMNS.SISWA.ID, id);
+      const siswa = findDataByColumn(SHEETS.SISWA, COLUMNS.SISWA.ID, cleanId);
       if (siswa) {
         userData = {
           role: 'siswa',
@@ -59,8 +86,25 @@ function loginById(id) {
   
   // Jika tidak ditemukan
   if (!userData) {
-    return errorResponse('ID tidak ditemukan');
+    failCount++;
+    cache.put(failKey, String(failCount), 900); // Kunci hitungan per-ID selama 15 menit
+
+    globalFails++;
+    cache.put(globalFailKey, String(globalFails), 60); // Window bot enumerasi 60 detik
+
+    var sisa = 5 - failCount;
+    var msg = 'ID tidak ditemukan';
+    if (sisa > 0 && sisa <= 2) {
+      msg += ' (' + sisa + ' percobaan tersisa sebelum dikunci)';
+    }
+    return errorResponse(msg);
   }
+
+  // Bersihkan catatan kegagalan jika login sukses
+  cache.remove(failKey);
+
+  // Tandai ID ini sebagai 'dikenal' (boleh login ulang saat mode terkunci global)
+  cache.put('known_' + cleanId, '1', 21600);
 
   // ============================================
   // TOKEN SESI (UUID) - TTL 6 Jam (21600 detik)
@@ -87,6 +131,54 @@ function loginById(id) {
   catatRiwayatLogin_(userData.id, userData.nama, userData.role);
 
   return successResponse('Login berhasil', userData);
+}
+
+/**
+ * Login khusus Administrator menggunakan PIN
+ * @param {string} pin - PIN admin
+ * @returns {Object} JSON response dengan status, role, dan token sesi admin
+ */
+function adminLogin(pin) {
+  var ADMIN_PIN = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN") || "293031";
+  var cache = CacheService.getScriptCache();
+  var failKey = 'admin_login_fail';
+  var failCount = parseInt(cache.get(failKey) || '0', 10);
+
+  if (failCount >= 5) {
+    return errorResponse("Terlalu banyak percobaan PIN Admin gagal. Akses dikunci sementara selama 15 menit demi keamanan.");
+  }
+
+  if (isEmpty(pin) || String(pin).trim() !== String(ADMIN_PIN).trim()) {
+    failCount++;
+    cache.put(failKey, String(failCount), 900); // 15 menit
+    return errorResponse("Kode PIN Administrator salah!");
+  }
+
+  // Bersihkan kegagalan jika PIN benar
+  cache.remove(failKey);
+  
+  var token = Utilities.getUuid();
+  var sessionPayload = {
+    id: "ADMIN_PORTAL",
+    role: "admin",
+    nama: "Administrator",
+    loginAt: new Date().getTime()
+  };
+  
+  CacheService.getScriptCache().put(
+    'sess_' + token,
+    JSON.stringify(sessionPayload),
+    21600
+  );
+  
+  catatRiwayatLogin_(sessionPayload.id, sessionPayload.nama, sessionPayload.role);
+  
+  return successResponse("Login administrator berhasil", {
+    role: "admin",
+    id: "ADMIN_PORTAL",
+    nama: "Administrator",
+    token: token
+  });
 }
 
 /**

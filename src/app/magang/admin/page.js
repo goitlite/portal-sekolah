@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { verifikasiPinLogin, verifikasiPinHapus } from "./actions"; // Memanggil fungsi aman dari server
 import {
+  adminLogin,
   getAdminGuru,
   addAdminGuru,
   deleteAdminGuru,
-  login,
   logoutSession,
 } from "../lib/api";
 import { getSession, saveSession } from "../lib/auth";
@@ -58,30 +58,36 @@ export default function AdminPage() {
   };
 
   // ===========================
-  // Fungsi Cek PIN Login (Diperbarui)
+  // Fungsi Cek PIN Login (Diperbarui Aman)
   // ===========================
   const handleLoginAdmin = async (e) => {
     e.preventDefault();
 
-    // Mengecek PIN murni di belakang layar (Server)
+    // 1. Mengecek PIN murni di belakang layar (Server Next.js)
     const isPinBenar = await verifikasiPinLogin(inputPin);
 
-    if (isPinBenar) {
-      setIsAuthenticated(true);
-      // Pastikan ada token session admin di penyimpanan
-      const sess = getSession();
-      if (!sess || sess.role !== "admin" || !sess.token) {
-        try {
-          const resLogin = await login("TJKTADMIN2026");
-          if (resLogin?.success && resLogin?.data) {
-            saveSession(resLogin.data);
-          }
-        } catch (_) {}
-      }
-      loadGuru();
-    } else {
+    if (!isPinBenar) {
       showToast("Kode PIN salah!", "error");
       setInputPin("");
+      return;
+    }
+
+    // 2. Minta Token Sesi Admin langsung dari Server Apps Script dengan PIN
+    try {
+      setLoading(true);
+      const resLogin = await adminLogin(inputPin);
+      if (resLogin?.success && resLogin?.data?.token) {
+        saveSession(resLogin.data);
+        setIsAuthenticated(true);
+        await loadGuru();
+      } else {
+        showToast(resLogin?.message || "Otorisasi admin di server ditolak.", "error");
+      }
+    } catch (err) {
+      console.error("Error adminLogin:", err);
+      showToast("Gagal terhubung ke server autentikasi admin.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
