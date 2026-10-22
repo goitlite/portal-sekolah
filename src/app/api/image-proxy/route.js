@@ -12,13 +12,14 @@ export async function GET(request) {
     let finalUrl = targetUrl;
     if (finalUrl.includes("/file/d/")) {
       const fileId = finalUrl.split("/file/d/")[1].split("/")[0];
-      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w320`;
     } else if (finalUrl.includes("id=")) {
       const fileId = finalUrl.split("id=")[1].split("&")[0];
-      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w320`;
     }
 
     const response = await fetch(finalUrl, {
+      signal: AbortSignal.timeout(6000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

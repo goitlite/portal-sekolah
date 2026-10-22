@@ -166,8 +166,13 @@ export function readCachedDescriptor(idSiswa, url) {
     const raw = localStorage.getItem(DESC_KEY + idSiswa);
     if (!raw) return null;
     const o = JSON.parse(raw);
-    if (o?.url === url && Array.isArray(o.d) && o.d.length === 128) {
-      return Float32Array.from(o.d);
+    if (o?.url === url) {
+      if (Array.isArray(o.d) && o.d.length === 128) {
+        return Float32Array.from(o.d);
+      }
+      if (o.status === "noface" || o.status === "error") {
+        return { status: o.status };
+      }
     }
   } catch (_) {}
   return null;
@@ -177,11 +182,22 @@ export function readCachedDescriptor(idSiswa, url) {
 export function writeCachedDescriptor(idSiswa, url, desc) {
   try {
     if (!desc) return;
+    if (desc === "NO_FACE" || desc === "ERROR") {
+      localStorage.setItem(
+        DESC_KEY + idSiswa,
+        JSON.stringify({
+          url: url || "",
+          status: desc === "NO_FACE" ? "noface" : "error",
+        }),
+      );
+      return;
+    }
     localStorage.setItem(
       DESC_KEY + idSiswa,
       JSON.stringify({
         url: url || "",
         d: Array.from(desc, (v) => +v.toFixed(5)),
+        status: "ok",
       }),
     );
   } catch (_) {}
@@ -195,18 +211,34 @@ export function driveThumbUrl(url, size = 800) {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : url;
 }
 
-export function loadImage(src) {
+export function loadImage(src, timeoutMs = 7000) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    let timer = setTimeout(() => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = "";
+      reject(new Error("Timeout memuat gambar"));
+    }, timeoutMs);
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Gagal memuat gambar"));
+    img.onload = () => {
+      clearTimeout(timer);
+      resolve(img);
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("Gagal memuat gambar"));
+    };
     img.src = src;
   });
 }
 
 // Muat foto wajah lewat proxy atau thumbnail Drive
 export async function loadFaceImage(url) {
+  if (!url) throw new Error("URL foto kosong");
+  if (url.startsWith("data:") || url.startsWith("blob:")) {
+    return await loadImage(url, 10000);
+  }
   const candidates = [
     `/api/image-proxy?url=${encodeURIComponent(url)}`,
     driveThumbUrl(url, 800),
@@ -214,7 +246,7 @@ export async function loadFaceImage(url) {
   let lastErr = null;
   for (const src of candidates) {
     try {
-      return await loadImage(src);
+      return await loadImage(src, 7000);
     } catch (e) {
       lastErr = e;
     }
