@@ -7,6 +7,7 @@ import {
   checkFaceDuplicate,
   writeCachedDescriptor,
   loadImage,
+  DUPLICATE_THRESHOLD,
 } from "../lib/faceApiHelper";
 
 // =====================================================================
@@ -993,25 +994,46 @@ export default function ModalRegistrasiWajahSiswa({
           currentStudentId: user.id,
           descriptor: myDescriptor,
           otherStudents,
-          threshold: 0.45,
+          threshold: DUPLICATE_THRESHOLD,
         });
 
         if (dupCheck.isDuplicate) {
-          setSaving(false);
-          setSaveProgress({
-            pct: 100,
-            label: `❌ Wajah sudah terdaftar atas nama ${dupCheck.matchedName}`,
-            done: true,
-            error: true,
-          });
-          alert(
-            `⛔ Registrasi Wajah Ditolak!\n\n` +
-            `Biometrik wajah ini terdeteksi sudah terdaftar atas nama siswa lain:\n` +
-            `• Nama: ${dupCheck.matchedName}\n` +
-            `• ID Siswa: ${dupCheck.matchedId}\n\n` +
-            `Satu wajah tidak dapat digunakan untuk mendaftar lebih dari satu siswa.`
-          );
-          return;
+          const distStr =
+            typeof dupCheck.distance === "number"
+              ? dupCheck.distance.toFixed(2)
+              : "";
+          // Jika didaftarkan oleh wali kelas dan kemiripan di ambang batas wajar (misal siswi berjilbab), berikan konfirmasi
+          if (onStagePhoto && dupCheck.distance > 0.28) {
+            const proceed = window.confirm(
+              `⚠️ Peringatan Kemiripan Biometrik:\n\n` +
+                `Wajah ini terdeteksi memiliki kemiripan dengan:\n` +
+                `• Nama: ${dupCheck.matchedName || dupCheck.matchedId}\n` +
+                `• Jarak Kemiripan: ${distStr}\n\n` +
+                `Kemiripan sering terjadi jika kedua siswa mengenakan jilbab/seragam serupa.\n` +
+                `Apakah Anda yakin ini siswa yang berbeda dan ingin tetap melanjutkan pendaftaran?`,
+            );
+            if (!proceed) {
+              setSaving(false);
+              return;
+            }
+          } else {
+            setSaving(false);
+            setSaveProgress({
+              pct: 100,
+              label: `❌ Wajah sudah terdaftar atas nama ${dupCheck.matchedName}`,
+              done: true,
+              error: true,
+            });
+            alert(
+              `⛔ Registrasi Wajah Ditolak!\n\n` +
+                `Biometrik wajah ini terdeteksi sudah terdaftar atas nama siswa lain:\n` +
+                `• Nama: ${dupCheck.matchedName}\n` +
+                `• ID Siswa: ${dupCheck.matchedId}\n` +
+                (distStr ? `• Jarak Kemiripan: ${distStr}\n\n` : `\n`) +
+                `Satu wajah tidak dapat digunakan untuk mendaftar lebih dari satu siswa.`,
+            );
+            return;
+          }
         }
       }
 

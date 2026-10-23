@@ -13,6 +13,8 @@ import {
   checkFaceDuplicate,
   writeCachedDescriptor,
   loadImage,
+  DUPLICATE_THRESHOLD,
+  DESC_KEY,
 } from "../../lib/faceApiHelper";
 import ModalRegistrasiWajahSiswa from "../../dashboard_siswa/ModalRegistrasiWajahSiswa";
 
@@ -130,12 +132,22 @@ export default function ModalRegistrasiWajahWaliKelas({
           const bulkRes = await getWajahBulk(missingIds);
           if (bulkRes?.success && bulkRes.data) {
             Object.entries(bulkRes.data).forEach(([id, url]) => {
+              const st = normalized.find((s) => s.idSiswa === id);
               if (url) {
-                const st = normalized.find((s) => s.idSiswa === id);
                 if (st) {
                   st.fotoWajah = url;
                   urlCache[id] = url;
                 }
+              } else if (force || url === "") {
+                // Di server foto tidak ada / telah dihapus
+                if (st) st.fotoWajah = null;
+                delete urlCache[id];
+                try {
+                  localStorage.removeItem(DESC_KEY + id);
+                  localStorage.removeItem(`face_reg_${id}`);
+                  localStorage.removeItem(`face_feat_${id}`);
+                  localStorage.removeItem(`face_feat_zncc_${id}`);
+                } catch (_) {}
               }
             });
             bulkSuccess = true;
@@ -156,9 +168,20 @@ export default function ModalRegistrasiWajahWaliKelas({
               batch.map(async (st) => {
                 try {
                   const bio = await getBiodataSiswa(st.idSiswa);
-                  if (bio?.success && bio.data?.fotoWajah) {
-                    st.fotoWajah = bio.data.fotoWajah;
-                    urlCache[st.idSiswa] = bio.data.fotoWajah;
+                  if (bio?.success) {
+                    if (bio.data?.fotoWajah) {
+                      st.fotoWajah = bio.data.fotoWajah;
+                      urlCache[st.idSiswa] = bio.data.fotoWajah;
+                    } else if (force) {
+                      st.fotoWajah = null;
+                      delete urlCache[st.idSiswa];
+                      try {
+                        localStorage.removeItem(DESC_KEY + st.idSiswa);
+                        localStorage.removeItem(`face_reg_${st.idSiswa}`);
+                        localStorage.removeItem(`face_feat_${st.idSiswa}`);
+                        localStorage.removeItem(`face_feat_zncc_${st.idSiswa}`);
+                      } catch (_) {}
+                    }
                   }
                 } catch (_) {}
               }),
@@ -345,13 +368,23 @@ export default function ModalRegistrasiWajahWaliKelas({
               currentStudentId: item.idSiswa,
               descriptor: myDescriptor,
               otherStudents: siswaList,
-              threshold: 0.45,
+              threshold: DUPLICATE_THRESHOLD,
             });
 
             if (dupCheck.isDuplicate) {
-              throw new Error(
-                `Wajah identik dengan ${dupCheck.matchedName || dupCheck.matchedId}`,
-              );
+              const distStr =
+                typeof dupCheck.distance === "number"
+                  ? dupCheck.distance.toFixed(2)
+                  : "";
+              if (dupCheck.distance <= 0.28) {
+                throw new Error(
+                  `Wajah identik dengan ${dupCheck.matchedName || dupCheck.matchedId} (jarak: ${distStr})`,
+                );
+              } else {
+                console.warn(
+                  `Kemiripan biometrik terdeteksi untuk ${studentName} vs ${dupCheck.matchedName} (jarak: ${distStr}), dilanjutkan sesuai verifikasi wali kelas.`,
+                );
+              }
             }
           }
         }
@@ -518,6 +551,71 @@ export default function ModalRegistrasiWajahWaliKelas({
 
     setActiveSiswaToRegister(null);
   }
+
+  const [deletingId, setDeletingId] = useState(null);
+
+  const handleDeleteRegisteredPhoto = useCallback(
+    async (student) => {
+      if (!student?.idSiswa) return;
+      const ok = window.confirm(
+        `Hapus registrasi foto wajah ${student.nama} (${student.idSiswa})?\n\n` +
+          `Foto di database dan seluruh cache biometrik lokal akan dibersihkan. Siswa dapat difoto ulang kembali.`
+      );
+      if (!ok) return;
+
+      setDeletingId(student.idSiswa);
+      try {
+        const res = await updateBiodataSiswa({
+          idSiswa: student.idSiswa,
+          fotoWajah: "",
+        });
+        if (!res?.success) {
+          throw new Error(res?.message || "Gagal menghapus foto di database");
+        }
+
+        // Bersihkan state siswa
+        setSiswaList((prev) =>
+          prev.map((s) =>
+            s.idSiswa === student.idSiswa ? { ...s, fotoWajah: null } : s
+          )
+        );
+
+        // Bersihkan seluruh cache lokal biometrik
+        try {
+          const saved = localStorage.getItem(localCacheKey);
+          if (saved) {
+            const cache = JSON.parse(saved);
+            delete cache[student.idSiswa];
+            localStorage.setItem(localCacheKey, JSON.stringify(cache));
+          }
+          localStorage.removeItem(DESC_KEY + student.idSiswa);
+          localStorage.removeItem(`face_reg_${student.idSiswa}`);
+          localStorage.removeItem(`face_feat_${student.idSiswa}`);
+          localStorage.removeItem(`face_feat_zncc_${student.idSiswa}`);
+        } catch (_) {}
+
+        // Siarkan update sync
+        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("portal_face_sync");
+          bc.postMessage({
+            type: "FACE_DELETED",
+            waliId,
+            idSiswa: student.idSiswa,
+            timestamp: Date.now(),
+          });
+          bc.close();
+        }
+
+        alert(`✅ Foto wajah ${student.nama} berhasil dihapus.`);
+      } catch (err) {
+        console.error("Gagal menghapus foto wajah:", err);
+        alert(`❌ Gagal menghapus foto: ${err.message}`);
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [localCacheKey, waliId],
+  );
 
   if (!isOpen) return null;
 
@@ -837,25 +935,38 @@ export default function ModalRegistrasiWajahWaliKelas({
                               </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActiveSiswaToRegister({
-                                  id: s.idSiswa,
-                                  nama: s.nama,
-                                  kelas: s.kelas || wali?.namaKelas,
-                                  fotoLama: s.fotoWajah,
-                                })
-                              }
-                              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
-                                hasPhoto
-                                  ? "bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300"
-                                  : "bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white border border-teal-600 shadow-emerald-700/20"
-                              }`}
-                            >
-                              <span>🧏</span>
-                              <span>{hasPhoto ? "Ubah Wajah" : "Daftarkan"}</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              {hasPhoto && (
+                                <button
+                                  type="button"
+                                  disabled={deletingId === s.idSiswa}
+                                  onClick={() => handleDeleteRegisteredPhoto(s)}
+                                  className="w-8 h-8 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all flex items-center justify-center text-xs cursor-pointer disabled:opacity-50"
+                                  title="Hapus foto wajah ini agar bisa didaftarkan ulang"
+                                >
+                                  {deletingId === s.idSiswa ? "⏳" : "🗑️"}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveSiswaToRegister({
+                                    id: s.idSiswa,
+                                    nama: s.nama,
+                                    kelas: s.kelas || wali?.namaKelas,
+                                    fotoLama: s.fotoWajah,
+                                  })
+                                }
+                                className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                                  hasPhoto
+                                    ? "bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300"
+                                    : "bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white border border-teal-600 shadow-emerald-700/20"
+                                }`}
+                              >
+                                <span>🧏</span>
+                                <span>{hasPhoto ? "Ubah Wajah" : "Daftarkan"}</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>

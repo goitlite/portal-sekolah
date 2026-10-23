@@ -9,7 +9,7 @@ export const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA
 
 export const DESC_KEY = "face_desc_v2_";
 export const MATCH_DIST = 0.5; // Batas kecocokan presensi
-export const DUPLICATE_THRESHOLD = 0.45; // Batas identik anti-duplikasi (makin kecil = makin mirip)
+export const DUPLICATE_THRESHOLD = 0.33; // Batas identik anti-duplikasi pasti (makin kecil = makin mirip). Di atas 0.33 adalah kemiripan wajar (jilbab/lookalike)
 export const LOOSE_DIST = 0.6; // di atas ini = jelas bukan siapa pun
 export const MARGIN_MIN = 0.06; // jarak siswa terdekat ke-2 harus lebih jauh sekian (anti-ragu)
 export const VOTES_NEEDED = 3; // jumlah hasil identik berturut-turut sebelum dicatat hadir
@@ -324,7 +324,7 @@ export function findStudentNameById(idSiswa, otherStudents = []) {
  * @param {string|number} params.currentStudentId - ID siswa yang sedang didaftarkan
  * @param {Float32Array|Array} params.descriptor - Deskriptor 128-d wajah baru
  * @param {Array} [params.otherStudents] - Daftar siswa rombel/kelas (opsional)
- * @param {number} [params.threshold=0.45] - Jarak maksimal yang dianggap identik
+ * @param {number} [params.threshold=0.33] - Jarak maksimal yang dianggap identik pasti
  * @returns {Promise<{ isDuplicate: boolean, matchedId?: string, matchedName?: string, distance?: number }>}
  */
 export async function checkFaceDuplicate({
@@ -339,6 +339,24 @@ export async function checkFaceDuplicate({
 
   const curIdStr = String(currentStudentId || "").trim();
 
+  // Buat index siswa aktif dari otherStudents (jika ada)
+  const hasOtherStudentsList = Array.isArray(otherStudents) && otherStudents.length > 0;
+  const activeStudentMap = new Map();
+  if (hasOtherStudentsList) {
+    for (const st of otherStudents) {
+      const sid = String(st.idSiswa || st.id || "").trim();
+      if (sid && sid !== curIdStr) {
+        activeStudentMap.set(sid, st);
+        // Jika siswa di rombel tidak memiliki foto (misal foto telah dihapus), bersihkan cache lokal usang
+        if (!st.fotoWajah) {
+          try {
+            localStorage.removeItem(DESC_KEY + sid);
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
   // 1. Periksa seluruh descriptor yang tersimpan di localStorage (face_desc_v2_*)
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -346,10 +364,28 @@ export async function checkFaceDuplicate({
       if (key && key.startsWith(DESC_KEY)) {
         const otherId = key.slice(DESC_KEY.length).trim();
         if (otherId && otherId !== curIdStr) {
+          // Jika otherStudents disediakan, pastikan otherId memang terdaftar dan memiliki foto aktif
+          if (hasOtherStudentsList) {
+            const stInfo = activeStudentMap.get(otherId);
+            if (!stInfo || !stInfo.fotoWajah) {
+              // Siswa ini tidak dalam daftar aktif atau fotonya sudah dihapus; abaikan cache usang
+              continue;
+            }
+          }
+
           const raw = localStorage.getItem(key);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed?.d) && parsed.d.length === 128) {
+              // Jika otherStudents tersedia, pastikan URL foto di cache sesuai dengan foto aktif
+              if (hasOtherStudentsList) {
+                const stInfo = activeStudentMap.get(otherId);
+                if (stInfo?.fotoWajah && parsed.url && parsed.url !== stInfo.fotoWajah) {
+                  // Cache URL tidak cocok dengan foto terkini; lewati
+                  continue;
+                }
+              }
+
               const dist = euclid(descriptor, parsed.d);
               if (dist <= threshold) {
                 const matchedName = findStudentNameById(otherId, otherStudents);
@@ -370,7 +406,7 @@ export async function checkFaceDuplicate({
   }
 
   // 2. Periksa siswa lain dari otherStudents yang belum memiliki descriptor lokal
-  if (Array.isArray(otherStudents) && otherStudents.length > 0) {
+  if (hasOtherStudentsList) {
     let fa = null;
     for (const st of otherStudents) {
       const sid = String(st.idSiswa || st.id || "").trim();
@@ -378,7 +414,7 @@ export async function checkFaceDuplicate({
 
       // Cek apakah descriptor sudah ada di cache
       const cached = readCachedDescriptor(sid, st.fotoWajah);
-      if (cached) {
+      if (cached && !(cached instanceof Object && cached.status)) {
         const dist = euclid(descriptor, cached);
         if (dist <= threshold) {
           return {
