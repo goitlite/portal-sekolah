@@ -1121,10 +1121,12 @@ export default function ModalScanWajahPetugas({
             bulkMap = bulk.data;
           }
         } catch (_) {}
+        // JANGAN fallback ke getBiodataSiswa(sid): untuk siswa petugas server memaksa ID sendiri,
+        // sehingga semua siswa akan menerima foto milik petugas. Bila bulk gagal, pakai cache lama.
         const fetchFoto = async (sid) =>
           bulkMap
             ? { success: true, data: { fotoWajah: bulkMap[sid] || "" } }
-            : getBiodataSiswa(sid);
+            : { success: false };
 
         for (let i = 0; i < studentsToFetch.length; i += BATCH_SIZE) {
           const batch = studentsToFetch.slice(i, i + BATCH_SIZE);

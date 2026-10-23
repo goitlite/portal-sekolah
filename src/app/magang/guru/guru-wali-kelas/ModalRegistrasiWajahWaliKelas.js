@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   getPresensiWaliGrid,
   getBiodataSiswa,
@@ -54,6 +54,12 @@ export default function ModalRegistrasiWajahWaliKelas({
     isComplete: false,
     errors: [],
   });
+
+  const [storageWarn, setStorageWarn] = useState(false);
+  const stagedRef = useRef({});
+  useEffect(() => {
+    stagedRef.current = stagedPhotos;
+  }, [stagedPhotos]);
 
   const waliId = wali?.idWali;
   const guruId = guru?.id;
@@ -216,30 +222,40 @@ export default function ModalRegistrasiWajahWaliKelas({
     const total = siswaList.length;
     const terdaftar = siswaList.filter((s) => !!s.fotoWajah).length;
     const stagedCount = Object.keys(stagedPhotos).length;
-    const belum = Math.max(0, total - terdaftar - stagedCount);
-    const persen = total > 0 ? Math.round(((terdaftar + stagedCount) / total) * 100) : 0;
+    // Antrian untuk siswa yang SUDAH punya foto (ubah wajah) tidak boleh dihitung dua kali
+    const stagedBaru = siswaList.filter(
+      (s) => !s.fotoWajah && stagedPhotos[s.idSiswa],
+    ).length;
+    const belum = siswaList.filter(
+      (s) => !s.fotoWajah && !stagedPhotos[s.idSiswa],
+    ).length;
+    const persen =
+      total > 0 ? Math.min(100, Math.round(((terdaftar + stagedBaru) / total) * 100)) : 0;
     return { total, terdaftar, stagedCount, belum, persen };
   }, [siswaList, stagedPhotos]);
 
   // Staged Photos Handlers
   const handleStagePhoto = useCallback(
     (idSiswa, base64Photo, userInfo) => {
-      setStagedPhotos((prev) => {
-        const updated = {
-          ...prev,
-          [idSiswa]: {
-            idSiswa,
-            nama: userInfo?.nama || "",
-            kelas: userInfo?.kelas || wali?.namaKelas || "",
-            base64: base64Photo,
-            timestamp: Date.now(),
-          },
-        };
-        try {
-          localStorage.setItem(stagedStorageKey, JSON.stringify(updated));
-        } catch (_) {}
-        return updated;
-      });
+      const updated = {
+        ...stagedRef.current,
+        [idSiswa]: {
+          idSiswa,
+          nama: userInfo?.nama || "",
+          kelas: userInfo?.kelas || wali?.namaKelas || "",
+          base64: base64Photo,
+          timestamp: Date.now(),
+        },
+      };
+      stagedRef.current = updated;
+      setStagedPhotos(updated);
+      try {
+        localStorage.setItem(stagedStorageKey, JSON.stringify(updated));
+        setStorageWarn(false);
+      } catch (_) {
+        // Penyimpanan HP penuh: antrian tetap ada di memori selama halaman tidak ditutup
+        setStorageWarn(true);
+      }
     },
     [stagedStorageKey, wali?.namaKelas],
   );
@@ -316,13 +332,17 @@ export default function ModalRegistrasiWajahWaliKelas({
     const errors = [];
     const updatedStaged = { ...stagedPhotos };
 
-    // Inisialisasi Face API jika memungkinkan
+    // Inisialisasi Face API
     let fa = null;
     try {
       fa = await loadFaceApi();
     } catch (e) {
-      console.warn("Face API dilewati:", e);
+      console.warn("Face API gagal dimuat:", e);
     }
+
+    // Daftar kerja: diperbarui setelah tiap siswa berhasil, sehingga siswa berikutnya
+    // dalam batch yang sama ikut dibandingkan (siswaList di closure ini basi).
+    const workingList = siswaList.map((x) => ({ ...x }));
 
     for (let i = 0; i < stagedEntries.length; i++) {
       const item = stagedEntries[i];
@@ -339,53 +359,67 @@ export default function ModalRegistrasiWajahWaliKelas({
 
       try {
         // 1. Ekstraksi biometrik & Duplication Check
+        // WAJIB: foto yang wajahnya tidak terbaca tidak boleh didaftarkan (tidak akan pernah cocok saat scan)
+        if (!fa) {
+          throw new Error(
+            "Model pengenal wajah gagal dimuat. Periksa koneksi internet lalu coba lagi.",
+          );
+        }
         let myDescriptor = null;
-        if (fa && item.base64) {
-          try {
-            const img = await loadImage(item.base64);
-            const det = await fa
-              .detectSingleFace(
-                img,
-                new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
-              )
-              .withFaceLandmarks(true);
+        try {
+          const img = await loadImage(item.base64);
+          const det = await fa
+            .detectSingleFace(
+              img,
+              new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
+            )
+            .withFaceLandmarks(true);
 
-            if (det) {
-              const [aligned] = await fa.extractFaces(img, [det.landmarks.align()]);
-              myDescriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(aligned);
-            }
-          } catch (err) {
-            console.warn("Ekstraksi biometrik dilewati:", studentName, err);
+          if (det) {
+            const [aligned] = await fa.extractFaces(img, [det.landmarks.align()]);
+            myDescriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(aligned);
           }
+        } catch (err) {
+          console.warn("Ekstraksi biometrik gagal:", studentName, err);
+        }
 
-          if (myDescriptor) {
-            setBatchProgress((prev) => ({
-              ...prev,
-              stepText: `Memeriksa keunikan wajah ${studentName}...`,
-            }));
+        if (!myDescriptor) {
+          throw new Error(
+            "Wajah tidak terbaca pada foto. Foto ulang: hadap lurus, cahaya cukup, tanpa masker/topi.",
+          );
+        }
 
-            const dupCheck = await checkFaceDuplicate({
-              currentStudentId: item.idSiswa,
-              descriptor: myDescriptor,
-              otherStudents: siswaList,
-              threshold: DUPLICATE_THRESHOLD,
-            });
+        setBatchProgress((prev) => ({
+          ...prev,
+          stepText: `Memeriksa keunikan wajah ${studentName}...`,
+        }));
 
-            if (dupCheck.isDuplicate) {
-              const distStr =
-                typeof dupCheck.distance === "number"
-                  ? dupCheck.distance.toFixed(2)
-                  : "";
-              if (dupCheck.distance <= 0.28) {
-                throw new Error(
-                  `Wajah identik dengan ${dupCheck.matchedName || dupCheck.matchedId} (jarak: ${distStr})`,
-                );
-              } else {
-                console.warn(
-                  `Kemiripan biometrik terdeteksi untuk ${studentName} vs ${dupCheck.matchedName} (jarak: ${distStr}), dilanjutkan sesuai verifikasi wali kelas.`,
-                );
-              }
-            }
+        const dupCheck = await checkFaceDuplicate({
+          currentStudentId: item.idSiswa,
+          descriptor: myDescriptor,
+          otherStudents: workingList,
+          threshold: DUPLICATE_THRESHOLD,
+        });
+
+        if (dupCheck.isDuplicate) {
+          const distStr =
+            typeof dupCheck.distance === "number" ? dupCheck.distance.toFixed(2) : "";
+          if (!(dupCheck.distance > 0.28)) {
+            throw new Error(
+              `Wajah identik dengan ${dupCheck.matchedName || dupCheck.matchedId} (jarak: ${distStr})`,
+            );
+          }
+          // Zona kemiripan (mis. siswi berjilbab): minta keputusan wali kelas
+          const proceed = window.confirm(
+            `⚠️ Kemiripan Biometrik\n\n` +
+              `${studentName} mirip dengan ${dupCheck.matchedName || dupCheck.matchedId} (jarak ${distStr}).\n` +
+              `Kemiripan sering terjadi pada siswi berjilbab/seragam serupa.\n\n` +
+              `Yakin ini siswa yang berbeda dan lanjut mendaftarkan?`,
+          );
+          if (!proceed) {
+            throw new Error(
+              `Dibatalkan wali kelas (mirip ${dupCheck.matchedName || dupCheck.matchedId}, jarak ${distStr})`,
+            );
           }
         }
 
@@ -418,6 +452,10 @@ export default function ModalRegistrasiWajahWaliKelas({
         if (!updateRes?.success) {
           throw new Error(updateRes?.message || "Gagal memperbarui spreadsheet");
         }
+
+        // Perbarui daftar kerja agar siswa berikutnya dibandingkan dengan foto ini
+        const wk = workingList.find((x) => x.idSiswa === item.idSiswa);
+        if (wk) wk.fotoWajah = photoUrl;
 
         // 4. Cache biometrik dan update local state
         if (myDescriptor && photoUrl) {
@@ -619,6 +657,10 @@ export default function ModalRegistrasiWajahWaliKelas({
 
   if (!isOpen) return null;
 
+  const nextStudent = activeSiswaToRegister
+    ? getNextStudentToRegister(activeSiswaToRegister.id)
+    : null;
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-xs overflow-y-auto">
@@ -665,7 +707,8 @@ export default function ModalRegistrasiWajahWaliKelas({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold cursor-pointer"
+                disabled={batchSaving}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold cursor-pointer disabled:opacity-40"
                 aria-label="Tutup"
               >
                 ✕
@@ -775,6 +818,13 @@ export default function ModalRegistrasiWajahWaliKelas({
               </div>
             </div>
           </div>
+
+          {storageWarn && (
+            <div className="px-3 py-2 bg-rose-50 border-b border-rose-200 text-rose-800 text-[11px] font-bold shrink-0">
+              ⚠️ Penyimpanan HP hampir penuh: antrian foto belum aman jika halaman ditutup.
+              Tekan <strong>Simpan Semua</strong> sekarang.
+            </div>
+          )}
 
           {/* LIST SISWA */}
           <div className="p-3 sm:p-5 overflow-y-auto space-y-2 flex-1 bg-slate-50/60">
@@ -1055,16 +1105,16 @@ export default function ModalRegistrasiWajahWaliKelas({
           onStagePhoto={(idSiswa, base64Photo, userInfo) => {
             handleStagePhoto(idSiswa, base64Photo, userInfo);
           }}
-          hasNextStudent={!!getNextStudentToRegister(activeSiswaToRegister.id)}
-          nextStudentName={getNextStudentToRegister(activeSiswaToRegister.id)?.nama}
+          hasNextStudent={!!nextStudent}
+          nextStudentName={nextStudent?.nama}
           onNextStudent={() => {
-            const nextStudent = getNextStudentToRegister(activeSiswaToRegister.id);
-            if (nextStudent) {
+            const next = getNextStudentToRegister(activeSiswaToRegister.id);
+            if (next) {
               setActiveSiswaToRegister({
-                id: nextStudent.idSiswa,
-                nama: nextStudent.nama,
-                kelas: nextStudent.kelas || wali?.namaKelas,
-                fotoLama: nextStudent.fotoWajah,
+                id: next.idSiswa,
+                nama: next.nama,
+                kelas: next.kelas || wali?.namaKelas,
+                fotoLama: next.fotoWajah,
               });
             } else {
               setActiveSiswaToRegister(null);

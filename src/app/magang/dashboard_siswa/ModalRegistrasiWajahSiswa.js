@@ -1137,6 +1137,94 @@ export default function ModalRegistrasiWajahSiswa({
     }
   }
 
+  // Masuk antrian (mode wali kelas): wajib wajah terbaca & tidak identik dengan siswa lain.
+  // Jika model AI tidak bisa dimuat (mis. sedang offline), foto tetap boleh masuk antrian;
+  // pemeriksaan ulang dilakukan saat "Simpan Semua".
+  async function handleStage(goNext) {
+    if (!previewImage || !user?.id || saving || !onStagePhoto) return;
+    setSaving(true);
+    setSaveProgress({
+      pct: 40,
+      label: "Memeriksa wajah pada foto...",
+      done: false,
+      error: false,
+    });
+    try {
+      let descriptor = null;
+      let modelFailed = false;
+      try {
+        const fa = await loadFaceApi();
+        const img = await loadImage(previewImage);
+        const det = await fa
+          .detectSingleFace(
+            img,
+            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
+          )
+          .withFaceLandmarks(true);
+        if (det) {
+          const [aligned] = await fa.extractFaces(img, [det.landmarks.align()]);
+          descriptor = await fa.nets.faceRecognitionNet.computeFaceDescriptor(aligned);
+        }
+      } catch (e) {
+        modelFailed = true;
+        console.warn("Pemeriksaan wajah saat antrian dilewati:", e);
+      }
+
+      if (!modelFailed && !descriptor) {
+        setSaveProgress({
+          pct: 100,
+          label: "❌ Wajah tidak terbaca. Tekan Foto Ulang: hadap lurus, cahaya cukup, tanpa masker/topi.",
+          done: true,
+          error: true,
+        });
+        return;
+      }
+
+      if (descriptor) {
+        const dup = await checkFaceDuplicate({
+          currentStudentId: user.id,
+          descriptor,
+          otherStudents,
+          threshold: DUPLICATE_THRESHOLD,
+        });
+        if (dup.isDuplicate) {
+          const distStr =
+            typeof dup.distance === "number" ? dup.distance.toFixed(2) : "";
+          if (!(dup.distance > 0.28)) {
+            setSaveProgress({
+              pct: 100,
+              label: `❌ Wajah identik dengan ${dup.matchedName || dup.matchedId} (jarak ${distStr}). Pastikan ini bukan siswa yang sama.`,
+              done: true,
+              error: true,
+            });
+            return;
+          }
+          const proceed = window.confirm(
+            `⚠️ Kemiripan Biometrik\n\n` +
+              `Wajah ini mirip dengan ${dup.matchedName || dup.matchedId} (jarak ${distStr}).\n` +
+              `Sering terjadi pada siswi berjilbab/seragam serupa.\n\n` +
+              `Yakin ini siswa yang berbeda dan lanjut?`,
+          );
+          if (!proceed) {
+            setSaveProgress(null);
+            return;
+          }
+        }
+      }
+
+      setSaveProgress(null);
+      onStagePhoto(user.id, previewImage, user);
+      setSaving(false);
+      if (goNext && typeof onNextStudent === "function") onNextStudent();
+      else {
+        stopCamera();
+        onClose();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleClose() {
     if (saving) return;
     stopCamera();
@@ -1550,10 +1638,7 @@ export default function ModalRegistrasiWajahSiswa({
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        onStagePhoto(user.id, previewImage, user);
-                        handleClose();
-                      }}
+                      onClick={() => handleStage(false)}
                       disabled={saving || saveOk}
                       className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       title="Simpan foto siswa ini ke antrian lokal dan kembali ke daftar siswa"
@@ -1565,10 +1650,7 @@ export default function ModalRegistrasiWajahSiswa({
                     {hasNextStudent && onNextStudent && (
                       <button
                         type="button"
-                        onClick={() => {
-                          onStagePhoto(user.id, previewImage, user);
-                          onNextStudent();
-                        }}
+                        onClick={() => handleStage(true)}
                         disabled={saving || saveOk}
                         className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:brightness-110 active:scale-95 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         title={`Simpan foto ke antrian dan langsung lanjut foto ${nextStudentName || "siswa berikutnya"}`}

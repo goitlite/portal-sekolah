@@ -23,47 +23,90 @@ function ppCleanId_(val) {
 
 // ------------------------------------------------------------
 // Helper verifikasi hak akses siswa petugas presensi
-// Mendukung scan presensi lintas kelas dengan RAM Cache instan
+// - Cara 1: baca sheet WALI_KELAS langsung (ringan)
+// - Cara 2 (cadangan): kartu dashboard kepsek, bila Cara 1 tidak tersedia/gagal
+// - Gagal total => DITOLAK dan TIDAK disimpan di cache (klien menyimpan antrian & mencoba lagi)
+// - Cache: positif 10 menit, negatif 2 menit (petugas baru ditunjuk cepat aktif,
+//   petugas yang dicopot cepat kehilangan akses)
 // ------------------------------------------------------------
+var PP_CACHE_POS_SEC = 600;
+var PP_CACHE_NEG_SEC = 120;
+
+function ppCachePetugas_(sid, isPetugas) {
+  try {
+    CacheService.getScriptCache().put(
+      'petugas_' + sid,
+      isPetugas ? '1' : '0',
+      isPetugas ? PP_CACHE_POS_SEC : PP_CACHE_NEG_SEC
+    );
+  } catch (e) {}
+}
+
+function ppKetPunyaTag_(ket, sid) {
+  ket = String(ket || "");
+  return ket.indexOf("[PETUGAS:" + sid + ":") !== -1 || ket.indexOf("[PETUGAS:" + sid + "]") !== -1;
+}
+
+function ppCekPetugasDariSheet_(sid) {
+  if (typeof getAllDataWali_ !== 'function' || typeof WALI_SHEETS === 'undefined' || !WALI_SHEETS.WALI_KELAS) {
+    throw new Error('getAllDataWali_/WALI_SHEETS tidak tersedia');
+  }
+  var rows = getAllDataWali_(WALI_SHEETS.WALI_KELAS);
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('Data WALI_KELAS kosong');
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    var ket = (typeof WALI_COLUMNS !== 'undefined' && WALI_COLUMNS.WALI_KELAS && r[WALI_COLUMNS.WALI_KELAS.KETERANGAN]) ||
+      r["KETERANGAN"] || r["keterangan"] || "";
+    if (ppKetPunyaTag_(ket, sid)) return true;
+  }
+  return false;
+}
+
+function ppCekPetugasDariKartu_(sid) {
+  var out = handleKepsekAction_("getDashboardKepsekWaliKelas", { forceRefresh: false });
+  var parsed = JSON.parse(out.getContent());
+  var cards = parsed && parsed.success && parsed.data && parsed.data.cards;
+  if (!Array.isArray(cards)) throw new Error('Kartu kelas tidak tersedia');
+  return cards.some(function (c) { return ppKetPunyaTag_(c.keterangan, sid); });
+}
+
 function isSiswaBerhakPresensiWaliKelas_(sid, idWali) {
   if (!sid) return false;
 
   var cache = CacheService.getScriptCache();
-  var key = 'petugas_' + sid;
-  var cached = cache.get(key);
+  var cached = cache.get('petugas_' + sid);
   if (cached === '1') return true;
   if (cached === '0') return false;
 
+  var hasil = null;
   try {
-    // Baca langsung daftar rombel dari sheet WALI_KELAS (ringan, hanya ~15-20 baris)
-    // JANGAN panggil getDashboardKepsekWaliKelas yang membaca ribuan data dan memperlambat sinkronisasi!
-    var rows = typeof getAllDataWali_ === 'function' 
-      ? getAllDataWali_(WALI_SHEETS.WALI_KELAS) 
-      : [];
-
-    var tagA = "[PETUGAS:" + sid + ":";
-    var tagB = "[PETUGAS:" + sid + "]";
-    var isPetugas = false;
-
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i] || {};
-      var ket = String(
-        (typeof WALI_COLUMNS !== 'undefined' && WALI_COLUMNS.WALI_KELAS && r[WALI_COLUMNS.WALI_KELAS.KETERANGAN]) ||
-        r["KETERANGAN"] ||
-        r["keterangan"] ||
-        ""
-      );
-      if (ket.indexOf(tagA) !== -1 || ket.indexOf(tagB) !== -1) {
-        isPetugas = true;
-        break;
-      }
+    hasil = ppCekPetugasDariSheet_(sid);
+  } catch (e1) {
+    try {
+      hasil = ppCekPetugasDariKartu_(sid);
+    } catch (e2) {
+      Logger.log('[isSiswaBerhakPresensiWaliKelas_] gagal verifikasi: ' + e1.message + ' | ' + e2.message);
+      return false; // fail-closed, tidak di-cache
     }
-
-    cache.put(key, isPetugas ? '1' : '0', 21600); // Simpan 6 jam
-    return isPetugas;
-  } catch (e) {
-    return true; // Fail-safe agar sinkronisasi presensi tidak pernah macet
   }
+  ppCachePetugas_(sid, hasil);
+  return hasil;
+}
+
+// Siswa petugas hanya boleh menulis presensi untuk hari ini s/d 14 hari ke belakang (WIB).
+// (Antrian offline multi-hari tetap bisa terkirim; tanggal masa depan / sangat lampau ditolak.)
+function ppValidasiTanggalSiswa_(cells) {
+  var tz = "Asia/Jakarta";
+  var hariIni = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+  var batas = Utilities.formatDate(new Date(Date.now() - 14 * 24 * 3600 * 1000), tz, "yyyy-MM-dd");
+  var list = Array.isArray(cells) ? cells : [];
+  for (var i = 0; i < list.length; i++) {
+    var t = String((list[i] && list[i].tanggal) || "").trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "Format tanggal presensi tidak valid.";
+    if (t > hariIni) return "Tanggal presensi tidak boleh di masa depan.";
+    if (t < batas) return "Tanggal presensi terlalu lampau (maksimal 14 hari).";
+  }
+  return "";
 }
 
 // ------------------------------------------------------------
@@ -77,6 +120,8 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
     if (!isSiswaBerhakPresensiWaliKelas_(sid, idWali)) {
       return errorResponse("Akses ditolak: Anda bukan petugas presensi.");
     }
+    var errTgl = ppValidasiTanggalSiswa_(params && params.cells);
+    if (errTgl) return errorResponse(errTgl);
   }
 
   var lock = LockService.getScriptLock();
@@ -94,13 +139,48 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
 
     var skipped = 0;
     var out = cells;
+    var isSiswaRole = !!(sessionUser && sessionUser.role === 'siswa');
 
-    if (perluCek) {
+    if (perluCek || isSiswaRole) {
       // Baca status yang sudah ada di server (fungsi yang sama dipakai aplikasi)
       var grid = getPresensiWaliGrid(params.idGuru, params.idWali);
       if (!grid || !grid.success || !grid.data) {
         // Gagal baca -> JANGAN menulis sembarangan (klien menyimpan antrian & mencoba lagi)
         return errorResponse("Tidak dapat memeriksa data yang sudah ada. Coba lagi.");
+      }
+
+      // Siswa petugas hanya boleh menulis untuk siswa yang memang anggota kelas ini
+      if (isSiswaRole) {
+        var anggota = {};
+        var daftarAnggota = Array.isArray(grid.data.siswa) ? grid.data.siswa : [];
+        daftarAnggota.forEach(function (m) {
+          var mid = ppCleanId_(m && (m.idSiswa || m.ID_SISWA || m.id));
+          if (mid) anggota[mid] = true;
+        });
+
+        // Fallback aman: jika grid.data.siswa kosong (misal idGuru format berbeda), cari anggota langsung dari sheet SISWA_WALI_KELAS via idWali
+        if (daftarAnggota.length === 0 && typeof getAllDataWali_ === 'function' && typeof WALI_SHEETS !== 'undefined' && WALI_SHEETS.SISWA_WALI_KELAS) {
+          try {
+            var rawAnggota = getAllDataWali_(WALI_SHEETS.SISWA_WALI_KELAS);
+            rawAnggota.forEach(function (r) {
+              var wCol = (typeof WALI_COLUMNS !== 'undefined' && WALI_COLUMNS.SISWA_WALI_KELAS && WALI_COLUMNS.SISWA_WALI_KELAS.ID_WALI) || "ID_WALI";
+              var sCol = (typeof WALI_COLUMNS !== 'undefined' && WALI_COLUMNS.SISWA_WALI_KELAS && WALI_COLUMNS.SISWA_WALI_KELAS.ID_SISWA) || "ID_SISWA";
+              if (String(r[wCol] || r["ID_WALI"] || r["idWali"]) === String(params.idWali)) {
+                var sid2 = ppCleanId_(r[sCol] || r["ID_SISWA"] || r["idSiswa"]);
+                if (sid2) anggota[sid2] = true;
+              }
+            });
+          } catch (_) {}
+        }
+
+        if (Object.keys(anggota).length === 0) {
+          return errorResponse("Daftar siswa kelas tidak ditemukan. Coba lagi.");
+        }
+        for (var ci = 0; ci < cells.length; ci++) {
+          if (!cells[ci] || !anggota[ppCleanId_(cells[ci].idSiswa)]) {
+            return errorResponse("Ada siswa yang bukan anggota kelas ini. Presensi ditolak.");
+          }
+        }
       }
 
       var ada = {};
@@ -239,9 +319,7 @@ function getKelasPetugas_(params) {
   }
 
   var petugas = cards.some(punyaTagSaya);
-  try {
-    CacheService.getScriptCache().put('petugas_' + sid, petugas ? '1' : '0', 21600);
-  } catch (_) {}
+  ppCachePetugas_(sid, petugas);
 
   // Kelas milik siswa ini: utamakan keanggotaan di daftarSiswa, lalu tag petugas
   var idWaliSaya = "";
@@ -410,4 +488,3 @@ function hapusSiswaWaliAman_(params) {
     try { lock.releaseLock(); } catch (e2) {}
   }
 }
-
