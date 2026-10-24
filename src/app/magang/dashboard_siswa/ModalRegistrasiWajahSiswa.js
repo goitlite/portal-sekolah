@@ -958,7 +958,7 @@ export default function ModalRegistrasiWajahSiswa({
         const det = await fa
           .detectSingleFace(
             img,
-            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
+            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
           )
           .withFaceLandmarks(true);
 
@@ -1158,7 +1158,7 @@ export default function ModalRegistrasiWajahSiswa({
         const det = await fa
           .detectSingleFace(
             img,
-            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
+            new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
           )
           .withFaceLandmarks(true);
         if (det) {

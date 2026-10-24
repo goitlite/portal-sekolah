@@ -134,6 +134,16 @@ function doPost(e) {
         }
       }
 
+      // E2. Foto wajah massal = data biometrik. Siswa hanya boleh jika ia petugas presensi.
+      // (Guru, admin, dan kepsek tidak dibatasi.)
+      if (action === 'getWajahBulk' && userRole === 'siswa') {
+        if (!isSiswaBerhakPresensiWaliKelas_(ppCleanId_(sessionUser.id), null)) {
+          return ContentService.createTextOutput(JSON.stringify(
+            errorResponse('Akses ditolak: Data foto wajah hanya untuk petugas presensi.')
+          )).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
       // F. Proteksi Integritas Data Siswa
       // Jika pemanggil adalah siswa, paksa parameter idSiswa selalu sesuai dengan ID pada token sesi
       // Mencegah siswa memanipulasi parameter di DevTools untuk mengubah profil, submit tugas, atau mengabsenkan siswa lain
@@ -150,6 +160,13 @@ function doPost(e) {
         if (action === 'getSiswaById') {
           params.id = sessionUser.id;
         }
+      }
+
+      // F2. Netralkan "formula injection" dari input siswa.
+      // Teks yang diawali = / @ / +fungsi / -fungsi bisa dieksekusi Google Sheets sebagai rumus
+      // (mis. IMPORTXML untuk mengirim isi spreadsheet ke luar). Diberi awalan ' agar tersimpan sebagai teks biasa.
+      if (userRole === 'siswa') {
+        netralkanRumusSiswa_(params, 0);
       }
 
       // G. Proteksi Guru-ke-Guru
@@ -685,6 +702,29 @@ function doPost(e) {
     
     return ContentService.createTextOutput(JSON.stringify(errorResponse))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Netralkan teks yang dapat dibaca Google Sheets sebagai rumus (dimodifikasi di tempat).
+ * - Hanya string yang diawali "=", "@", atau "+"/"-" yang diikuti huruf/kurung/kutip.
+ *   (Nomor telepon "+62812..." dan angka negatif tidak tersentuh.)
+ * - Kolom base64 (foto/berkas) dilewati.
+ */
+function netralkanRumusSiswa_(obj, depth) {
+  if (!obj || typeof obj !== 'object' || depth > 6) return;
+  var keys = Object.keys(obj);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var v = obj[k];
+    if (typeof v === 'string') {
+      if (/base64/i.test(k)) continue;
+      if (/^[=@]/.test(v) || /^[+\-]\s*[A-Za-z_('"$]/.test(v)) {
+        obj[k] = "'" + v;
+      }
+    } else if (v && typeof v === 'object') {
+      netralkanRumusSiswa_(v, depth + 1);
+    }
   }
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { verifikasiPinLogin, verifikasiPinHapus } from "./actions"; // Memanggil fungsi aman dari server
+import { verifikasiPinHapus } from "./actions"; // Memanggil fungsi aman dari server
 import {
   adminLogin,
   getAdminGuru,
@@ -63,16 +63,15 @@ export default function AdminPage() {
   const handleLoginAdmin = async (e) => {
     e.preventDefault();
 
-    // 1. Mengecek PIN murni di belakang layar (Server Next.js)
-    const isPinBenar = await verifikasiPinLogin(inputPin);
-
-    if (!isPinBenar) {
+    // PIN diperiksa HANYA oleh Apps Script (ada penguncian 5x salah / 15 menit).
+    // Pra-cek di Next.js dihapus: tanpa batas percobaan, ia bisa dipakai menebak PIN.
+    if (!inputPin || inputPin.length < 6) {
       showToast("Kode PIN salah!", "error");
       setInputPin("");
       return;
     }
 
-    // 2. Minta Token Sesi Admin langsung dari Server Apps Script dengan PIN
+    // Minta Token Sesi Admin langsung dari Server Apps Script dengan PIN
     try {
       setLoading(true);
       const resLogin = await adminLogin(inputPin);
@@ -82,6 +81,7 @@ export default function AdminPage() {
         await loadGuru();
       } else {
         showToast(resLogin?.message || "Otorisasi admin di server ditolak.", "error");
+        setInputPin("");
       }
     } catch (err) {
       console.error("Error adminLogin:", err);

@@ -94,20 +94,37 @@ function isSiswaBerhakPresensiWaliKelas_(sid, idWali) {
 }
 
 // Siswa petugas hanya boleh menulis presensi untuk hari ini s/d 14 hari ke belakang (WIB).
-// (Antrian offline multi-hari tetap bisa terkirim; tanggal masa depan / sangat lampau ditolak.)
-function ppValidasiTanggalSiswa_(cells) {
+// - Format salah / tanggal masa depan  : seluruh permintaan ditolak (jam HP salah perlu diperbaiki petugas)
+// - Terlalu lampau (> 14 hari)         : sel itu saja yang dibuang (antrian basi tidak boleh
+//                                        menyandera presensi hari ini); lihat savePresensiWaliKelasAman_
+function ppBatasTanggal_() {
   var tz = "Asia/Jakarta";
-  var hariIni = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
-  var batas = Utilities.formatDate(new Date(Date.now() - 14 * 24 * 3600 * 1000), tz, "yyyy-MM-dd");
+  return {
+    hariIni: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd"),
+    batas: Utilities.formatDate(new Date(Date.now() - 14 * 24 * 3600 * 1000), tz, "yyyy-MM-dd")
+  };
+}
+
+function ppValidasiTanggalSiswa_(cells) {
+  var b = ppBatasTanggal_();
   var list = Array.isArray(cells) ? cells : [];
   for (var i = 0; i < list.length; i++) {
     var t = String((list[i] && list[i].tanggal) || "").trim().slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "Format tanggal presensi tidak valid.";
-    if (t > hariIni) return "Tanggal presensi tidak boleh di masa depan.";
-    if (t < batas) return "Tanggal presensi terlalu lampau (maksimal 14 hari).";
+    if (t > b.hariIni) return "Tanggal presensi tidak boleh di masa depan. Periksa tanggal & jam HP Anda.";
   }
   return "";
 }
+
+// Teks bebas dari siswa: buang karakter kontrol, batasi panjang, dan netralkan awalan rumus Sheets
+function ppAmanTeks_(v, maxLen) {
+  var s = String(v === null || v === undefined ? "" : v).replace(/[\u0000-\u001f]/g, " ").slice(0, maxLen || 200);
+  if (/^[=@]/.test(s) || /^[+\-]\s*[A-Za-z_('"$]/.test(s)) s = "'" + s;
+  return s;
+}
+
+var PP_STATUS_SISWA = { hadir: "Hadir", sakit: "Sakit", izin: "Izin", alfa: "Alfa", cabut: "Cabut" };
+var PP_MAX_CELLS_SISWA = 800;
 
 // ------------------------------------------------------------
 // 1. SIMPAN PRESENSI WALI KELAS (aman & tidak menimpa)
@@ -119,6 +136,9 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
     var idWali = params && (params.idWali || params.ID_WALI);
     if (!isSiswaBerhakPresensiWaliKelas_(sid, idWali)) {
       return errorResponse("Akses ditolak: Anda bukan petugas presensi.");
+    }
+    if (params && Array.isArray(params.cells) && params.cells.length > PP_MAX_CELLS_SISWA) {
+      return errorResponse("Terlalu banyak data dalam satu permintaan.");
     }
     var errTgl = ppValidasiTanggalSiswa_(params && params.cells);
     if (errTgl) return errorResponse(errTgl);
@@ -138,6 +158,7 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
     });
 
     var skipped = 0;
+    var ditolak = 0;
     var out = cells;
     var isSiswaRole = !!(sessionUser && sessionUser.role === 'siswa');
 
@@ -155,7 +176,7 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
         var daftarAnggota = Array.isArray(grid.data.siswa) ? grid.data.siswa : [];
         daftarAnggota.forEach(function (m) {
           var mid = ppCleanId_(m && (m.idSiswa || m.ID_SISWA || m.id));
-          if (mid) anggota[mid] = true;
+          if (mid) anggota[mid] = String((m && (m.nama || m.namaSiswa || m.NAMA)) || "") || true;
         });
 
         // Fallback aman: jika grid.data.siswa kosong (misal idGuru format berbeda), cari anggota langsung dari sheet SISWA_WALI_KELAS via idWali
@@ -176,10 +197,35 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
         if (Object.keys(anggota).length === 0) {
           return errorResponse("Daftar siswa kelas tidak ditemukan. Coba lagi.");
         }
+
+        // Per sel: status harus salah satu status resmi (selain itu = permintaan dimanipulasi → tolak semua);
+        // bukan anggota kelas / tanggal > 14 hari → sel dibuang saja (antrian basi/siswa pindah kelas
+        // tidak boleh menyandera presensi hari ini). Teks bebas disanitasi.
+        var batasTgl = ppBatasTanggal_().batas;
+        var cellsSah = [];
         for (var ci = 0; ci < cells.length; ci++) {
-          if (!cells[ci] || !anggota[ppCleanId_(cells[ci].idSiswa)]) {
-            return errorResponse("Ada siswa yang bukan anggota kelas ini. Presensi ditolak.");
-          }
+          var c0 = cells[ci];
+          if (!c0) { ditolak++; continue; }
+          var stKanon = PP_STATUS_SISWA[String(c0.status || "").trim().toLowerCase()];
+          if (!stKanon) return errorResponse("Status presensi tidak valid.");
+          var idC = ppCleanId_(c0.idSiswa);
+          var tglC = String(c0.tanggal || "").trim().slice(0, 10);
+          if (!idC || !anggota[idC] || tglC < batasTgl) { ditolak++; continue; }
+
+          var c1 = {};
+          Object.keys(c0).forEach(function (key) {
+            var val = c0[key];
+            c1[key] = (typeof val === "string") ? ppAmanTeks_(val, 200) : val;
+          });
+          c1.status = stKanon;
+          c1.idSiswa = idC;
+          c1.tanggal = tglC;
+          if (typeof anggota[idC] === "string") c1.namaSiswa = anggota[idC]; // nama dari server, bukan dari klien
+          cellsSah.push(c1);
+        }
+        cells = cellsSah;
+        if (cells.length === 0) {
+          return successResponse("Tidak ada data valid yang perlu ditulis", { saved: 0, skipped: 0, ditolak: ditolak });
         }
       }
 
@@ -230,7 +276,7 @@ function savePresensiWaliKelasAman_(params, sessionUser) {
 
     var res = savePresensiWaliKelas(p2);
     if (res && res.success) {
-      res.data = Object.assign({}, res.data || {}, { skipped: skipped });
+      res.data = Object.assign({}, res.data || {}, { skipped: skipped, ditolak: ditolak });
     }
     return res;
 
