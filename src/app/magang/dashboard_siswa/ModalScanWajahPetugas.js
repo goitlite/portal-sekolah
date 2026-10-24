@@ -1777,10 +1777,12 @@ export default function ModalScanWajahPetugas({
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
+    // Ambang deteksi kamera responsif kilat: 0.28 (mode cepat) atau 0.32 (mode biasa) agar dari jauh langsung tertangkap
+    const liveScoreThreshold = isFastVerifyRef.current ? 0.28 : 0.32;
     const dets = await fa
       .detectAllFaces(
         video,
-        new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }),
+        new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: liveScoreThreshold }),
       )
       .withFaceLandmarks(true);
     if (!st.alive) return;
@@ -1967,7 +1969,8 @@ export default function ModalScanWajahPetugas({
     const inChallenge = !(st.liveness && st.liveness.isMotionVerified);
     const cxLo = inChallenge ? 0.2 : 0.28;
     const cxHi = inChallenge ? 0.8 : 0.72;
-    const minRatio = inChallenge ? 0.13 : 0.18;
+    // Jarak responsif: wajah dari jauh (rasio lebih kecil) langsung dapat diproses
+    const minRatio = isFastVerifyRef.current ? 0.08 : (inChallenge ? 0.10 : 0.13);
 
     // A. Cek Wajah di Posisi Tengah (Zona Reticle Tengah)
     if (cxNorm < cxLo || cxNorm > cxHi || cyNorm < 0.2 || cyNorm > 0.75) {

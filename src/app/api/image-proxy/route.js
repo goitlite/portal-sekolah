@@ -49,7 +49,7 @@ export async function GET(request) {
     if (parsed.hostname.endsWith("google.com")) {
       const fileId = extractDriveId(parsed);
       if (fileId) {
-        finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w640`;
+        finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w320`;
       }
     }
 

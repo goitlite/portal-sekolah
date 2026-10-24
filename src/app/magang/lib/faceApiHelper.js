@@ -254,33 +254,23 @@ export async function loadFaceImage(url) {
   throw lastErr || new Error("Gagal memuat foto wajah");
 }
 
-// Ekstrak deskriptor 128-d dari URL foto pendaftaran
+// Ekstrak deskriptor 128-d dari URL foto pendaftaran (Cepat & Hemat Memori)
 export async function computeTemplate(fa, url) {
   const img = await loadFaceImage(url);
-  // Coba deteksi standar (0.4)
+  // Deteksi cepat kilat (inputSize 320, ambang 0.3)
   let det = await fa
     .detectSingleFace(
       img,
-      new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
+      new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }),
     )
     .withFaceLandmarks(true);
 
-  // Jika belum terbaca (misal pencahayaan kurang/sedikit miring), coba toleransi lebih ramah
+  // Jika belum terbaca (misal pencahayaan kurang/sedikit miring), coba fallback
   if (!det) {
     det = await fa
       .detectSingleFace(
         img,
-        new fa.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.25 }),
-      )
-      .withFaceLandmarks(true);
-  }
-
-  // Fallback terakhir dengan inputSize 320
-  if (!det) {
-    det = await fa
-      .detectSingleFace(
-        img,
-        new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.2 }),
+        new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.25 }),
       )
       .withFaceLandmarks(true);
   }
