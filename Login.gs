@@ -139,7 +139,13 @@ function loginById(id) {
  * @returns {Object} JSON response dengan status, role, dan token sesi admin
  */
 function adminLogin(pin) {
-  var ADMIN_PIN = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN") || "293031";
+  // PIN WAJIB diatur di Project Settings > Script Properties (nama: ADMIN_PIN).
+  // Tidak ada lagi PIN cadangan di dalam kode: jika belum diatur, login admin ditolak.
+  var ADMIN_PIN = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN");
+  if (isEmpty(ADMIN_PIN) || String(ADMIN_PIN).trim().length < 6) {
+    Logger.log("[adminLogin] ADMIN_PIN belum diatur di Script Properties (minimal 6 karakter).");
+    return errorResponse("Login administrator belum dikonfigurasi di server. Hubungi pengelola sistem.");
+  }
   var cache = CacheService.getScriptCache();
   var failKey = 'admin_login_fail';
   var failCount = parseInt(cache.get(failKey) || '0', 10);
@@ -148,7 +154,7 @@ function adminLogin(pin) {
     return errorResponse("Terlalu banyak percobaan PIN Admin gagal. Akses dikunci sementara selama 15 menit demi keamanan.");
   }
 
-  if (isEmpty(pin) || String(pin).trim() !== String(ADMIN_PIN).trim()) {
+  if (isEmpty(pin) || !samaAman_(String(pin).trim(), String(ADMIN_PIN).trim())) {
     failCount++;
     cache.put(failKey, String(failCount), 900); // 15 menit
     return errorResponse("Kode PIN Administrator salah!");
@@ -179,6 +185,19 @@ function adminLogin(pin) {
     nama: "Administrator",
     token: token
   });
+}
+
+/**
+ * Perbandingan string tanpa berhenti di karakter pertama yang berbeda
+ * (constant-time comparison — mencegah timing attack pada PIN admin)
+ */
+function samaAman_(a, b) {
+  if (a.length !== b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 /**
@@ -259,4 +278,3 @@ function getRoleById(id) {
   if (isSiswa(id)) return 'siswa';
   return null;
 }
-
