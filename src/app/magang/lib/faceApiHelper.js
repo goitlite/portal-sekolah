@@ -257,12 +257,34 @@ export async function loadFaceImage(url) {
 // Ekstrak deskriptor 128-d dari URL foto pendaftaran
 export async function computeTemplate(fa, url) {
   const img = await loadFaceImage(url);
-  const det = await fa
+  // Coba deteksi standar (0.4)
+  let det = await fa
     .detectSingleFace(
       img,
       new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }),
     )
     .withFaceLandmarks(true);
+
+  // Jika belum terbaca (misal pencahayaan kurang/sedikit miring), coba toleransi lebih ramah
+  if (!det) {
+    det = await fa
+      .detectSingleFace(
+        img,
+        new fa.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.25 }),
+      )
+      .withFaceLandmarks(true);
+  }
+
+  // Fallback terakhir dengan inputSize 320
+  if (!det) {
+    det = await fa
+      .detectSingleFace(
+        img,
+        new fa.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.2 }),
+      )
+      .withFaceLandmarks(true);
+  }
+
   if (!det) return { descriptor: null };
   const [canvas] = await fa.extractFaces(img, [det.landmarks.align()]);
   const descriptor =

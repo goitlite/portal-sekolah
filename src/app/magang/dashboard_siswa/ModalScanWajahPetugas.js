@@ -918,11 +918,12 @@ export default function ModalScanWajahPetugas({
           const url = rawUrl && rawUrl !== "NO_PHOTO" ? rawUrl : null;
           const cached = url ? readCachedDescriptor(sid, url) : null;
           const isDesc = cached instanceof Float32Array;
+          // Saat forceRefresh, buang kegagalan lama agar bisa dianalisis ulang dengan deteksi adaptif
           const status = !url
             ? "nophoto"
             : isDesc
             ? "ok"
-            : cached?.status === "noface" || cached?.status === "error"
+            : !forceRefresh && (cached?.status === "noface" || cached?.status === "error")
             ? cached.status
             : "pending";
           return {
@@ -3676,6 +3677,24 @@ export default function ModalScanWajahPetugas({
                       <span>
                         ⚠️ {templateInfo.failed.length} foto siswa perlu didaftarkan ulang (harus lurus & jelas):
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          templateInfo.failed.forEach((f) => {
+                            const p = studentProfilesRef.current.find((sp) => sp.nama === f.nama);
+                            if (p?.idSiswa) {
+                              try {
+                                localStorage.removeItem(DESC_KEY + p.idSiswa);
+                              } catch (_) {}
+                            }
+                          });
+                          loadStudentFaceProfilesParallel(studentProfilesRef.current, true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-[9.5px] shrink-0 cursor-pointer transition-all shadow-xs"
+                        title="Coba analisis ulang foto dengan deteksi adaptif"
+                      >
+                        🔄 Proses Ulang
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1 pt-0.5">
                       {templateInfo.failed.map((s, idx) => (
