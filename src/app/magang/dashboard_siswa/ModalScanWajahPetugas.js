@@ -27,6 +27,7 @@ import {
   pushVote,
   mapBoxToContainer,
   headPose,
+  isSameFaceUrl,
   readCachedDescriptor,
   writeCachedDescriptor,
   loadFaceImage,
@@ -988,7 +989,7 @@ export default function ModalScanWajahPetugas({
         }
 
         let computedCount = 0;
-        const BATCH_SIZE = 2;
+        const BATCH_SIZE = 4;
         for (let i = 0; i < pending.length; i += BATCH_SIZE) {
           if (jobId !== templateJobRef.current) return;
           const chunk = pending.slice(i, i + BATCH_SIZE);
@@ -1006,8 +1007,13 @@ export default function ModalScanWajahPetugas({
                 }
               } catch (e) {
                 console.warn("Template wajah gagal:", p.nama, e);
-                p.status = "error";
-                writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
+                const isOffline =
+                  e?.message === "OFFLINE_NETWORK_UNAVAILABLE" ||
+                  (typeof navigator !== "undefined" && !navigator.onLine);
+                p.status = isOffline ? "offline_pending" : "error";
+                if (!isOffline) {
+                  writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
+                }
               }
               computedCount++;
             }),
@@ -1030,7 +1036,10 @@ export default function ModalScanWajahPetugas({
         }
 
         pending.forEach((p) => {
-          if (p.status === "pending") p.status = "error";
+          if (p.status === "pending") {
+            const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+            p.status = isOffline ? "offline_pending" : "error";
+          }
         });
         if (jobId === templateJobRef.current) {
           syncTemplateInfo(profiles);
@@ -1085,7 +1094,9 @@ export default function ModalScanWajahPetugas({
 
       const mustCheck =
         isOnlineNow &&
-        (forceRefresh || !hasEverSynced || unknownStudents.length > 0);
+        (forceRefresh ||
+          (!hasEverSynced && !SESSION_URL_CHECKED[effectiveWaliId]) ||
+          unknownStudents.length > 0);
 
       if (mustCheck) {
         updateProfileLoadingState("reading_photos");
@@ -1095,20 +1106,18 @@ export default function ModalScanWajahPetugas({
           show: true,
           stage: 1,
           totalStages: 3,
-          pct: 10,
+          pct: 20,
           title: isAllClassesMode
             ? "Sinkronisasi Foto Wajah (Semua Kelas)"
             : "Sinkronisasi Foto Wajah Siswa",
-          desc: "Memeriksa pembaruan foto wajah siswa dari server...",
-          detail: `0 dari ${studentsToFetch.length} siswa`,
+          desc: "Memeriksa pembaruan foto wajah siswa dari database server...",
+          detail: `Memeriksa ${studentsToFetch.length} data siswa`,
         });
 
         const urlsB = { ...urlsA };
-        const BATCH_SIZE = 8;
         let allOk = true;
 
-        // Cepat: ambil SEMUA foto wajah dalam 1 panggilan. Bila server belum mendukung
-        // (atau gagal), otomatis kembali ke cara lama per siswa.
+        // Ambil SEMUA foto wajah sekaligus dalam 1 panggilan bulk yang cepat
         let bulkMap = null;
         try {
           const bulk = await getWajahBulk(
@@ -1123,71 +1132,47 @@ export default function ModalScanWajahPetugas({
             bulkMap = bulk.data;
           }
         } catch (_) {}
-        // JANGAN fallback ke getBiodataSiswa(sid): untuk siswa petugas server memaksa ID sendiri,
-        // sehingga semua siswa akan menerima foto milik petugas. Bila bulk gagal, pakai cache lama.
-        const fetchFoto = async (sid) =>
-          bulkMap
-            ? { success: true, data: { fotoWajah: bulkMap[sid] || "" } }
-            : { success: false };
 
-        for (let i = 0; i < studentsToFetch.length; i += BATCH_SIZE) {
-          const batch = studentsToFetch.slice(i, i + BATCH_SIZE);
-          await Promise.allSettled(
-            batch.map(async (s) => {
-              const sid = String(s.idSiswa).trim();
-              try {
-                const bio = await fetchFoto(sid);
-                if (bio?.success) {
-                  if (bio.data?.fotoWajah) {
-                    urlsB[sid] = bio.data.fotoWajah;
-                    urlCache[sid] = bio.data.fotoWajah;
-                    globalCache[sid] = bio.data.fotoWajah;
-                    if (s.idWali) {
-                      try {
-                        const rawW = localStorage.getItem(
-                          `cached_face_urls_${s.idWali}`,
-                        );
-                        const wObj = rawW ? JSON.parse(rawW) : {};
-                        wObj[sid] = bio.data.fotoWajah;
-                        localStorage.setItem(
-                          `cached_face_urls_${s.idWali}`,
-                          JSON.stringify(wObj),
-                        );
-                      } catch (_) {}
-                    }
-                  } else {
-                    urlCache[sid] = "NO_PHOTO";
-                    globalCache[sid] = "NO_PHOTO";
-                  }
-                } else {
-                  allOk = false;
-                  if (urlsA[sid]) urlsB[sid] = urlsA[sid];
-                }
-              } catch (_) {
-                allOk = false;
-                if (urlsA[sid]) urlsB[sid] = urlsA[sid];
+        if (bulkMap) {
+          studentsToFetch.forEach((s) => {
+            const sid = String(s.idSiswa).trim();
+            const foto = String(bulkMap[sid] || "").trim();
+            if (foto) {
+              urlsB[sid] = foto;
+              urlCache[sid] = foto;
+              globalCache[sid] = foto;
+              if (s.idWali) {
+                try {
+                  const rawW = localStorage.getItem(`cached_face_urls_${s.idWali}`);
+                  const wObj = rawW ? JSON.parse(rawW) : {};
+                  wObj[sid] = foto;
+                  localStorage.setItem(`cached_face_urls_${s.idWali}`, JSON.stringify(wObj));
+                } catch (_) {}
               }
-            }),
-          );
-
-          const currentProcessed = Math.min(
-            i + BATCH_SIZE,
-            studentsToFetch.length,
-          );
-          const stage1Pct =
-            10 + Math.round((currentProcessed / studentsToFetch.length) * 35); // 10% -> 45%
-          setSyncModalProgress({
-            show: true,
-            stage: 1,
-            totalStages: 3,
-            pct: stage1Pct,
-            title: isAllClassesMode
-              ? "Mengunduh Foto Wajah (Semua Kelas)"
-              : "Mengunduh Foto Wajah Siswa",
-            desc: "Memvalidasi foto wajah siswa dari database server...",
-            detail: `${currentProcessed} dari ${studentsToFetch.length} siswa diperiksa`,
+            } else {
+              urlCache[sid] = "NO_PHOTO";
+              globalCache[sid] = "NO_PHOTO";
+            }
+          });
+        } else {
+          allOk = false;
+          studentsToFetch.forEach((s) => {
+            const sid = String(s.idSiswa).trim();
+            if (urlsA[sid]) urlsB[sid] = urlsA[sid];
           });
         }
+
+        setSyncModalProgress({
+          show: true,
+          stage: 1,
+          totalStages: 3,
+          pct: 45,
+          title: isAllClassesMode
+            ? "Foto Wajah Siap (Semua Kelas)"
+            : "Foto Wajah Siswa Siap",
+          desc: "Daftar foto wajah berhasil diverifikasi dari server.",
+          detail: `${studentsToFetch.length} siswa siap diproses`,
+        });
 
         try {
           localStorage.setItem(localCacheKey, JSON.stringify(urlCache));
@@ -1312,7 +1297,7 @@ export default function ModalScanWajahPetugas({
         const newUrl = bulkMap[sid] || null;
         const oldUrl = urlCache[sid] || globalCache[sid] || null;
         const hasPhoto = newUrl && newUrl !== "NO_PHOTO";
-        const isSame = hasPhoto && oldUrl === newUrl;
+        const isSame = hasPhoto && (oldUrl === newUrl || isSameFaceUrl(oldUrl, newUrl));
 
         if (hasPhoto) {
           registeredCount++;
@@ -1414,7 +1399,7 @@ export default function ModalScanWajahPetugas({
         }
 
         if (fa) {
-          const BATCH_SIZE = 2;
+          const BATCH_SIZE = 4;
           for (let i = 0; i < needCompute.length; i += BATCH_SIZE) {
             if (jobId !== templateJobRef.current) break;
             const chunk = needCompute.slice(i, i + BATCH_SIZE);
@@ -1430,9 +1415,14 @@ export default function ModalScanWajahPetugas({
                     p.status = "noface";
                     writeCachedDescriptor(p.idSiswa, p.fotoWajah, "NO_FACE");
                   }
-                } catch (_) {
-                  p.status = "error";
-                  writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
+                } catch (e) {
+                  const isOffline =
+                    e?.message === "OFFLINE_NETWORK_UNAVAILABLE" ||
+                    (typeof navigator !== "undefined" && !navigator.onLine);
+                  p.status = isOffline ? "offline_pending" : "error";
+                  if (!isOffline) {
+                    writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
+                  }
                 }
               }),
             );
@@ -1443,8 +1433,9 @@ export default function ModalScanWajahPetugas({
         // Pastikan tidak ada profil yang tertinggal dengan status "pending" agar tidak stuck di UI
         needCompute.forEach((p) => {
           if (p.status === "pending") {
-            p.status = p.descriptor ? "ok" : "error";
-            if (!p.descriptor) writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
+            const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+            p.status = p.descriptor ? "ok" : isOffline ? "offline_pending" : "error";
+            if (!p.descriptor && !isOffline) writeCachedDescriptor(p.idSiswa, p.fotoWajah, "ERROR");
           }
         });
       }

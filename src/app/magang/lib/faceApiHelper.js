@@ -160,13 +160,33 @@ export function headPose(landmarks) {
   };
 }
 
+// Ekstrak ID file Google Drive dari berbagai variasi URL
+export function extractDriveFileId(url) {
+  if (!url || typeof url !== "string") return "";
+  const m1 = url.match(/\/file\/d\/([A-Za-z0-9_-]{10,})/);
+  if (m1) return m1[1];
+  const m2 = url.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+  if (m2) return m2[1];
+  return "";
+}
+
+// Cek apakah dua URL merujuk ke foto yang sama (identik atau ID Google Drive sama)
+export function isSameFaceUrl(urlA, urlB) {
+  if (!urlA || !urlB) return false;
+  if (urlA === urlB) return true;
+  const idA = extractDriveFileId(urlA);
+  const idB = extractDriveFileId(urlB);
+  if (idA && idB && idA === idB) return true;
+  return false;
+}
+
 // Baca deskriptor dari cache lokal
 export function readCachedDescriptor(idSiswa, url) {
   try {
     const raw = localStorage.getItem(DESC_KEY + idSiswa);
     if (!raw) return null;
     const o = JSON.parse(raw);
-    if (o?.url === url) {
+    if (isSameFaceUrl(o?.url, url)) {
       if (Array.isArray(o.d) && o.d.length === 128) {
         return Float32Array.from(o.d);
       }
@@ -203,15 +223,13 @@ export function writeCachedDescriptor(idSiswa, url, desc) {
   } catch (_) {}
 }
 
-export function driveThumbUrl(url, size = 800) {
+export function driveThumbUrl(url, size = 320) {
   if (!url) return "";
-  let id = "";
-  if (url.includes("/file/d/")) id = url.split("/file/d/")[1].split("/")[0];
-  else if (url.includes("id=")) id = url.split("id=")[1].split("&")[0];
+  const id = extractDriveFileId(url);
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : url;
 }
 
-export function loadImage(src, timeoutMs = 7000) {
+export function loadImage(src, timeoutMs = 4000) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     let timer = setTimeout(() => {
@@ -233,20 +251,26 @@ export function loadImage(src, timeoutMs = 7000) {
   });
 }
 
-// Muat foto wajah lewat proxy atau thumbnail Drive
+// Muat foto wajah lewat proxy atau thumbnail Drive (Fast & Offline-Aware)
 export async function loadFaceImage(url) {
   if (!url) throw new Error("URL foto kosong");
   if (url.startsWith("data:") || url.startsWith("blob:")) {
     return await loadImage(url, 10000);
   }
+
+  // Fast-fail bila perangkat sedang offline: cegah UI macet/timeout bermenit-menit
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error("OFFLINE_NETWORK_UNAVAILABLE");
+  }
+
   const candidates = [
     `/api/image-proxy?url=${encodeURIComponent(url)}`,
-    driveThumbUrl(url, 800),
+    driveThumbUrl(url, 320),
   ];
   let lastErr = null;
   for (const src of candidates) {
     try {
-      return await loadImage(src, 7000);
+      return await loadImage(src, 4000);
     } catch (e) {
       lastErr = e;
     }
