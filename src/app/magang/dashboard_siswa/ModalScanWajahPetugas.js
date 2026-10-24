@@ -1890,12 +1890,14 @@ export default function ModalScanWajahPetugas({
         const alreadyScanned = sid ? !!scannedMapRef.current[sid] : false;
         const label = prev?.label || "Memindai...";
         const status = alreadyScanned ? "duplicate" : prev?.status || "verifying";
+        const hits = prev?.hits || 0;
 
         return {
           ...baseBox,
           cx: f.cx,
           cy: f.cy,
           sid,
+          hits,
           label,
           status,
         };
@@ -1905,10 +1907,11 @@ export default function ModalScanWajahPetugas({
       if (now - st.lastDescAt >= DESC_INTERVAL_MS) {
         st.lastDescAt = now;
         const recognizedBatch = [];
+        const rawMatches = [];
 
+        // 1. Ekstrak deskriptor & cari kemiripan untuk seluruh wajah di kamera
         for (let i = 0; i < validFaces.length; i++) {
           const f = validFaces[i];
-          const mBox = mappedBoxes[i];
           try {
             const [faceCanvas] = await fa.extractFaces(video, [f.d.landmarks.align()]);
             const desc = await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
@@ -1916,31 +1919,72 @@ export default function ModalScanWajahPetugas({
             const confident = best && isConfident(d1, d2, MATCH_DIST, MARGIN_MIN);
 
             if (confident) {
-              const sid = best.idSiswa;
-              const alreadyScanned = !!scannedMapRef.current[sid];
-              const cooldownUntil = multiCooldownRef.current[sid] || 0;
+              rawMatches.push({
+                faceIdx: i,
+                sid: best.idSiswa,
+                nama: best.nama,
+                d1,
+                d2,
+              });
+            }
+          } catch (_) {}
+        }
 
-              if (alreadyScanned) {
-                mBox.label = `✓ ${best.nama} (Hadir)`;
-                mBox.status = "duplicate";
-                mBox.sid = sid;
-              } else {
-                mBox.label = `✓ ${best.nama}`;
+        // 2. Greedy 1-to-1 Assignment: urutkan dari jarak d1 terkecil (paling mirip)
+        // Menjamin dalam 1 frame tidak ada 2 wajah berbeda yang memindai / mengklaim siswa yang sama
+        rawMatches.sort((a, b) => a.d1 - b.d1);
+        const assignedSids = new Set();
+        const assignedFaces = new Set();
+        const finalMatches = {};
+
+        for (const m of rawMatches) {
+          if (!assignedSids.has(m.sid) && !assignedFaces.has(m.faceIdx)) {
+            assignedSids.add(m.sid);
+            assignedFaces.add(m.faceIdx);
+            finalMatches[m.faceIdx] = m;
+          }
+        }
+
+        // 3. Terapkan hasil pencocokan dengan konfirmasi stabilitas 2-frame (anti-false-positive)
+        for (let i = 0; i < mappedBoxes.length; i++) {
+          const mBox = mappedBoxes[i];
+          const match = finalMatches[i];
+
+          if (match) {
+            const sid = match.sid;
+            const alreadyScanned = !!scannedMapRef.current[sid];
+            const cooldownUntil = multiCooldownRef.current[sid] || 0;
+            const prev = mappedBoxes[i];
+            const prevSidMatches = prev?.sid === sid;
+            const hits = (prevSidMatches ? (prev?.hits || 0) : 0) + 1;
+            mBox.hits = hits;
+            mBox.sid = sid;
+
+            if (alreadyScanned) {
+              mBox.label = `✓ ${match.nama} (Hadir)`;
+              mBox.status = "duplicate";
+            } else {
+              // Butuh minimal 2 frame berturut-turut konsisten agar presensi sah & akurat
+              if (hits >= 2 || prev?.status === "verified") {
+                mBox.label = `✓ ${match.nama}`;
                 mBox.status = "verified";
-                mBox.sid = sid;
 
                 if (now > cooldownUntil) {
                   multiCooldownRef.current[sid] = now + 8000;
-                  recognizedBatch.push({ id: sid, nama: best.nama });
+                  recognizedBatch.push({ id: sid, nama: match.nama });
                 }
-              }
-            } else {
-              if (mBox.label === "Memindai...") {
-                mBox.label = "Wajah Terdeteksi";
-                mBox.status = "unknown";
+              } else {
+                mBox.label = `✓ ${match.nama}...`;
+                mBox.status = "verifying";
               }
             }
-          } catch (_) {}
+          } else {
+            mBox.hits = 0;
+            if (mBox.label === "Memindai...") {
+              mBox.label = "Wajah Terdeteksi";
+              mBox.status = "unknown";
+            }
+          }
         }
 
         // Update memori spasial agar frame berikutnya stabil tanpa berkedip
@@ -1950,6 +1994,7 @@ export default function ModalScanWajahPetugas({
           label: b.label,
           status: b.status,
           sid: b.sid,
+          hits: b.hits || 0,
           lastSeen: now,
         }));
 
