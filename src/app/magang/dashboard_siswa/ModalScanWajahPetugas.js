@@ -242,6 +242,7 @@ export default function ModalScanWajahPetugas({
   // Status visual deteksi wajah di layar kamera (Live HUD)
   const [liveFaceBoxes, setLiveFaceBoxes] = useState([]); // array of { leftPct, topPct, widthPct, heightPct, label, status }
   const multiCooldownRef = useRef({}); // cooldown scan multi-wajah { [idSiswa]: timestamp }
+  const multiTrackedFacesRef = useRef([]); // pelacakan spasial multi-wajah { cx, cy, label, status, sid, lastSeen }
   const [liveFaceStatus, setLiveFaceStatus] = useState(
     "Arahkan wajah ke dalam zona pemindaian...",
   );
@@ -1872,11 +1873,42 @@ export default function ModalScanWajahPetugas({
         return;
       }
 
-      const mappedBoxes = validFaces.map((f) => ({
-        ...mapBoxToContainer(f.box, vw, vh, video.clientWidth || vw, video.clientHeight || vh, cameraFacing === "user"),
-        label: "Memindai...",
-        status: "verifying",
-      }));
+      // Pelacakan Spasial: pertahankan nama wajah yang sudah teridentifikasi agar tidak berkedip bergantian
+      const mappedBoxes = validFaces.map((f) => {
+        const baseBox = mapBoxToContainer(
+          f.box,
+          vw,
+          vh,
+          video.clientWidth || vw,
+          video.clientHeight || vh,
+          cameraFacing === "user",
+        );
+
+        // Cari wajah terlacak terdekat di frame sebelumnya (radius toleransi gerakan kepala 0.16)
+        let prev = null;
+        let minDist = 0.16;
+        for (const t of multiTrackedFacesRef.current) {
+          const dist = Math.hypot(t.cx - f.cx, t.cy - f.cy);
+          if (dist < minDist) {
+            minDist = dist;
+            prev = t;
+          }
+        }
+
+        const sid = prev?.sid;
+        const alreadyScanned = sid ? !!scannedMapRef.current[sid] : false;
+        const label = prev?.label || "Memindai...";
+        const status = alreadyScanned ? "duplicate" : prev?.status || "verifying";
+
+        return {
+          ...baseBox,
+          cx: f.cx,
+          cy: f.cy,
+          sid,
+          label,
+          status,
+        };
+      });
 
       // Analisis biometrik tiap wajah
       if (now - st.lastDescAt >= DESC_INTERVAL_MS) {
@@ -1900,9 +1932,11 @@ export default function ModalScanWajahPetugas({
               if (alreadyScanned) {
                 mBox.label = `✓ ${best.nama} (Hadir)`;
                 mBox.status = "duplicate";
+                mBox.sid = sid;
               } else {
                 mBox.label = `✓ ${best.nama}`;
                 mBox.status = "verified";
+                mBox.sid = sid;
 
                 if (now > cooldownUntil) {
                   multiCooldownRef.current[sid] = now + 8000;
@@ -1910,11 +1944,23 @@ export default function ModalScanWajahPetugas({
                 }
               }
             } else {
-              mBox.label = "Wajah Terdeteksi";
-              mBox.status = "unknown";
+              if (mBox.label === "Memindai...") {
+                mBox.label = "Wajah Terdeteksi";
+                mBox.status = "unknown";
+              }
             }
           } catch (_) {}
         }
+
+        // Update memori spasial agar frame berikutnya stabil tanpa berkedip
+        multiTrackedFacesRef.current = mappedBoxes.map((b) => ({
+          cx: b.cx,
+          cy: b.cy,
+          label: b.label,
+          status: b.status,
+          sid: b.sid,
+          lastSeen: now,
+        }));
 
         setLiveFaceBoxes(mappedBoxes);
         if (recognizedBatch.length > 0) {
@@ -1925,15 +1971,24 @@ export default function ModalScanWajahPetugas({
           recognizedBatch.forEach((item) => {
             recognizedRef.current(item.id, item.nama);
           });
-          setLiveFaceStatus(
-            `✅ ${recognizedBatch.length} siswa berhasil presensi: ${recognizedBatch.map((s) => s.nama).join(", ")}`,
-          );
+          const namaList = recognizedBatch.map((s) => s.nama).join(", ");
+          setLiveFaceStatus(`✅ ${recognizedBatch.length} siswa hadir: ${namaList}`);
         } else {
-          const countDone = mappedBoxes.filter((b) => b.status === "verified" || b.status === "duplicate").length;
-          setScanZoneState(countDone > 0 ? "success" : "verifying");
-          setLiveFaceStatus(`⚡ Mode Cepat: ${mappedBoxes.length} wajah (${countDone} cocok)`);
+          const cocok = mappedBoxes.filter((b) => b.status === "verified" || b.status === "duplicate");
+          if (cocok.length > 0) {
+            setScanZoneState("success");
+            const names = cocok
+              .map((c) => c.label.replace(/^✓\s*/, "").replace(/\s*\(Hadir\)$/, ""))
+              .join(", ");
+            setLiveFaceStatus(`⚡ Mode Cepat: ${names}`);
+          } else {
+            setScanZoneState("verifying");
+            setLiveFaceStatus(`⚡ Mode Cepat: ${mappedBoxes.length} wajah di kamera`);
+          }
         }
       } else {
+        // Frame antar-interval: bersihkan tracker yang sudah tidak tampak > 2.5 detik
+        multiTrackedFacesRef.current = multiTrackedFacesRef.current.filter((t) => now - t.lastSeen < 2500);
         setLiveFaceBoxes(mappedBoxes);
       }
       return;
