@@ -5,7 +5,9 @@
 
 export const FA_VERSION = "1.7.15";
 export const FA_BUNDLE = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/dist/face-api.esm.js`;
-export const FA_MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/model/`;
+export const FA_MODELS_LOCAL = "/models/";
+export const FA_MODELS_CDN = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${FA_VERSION}/model/`;
+export const FA_MODELS = FA_MODELS_LOCAL;
 
 export const DESC_KEY = "face_desc_v2_";
 export const MATCH_DIST = 0.5; // Batas kecocokan presensi
@@ -43,11 +45,20 @@ export function loadFaceApi(force = false) {
     } catch (_) {}
     if (!backendOk) await fa.tf.setBackend("cpu");
     await fa.tf.ready();
-    await Promise.all([
-      fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS),
-      fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS),
-      fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS),
-    ]);
+    try {
+      await Promise.all([
+        fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS_LOCAL),
+        fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS_LOCAL),
+        fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS_LOCAL),
+      ]);
+    } catch (localErr) {
+      console.warn("Model lokal tidak dapat dimuat, beralih ke CDN:", localErr);
+      await Promise.all([
+        fa.nets.tinyFaceDetector.loadFromUri(FA_MODELS_CDN),
+        fa.nets.faceLandmark68TinyNet.loadFromUri(FA_MODELS_CDN),
+        fa.nets.faceRecognitionNet.loadFromUri(FA_MODELS_CDN),
+      ]);
+    }
     return fa;
   })().catch((err) => {
     faPromise = null; // Boleh dicoba lagi jika koneksi sempat terputus

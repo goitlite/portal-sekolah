@@ -910,7 +910,7 @@ export default function ModalRegistrasiWajahSiswa({
   }
   captureRef.current = captureFaceSnapshot;
 
-  // Tombol manual: pada mode AI/native wajib ada wajah terdeteksi
+  // Tombol manual: pada mode AI/native wajib ada wajah terdeteksi dan memenuhi standar kualitas minimal
   function handleManualCapture() {
     const type = engineRef.current?.type;
     if (type === "ai" || type === "native") {
@@ -920,6 +920,25 @@ export default function ModalRegistrasiWajahSiswa({
       }
       if (metricsRef.current.multiple) {
         alert("Terdeteksi lebih dari satu wajah. Pastikan hanya Anda di kamera.");
+        return;
+      }
+      const m = metricsRef.current;
+      if (m.score < 55) {
+        const reasons = [];
+        if (!m.ok?.light) {
+          reasons.push(m.brightness < 30 ? "cahaya terlalu redup/gelap" : "cahaya terlalu silau");
+        }
+        if (!m.ok?.sharp) {
+          reasons.push("kamera buram atau kurang fokus");
+        }
+        if (!m.ok?.pose) {
+          reasons.push("posisi kepala miring atau menoleh");
+        }
+        if (!m.ok?.scale) {
+          reasons.push("jarak wajah terlalu jauh/dekat");
+        }
+        const detail = reasons.length > 0 ? ` (${reasons.join(", ")})` : "";
+        alert(`Kualitas foto belum memadai${detail}. Mohon posisikan wajah lurus di tempat terang dan tahan stabil.`);
         return;
       }
     }
