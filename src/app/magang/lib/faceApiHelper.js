@@ -199,7 +199,12 @@ export function readCachedDescriptor(idSiswa, url) {
     const o = JSON.parse(raw);
     if (isSameFaceUrl(o?.url, url)) {
       if (Array.isArray(o.d) && o.d.length === 128) {
-        return Float32Array.from(o.d);
+        const allValid = o.d.every(
+          (n) => typeof n === "number" && Number.isFinite(n),
+        );
+        if (allValid) {
+          return Float32Array.from(o.d);
+        }
       }
       if (o.status === "noface" || o.status === "error") {
         return { status: o.status };

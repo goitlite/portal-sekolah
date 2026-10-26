@@ -510,6 +510,7 @@ export default function ModalScanWajahPetugas({
                 kelas: s.kelas || cls.namaKelas || "",
                 idWali: wId,
                 idGuru: gId,
+                fotoWajah: s.fotoWajah || s.foto || null,
               };
               combinedMap[sid] = obj;
               combinedSiswa.push(obj);
@@ -891,7 +892,7 @@ export default function ModalScanWajahPetugas({
       const urlsA = {};
       siswaArray.forEach((s) => {
         const sid = String(s.idSiswa).trim();
-        let u = urlCache[sid] || globalCache[sid] || null;
+        let u = s.fotoWajah || urlCache[sid] || globalCache[sid] || null;
         if (!u && s.idWali) {
           if (!waliCaches[s.idWali]) {
             try {
@@ -989,7 +990,7 @@ export default function ModalScanWajahPetugas({
         }
 
         let computedCount = 0;
-        const BATCH_SIZE = 4;
+        const BATCH_SIZE = 6;
         for (let i = 0; i < pending.length; i += BATCH_SIZE) {
           if (jobId !== templateJobRef.current) return;
           const chunk = pending.slice(i, i + BATCH_SIZE);
@@ -1399,7 +1400,7 @@ export default function ModalScanWajahPetugas({
         }
 
         if (fa) {
-          const BATCH_SIZE = 4;
+          const BATCH_SIZE = 6;
           for (let i = 0; i < needCompute.length; i += BATCH_SIZE) {
             if (jobId !== templateJobRef.current) break;
             const chunk = needCompute.slice(i, i + BATCH_SIZE);
@@ -1799,7 +1800,11 @@ export default function ModalScanWajahPetugas({
           `⏳ Sedang memproses template wajah (${templateInfo.ready}/${templateInfo.total} siswa siap)...`,
         );
       } else {
-        setLiveFaceStatus("Arahkan wajah ke dalam zona pemindaian...");
+        setLiveFaceStatus(
+          templateInfo.pending > 0
+            ? `Arahkan wajah (${templateInfo.ready}/${templateInfo.total} siswa siap...)`
+            : "Arahkan wajah ke dalam zona pemindaian...",
+        );
       }
       return;
     }
@@ -1916,7 +1921,14 @@ export default function ModalScanWajahPetugas({
             const [faceCanvas] = await fa.extractFaces(video, [f.d.landmarks.align()]);
             const desc = await fa.nets.faceRecognitionNet.computeFaceDescriptor(faceCanvas);
             const { best, d1, d2 } = matchFace(desc, profiles);
-            const confident = best && isConfident(d1, d2, MATCH_DIST, MARGIN_MIN);
+            const strict = allModeRef.current;
+            const distLimit = strict
+              ? (isFastVerifyRef.current ? 0.50 : 0.49)
+              : MATCH_DIST;
+            const marginLimit = strict
+              ? (isFastVerifyRef.current ? 0.05 : 0.06)
+              : MARGIN_MIN;
+            const confident = best && isConfident(d1, d2, distLimit, marginLimit);
 
             if (confident) {
               rawMatches.push({
@@ -2260,22 +2272,28 @@ export default function ModalScanWajahPetugas({
     if (!st.alive) return;
 
     const { best, d1, d2 } = matchFace(desc, profiles);
-    // Mode Semua Kelas: kandidat jauh lebih banyak, jadi ambang dibuat lebih ketat
+    // Mode Semua Kelas: kandidat jauh lebih banyak, kalibrasi ambang seimbang (aman & responsif)
     const strict = allModeRef.current;
+    const distLimit = strict
+      ? (isFastVerifyRef.current ? 0.50 : 0.49)
+      : MATCH_DIST;
+    const marginLimit = strict
+      ? (isFastVerifyRef.current ? 0.05 : 0.06)
+      : MARGIN_MIN;
     const confident =
       best &&
       isConfident(
         d1,
         d2,
-        strict ? 0.45 : MATCH_DIST,
-        strict ? 0.09 : MARGIN_MIN,
+        distLimit,
+        marginLimit,
       );
 
     if (showDebugRef.current && best) {
       setDebugLine(
         `terdekat: ${best.nama} • jarak ${d1.toFixed(2)} • selisih ${
           Number.isFinite(d2) ? (d2 - d1).toFixed(2) : "-"
-        } (butuh ≤ ${MATCH_DIST} & ≥ ${MARGIN_MIN}) • ${live.phase}${st.lock ? " • terkunci" : ""}`,
+        } (butuh ≤ ${distLimit} & ≥ ${marginLimit}) • ${live.phase}${st.lock ? " • terkunci" : ""}`,
       );
     }
 
@@ -2292,12 +2310,18 @@ export default function ModalScanWajahPetugas({
       return;
     }
 
+    const targetVotes = isFastVerifyRef.current
+      ? VOTES_NEEDED
+      : allModeRef.current
+      ? VOTES_NEEDED + 1
+      : VOTES_NEEDED;
+
     const confirmedId = pushVote(
       st.votes,
       confident ? best.idSiswa : null,
       now,
       IDENT_WINDOW_MS,
-      allModeRef.current ? VOTES_NEEDED + 1 : VOTES_NEEDED,
+      targetVotes,
     );
     if (st.lock && confident && best.idSiswa === st.lock.id) {
       st.lock.at = now; // pencocokan segar: perbarui
@@ -2339,9 +2363,15 @@ export default function ModalScanWajahPetugas({
       setLiveFaceStatus(guideText);
     } else {
       setScanZoneState("adjust");
-      setLiveFaceStatus(
-        "⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini",
-      );
+      if (templateInfo.pending > 0) {
+        setLiveFaceStatus(
+          `⏳ Wajah belum cocok (${templateInfo.ready}/${templateInfo.total} siswa siap, ${templateInfo.pending} masih diproses...)`,
+        );
+      } else {
+        setLiveFaceStatus(
+          "⚠️ Wajah tidak dikenal / belum terdaftar di kelas ini",
+        );
+      }
     }
   }
 
@@ -3827,6 +3857,24 @@ export default function ModalScanWajahPetugas({
                     >
                       Matikan
                     </button>
+                  </div>
+                )}
+
+                {/* BANNER PROSES TEMPLATE LATAR BELAKANG */}
+                {templateInfo.pending > 0 && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-300 text-blue-900 text-[11px] flex items-center justify-between gap-1.5 shadow-xs animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="animate-spin text-[11px]">⏳</span>
+                      <span className="font-bold">
+                        {isAllClassesMode ? "Mode Semua Kelas:" : "Menyiapkan AI:"}
+                      </span>
+                      <span className="text-blue-700 truncate">
+                        {templateInfo.ready}/{templateInfo.total} siswa siap
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono bg-blue-200/80 text-blue-900 px-1.5 py-0.5 rounded-md font-bold shrink-0">
+                      {templateInfo.pending} diproses...
+                    </span>
                   </div>
                 )}
 
