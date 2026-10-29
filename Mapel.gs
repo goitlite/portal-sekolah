@@ -1146,44 +1146,95 @@ function hapusPertemuanMapel(params) {
 }
 
 // ============================================
-// 4. PEMBINAAN SISWA MAPEL (dipakai di Fase 4)
+// 4. JURNAL PEMBELAJARAN & PEMBINAAN MAPEL
 // ============================================
 function saveJurnalMapel(params) {
   if (isEmpty(params.idGuru)) return errorResponse('ID guru tidak boleh kosong');
   if (isEmpty(params.idMapel)) return errorResponse('ID mapel tidak boleh kosong');
   if (isEmpty(params.tanggal)) return errorResponse('Tanggal wajib diisi');
 
-  const formatPertemuan = params.formatPertemuan || 'Individu';
-  let daftarIdSiswa = [];
+  const formatPertemuan = params.formatPertemuan || 'Klasikal';
 
-  if (formatPertemuan === 'Kelompok' && Array.isArray(params.idSiswaList) && params.idSiswaList.length > 0) {
-    daftarIdSiswa = params.idSiswaList;
-  } else if (!isEmpty(params.idSiswa)) {
-    daftarIdSiswa = [params.idSiswa];
-  } else {
-    return errorResponse('Siswa wajib dipilih');
-  }
+  // Objek meta terstruktur untuk menyimpan rincian jurnal mengajar mapel
+  const metaJurnal = {
+    materi: params.materi || params.topik || '',
+    tujuanPembelajaran: params.tujuanPembelajaran || '',
+    kegiatanPembelajaran: params.kegiatanPembelajaran || '',
+    hasilRefleksi: params.hasilRefleksi || '',
+    tindakLanjut: params.tindakLanjut || '',
+    hadir: params.hadir !== undefined ? Number(params.hadir) : 0,
+    sakit: params.sakit !== undefined ? Number(params.sakit) : 0,
+    izin: params.izin !== undefined ? Number(params.izin) : 0,
+    alfa: params.alfa !== undefined ? Number(params.alfa) : 0,
+    cabut: params.cabut !== undefined ? Number(params.cabut) : 0,
+    pertemuanKe: params.pertemuanKe ? Number(params.pertemuanKe) : null,
+    catatan: params.keterangan || ''
+  };
+
+  const keteranganStr = JSON.stringify(metaJurnal);
 
   try {
     const namaFile = 'jurnal_mapel_' + params.idGuru + '_' + Date.now() + '.jpg';
-    const foto = prosesFotoMapel_(params.fotoUrl, namaFile);
+    let foto = { url: '', id: '' };
+    if (!isEmpty(params.fotoBase64)) {
+      foto = prosesFotoMapel_(params.fotoBase64, namaFile);
+    } else if (!isEmpty(params.fotoUrl)) {
+      foto = prosesFotoMapel_(params.fotoUrl, namaFile);
+    }
 
+    // JIKA FORMAT KLASIKAL / SELURUH SISWA KELAS (DEFAULT JURNAL MENGAJAR MAPEL)
+    const isKlasikal = formatPertemuan === 'Klasikal' || formatPertemuan === 'Kelas' ||
+      (isEmpty(params.idSiswa) && (!Array.isArray(params.idSiswaList) || params.idSiswaList.length === 0));
+
+    if (isKlasikal) {
+      const idJurnal = generateRandomId();
+      const obj = {};
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL] = idJurnal;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_GURU] = params.idGuru;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_MAPEL] = params.idMapel;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_SISWA] = 'SEMUA';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.NAMA_SISWA] = params.namaSiswa || 'Seluruh Siswa';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KELAS] = params.kelas || '';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.TANGGAL] = params.tanggal;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.FORMAT_PERTEMUAN] = 'Klasikal';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.TOPIK] = params.materi || params.topik || '';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.TINDAK_LANJUT] = params.tindakLanjut || '';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KETERANGAN] = keteranganStr;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.FOTO_URL] = foto.url;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.FOTO_ID] = foto.id;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.CREATED_AT] = new Date();
+
+      appendRowMapel_(MAPEL_SHEETS.JURNAL_MAPEL, obj);
+      return successResponse('Jurnal pembelajaran mapel berhasil disimpan', { idJurnal: idJurnal, mode: 'klasikal' });
+    }
+
+    // FORMAT KELOMPOK / INDIVIDU SISWA
+    let daftarIdSiswa = [];
+    if (formatPertemuan === 'Kelompok' && Array.isArray(params.idSiswaList) && params.idSiswaList.length > 0) {
+      daftarIdSiswa = params.idSiswaList;
+    } else if (!isEmpty(params.idSiswa)) {
+      daftarIdSiswa = [params.idSiswa];
+    } else {
+      daftarIdSiswa = ['SEMUA'];
+    }
+
+    const idJurnalShared = generateRandomId();
     daftarIdSiswa.forEach(function (idSiswa) {
-      const siswa = getSiswaById(idSiswa);
-      const info = parseNamaKelasSiswa_(siswa ? siswa[COLUMNS.SISWA.NAMA] : '', siswa);
+      const siswa = idSiswa !== 'SEMUA' ? getSiswaById(idSiswa) : null;
+      const info = siswa ? parseNamaKelasSiswa_(siswa[COLUMNS.SISWA.NAMA], siswa) : { namaBersih: 'Seluruh Siswa', kelas: params.kelas || '' };
 
       const obj = {};
-      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL] = generateRandomId();
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL] = idJurnalShared;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_GURU] = params.idGuru;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_MAPEL] = params.idMapel;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.ID_SISWA] = idSiswa;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.NAMA_SISWA] = info.namaBersih;
-      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KELAS] = info.kelas;
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KELAS] = params.kelas || info.kelas;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.TANGGAL] = params.tanggal;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.FORMAT_PERTEMUAN] = formatPertemuan;
-      obj[MAPEL_COLUMNS.JURNAL_MAPEL.TOPIK] = params.topik || '';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.TOPIK] = params.materi || params.topik || '';
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.TINDAK_LANJUT] = params.tindakLanjut || '';
-      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KETERANGAN] = params.keterangan || '';
+      obj[MAPEL_COLUMNS.JURNAL_MAPEL.KETERANGAN] = keteranganStr;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.FOTO_URL] = foto.url;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.FOTO_ID] = foto.id;
       obj[MAPEL_COLUMNS.JURNAL_MAPEL.CREATED_AT] = new Date();
@@ -1191,7 +1242,7 @@ function saveJurnalMapel(params) {
       appendRowMapel_(MAPEL_SHEETS.JURNAL_MAPEL, obj);
     });
 
-    return successResponse('Jurnal pembinaan mapel berhasil disimpan', { jumlahSiswa: daftarIdSiswa.length });
+    return successResponse('Jurnal mapel berhasil disimpan', { jumlahSiswa: daftarIdSiswa.length, idJurnal: idJurnalShared });
   } catch (error) {
     return errorResponse('Error: ' + error.message);
   }
@@ -1204,9 +1255,71 @@ function getJurnalMapel(idGuru, idMapel) {
     if (!isEmpty(idMapel)) {
       list = list.filter(function (j) { return String(j[MAPEL_COLUMNS.JURNAL_MAPEL.ID_MAPEL]) === String(idMapel); });
     }
-    return list;
+    // Normalisasi: parse KETERANGAN JSON dan gabungkan sebagai field camelCase
+    // sehingga frontend dapat langsung membaca field tanpa harus melakukan parsing sendiri
+    return list.map(function (row) {
+      var meta = {};
+      var rawKet = row[MAPEL_COLUMNS.JURNAL_MAPEL.KETERANGAN] || '';
+      if (rawKet && typeof rawKet === 'string' && rawKet.trim().charAt(0) === '{') {
+        try { meta = JSON.parse(rawKet); } catch (e) { meta = {}; }
+      }
+      return {
+        idJurnal:            row[MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL]       || '',
+        idGuru:              row[MAPEL_COLUMNS.JURNAL_MAPEL.ID_GURU]          || '',
+        idMapel:             row[MAPEL_COLUMNS.JURNAL_MAPEL.ID_MAPEL]         || '',
+        idSiswa:             row[MAPEL_COLUMNS.JURNAL_MAPEL.ID_SISWA]         || '',
+        namaSiswa:           row[MAPEL_COLUMNS.JURNAL_MAPEL.NAMA_SISWA]       || '',
+        kelas:               row[MAPEL_COLUMNS.JURNAL_MAPEL.KELAS]            || '',
+        tanggal:             row[MAPEL_COLUMNS.JURNAL_MAPEL.TANGGAL]          || '',
+        formatPertemuan:     row[MAPEL_COLUMNS.JURNAL_MAPEL.FORMAT_PERTEMUAN] || '',
+        topik:               row[MAPEL_COLUMNS.JURNAL_MAPEL.TOPIK]            || '',
+        tindakLanjutLama:    row[MAPEL_COLUMNS.JURNAL_MAPEL.TINDAK_LANJUT]   || '',
+        keterangan:          rawKet,
+        fotoUrl:             row[MAPEL_COLUMNS.JURNAL_MAPEL.FOTO_URL]         || '',
+        createdAt:           row[MAPEL_COLUMNS.JURNAL_MAPEL.CREATED_AT]       || '',
+        // Dari meta JSON (format baru)
+        materi:              meta.materi              || row[MAPEL_COLUMNS.JURNAL_MAPEL.TOPIK] || '',
+        tujuanPembelajaran:  meta.tujuanPembelajaran  || '',
+        kegiatanPembelajaran:meta.kegiatanPembelajaran|| '',
+        hasilRefleksi:       meta.hasilRefleksi       || '',
+        tindakLanjut:        meta.tindakLanjut        || row[MAPEL_COLUMNS.JURNAL_MAPEL.TINDAK_LANJUT] || '',
+        hadir:               meta.hadir  !== undefined ? Number(meta.hadir)  : 0,
+        sakit:               meta.sakit  !== undefined ? Number(meta.sakit)  : 0,
+        izin:                meta.izin   !== undefined ? Number(meta.izin)   : 0,
+        alfa:                meta.alfa   !== undefined ? Number(meta.alfa)   : 0,
+        cabut:               meta.cabut  !== undefined ? Number(meta.cabut)  : 0,
+        pertemuanKe:         meta.pertemuanKe ? Number(meta.pertemuanKe) : null,
+      };
+    });
   } catch (error) {
     Logger.log('getJurnalMapel error: ' + error.message);
     return [];
+  }
+}
+
+function deleteJurnalMapel(params) {
+  if (isEmpty(params.idJurnal)) return errorResponse('ID jurnal tidak boleh kosong');
+  try {
+    const sheet = getMapelSheet_(MAPEL_SHEETS.JURNAL_MAPEL);
+    const headers = getMapelHeaders_(MAPEL_SHEETS.JURNAL_MAPEL);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return errorResponse('Jurnal tidak ditemukan');
+
+    const data = sheet.getRange(1, 1, lastRow, headers.length).getValues();
+    const idCol = headers.indexOf(MAPEL_COLUMNS.JURNAL_MAPEL.ID_JURNAL);
+
+    let terhapus = 0;
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][idCol]) === String(params.idJurnal)) {
+        sheet.deleteRow(i + 1);
+        terhapus++;
+      }
+    }
+    if (terhapus > 0) {
+      return successResponse('Jurnal berhasil dihapus', { idJurnal: params.idJurnal, terhapus: terhapus });
+    }
+    return errorResponse('Data jurnal dengan ID tersebut tidak ditemukan');
+  } catch (error) {
+    return errorResponse('Gagal menghapus jurnal mapel: ' + error.message);
   }
 }

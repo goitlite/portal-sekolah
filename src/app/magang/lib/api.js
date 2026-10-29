@@ -641,22 +641,58 @@ export async function hapusPertemuanMapel(idGuru, idMapel, pertemuanKe) {
 }
 
 export async function saveJurnalMapel(data) {
+  const metaJurnal = {
+    materi: data.materi || data.topik || "",
+    tujuanPembelajaran: data.tujuanPembelajaran || "",
+    kegiatanPembelajaran: data.kegiatanPembelajaran || "",
+    hasilRefleksi: data.hasilRefleksi || "",
+    tindakLanjut: data.tindakLanjut || "",
+    hadir: data.hadir !== undefined ? Number(data.hadir) : 0,
+    sakit: data.sakit !== undefined ? Number(data.sakit) : 0,
+    izin: data.izin !== undefined ? Number(data.izin) : 0,
+    alfa: data.alfa !== undefined ? Number(data.alfa) : 0,
+    cabut: data.cabut !== undefined ? Number(data.cabut) : 0,
+    pertemuanKe: data.pertemuanKe || null,
+  };
+  const keteranganPayload =
+    typeof data.keterangan === "string" && data.keterangan.trim().startsWith("{")
+      ? data.keterangan
+      : JSON.stringify(metaJurnal);
+
   return request("saveJurnalMapel", {
     idGuru: data.idGuru,
     idMapel: data.idMapel,
-    idSiswa: data.idSiswa,
-    idSiswaList: data.idSiswaList,
+    idSiswa: data.idSiswa || "SEMUA",
+    idSiswaList: data.idSiswaList || [],
+    namaSiswa: data.namaSiswa || "Seluruh Siswa",
+    kelas: data.kelas || "",
     tanggal: data.tanggal,
-    formatPertemuan: data.formatPertemuan || "Individu",
-    topik: data.topik || "",
+    formatPertemuan: data.formatPertemuan || "Klasikal",
+    materi: data.materi || data.topik || "",
+    topik: data.materi || data.topik || "",
+    tujuanPembelajaran: data.tujuanPembelajaran || "",
+    kegiatanPembelajaran: data.kegiatanPembelajaran || "",
+    hasilRefleksi: data.hasilRefleksi || "",
     tindakLanjut: data.tindakLanjut || "",
-    keterangan: data.keterangan || "",
+    keterangan: keteranganPayload,
+    hadir: data.hadir !== undefined ? Number(data.hadir) : 0,
+    sakit: data.sakit !== undefined ? Number(data.sakit) : 0,
+    izin: data.izin !== undefined ? Number(data.izin) : 0,
+    alfa: data.alfa !== undefined ? Number(data.alfa) : 0,
+    cabut: data.cabut !== undefined ? Number(data.cabut) : 0,
+    pertemuanKe: data.pertemuanKe || null,
     fotoUrl: data.fotoUrl || "",
+    fotoBase64: data.fotoBase64 || "",
+    fotoMime: data.fotoMime || "",
   });
 }
 
 export async function getJurnalMapel(idGuru, idMapel) {
   return request("getJurnalMapel", { idGuru, idMapel });
+}
+
+export async function deleteJurnalMapel(idJurnal, idGuru, idMapel) {
+  return request("deleteJurnalMapel", { idJurnal, idGuru, idMapel });
 }
 
 // ==========================================

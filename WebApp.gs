@@ -100,7 +100,7 @@ function doPost(e) {
         'saveMonitoring', 'rekapGuru', 'getRekapSemua',
         'addMapel', 'editMapel', 'deleteMapel',
         'simpanSiswaMapel', 'hapusSiswaMapel', 'hapusPertemuanMapel',
-        'saveJurnalMapel', 'uploadTugasMapel',
+        'saveJurnalMapel', 'deleteJurnalMapel', 'uploadTugasMapel',
         'addWaliKelas', 'editWaliKelas', 'deleteWaliKelas',
         'simpanSiswaWaliKelas', 'hapusSiswaWaliKelas', 'sinkronSiswaWaliKelas',
         'getSemuaSiswaUntukTambahWali', 'getSemuaSiswaUntukTambahMapel',
@@ -177,7 +177,7 @@ function doPost(e) {
           'deleteWaliKelas', 'editWaliKelas', 'addWaliKelas',
           'saveJurnalGuruWali', 'deleteJurnalGuruWali',
           'saveJurnalPKL', 'deleteJurnalPKL',
-          'saveJurnalMapel', 'saveJurnalWaliKelas', 'deleteJurnalWaliKelas',
+          'saveJurnalMapel', 'deleteJurnalMapel', 'saveJurnalWaliKelas', 'deleteJurnalWaliKelas',
           'saveMonitoring',
           'savePresensiMapel', 'hapusSiswaWali', 'simpanGuruWaliSiswa',
           'simpanSiswaMapel', 'hapusSiswaMapel', 'hapusPertemuanMapel',
@@ -574,6 +574,10 @@ function doPost(e) {
 
     else if (action === 'saveJurnalMapel') {
       response = saveJurnalMapel(params);
+    }
+
+    else if (action === 'deleteJurnalMapel') {
+      response = deleteJurnalMapel(params);
     }
 
     else if (action === 'getJurnalMapel') {
