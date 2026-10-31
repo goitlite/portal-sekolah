@@ -102,9 +102,14 @@ export default function ExamPage() {
       // VALIDASI KEYBOARD
       // =========================
       const keyboardSafe = sessionStorage.getItem("keyboardSafe");
+      const isIOSDevice =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
 
-      // Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no")
-      if (keyboardSafe === "no") {
+      // Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no") pada Android / non-iOS
+      if (!isIOSDevice && keyboardSafe === "no") {
         alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
         router.push("/magang/dashboard_siswa");
         return;
@@ -674,9 +679,14 @@ export default function ExamPage() {
                             !/Android|iPhone|iPad|iPod/i.test(
                               navigator.userAgent,
                             );
+                          const isIOS =
+                            /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                            (typeof navigator !== "undefined" &&
+                              navigator.platform === "MacIntel" &&
+                              navigator.maxTouchPoints > 1);
                           let keyboardSafe = true;
 
-                          if (!isDesktop && window.visualViewport) {
+                          if (!isDesktop && !isIOS && window.visualViewport) {
                             const viewport = window.visualViewport;
                             const diff = window.innerHeight - viewport.height;
                             const widthShrink =

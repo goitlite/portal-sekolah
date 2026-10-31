@@ -57,7 +57,26 @@ export default function StartExamPage() {
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (typeof navigator !== "undefined" &&
+        navigator.platform === "MacIntel" &&
+        navigator.maxTouchPoints > 1);
 
+    // DUKUNGAN RESMI IPHONE / IOS (TETAP AMAN)
+    if (isIOS) {
+      // Izinkan Safari bawaan, Google Chrome iOS (CriOS), atau WebApp Standalone PWA
+      const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+      const isChromeIOS = /CriOS/.test(ua);
+      const isStandalone =
+        window.navigator.standalone === true ||
+        (typeof window !== "undefined" &&
+          window.matchMedia("(display-mode: standalone)").matches);
+
+      return isSafari || isChromeIOS || isStandalone;
+    }
+
+    // STRUKTUR ASLI ANDROID / DESKTOP (TIDAK BERUBAH SAMA SEKALI)
     // WAJIB ADA CHROME
     const hasChrome = ua.includes("Chrome");
 
@@ -623,6 +642,14 @@ export default function StartExamPage() {
   // =========================
   useEffect(() => {
     function handleFullscreenChange() {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
+      // Di iPhone, Fullscreen API standar HTML5 tidak didukung oleh Apple WebKit
+      if (isIOS) return;
+
       clearTimeout(fullscreenTimeout.current);
       fullscreenTimeout.current = setTimeout(() => {
         if (logoutRef.current) return;
@@ -960,7 +987,11 @@ export default function StartExamPage() {
       clearTimeout(blurTimeoutRef.current);
 
       blurTimeoutRef.current = setTimeout(() => {
-        if (!document.hasFocus()) {
+        // Cek apakah fokus berpindah ke dalam formulir ujian (iframe Google Form)
+        const isIframeFocused =
+          iframeRef.current && document.activeElement === iframeRef.current;
+
+        if (!document.hasFocus() && !isIframeFocused) {
           if (
             modalOpen ||
             isModalPengaduanOpen ||
@@ -1005,6 +1036,14 @@ export default function StartExamPage() {
     // RESIZE DETECTION
     // ======================
     function handleResize() {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
+      // Di iPhone tidak ada fitur split-screen/floating apps; resize dinamis terjadi karena address bar Safari
+      if (isIOS) return;
+
       if (safeActionRef.current) return;
 
       if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
@@ -1050,6 +1089,14 @@ export default function StartExamPage() {
     // VISUAL VIEWPORT (Android) - VERSI BARU: LANGSUNG BLOKIR
     // ======================
     function handleViewport() {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
+      // Di iPhone keyboard selalu docked & tidak ada floating keyboard. Proteksi perpindahan aplikasi dihandle visibilitychange & pagehide
+      if (isIOS) return;
+
       if (keyboardGraceRef.current) {
         return;
       }
@@ -1145,6 +1192,11 @@ export default function StartExamPage() {
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus); // ← TAMBAH INI
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", () => {
+      if (!safeActionRef.current) {
+        triggerViolation("Anda meninggalkan halaman ujian");
+      }
+    });
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleOrientation);
 
@@ -1309,9 +1361,11 @@ export default function StartExamPage() {
       const now = Date.now();
 
       const idleTime = now - lastTouchRef.current;
+      const isIframeFocused =
+        iframeRef.current && document.activeElement === iframeRef.current;
 
-      // jika tidak fokus + tidak ada touch
-      if (idleTime > 6000 && !document.hasFocus()) {
+      // jika tidak fokus + tidak ada touch (dan siswa sedang tidak aktif mengisi form di iframe)
+      if (idleTime > 6000 && !document.hasFocus() && !isIframeFocused) {
         forceLogout("Floating window / aplikasi lain terdeteksi");
       }
     }, 1500);

@@ -66,7 +66,7 @@ export default function LoginPage() {
     setLoading(false);
 
     // BERHASIL
-    if (result.status === "success" || result.status === "EXIST") {
+    if ((result.status && result.status.toLowerCase() === "success") || result.status === "EXIST") {
       // SIMPAN SESSION
       localStorage.setItem("nama", nama);
       localStorage.setItem("kelas", kelas);
