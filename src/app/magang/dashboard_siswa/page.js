@@ -31,6 +31,7 @@ import ModalKartuBarcodeSiswa from "./ModalKartuBarcodeSiswa";
 import ModalScanPresensiPetugas from "./ModalScanPresensiPetugas";
 import ModalScanWajahPetugas from "./ModalScanWajahPetugas";
 import ModalDaftarWajahSementaraSiswa from "./ModalDaftarWajahSementaraSiswa";
+import AlarmPresensiSiswa from "./AlarmPresensiSiswa";
 import PesanSekolahModal, {
   useJumlahPesanSekolah,
 } from "../components/PesanSekolahModal";
@@ -2223,6 +2224,16 @@ export default function DashboardSiswa() {
         }}
       />
     
+      {/* ⏰ ALARM NOTIFIKASI PENGINGAT PRESENSI SISWA & PETUGAS */}
+      <AlarmPresensiSiswa
+        sudahMagang={sudahMagang}
+        isSudahPresensi={isSudahPresensi}
+        petugasWaliData={petugasWaliData}
+        user={user}
+        onOpenPresensiMagang={() => router.push("/magang/presensi")}
+        onOpenScanWajah={() => setShowModalScanWajah(true)}
+      />
+
       {/* ========================================================= */}
       {/* STICKY FLOATING FOOTER SISWA                              */}
       {/* MUNCUL KETIKA HERO BANNER TER-SCROLL KE LUAR VIEWPORT     */}
