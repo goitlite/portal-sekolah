@@ -1093,6 +1093,22 @@ export default function DashboardSiswa() {
 
   const sudahMagang = isSedangMagang;
   const isSudahPresensi = !!presensiHariIni || hasPresensiTodayLocal;
+  // Sinkronisasi status role push notification spesifik (siswa_petugas / siswa_magang / siswa)
+  useEffect(() => {
+    if (!user?.id) return;
+    let pushRole = "siswa";
+    if (petugasWaliData) {
+      pushRole = "siswa_petugas";
+    } else if (sudahMagang) {
+      pushRole = "siswa_magang";
+    }
+
+    autoPushSubscribe({
+      userId: String(user.id).trim(),
+      role: pushRole,
+    }).catch(() => {});
+  }, [user?.id, petugasWaliData, sudahMagang]);
+
   const fotoTerbaru = riwayat.length > 0 ? riwayat[0].FOTO : null;
 
   // Cek ada catatan wali terisi

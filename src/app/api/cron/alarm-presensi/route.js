@@ -14,19 +14,53 @@ const GAS_API_URL =
   "https://script.google.com/macros/s/AKfycbwL6gJ9rVKps7EmqKO0o928iwbFlqk-xQDY4za0PcIPh0f-kkRTyu5XCavvZ-9bsZA/exec";
 
 /**
- * Helper request aman ke Google Apps Script dengan timeout
+ * Autentikasi Admin ke Google Apps Script untuk mendapatkan Token Sesi Server.
+ * Token ini diperlukan untuk memanggil getSiswa dan getDashboardKepsekWaliKelas.
  */
-async function fetchFromGAS(action, params = {}) {
+async function getGasAdminToken() {
+  const adminPin = process.env.PIN_ADMIN_RAHASIA || "663355";
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(GAS_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "adminLogin", params: { pin: adminPin } }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const json = await res.json();
+    if (json && json.success && json.data?.token) {
+      return json.data.token;
+    }
+    console.warn("[Cron Alarm] adminLogin gagal:", json?.message);
+  } catch (err) {
+    console.warn("[Cron Alarm] Error request adminLogin:", err?.message);
+  }
+  return null;
+}
+
+/**
+ * Helper request aman ke Google Apps Script dengan token sesi admin
+ */
+async function fetchFromGAS(action, params = {}, token = null) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    const payload = { action, params };
+    if (token) {
+      payload.token = token;
+    }
 
     const response = await fetch(GAS_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
       },
-      body: JSON.stringify({ action, params }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -53,6 +87,8 @@ async function handleAlarmCron(request) {
 
     const { searchParams } = new URL(request.url);
     const paramType = searchParams.get("type"); // "petugas" | "magang"
+    const targetIdParam = searchParams.get("targetId"); // Uji coba kirim ke 1 siswa spesifik
+    const forceAllParam = searchParams.get("all") === "true"; // Uji coba broadcast seluruh siswa
 
     // 2. Tentukan tipe alarm (berdasarkan param atau jam WIB sekarang)
     const now = new Date();
@@ -66,7 +102,7 @@ async function handleAlarmCron(request) {
       } else if (wibHours >= 8 && wibHours < 12) {
         targetType = "magang";
       } else {
-        targetType = "magang"; // default preview
+        targetType = "magang";
       }
     }
 
@@ -88,12 +124,14 @@ async function handleAlarmCron(request) {
     if (!allSubs || allSubs.length === 0) {
       return NextResponse.json({
         ok: true,
-        message: "Tidak ada perangkat HP siswa yang terdaftar untuk menerima notifikasi.",
+        message: "Tidak ada perangkat HP siswa yang terdaftar untuk menerima notifikasi di Supabase.",
         sent: 0,
         failed: 0,
       });
     }
 
+    // Dapatkan token admin dari Google Apps Script
+    const adminToken = await getGasAdminToken();
     let targetUserIds = new Set();
     let notifTitle = "";
     let notifBody = "";
@@ -109,9 +147,11 @@ async function handleAlarmCron(request) {
       targetUrl = "/magang/dashboard_siswa";
 
       // Ambil daftar Wali Kelas untuk mengekstrak siapa saja yang ditunjuk sebagai Petugas
-      const waliRes = await fetchFromGAS("getDashboardKepsekWaliKelas", {
-        forceRefresh: false,
-      });
+      const waliRes = await fetchFromGAS(
+        "getDashboardKepsekWaliKelas",
+        { forceRefresh: false },
+        adminToken,
+      );
 
       if (waliRes && waliRes.success && Array.isArray(waliRes.data?.cards)) {
         waliRes.data.cards.forEach((card) => {
@@ -139,7 +179,7 @@ async function handleAlarmCron(request) {
       targetUrl = "/magang/presensi";
 
       // Ambil daftar master siswa untuk memfilter HANYA siswa yang sedang magang
-      const siswaRes = await fetchFromGAS("getSiswa", {});
+      const siswaRes = await fetchFromGAS("getSiswa", {}, adminToken);
       const rawSiswaList = Array.isArray(siswaRes)
         ? siswaRes
         : Array.isArray(siswaRes?.data)
@@ -148,12 +188,10 @@ async function handleAlarmCron(request) {
 
       if (rawSiswaList.length > 0) {
         rawSiswaList.forEach((s) => {
-          const rawStatus = String(s.status || s.STATUS || "")
-            .trim()
-            .toUpperCase();
-          const rawTempat = String(
-            s.tempatMagang || s.TEMPAT_MAGANG || "",
-          ).trim();
+          const sid = String(s.ID || s.id || s.nisn || s.NISN || "").trim();
+          const rawStatus = String(s.STATUS || s.status || "").trim().toUpperCase();
+          const rawTempat = String(s.TEMPAT_MAGANG || s.tempatMagang || "").trim();
+
           const isSedangMagang =
             rawStatus === "MAGANG" ||
             rawStatus === "SEDANG_MAGANG" ||
@@ -161,15 +199,15 @@ async function handleAlarmCron(request) {
               rawTempat !== "-" &&
               rawStatus !== "BELUM_MAGANG");
 
-          // HANYA SISWA MAGANG YANG DITAMBAHKAN (Siswa belum magang tidak menerima)
-          if (isSedangMagang && s.id) {
-            targetUserIds.add(String(s.id).trim().toLowerCase());
+          // HANYA SISWA MAGANG YANG DITAMBAHKAN (Siswa belum magang tidak dimasukkan)
+          if (isSedangMagang && sid) {
+            targetUserIds.add(sid.toLowerCase());
           }
         });
       }
 
       console.log(
-        `[Cron Alarm Magang] Teridentifikasi ${targetUserIds.size} siswa aktif magang.`,
+        `[Cron Alarm Magang] Teridentifikasi ${targetUserIds.size} siswa aktif magang dari server GAS.`,
       );
     }
 
@@ -178,8 +216,30 @@ async function handleAlarmCron(request) {
       const sId = String(sub.user_id || "").trim().toLowerCase();
       const sRole = String(sub.role || "").trim().toLowerCase();
 
-      // Harus terdaftar sebagai siswa dan ada di daftar targetUserIds
-      return sRole === "siswa" && targetUserIds.has(sId);
+      // Mode Uji Coba: jika targetId spesifik diberikan di query param
+      if (targetIdParam && sId === targetIdParam.trim().toLowerCase()) {
+        return true;
+      }
+
+      // Mode Uji Coba: jika all=true diberikan di query param
+      if (forceAllParam && (sRole === "siswa" || sRole.startsWith("siswa_"))) {
+        return true;
+      }
+
+      // 1. Cocokkan ID siswa dengan targetUserIds dari server Google Apps Script
+      if (targetUserIds.size > 0 && targetUserIds.has(sId)) {
+        return true;
+      }
+
+      // 2. Cocokkan berdasarkan peran spesifik yang tersimpan di Supabase
+      if (targetType === "petugas" && (sRole === "siswa_petugas" || sRole === "petugas")) {
+        return true;
+      }
+      if (targetType === "magang" && sRole === "siswa_magang") {
+        return true;
+      }
+
+      return false;
     });
 
     console.log(
@@ -190,13 +250,16 @@ async function handleAlarmCron(request) {
       return NextResponse.json({
         ok: true,
         type: targetType,
+        gasAuthSuccess: !!adminToken,
         targetCandidates: targetUserIds.size,
         deviceSubscriptions: allSubs.length,
         matchedDevices: 0,
         sent: 0,
         failed: 0,
         message:
-          "Belum ada perangkat HP siswa yang cocok dan mengizinkan push notifikasi di database.",
+          targetUserIds.size === 0
+            ? "Data siswa magang/petugas belum termuat dari server (atau sedang kosong). Anda dapat menguji kirim dengan menambahkan &targetId=[ID_SISWA] atau &all=true di URL."
+            : `Teridentifikasi ${targetUserIds.size} siswa sasaran, namun belum ada token push HP mereka yang tersimpan di database Supabase.`,
       });
     }
 
@@ -250,6 +313,7 @@ async function handleAlarmCron(request) {
     return NextResponse.json({
       ok: true,
       type: targetType,
+      gasAuthSuccess: !!adminToken,
       targetCandidates: targetUserIds.size,
       matchedDevices: matchedSubscriptions.length,
       sent,
@@ -274,4 +338,3 @@ export async function GET(request) {
 export async function POST(request) {
   return handleAlarmCron(request);
 }
-
