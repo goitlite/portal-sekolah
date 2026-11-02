@@ -496,33 +496,33 @@ export default function ModalPantauAsesmenKelas({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
       <div className="relative flex max-h-[95vh] w-full max-w-5xl flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
         {/* HEADER MODAL */}
-        <div className="flex items-center justify-between border-b border-blue-900/30 bg-gradient-to-r from-blue-950 via-indigo-900 to-slate-900 px-5 py-4 text-white">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-400/20 text-xl border border-amber-300/40">
+        <div className="flex items-center justify-between border-b border-blue-900/30 bg-gradient-to-r from-blue-950 via-indigo-900 to-slate-900 px-3 py-2.5 sm:px-5 sm:py-4 text-white">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl sm:rounded-2xl bg-amber-400/20 text-base sm:text-xl border border-amber-300/40 shrink-0">
               🛡️
             </span>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-black tracking-tight text-white">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-lg font-black tracking-tight text-white leading-tight">
                   Pantau Asesmen & Ujian
                 </h3>
-                <span className={`rounded-lg px-2.5 py-0.5 text-xs font-black border ${warnaKelasObj.badge}`}>
+                <span className={`rounded-lg px-2 py-0.5 text-[10px] sm:text-xs font-black border ${warnaKelasObj.badge}`}>
                   {kelasTarget || "KELAS"}
                 </span>
                 {namaMapel && (
-                  <span className="rounded-lg bg-blue-500/20 px-2 py-0.5 text-xs font-bold text-blue-200 border border-blue-400/30">
+                  <span className="rounded-lg bg-blue-500/20 px-2 py-0.5 text-[10px] sm:text-xs font-bold text-blue-200 border border-blue-400/30">
                     {namaMapel}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-blue-200">
+              <p className="hidden sm:block text-xs text-blue-200">
                 SMKN 1 Teluk Kuantan • Status Ujian & Monitoring Pelanggaran Siswa
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all font-bold cursor-pointer"
+            className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all font-bold cursor-pointer text-xs sm:text-sm shrink-0"
           >
             ✕
           </button>
@@ -555,37 +555,38 @@ export default function ModalPantauAsesmenKelas({
         {/* ========================================================= */}
         {/* KARTU STATUS SESI UJIAN AKTIF KELAS & MAPEL INI           */}
         {/* ========================================================= */}
-        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/50 border-b border-amber-200/80 px-5 py-3.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/50 border-b border-amber-200/80 px-3 py-2 sm:px-5 sm:py-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs font-black uppercase text-amber-950 flex items-center gap-1">
                   <span>📑</span>
-                  <span>Sesi Ujian Sheet UJIAN:</span>
+                  <span className="hidden sm:inline">Sesi Ujian Sheet UJIAN:</span>
+                  <span className="sm:hidden">Sesi:</span>
                 </span>
                 {sesiUjianAktif ? (
-                  <span className="rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[10px] font-black">
+                  <span className="rounded-full bg-emerald-600 text-white px-2 py-0.5 text-[9px] sm:text-[10px] font-black">
                     ✓ TERDAFTAR (#{sesiUjianAktif.rowIndex || "-"})
                   </span>
                 ) : (
-                  <span className="rounded-full bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 text-[10px] font-bold">
-                    ✕ Belum Ada Sesi Ujian
+                  <span className="rounded-full bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 text-[9px] sm:text-[10px] font-bold">
+                    ✕ Belum Ada Sesi
                   </span>
                 )}
               </div>
 
               {sesiUjianAktif ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
                   <span className="font-bold text-slate-800">
-                    Token Masuk:{" "}
-                    <b className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-300 text-emerald-800 font-black">
+                    Token:{" "}
+                    <b className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-300 text-emerald-800 font-black">
                       {sesiUjianAktif.token || "-"}
                     </b>
                   </span>
                   <span className="text-slate-400">•</span>
                   <span className="font-bold text-slate-800">
-                    Kode Kirim:{" "}
-                    <b className="font-mono bg-white px-2 py-0.5 rounded border border-amber-300 text-amber-900 font-black">
+                    Kirim:{" "}
+                    <b className="font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300 text-amber-900 font-black">
                       {sesiUjianAktif.kodeKirim || "-"}
                     </b>
                   </span>
@@ -604,47 +605,53 @@ export default function ModalPantauAsesmenKelas({
                   )}
                   {sesiUjianAktif.guru && (
                     <>
-                      <span className="text-slate-400">•</span>
-                      <span className="text-[10px] text-slate-500 font-semibold">
+                      <span className="hidden sm:inline text-slate-400">•</span>
+                      <span className="hidden sm:inline text-[10px] text-slate-500 font-semibold truncate max-w-[150px]">
                         Pembuat: {sesiUjianAktif.guru}
                       </span>
                     </>
                   )}
                 </div>
               ) : (
-                <p className="mt-1 text-xs text-amber-900 font-medium">
+                <p className="mt-1 text-[11px] sm:text-xs text-amber-900 font-medium">
                   Belum ada sesi ujian di sheet UJIAN untuk kelas <b>{kelasTarget}</b> mapel <b>{namaMapel}</b>.
                 </p>
               )}
             </div>
 
-            {/* TOMBOL AKSI SESI UJIAN */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* TOMBOL AKSI SESI UJIAN (KOMPAK & IKON DI HP) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {sesiUjianAktif ? (
                 <>
                   <button
                     onClick={handleOpenEditSesiUjian}
                     disabled={actionLoading}
-                    className="rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 px-3 py-1.5 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                    className="rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1"
+                    title="Edit Token / Link Ujian"
                   >
-                    ✏️ Edit Token/Link
+                    <span>✏️</span>
+                    <span className="hidden sm:inline">Edit Token/Link</span>
+                    <span className="sm:hidden">Edit</span>
                   </button>
                   <button
                     onClick={handleHapusSesiUjian}
                     disabled={actionLoading}
-                    className="rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer"
+                    className="rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                    title="Hapus Sesi Ujian"
                   >
-                    🗑️ Hapus
+                    <span>🗑️</span>
+                    <span className="hidden sm:inline">Hapus</span>
                   </button>
                 </>
               ) : (
                 <button
                   onClick={handleOpenBuatUjian}
                   disabled={actionLoading}
-                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-1.5 text-xs font-black shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-2.5 py-1 sm:px-3.5 sm:py-1.5 text-[11px] sm:text-xs font-black shadow-xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
                 >
                   <span>➕</span>
-                  <span>Buat Sesi Ujian untuk Kelas Ini</span>
+                  <span className="hidden sm:inline">Buat Sesi Ujian untuk Kelas Ini</span>
+                  <span className="sm:hidden">Buat Sesi</span>
                 </button>
               )}
             </div>
@@ -742,58 +749,63 @@ export default function ModalPantauAsesmenKelas({
         </div>
 
         {/* STATISTIK & AKSI CEPAT KELAS */}
-        <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                Total Siswa Kelas Ini
+        <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3 space-y-2 sm:space-y-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2.5">
+            <div className="rounded-xl border border-slate-200 bg-white p-2 sm:p-2.5 shadow-2xs">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase block truncate">
+                Total Siswa
               </span>
-              <span className="text-lg font-black text-slate-800">
+              <span className="text-base sm:text-lg font-black text-slate-800">
                 {stats.total}
               </span>
             </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-2.5 shadow-sm">
-              <span className="text-[10px] font-bold text-rose-600 uppercase block">
-                Siswa Ada Pelanggaran
+            <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-2 sm:p-2.5 shadow-2xs">
+              <span className="text-[9px] sm:text-[10px] font-bold text-rose-600 uppercase block truncate">
+                Pelanggar
               </span>
-              <span className="text-lg font-black text-rose-700">
+              <span className="text-base sm:text-lg font-black text-rose-700">
                 {stats.adaPelanggaran}
               </span>
             </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 shadow-sm">
-              <span className="text-[10px] font-bold text-amber-700 uppercase block">
-                Total Pelanggaran
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2 sm:p-2.5 shadow-2xs">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase block truncate">
+                Melanggar
               </span>
-              <span className="text-lg font-black text-amber-800">
+              <span className="text-base sm:text-lg font-black text-amber-800">
                 {stats.totalPelanggaran}
               </span>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2.5 shadow-sm">
-              <span className="text-[10px] font-bold text-blue-700 uppercase block">
-                Pengaduan Siswa
+            <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2 sm:p-2.5 shadow-2xs">
+              <span className="text-[9px] sm:text-[10px] font-bold text-blue-700 uppercase block truncate">
+                Pengaduan
               </span>
-              <span className="text-lg font-black text-blue-800">
+              <span className="text-base sm:text-lg font-black text-blue-800">
                 {stats.adaPengaduan}
               </span>
             </div>
           </div>
 
-          {/* TOMBOL AKSI CEPAT KELAS */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          {/* TOMBOL AKSI CEPAT KELAS (PADAT & IKON PADA MOBILE) */}
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-0.5">
             <button
               onClick={muatData}
               disabled={loading || actionLoading}
-              className="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="Refresh Data Siswa"
             >
-              🔄 Refresh
+              <span>🔄</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
 
             <button
               onClick={handleResetPelanggaranSekelas}
               disabled={actionLoading || stats.totalPelanggaran === 0}
-              className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+              title="Reset Semua Pelanggaran Kelas ke 0"
             >
-              0️⃣ Reset Pelanggaran Kelas
+              <span>0️⃣</span>
+              <span className="hidden sm:inline">Reset Pelanggaran Kelas</span>
+              <span className="sm:hidden">Reset 0</span>
             </button>
 
             <button
@@ -802,25 +814,34 @@ export default function ModalPantauAsesmenKelas({
                 setShowPesanModal(true);
               }}
               disabled={actionLoading}
-              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-black transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+              title="Kirim Pesan ke Seluruh Siswa Kelas Ini"
             >
-              💬 Kirim Pesan ke Kelas
+              <span>💬</span>
+              <span className="hidden sm:inline">Kirim Pesan ke Kelas</span>
+              <span className="sm:hidden">Pesan</span>
             </button>
 
             <button
               onClick={handleHapusPesanSekelas}
               disabled={actionLoading}
-              className="rounded-xl bg-slate-600 hover:bg-slate-700 text-white px-3 py-1.5 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="rounded-xl bg-slate-600 hover:bg-slate-700 text-white px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+              title="Bersihkan Pesan Aktif di Kelas Ini"
             >
-              🧹 Bersihkan Pesan
+              <span>🧹</span>
+              <span className="hidden sm:inline">Bersihkan Pesan</span>
+              <span className="sm:hidden">Bersihkan</span>
             </button>
 
             <button
               onClick={handleResetUjianSekelas}
               disabled={actionLoading}
-              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-black transition-all shadow-sm active:scale-95 ml-auto cursor-pointer"
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 ml-auto cursor-pointer flex items-center gap-1"
+              title="RESET UJIAN KELAS (Keluarkan Semua Siswa dari Ujian)"
             >
-              ⚠️ RESET UJIAN KELAS
+              <span>⚠️</span>
+              <span className="hidden sm:inline">RESET UJIAN KELAS</span>
+              <span className="sm:hidden">Reset Ujian</span>
             </button>
           </div>
         </div>
@@ -1000,17 +1021,18 @@ export default function ModalPantauAsesmenKelas({
                             <span className="text-slate-400 text-[10px]">-</span>
                           )}
                         </td>
-                        <td className="px-2.5 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <td className="px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             {/* Reset 0 */}
                             <button
                               type="button"
                               onClick={() => handleResetPelanggaranSiswa(s)}
                               disabled={actionLoading || !isMelanggar}
-                              className="rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 text-[10px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-2xs"
+                              className="rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-2xs flex items-center gap-0.5"
                               title="Reset pelanggaran siswa ini ke 0"
                             >
-                              Reset 0
+                              <span>0️⃣</span>
+                              <span className="hidden sm:inline">Reset 0</span>
                             </button>
 
                             {/* Kirim Pesan */}
@@ -1020,10 +1042,11 @@ export default function ModalPantauAsesmenKelas({
                                 setTargetSiswaPesan(s);
                                 setShowPesanModal(true);
                               }}
-                              className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 text-[10px] font-bold transition-all cursor-pointer shadow-2xs"
+                              className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-0.5"
                               title="Kirim pesan khusus ke siswa ini"
                             >
-                              Pesan
+                              <span>💬</span>
+                              <span className="hidden sm:inline">Pesan</span>
                             </button>
 
                             {/* Hapus Akun Siswa (Sesuai Rule Admin: Pertahankan ID) */}
@@ -1031,10 +1054,11 @@ export default function ModalPantauAsesmenKelas({
                               type="button"
                               onClick={() => handleHapusAkunSiswa(s)}
                               disabled={actionLoading}
-                              className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 text-[10px] font-black transition-all cursor-pointer shadow-2xs"
-                              title={`Hapus / Reset akun siswa ini (ID tetap tersimpan, nama & kelas dikosongkan untuk diisi kembali)`}
+                              className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-black transition-all cursor-pointer shadow-2xs flex items-center gap-0.5"
+                              title="Hapus / Reset akun siswa ini (ID tetap tersimpan, nama & kelas dikosongkan untuk diisi kembali)"
                             >
-                              🗑️ Hapus
+                              <span>🗑️</span>
+                              <span className="hidden sm:inline">Hapus</span>
                             </button>
                           </div>
                         </td>

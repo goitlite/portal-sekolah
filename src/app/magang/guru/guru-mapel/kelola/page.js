@@ -1750,10 +1750,11 @@ export default function KelolaMapelPage() {
                                 setSelectedAsesmenMapel(mapel);
                                 setIsModalAsesmenOpen(true);
                               }}
-                              className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-3 py-2 text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+                              className="mt-2 flex min-h-8 sm:min-h-9 w-full items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
                             >
                               <span>🛡️</span>
-                              <span>PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
+                              <span className="hidden sm:inline">PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
+                              <span className="sm:hidden">PANTAU ASESMEN ({mapel.kelas || "KELAS"})</span>
                             </button>
                           </div>
                         </>

@@ -797,6 +797,23 @@ function DashboardGuruContent() {
   const [editNama, setEditNama] = useState("");
   const [editKeterangan, setEditKeterangan] = useState("");
 
+  // Ref & State untuk Sticky Floating Footer Tab Pembimbing saat tab atas ter-scroll keluar layar
+  const tabJenisPembimbingRef = useRef(null);
+  const [showFloatingFooterTab, setShowFloatingFooterTab] = useState(false);
+
+  useEffect(() => {
+    const handleScrollTab = () => {
+      if (!tabJenisPembimbingRef.current) return;
+      const rect = tabJenisPembimbingRef.current.getBoundingClientRect();
+      // Muncul jika bagian bawah tab utama telah ter-scroll melewati bagian atas layar
+      setShowFloatingFooterTab(rect.bottom < 40);
+    };
+
+    window.addEventListener("scroll", handleScrollTab, { passive: true });
+    handleScrollTab();
+    return () => window.removeEventListener("scroll", handleScrollTab);
+  }, []);
+
   function mulaiEditMapel(mapel) {
     setEditingId(mapel.idMapel);
     setEditNama(mapel.namaMapel || "");
@@ -2892,7 +2909,10 @@ function DashboardGuruContent() {
         </div>
 
         {/* MENU TAMPILAN UTAMA - DIBUNGKUS BACKGROUND GRADIENT HEADER & TAB EMAS */}
-        <div className="relative mt-1 sm:mt-2 space-y-2.5 sm:space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2 sm:p-5 shadow-md">
+        <div
+          ref={tabJenisPembimbingRef}
+          className="relative mt-1 sm:mt-2 space-y-2.5 sm:space-y-3 rounded-2xl border border-blue-700/50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-2 sm:p-5 shadow-md"
+        >
           {/* Ornamen Glow Emas */}
 
           {/* TAMBAHKAN KODE GARIS EMAS DI SINI */}
@@ -4752,10 +4772,11 @@ function DashboardGuruContent() {
                               setSelectedAsesmenMapel(mapel);
                               setIsModalAsesmenOpen(true);
                             }}
-                            className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-3 py-2 text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+                            className="mt-2 flex min-h-8 sm:min-h-10 w-full items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
                           >
                             <span>🛡️</span>
-                            <span>PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
+                            <span className="hidden sm:inline">PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
+                            <span className="sm:hidden">PANTAU ASESMEN ({mapel.kelas || "KELAS"})</span>
                           </button>
                         </div>
                       </article>
@@ -7122,6 +7143,84 @@ function DashboardGuruContent() {
         onClose={() => setShowLihatJurnalGuruWaliModal(false)}
         guru={{ id: user?.id, nama: user?.nama }}
       />
+
+      {/* ========================================================= */}
+      {/* STICKY FLOATING FOOTER TAB JENIS PEMBIMBING               */}
+      {/* MUNCUL KETIKA TAB ATAS TER-SCROLL KE LUAR VIEWPORT        */}
+      {/* 4 ICON + TEKS PADAT, ESTETIK, TANPA CARD KECIL LAINNYA   */}
+      {/* ========================================================= */}
+      {showFloatingFooterTab && (
+        <aside
+          aria-label="Navigasi Cepat Jenis Pembimbing"
+          className="fixed bottom-2 left-2 right-2 sm:bottom-4 sm:left-1/2 sm:-translate-x-1/2 z-40 max-w-lg mx-auto animate-fadeInUp"
+        >
+          <nav className="flex items-center justify-between rounded-2xl border border-amber-400/40 bg-gradient-to-r from-slate-950/95 via-blue-950/95 to-indigo-950/95 p-1 sm:p-1.5 shadow-2xl backdrop-blur-md">
+            {/* 1. Pembimbing PKL */}
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab("pembimbing")}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+                activeMenuTab === "pembimbing"
+                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 font-black shadow-md border border-[#FBF5B7]"
+                  : "text-amber-200/80 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">👔</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Pembimbing PKL
+              </span>
+            </button>
+
+            {/* 2. Guru Wali */}
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab("wali")}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+                activeMenuTab === "wali"
+                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 font-black shadow-md border border-[#FBF5B7]"
+                  : "text-amber-200/80 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">👨‍🏫</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Guru Wali
+              </span>
+            </button>
+
+            {/* 3. Guru Mapel */}
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab("mapel")}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+                activeMenuTab === "mapel"
+                  ? "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-amber-950 font-black shadow-md border border-[#FBF5B7]"
+                  : "text-amber-200/80 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">📚</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Guru Mapel
+              </span>
+            </button>
+
+            {/* 4. Wali Kelas */}
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab("walikelas")}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+                activeMenuTab === "walikelas"
+                  ? "bg-gradient-to-r from-teal-600 via-teal-400 to-emerald-600 text-white font-black shadow-md border border-teal-300"
+                  : "text-amber-200/80 hover:text-teal-200 hover:bg-white/10"
+              }`}
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">🏫</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Wali Kelas
+              </span>
+            </button>
+          </nav>
+        </aside>
+      )}
     </main>
   );
 }

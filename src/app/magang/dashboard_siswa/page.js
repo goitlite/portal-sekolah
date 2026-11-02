@@ -277,6 +277,61 @@ export default function DashboardSiswa() {
   );
   const [isUpdatingOnline, setIsUpdatingOnline] = useState(false);
 
+  // Ref & State untuk Sticky Floating Footer Navigasi Cepat Siswa saat ter-scroll ke bawah
+  const heroBannerRef = useRef(null);
+  const [showFloatingFooter, setShowFloatingFooter] = useState(false);
+
+  useEffect(() => {
+    const handleScrollDashboard = () => {
+      if (!heroBannerRef.current) {
+        setShowFloatingFooter(window.scrollY > 100);
+        return;
+      }
+      const rect = heroBannerRef.current.getBoundingClientRect();
+      // Muncul ketika bagian bawah hero banner melewati batas atas viewport
+      setShowFloatingFooter(rect.bottom < 40);
+    };
+
+    window.addEventListener("scroll", handleScrollDashboard, { passive: true });
+    handleScrollDashboard();
+    return () => window.removeEventListener("scroll", handleScrollDashboard);
+  }, []);
+
+  // Handler navigasi & aksi cepat
+  const handleScrollToAksesCepat = () => {
+    const elem = document.getElementById("menu-akses-cepat");
+    if (elem) {
+      elem.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleBukaAsesmen = () => {
+    if (user) {
+      const match = (user.nama || "").match(/(.+?)\s*\[(.*?)\]/);
+      const cleanNama = match ? match[1].trim() : (user.nama || "").trim();
+      const userKelas = match
+        ? match[2].trim()
+        : (user.kelas || statistikKelas?.namaKelas || "").trim();
+
+      localStorage.setItem("nama", cleanNama);
+      localStorage.setItem("id_siswa", String(user.id || "").trim());
+      if (userKelas) {
+        localStorage.setItem("kelas", userKelas);
+      }
+    }
+    router.push("/exam");
+  };
+
+  const handleBukaScanWajah = () => {
+    if (petugasWaliData) {
+      setShowModalScanWajah(true);
+    } else {
+      alert(
+        "Fitur Scan Wajah khusus untuk siswa yang ditunjuk sebagai Petugas Presensi Kelas oleh Guru Wali."
+      );
+    }
+  };
+
   // Status Petugas Presensi Kelas & Statistik Kehadiran Kelas
   const [petugasWaliData, setPetugasWaliData] = useState(null);
   const [statistikKelas, setStatistikKelas] = useState(null);
@@ -1362,7 +1417,7 @@ export default function DashboardSiswa() {
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 space-y-4 sm:space-y-6 pb-12 relative">
+    <main className="min-h-screen bg-slate-50 space-y-4 sm:space-y-6 pb-24 sm:pb-28 relative">
       {/* NAVBAR */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
         <div className="mx-auto max-w-5xl flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3">
@@ -1411,7 +1466,7 @@ export default function DashboardSiswa() {
 
       <div className="mx-auto max-w-5xl px-3 sm:px-6 space-y-4 sm:space-y-6">
         {/* HERO BANNER SISWA */}
-        <div className="relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-4 sm:p-7 text-white shadow-xl border border-blue-800">
+        <div ref={heroBannerRef} className="relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-4 sm:p-7 text-white shadow-xl border border-blue-800">
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-amber-400 opacity-15 rounded-full blur-2xl pointer-events-none" />
           <div className="relative z-10">
             <div className="flex flex-wrap items-center gap-2 mb-2.5 sm:mb-4">
@@ -1458,7 +1513,7 @@ export default function DashboardSiswa() {
         {/* ============================================================ */}
         {/* MENU UTAMA DASHBOARD */}
         {/* ============================================================ */}
-        <div className="space-y-3.5 sm:space-y-4">
+        <div id="menu-akses-cepat" className="space-y-3.5 sm:space-y-4 scroll-mt-20">
           <div className="flex items-center gap-2.5 my-0.5 w-full px-1">
             <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-amber-400 to-yellow-300 rounded-full opacity-70"></div>
             <h3 className="text-xs sm:text-sm font-black tracking-widest text-slate-700 uppercase whitespace-nowrap flex items-center gap-1.5">
@@ -1574,27 +1629,7 @@ export default function DashboardSiswa() {
                 icon="📝"
                 bgGrad="from-indigo-600 via-purple-700 to-indigo-900 shadow-purple-500/20 border-purple-300/40"
                 badge="Ujian"
-                onClick={() => {
-                  if (user) {
-                    const match = (user.nama || "").match(/(.+?)\s*\[(.*?)\]/);
-                    const cleanNama = match
-                      ? match[1].trim()
-                      : (user.nama || "").trim();
-                    const userKelas = match
-                      ? match[2].trim()
-                      : (user.kelas || statistikKelas?.namaKelas || "").trim();
-
-                    localStorage.setItem("nama", cleanNama);
-                    localStorage.setItem(
-                      "id_siswa",
-                      String(user.id || "").trim(),
-                    );
-                    if (userKelas) {
-                      localStorage.setItem("kelas", userKelas);
-                    }
-                  }
-                  router.push("/exam");
-                }}
+                onClick={handleBukaAsesmen}
               />
             </div>
           </div>
@@ -2187,6 +2222,98 @@ export default function DashboardSiswa() {
             : null,
         }}
       />
+    
+      {/* ========================================================= */}
+      {/* STICKY FLOATING FOOTER SISWA                              */}
+      {/* MUNCUL KETIKA HERO BANNER TER-SCROLL KE LUAR VIEWPORT     */}
+      {/* 5 TOMBOL: 4 TAB + 1 ELEVATED CURVED FAB SCAN WAJAH DI TENGAH */}
+      {/* ========================================================= */}
+      {showFloatingFooter && (
+        <aside
+          aria-label="Navigasi Cepat Siswa"
+          className="fixed bottom-2 left-2 right-2 sm:bottom-4 sm:left-1/2 sm:-translate-x-1/2 z-40 max-w-md mx-auto transition-all duration-300"
+        >
+          <nav className="relative flex items-center justify-between rounded-2xl border border-amber-400/40 bg-gradient-to-r from-slate-950/95 via-blue-950/95 to-indigo-950/95 px-1 py-1 sm:px-2 sm:py-1.5 shadow-2xl backdrop-blur-md">
+            {/* 1. Akses Cepat */}
+            <button
+              type="button"
+              onClick={handleScrollToAksesCepat}
+              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl text-amber-200/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all duration-200"
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">⚡</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Akses Cepat
+              </span>
+            </button>
+
+            {/* 2. Asesmen */}
+            <button
+              type="button"
+              onClick={handleBukaAsesmen}
+              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl text-amber-200/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all duration-200"
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">📝</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Asesmen
+              </span>
+            </button>
+
+            {/* 3. Center: Scan Wajah (Petugas Presensi) - Lengkungan Estetik Elevasi */}
+            <div className="flex-1 flex flex-col items-center justify-center relative">
+              <div className="absolute -top-6 sm:-top-7 flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleBukaScanWajah}
+                  title={
+                    petugasWaliData
+                      ? "Buka Scan Wajah Presensi"
+                      : "Khusus Petugas Presensi Kelas"
+                  }
+                  className="group relative flex items-center justify-center w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-amber-500 p-0.5 shadow-xl shadow-amber-500/40 border-4 border-slate-950 active:scale-90 transition-all duration-200 cursor-pointer"
+                >
+                  <div className="w-full h-full rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-inner">
+                    <span className="text-xl sm:text-2xl leading-none select-none">🧏</span>
+                  </div>
+                  {petugasWaliData && (
+                    <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full flex items-center justify-center text-[7px] font-black text-white">
+                      ⭐
+                    </span>
+                  )}
+                </button>
+                <span className="text-[8.5px] sm:text-[9.5px] font-black text-amber-300 drop-shadow mt-0.5 tracking-tight whitespace-nowrap">
+                  Scan Wajah
+                </span>
+              </div>
+              {/* Spacer penyeimbang 5 kolom */}
+              <div className="h-8 sm:h-9 w-12"></div>
+            </div>
+
+            {/* 4. Status Kelulusan */}
+            <button
+              type="button"
+              onClick={() => router.push("/magang/siswa/kelulusan")}
+              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl text-amber-200/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all duration-200"
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">🎓</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Kelulusan
+              </span>
+            </button>
+
+            {/* 5. Biodata */}
+            <button
+              type="button"
+              onClick={() => router.push("/magang/siswa/biodata")}
+              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl text-amber-200/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all duration-200"
+            >
+              <span className="text-base sm:text-lg leading-none mb-0.5 select-none">👤</span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight truncate leading-tight text-center">
+                Biodata
+              </span>
+            </button>
+          </nav>
+        </aside>
+      )}
     </main>
   );
 }

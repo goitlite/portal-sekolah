@@ -595,32 +595,32 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   return (
     <div className="space-y-4 animate-fadeIn pb-8 text-slate-800">
       {/* BANNER UTAMA */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-4 sm:p-6 text-white shadow-xl border border-blue-900/50">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-3 sm:p-5 text-white shadow-xl border border-blue-900/50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
           <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-400/30">
-                🛡️ Pusat Kendali Asesmen & Ujian
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1 sm:mb-1.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider border border-amber-400/30">
+                🛡️ Pusat Kendali Asesmen
               </span>
               {isAdminAsesmen ? (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 text-amber-950 text-xs font-black shadow-md border border-yellow-200">
-                  👑 MODE ADMIN ASESMEN AKTIF
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 text-amber-950 text-[10px] sm:text-xs font-black shadow-xs border border-yellow-200">
+                  👑 ADMIN AKTIF
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 text-blue-200 text-xs font-semibold border border-white/15">
-                  👤 Guru: {user?.nama || "Guru"}
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/10 text-blue-200 text-[10px] sm:text-xs font-semibold border border-white/15">
+                  👤 {user?.nama || "Guru"}
                 </span>
               )}
             </div>
-            <h2 className="text-lg sm:text-2xl font-black tracking-tight text-white">
-              Sistem Asesmen SMKN 1 Teluk Kuantan
+            <h2 className="text-base sm:text-xl font-black tracking-tight text-white leading-tight">
+              Sistem Asesmen & Ujian
             </h2>
-            <p className="text-xs text-blue-200 mt-0.5">
+            <p className="text-[10px] sm:text-xs text-blue-200 mt-0.5 hidden sm:block">
               Tampilan responsif & padat untuk ribuan peserta ujian dengan pewarnaan kelas otomatis.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {!isAdminAsesmen ? (
               <button
                 onClick={() => {
@@ -628,17 +628,20 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   setPinError("");
                   setShowModalPin(true);
                 }}
-                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-3 py-2 text-xs font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 border border-amber-300/40"
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-black shadow-xs active:scale-95 transition-all flex items-center gap-1 border border-amber-300/40 cursor-pointer"
+                title="Masuk sebagai Admin Asesmen"
               >
                 <span>🔑</span>
-                <span>Masuk Admin (4321)</span>
+                <span className="hidden sm:inline">Masuk Admin (4321)</span>
+                <span className="sm:hidden">Admin (4321)</span>
               </button>
             ) : (
               <button
                 onClick={handleLogoutAdmin}
-                className="rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-400/30 px-3 py-2 text-xs font-bold transition-all"
+                className="rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-400/30 px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
               >
-                🚪 Keluar Admin
+                <span>🚪</span>
+                <span className="hidden sm:inline">Keluar Admin</span>
               </button>
             )}
 
@@ -648,47 +651,50 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 loadSiswa();
               }}
               disabled={loadingUjian || loadingSiswa || actionLoading}
-              className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-3 py-2 text-xs font-bold backdrop-blur-sm border border-white/20 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+              className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold backdrop-blur-xs border border-white/20 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="Refresh Data"
             >
               <span>🔄</span>
-              <span>Refresh</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
 
             {onClose && (
               <button
                 onClick={onClose}
-                className="rounded-xl bg-white/15 hover:bg-white/25 text-white px-3 py-2 text-xs font-black transition-all"
+                className="rounded-xl bg-white/15 hover:bg-white/25 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-black transition-all cursor-pointer"
               >
-                ✕ Tutup
+                ✕
               </button>
             )}
           </div>
         </div>
 
         {/* NAVIGASI SUB-TAB */}
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-3">
+        <div className="mt-2.5 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 border-t border-white/10 pt-2.5 sm:pt-3">
           <button
             onClick={() => setSubTab("ujian")}
-            className={`rounded-xl px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 shadow-sm ${
+            className={`rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-black transition-all flex items-center gap-1 shadow-xs cursor-pointer ${
               subTab === "ujian"
-                ? "bg-amber-400 text-amber-950 shadow-amber-400/30 scale-105"
+                ? "bg-amber-400 text-amber-950 shadow-amber-400/30 scale-102"
                 : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
             <span>📑</span>
-            <span>Sheet UJIAN ({filteredUjian.length} Sesi)</span>
+            <span className="hidden sm:inline">Sheet UJIAN ({filteredUjian.length} Sesi)</span>
+            <span className="sm:hidden">Sesi Ujian ({filteredUjian.length})</span>
           </button>
 
           <button
             onClick={() => setSubTab("monitoring")}
-            className={`rounded-xl px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 shadow-sm ${
+            className={`rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-black transition-all flex items-center gap-1 shadow-xs cursor-pointer ${
               subTab === "monitoring"
-                ? "bg-amber-400 text-amber-950 shadow-amber-400/30 scale-105"
+                ? "bg-amber-400 text-amber-950 shadow-amber-400/30 scale-102"
                 : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
             <span>🛡️</span>
-            <span>Monitoring Database Siswa ({filteredSiswa.length} Siswa)</span>
+            <span className="hidden sm:inline">Monitoring Database Siswa ({filteredSiswa.length} Siswa)</span>
+            <span className="sm:hidden">Monitoring Siswa ({filteredSiswa.length})</span>
           </button>
         </div>
       </div>
@@ -754,10 +760,11 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
               <button
                 onClick={handleOpenTambahUjian}
-                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-2 text-xs font-black shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
+                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>➕</span>
-                <span>Tambah Sesi Ujian Baru</span>
+                <span className="hidden sm:inline">Tambah Sesi Ujian Baru</span>
+                <span className="sm:hidden">Tambah Sesi</span>
               </button>
             </div>
           </div>
@@ -848,18 +855,20 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                               <button
                                 onClick={() => handleOpenEditUjian(item, idx)}
                                 disabled={actionLoading}
-                                className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 text-[10px] font-bold transition-all shadow-2xs"
+                                className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-0.5 cursor-pointer"
                                 title="Edit sesi ujian ini"
                               >
-                                ✏️ Edit
+                                <span>✏️</span>
+                                <span className="hidden sm:inline">Edit</span>
                               </button>
                               <button
                                 onClick={() => handleHapusUjian(item, idx)}
                                 disabled={actionLoading}
-                                className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 text-[10px] font-bold transition-all shadow-2xs"
+                                className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-0.5 cursor-pointer"
                                 title="Hapus sesi ujian ini"
                               >
-                                🗑️ Hapus
+                                <span>🗑️</span>
+                                <span className="hidden sm:inline">Hapus</span>
                               </button>
                             </div>
                           ) : (
@@ -1045,9 +1054,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 <button
                   onClick={handleResetPelanggaranMassal}
                   disabled={actionLoading || statsSiswa.totalPelanggaran === 0}
-                  className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 text-xs font-black transition-all shadow-xs active:scale-95 disabled:opacity-50"
+                  className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                  title="Reset Pelanggaran Siswa Terfilter"
                 >
-                  0️⃣ Reset Pelanggaran Terfilter
+                  <span>0️⃣</span>
+                  <span className="hidden sm:inline">Reset Pelanggaran Terfilter</span>
+                  <span className="sm:hidden">Reset 0</span>
                 </button>
 
                 <button
@@ -1056,9 +1068,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     setShowPesanModal(true);
                   }}
                   disabled={actionLoading}
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-black transition-all shadow-xs active:scale-95"
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                  title={`Broadcast Pesan (${filterKelas})`}
                 >
-                  💬 Broadcast Pesan ({filterKelas})
+                  <span>💬</span>
+                  <span className="hidden sm:inline">Broadcast Pesan ({filterKelas})</span>
+                  <span className="sm:hidden">Pesan</span>
                 </button>
 
                 <button
@@ -1068,9 +1083,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     setShowPesanModal(true);
                   }}
                   disabled={actionLoading}
-                  className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-black transition-all shadow-xs active:scale-95"
+                  className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                  title={`Reset Ujian Siswa (${filterKelas})`}
                 >
-                  ⚠️ Reset Ujian ({filterKelas})
+                  <span>⚠️</span>
+                  <span className="hidden sm:inline">Reset Ujian ({filterKelas})</span>
+                  <span className="sm:hidden">Reset Ujian</span>
                 </button>
               </div>
             </div>
@@ -1170,10 +1188,11 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                               <button
                                 onClick={() => handleResetPelanggaranSiswa(s)}
                                 disabled={actionLoading || s.pelanggaran === 0}
-                                className="rounded bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 text-[10px] font-bold transition-all disabled:opacity-30 shadow-2xs"
+                                className="rounded bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-0.5 sm:px-2 sm:py-0.5 text-[10px] font-bold transition-all disabled:opacity-30 shadow-2xs flex items-center gap-0.5 cursor-pointer"
                                 title="Reset pelanggaran siswa ke 0"
                               >
-                                0
+                                <span>0️⃣</span>
+                                <span className="hidden sm:inline">0</span>
                               </button>
                               <button
                                 onClick={() => {
@@ -1184,19 +1203,21 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                   });
                                   setShowPesanModal(true);
                                 }}
-                                className="rounded bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 text-[10px] font-bold transition-all shadow-2xs"
+                                className="rounded bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 sm:px-2 sm:py-0.5 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-0.5 cursor-pointer"
                                 title="Kirim pesan ke siswa ini"
                               >
-                                Pesan
+                                <span>💬</span>
+                                <span className="hidden sm:inline">Pesan</span>
                               </button>
                               {isAdminAsesmen && (
                                 <button
                                   onClick={() => handleHapusAkunSiswa(s)}
                                   disabled={actionLoading}
-                                  className="rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 text-[10px] font-bold transition-all"
+                                  className="rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 text-[10px] font-bold transition-all flex items-center gap-0.5 cursor-pointer"
                                   title="Hapus akun siswa (ID tetap tersimpan)"
                                 >
-                                  Hapus
+                                  <span>🗑️</span>
+                                  <span className="hidden sm:inline">Hapus</span>
                                 </button>
                               )}
                             </div>
