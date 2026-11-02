@@ -803,10 +803,13 @@ function DashboardGuruContent() {
 
   useEffect(() => {
     const handleScrollTab = () => {
-      if (!tabJenisPembimbingRef.current) return;
+      if (!tabJenisPembimbingRef.current) {
+        setShowFloatingFooterTab(window.scrollY > 80);
+        return;
+      }
       const rect = tabJenisPembimbingRef.current.getBoundingClientRect();
-      // Muncul jika bagian bawah tab utama telah ter-scroll melewati bagian atas layar
-      setShowFloatingFooterTab(rect.bottom < 40);
+      // Muncul segera setelah sedikit scroll (top tab < 200px dari atas layar)
+      setShowFloatingFooterTab(rect.top < 200);
     };
 
     window.addEventListener("scroll", handleScrollTab, { passive: true });
