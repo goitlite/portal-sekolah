@@ -36,8 +36,8 @@ export async function cekPesan(nama, kelas) {
     const formData = new URLSearchParams();
 
     formData.append("action", "cek_pesan");
-    formData.append("nama", nama);
-    formData.append("kelas", kelas);
+    formData.append("nama", nama || "");
+    formData.append("kelas", kelas || "");
 
     const response = await fetch(BASE_URL, {
       method: "POST",

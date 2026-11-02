@@ -1,7 +1,7 @@
 "use client";
 
 import { getExamData, checkToken } from "@/services/examService";
-import { cekPesan } from "@/services/authService";
+import { cekPesan, registerStudent } from "@/services/authService";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -126,6 +126,19 @@ export default function ExamPage() {
       setNama(savedNama);
       if (savedKelas) setKelas(savedKelas);
       if (savedId) setIdSiswa(savedId);
+
+      // Auto-register: pastikan nama+kelas tersimpan kembali di sheet
+      // (berguna jika akun siswa pernah dihapus guru — ID tetap, nama/kelas dikosongkan)
+      // Ini berjalan silent tanpa mengganggu alur ujian
+      if (savedNama && savedId) {
+        registerStudent({
+          nama: savedNama,
+          kelas: savedKelas || "",
+          wa_siswa: savedId,
+          wa_ortu: "-",
+        }).catch(() => {});
+      }
+
     }
 
     initSession();
@@ -143,15 +156,10 @@ export default function ExamPage() {
 
         if (result.status === "success") {
           const isiPesan = result.pesan || "";
-
           setPesan(isiPesan);
-
-          // RESET UJIAN
           if (isiPesan.toUpperCase() === "UJIAN DI RESET") {
             alert("Ujian telah direset oleh admin");
-
             localStorage.removeItem("examLink");
-
             router.push("/exam");
           }
         }

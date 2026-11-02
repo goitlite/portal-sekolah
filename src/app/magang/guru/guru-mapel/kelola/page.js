@@ -33,6 +33,8 @@ import {
 import { generateLaporanMapelPDF } from "../generateLaporanMapelPDF";
 import ModalTambahSiswa from "./ModalTambahSiswa";
 import ModalJurnalMapel from "../ModalJurnalMapel";
+import ModalPantauAsesmenKelas from "./ModalPantauAsesmenKelas";
+import TabKelolaUjian from "../../TabKelolaUjian";
 
 const PERTEMUAN_MAX = 20;
 const NILAI_OPTIONS = Array.from({ length: 20 }, (_, i) => (i + 1) * 5); // Kelipatan 5 hingga 100
@@ -280,6 +282,9 @@ export default function KelolaMapelPage() {
   const [statsPresensiMapel, setStatsPresensiMapel] = useState({});
   const [loadingStatsMapel, setLoadingStatsMapel] = useState({});
   const [selectedPertemuanMapel, setSelectedPertemuanMapel] = useState({});
+  const [selectedAsesmenMapel, setSelectedAsesmenMapel] = useState(null);
+  const [isModalAsesmenOpen, setIsModalAsesmenOpen] = useState(false);
+  const [showModalKelolaUjian, setShowModalKelolaUjian] = useState(false);
 
   // Helper format tanggal pertemuan mapel
   const formatTanggalMapelIndo = (tanggalStr) => {
@@ -863,12 +868,23 @@ export default function KelolaMapelPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => router.replace("/magang/guru")}
-            className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-4 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
-          >
-            ⬅️ KEMBALI
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowModalKelolaUjian(true)}
+              className="rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 px-3.5 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300 shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
+              title="Buka Pusat Kendali Ujian & Asesmen Sekolah"
+            >
+              <span>🛡️</span>
+              <span className="hidden sm:inline">KELOLA UJIAN</span>
+            </button>
+
+            <button
+              onClick={() => router.replace("/magang/guru")}
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 px-4 py-2 text-xs sm:text-sm font-black text-white border-2 border-amber-300/80 shadow-lg hover:border-amber-200 hover:brightness-110 active:scale-95 transition-all duration-300"
+            >
+              ⬅️ KEMBALI
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1726,6 +1742,19 @@ export default function KelolaMapelPage() {
                                   : "BUKA PRESENSI & NILAI"}
                               </span>
                             </button>
+
+                            {/* TOMBOL PANTAU ASESMEN KELAS */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAsesmenMapel(mapel);
+                                setIsModalAsesmenOpen(true);
+                              }}
+                              className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-3 py-2 text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+                            >
+                              <span>🛡️</span>
+                              <span>PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
+                            </button>
                           </div>
                         </>
                       )}
@@ -1841,6 +1870,27 @@ export default function KelolaMapelPage() {
             }
           }}
         />
+
+        {/* MODAL PANTAU ASESMEN KELAS (LEVEL 1: GURU MAPEL) */}
+        <ModalPantauAsesmenKelas
+          isOpen={isModalAsesmenOpen}
+          onClose={() => {
+            setIsModalAsesmenOpen(false);
+            setSelectedAsesmenMapel(null);
+          }}
+          kelasTarget={selectedAsesmenMapel?.kelas}
+          namaMapel={selectedAsesmenMapel?.namaMapel}
+          user={guru}
+        />
+
+        {/* MODAL PUSAT KELOLA UJIAN & ASESMEN SEKOLAH */}
+        {showModalKelolaUjian && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+            <div className="relative w-full max-w-5xl rounded-3xl bg-slate-50 p-4 sm:p-6 shadow-2xl border border-slate-200 my-auto max-h-[96vh] overflow-y-auto">
+              <TabKelolaUjian user={guru} daftarMapelGuru={daftarMapel} onClose={() => setShowModalKelolaUjian(false)} />
+            </div>
+          </div>
+        )}
       </div>
 
       <style

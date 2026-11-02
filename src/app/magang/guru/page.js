@@ -22,6 +22,8 @@ import {
   getGuru, // ⬅️ TAMBAHKAN
   getMapelByGuru,
   addMapel,
+  editMapel,
+  deleteMapel,
   getKelasSiswaMapel,
   getSiswaByKelasMapel,
   getPresensiMapelGrid,
@@ -57,6 +59,9 @@ import { generateLaporanJurnalPKL } from "./generateLaporanJurnalPKL";
 
 import ModalJurnalGuruWali from "./guru-wali/jurnal/ModalJurnalGuruWali";
 import ModalLihatJurnalGuruWali from "./guru-wali/jurnal/ModalLihatJurnalGuruWali";
+import TabKelolaUjian from "./TabKelolaUjian";
+import ModalTambahSiswa from "./guru-mapel/kelola/ModalTambahSiswa";
+import ModalPantauAsesmenKelas from "./guru-mapel/kelola/ModalPantauAsesmenKelas";
 import { PesanGuruModal, useJumlahPesanBaru } from "../kepsek/PesanKepsekGuru";
 import { autoPushSubscribe, runPesanCleanupBackground } from "../lib/pushHelper";
 
@@ -784,6 +789,66 @@ function DashboardGuruContent() {
   const [showLihatJurnalGuruWaliModal, setShowLihatJurnalGuruWaliModal] =
     useState(false);
   const [showCetakMapelModal, setShowCetakMapelModal] = useState(false);
+  const [showModalKelolaUjian, setShowModalKelolaUjian] = useState(false);
+  const [selectedAsesmenMapel, setSelectedAsesmenMapel] = useState(null);
+  const [isModalAsesmenOpen, setIsModalAsesmenOpen] = useState(false);
+  const [mapelTambahTarget, setMapelTambahTarget] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editNama, setEditNama] = useState("");
+  const [editKeterangan, setEditKeterangan] = useState("");
+
+  function mulaiEditMapel(mapel) {
+    setEditingId(mapel.idMapel);
+    setEditNama(mapel.namaMapel || "");
+    setEditKeterangan(mapel.keterangan || "");
+  }
+
+  function batalEditMapel() {
+    setEditingId(null);
+    setEditNama("");
+    setEditKeterangan("");
+  }
+
+  async function simpanEditMapel(idMapel) {
+    if (!editNama.trim()) {
+      alert("Nama mapel wajib diisi.");
+      return;
+    }
+    try {
+      const result = await editMapel({
+        idMapel,
+        namaMapel: editNama.trim(),
+        keterangan: editKeterangan.trim(),
+      });
+      if (result.success) {
+        batalEditMapel();
+        await loadMapelData(true);
+      } else {
+        alert(result.message || "Gagal mengedit mapel.");
+      }
+    } catch (err) {
+      console.error("ERROR EDIT MAPEL:", err);
+      alert("Terjadi kesalahan saat mengedit mapel.");
+    }
+  }
+
+  async function hapusMapelHandler(mapel) {
+    const konfirmasi = confirm(
+      `Apakah Anda yakin ingin menghapus mapel "${mapel.namaMapel}"?\nSemua data siswa dan presensi di mapel ini akan terhapus!`
+    );
+    if (!konfirmasi) return;
+    try {
+      const result = await deleteMapel(mapel.idMapel);
+      if (result.success) {
+        await loadMapelData(true);
+      } else {
+        alert(result.message || "Gagal menghapus mapel.");
+      }
+    } catch (err) {
+      console.error("ERROR HAPUS MAPEL:", err);
+      alert("Terjadi kesalahan saat menghapus mapel.");
+    }
+  }
 
   // --- STATE KHUSUS TAB GURU WALI ---
   const [dataSiswaWali, setDataSiswaWali] = useState([]);
@@ -2934,6 +2999,8 @@ function DashboardGuruContent() {
                 Wali Kelas
               </span>
             </button>
+
+
           </div>
 
           {/* 2. KONTEN TAB PEMBIMBING PKL */}
@@ -3034,6 +3101,13 @@ function DashboardGuruContent() {
                 icon="📚"
                 bgGrad="from-cyan-600 to-blue-700"
                 onClick={() => router.push("/magang/guru/guru-mapel/kelola")}
+              />
+              <SolidCompactCard
+                title="Kelola Ujian & Asesmen"
+                desc="Sheet ujian, token, & pantau pelanggaran"
+                icon="🛡️"
+                bgGrad="from-amber-600 via-orange-600 to-amber-700"
+                onClick={() => setShowModalKelolaUjian(true)}
               />
               <SolidCompactCard
                 title="Isi Pembinaan Mapel"
@@ -3768,6 +3842,15 @@ function DashboardGuruContent() {
 
                 <button
                   type="button"
+                  onClick={() => setShowModalKelolaUjian(true)}
+                  className="px-3 py-2 rounded-xl text-white text-xs font-black bg-gradient-to-r from-amber-600 to-orange-600 hover:brightness-110 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 shrink-0 border border-amber-300/40"
+                  title="Buka Pusat Kendali Ujian & Asesmen Sekolah"
+                >
+                  <span>🛡️</span>
+                  <span className="hidden sm:inline">Kelola Ujian</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setIsFormTambahMapelOpen(!isFormTambahMapelOpen);
                     // Tidak perlu load kelas - sudah menggunakan dropdown statis
@@ -4243,6 +4326,7 @@ function DashboardGuruContent() {
 
                     const isLoadingStats =
                       !!loadingStatsMapel[mapel.idMapel] || loadingMapel;
+                    const isEditing = editingId === mapel.idMapel;
 
                     return (
                       <article
@@ -4334,56 +4418,139 @@ function DashboardGuruContent() {
                             </div>
                           )}
 
-                          {/* TOMBOL AKSI CEPAT (3 KOLOM KOMPAK & RESPONSIF) */}
-                          <div className="grid grid-cols-3 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setMapelJurnalAktif(mapel)}
-                              className={`inline-flex items-center justify-center gap-1 rounded-xl text-white py-2 px-1.5 text-[11px] font-semibold shadow-2xs transition-all active:scale-95 cursor-pointer ${
-                                isMapelOnline
-                                  ? "bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700"
-                                  : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
-                              }`}
-                              title="Buka atau catat jurnal pembelajaran mapel"
-                            >
-                              <span>📝</span>
-                              <span className="truncate">Jurnal</span>
-                            </button>
+                          {/* FORM EDIT MAPEL INLINE JIKA AKTIF */}
+                          {isEditing ? (
+                            <div className="space-y-2.5 bg-white p-3.5 rounded-xl border-2 border-amber-400 shadow-inner text-slate-800 animate-fadeIn">
+                              <div>
+                                <label className="block text-[10px] font-extrabold uppercase text-slate-700 mb-1">
+                                  Nama Mapel <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editNama}
+                                  onChange={(e) => setEditNama(e.target.value)}
+                                  placeholder="Nama Mapel"
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-extrabold uppercase text-slate-700 mb-1">
+                                  Keterangan (opsional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editKeterangan}
+                                  onChange={(e) => setEditKeterangan(e.target.value)}
+                                  placeholder="Keterangan (opsional)"
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => simpanEditMapel(mapel.idMapel)}
+                                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black px-4 py-2 shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>💾</span>
+                                  <span>Simpan</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={batalEditMapel}
+                                  className="rounded-lg bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 text-xs font-black px-4 py-2 transition-all cursor-pointer"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* AKSI CEPAT (6 TOMBOL RESPONSIF KONSISTEN DENGAN KELOLA-MAPEL) */
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+                              {/* 1. Tambah Siswa */}
+                              <button
+                                type="button"
+                                onClick={() => setMapelTambahTarget(mapel)}
+                                title="Tambah / Daftarkan Siswa ke Mapel Ini"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all cursor-pointer"
+                              >
+                                <span>➕</span>
+                                <span className="truncate">Tambah Siswa</span>
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleCetakPdfMapelDirect(mapel)}
-                              disabled={isLoadingStats || cetakMapelCardLoadingId === mapel.idMapel}
-                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 active:scale-95 text-white py-2 px-1.5 text-[11px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-                              title="Cetak Laporan Presensi, Nilai & Jurnal PDF"
-                            >
-                              {cetakMapelCardLoadingId === mapel.idMapel ? (
-                                <>
-                                  <span className="inline-block animate-spin">⏳</span>
-                                  <span className="truncate">Cetak...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🖨️</span>
-                                  <span className="truncate">Cetak PDF</span>
-                                </>
-                              )}
-                            </button>
+                              {/* 2. Jurnal */}
+                              <button
+                                type="button"
+                                onClick={() => setMapelJurnalAktif(mapel)}
+                                className={`inline-flex items-center justify-center gap-1 rounded-xl text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all active:scale-95 cursor-pointer ${
+                                  isMapelOnline
+                                    ? "bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700"
+                                    : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
+                                }`}
+                                title="Catat & lihat jurnal pembelajaran mapel"
+                              >
+                                <span>📝</span>
+                                <span className="truncate">Jurnal</span>
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                localStorage.setItem("mapelAktifId", mapel.idMapel);
-                                router.push("/magang/guru/guru-mapel/kelola");
-                              }}
-                              disabled={isLoadingStats}
-                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-700 hover:bg-slate-800 active:scale-95 text-white py-2 px-1.5 text-[11px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-                              title="Buka menu kelola mapel & siswa"
-                            >
-                              <span>⚙️</span>
-                              <span className="truncate">Kelola</span>
-                            </button>
-                          </div>
+                              {/* 3. Cetak PDF */}
+                              <button
+                                type="button"
+                                onClick={() => handleCetakPdfMapelDirect(mapel)}
+                                disabled={isLoadingStats || cetakMapelCardLoadingId === mapel.idMapel}
+                                title="Cetak Laporan Presensi, Nilai & Jurnal PDF"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 active:scale-95 text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                              >
+                                {cetakMapelCardLoadingId === mapel.idMapel ? (
+                                  <>
+                                    <span className="inline-block animate-spin">⏳</span>
+                                    <span className="truncate">Cetak...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🖨️</span>
+                                    <span className="truncate">Cetak PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              {/* 4. Kelola */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  localStorage.setItem("mapelAktifId", mapel.idMapel);
+                                  router.push("/magang/guru/guru-mapel/kelola");
+                                }}
+                                disabled={isLoadingStats}
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-700 hover:bg-slate-800 active:scale-95 text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                                title="Buka menu kelola mapel & siswa"
+                              >
+                                <span>⚙️</span>
+                                <span className="truncate">Kelola</span>
+                              </button>
+
+                              {/* 5. Edit */}
+                              <button
+                                type="button"
+                                onClick={() => mulaiEditMapel(mapel)}
+                                title="Edit nama mapel dan keterangan"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all cursor-pointer"
+                              >
+                                <span>✏️</span>
+                                <span className="truncate">Edit</span>
+                              </button>
+
+                              {/* 6. Hapus */}
+                              <button
+                                type="button"
+                                onClick={() => hapusMapelHandler(mapel)}
+                                title="Hapus mapel"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white py-2 px-1.5 text-[10px] sm:text-[11px] font-semibold shadow-2xs transition-all cursor-pointer"
+                              >
+                                <span>🗑️</span>
+                                <span className="truncate">Hapus</span>
+                              </button>
+                            </div>
+                          )}
 
                           {/* PANEL PRESENSI PADAT DENGAN WARNA SESUAI TEMA */}
                           <div
@@ -4576,6 +4743,19 @@ function DashboardGuruContent() {
                                 <span>Buka Presensi &amp; Nilai</span>
                               </span>
                             )}
+                          </button>
+
+                          {/* TOMBOL PANTAU ASESMEN & UJIAN KELAS (KONSISTEN DENGAN KELOLA-MAPEL) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAsesmenMapel(mapel);
+                              setIsModalAsesmenOpen(true);
+                            }}
+                            className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:brightness-110 text-white px-3 py-2 text-xs font-black tracking-wide shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+                          >
+                            <span>🛡️</span>
+                            <span>PANTAU ASESMEN & UJIAN ({mapel.kelas || "KELAS"})</span>
                           </button>
                         </div>
                       </article>
@@ -5173,6 +5353,43 @@ function DashboardGuruContent() {
             )}
           </div>
         )}
+
+        {/* MODAL POPUP PUSAT KELOLA UJIAN & ASESMEN SEKOLAH */}
+        {showModalKelolaUjian && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+            <div className="relative w-full max-w-5xl rounded-3xl bg-slate-50 p-4 sm:p-6 shadow-2xl border border-slate-200 my-auto max-h-[96vh] overflow-y-auto">
+              <TabKelolaUjian user={user} daftarMapelGuru={daftarMapel} onClose={() => setShowModalKelolaUjian(false)} />
+            </div>
+          </div>
+        )}
+
+        {/* MODAL PANTAU ASESMEN KELAS SPESIFIK */}
+        {/* MODAL TAMBAH SISWA KE MAPEL */}
+        <ModalTambahSiswa
+          key={mapelTambahTarget?.idMapel || "closed"}
+          isOpen={!!mapelTambahTarget}
+          onClose={() => setMapelTambahTarget(null)}
+          guru={user}
+          mapel={mapelTambahTarget}
+          onSiswaAdded={() => {
+            loadMapelData(true);
+            if (mapelTambahTarget?.idMapel) {
+              loadStatsMapel(mapelTambahTarget.idMapel);
+            }
+          }}
+        />
+
+        {/* MODAL PANTAU ASESMEN KELAS SPESIFIK */}
+        <ModalPantauAsesmenKelas
+          isOpen={isModalAsesmenOpen}
+          onClose={() => {
+            setIsModalAsesmenOpen(false);
+            setSelectedAsesmenMapel(null);
+          }}
+          kelasTarget={selectedAsesmenMapel?.kelas}
+          namaMapel={selectedAsesmenMapel?.namaMapel}
+          user={user}
+        />
       </div>
 
       {/* ======================================================= */}
