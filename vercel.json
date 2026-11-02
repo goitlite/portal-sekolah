@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/alarm-presensi?type=petugas",
+      "schedule": "0 0 * * 1-5"
+    },
+    {
+      "path": "/api/cron/alarm-presensi?type=magang",
+      "schedule": "0 2 * * 1-5"
+    }
+  ]
+}
+
