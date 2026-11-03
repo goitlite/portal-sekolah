@@ -3,63 +3,84 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import QRCode from "qrcode";
 
-import { saveMonitoring, uploadPhoto } from "../../lib/api";
+import { saveMonitoring } from "../../lib/api";
 import { getSession, isLoggedIn } from "../../lib/auth";
+
+/* =====================================================================
+   MONITORING MAGANG (GURU PEMBIMBING) — Model Responsif Mobile & Stepper
+   Alur: 1 Foto Lingkungan & GPS → 2 Kondisi Siswa → 3 Laporan → 4 Kirim
+   ===================================================================== */
+
+const STEPS = [
+  { id: 1, label: "Foto & GPS", icon: "📸" },
+  { id: 2, label: "Kondisi", icon: "👨‍🏫" },
+  { id: 3, label: "Laporan", icon: "📝" },
+  { id: 4, label: "Kirim", icon: "🚀" },
+];
 
 export default function MonitoringPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [user, setUser] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
   const [status, setStatus] = useState("BERSAMA SISWA");
   const [keterangan, setKeterangan] = useState("");
+  const [step, setStep] = useState(1);
 
   const [photo, setPhoto] = useState("");
   const [photoSuccess, setPhotoSuccess] = useState(false);
-
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
 
-  // STATE UNTUK PANDUAN LANDSCAPEE
+  // Panduan Landscape (dipertahankan penuh)
   const [showLandscapeGuide, setShowLandscapeGuide] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
 
+  // GPS Lokasi
   const [latitude, setLatitude] = useState("-");
   const [longitude, setLongitude] = useState("-");
   const [alamat, setAlamat] = useState("-");
   const [accuracy, setAccuracy] = useState("-");
   const [gpsSuccess, setGpsSuccess] = useState(false);
-
   const [gpsLoading, setGpsLoading] = useState(false);
 
-  // ---- TAMBAHAN: state garis progress simpan monitoring ----
+  // Progress Bar Simpan
   const [saveProgress, setSaveProgress] = useState(0);
-  const [saveLabel, setSaveLabel] = useState("");
-  const progressIntervalRef = useRef(null);
+  const [saveStatusText, setSaveStatusText] = useState("");
+
+  // Dialog Notifikasi
+  const [dialog, setDialog] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const watermarkCanvasRef = useRef(null);
-
-  // PENAMBAHAN REF UNTUK STABILITAS KAMERA
   const streamRef = useRef(null);
+  const textRef = useRef(null);
+  const redirectTimerRef = useRef(null);
+  const gpsRunRef = useRef(0);
+  const submittingRef = useRef(false);
 
   const [tempatMagang, setTempatMagang] = useState("");
 
-  // DETEKSI ORIENTASI LAYAR OTOMATIS
+  // Jam berjalan
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Deteksi Orientasi Layar Otomatis
   useEffect(() => {
     function handleOrientation() {
       setIsLandscape(window.innerWidth > window.innerHeight);
     }
-
     handleOrientation();
-
     window.addEventListener("resize", handleOrientation);
     window.addEventListener("orientationchange", handleOrientation);
-
     return () => {
       window.removeEventListener("resize", handleOrientation);
       window.removeEventListener("orientationchange", handleOrientation);
@@ -70,29 +91,47 @@ export default function MonitoringPage() {
     setShowLandscapeGuide(true);
   }
 
-  // FUNGSI BACK DENGAN STOP KAMERA
+  // Dialog Helper
+  function showDialog(d) {
+    setDialog(d);
+  }
+  function closeDialog() {
+    setDialog(null);
+  }
+  function warn(message, title = "Perhatian") {
+    showDialog({
+      type: "warn",
+      title,
+      message,
+      actions: [{ label: "Mengerti", primary: true, onClick: closeDialog }],
+    });
+  }
+
+  // Fungsi Back dengan Stop Kamera
   function handleBack() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
+    stopStream();
     router.replace("/magang/guru");
   }
 
-  // AKSES KAMERA
-  async function startCamera() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert(
-        "Browser memblokir fitur kamera. Syarat wajib: Akses web ini menggunakan HTTPS atau dari localhost.",
-      );
-      return;
-    }
-
+  function stopStream() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+  }
 
+  // Akses Kamera Belakang (Environment)
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError(
+        "Browser memblokir kamera. Pastikan akses web ini menggunakan HTTPS."
+      );
+      return;
+    }
+
+    stopStream();
     setCameraReady(false);
+    setCameraError("");
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -105,10 +144,7 @@ export default function MonitoringPage() {
       });
       attachStream(stream);
     } catch (err) {
-      console.warn(
-        "Kamera belakang HD gagal diakses, mencoba mode dasar...",
-        err,
-      );
+      console.warn("Kamera belakang HD gagal diakses, mencoba mode dasar...", err);
       try {
         const fallbackStream = await navigator.mediaDevices.getUserMedia({
           video: true,
@@ -117,8 +153,8 @@ export default function MonitoringPage() {
         attachStream(fallbackStream);
       } catch (fallbackErr) {
         console.error("Semua percobaan akses kamera gagal:", fallbackErr);
-        alert(
-          "Akses kamera ditolak oleh HP. Pastikan izin kamera telah diberikan di pengaturan browser.",
+        setCameraError(
+          "Akses kamera ditolak. Pastikan izin kamera telah diberikan di pengaturan browser HP."
         );
       }
     }
@@ -135,17 +171,16 @@ export default function MonitoringPage() {
         setCameraReady(true);
       } catch (e) {
         console.error("Gagal autoplay video:", e);
+        setCameraError("Gagal memulai video kamera. Ketuk coba lagi.");
       }
     };
   }
 
-  // FUNGSI TAMBAH WATERMARK
+  // Tambah Watermark
   async function addWatermark(imageData) {
-    // QR code hanya dimuat saat benar-benar diperlukan.
-    const QRCode = (await import("qrcode")).default;
-
     return new Promise((resolve) => {
       const img = document.createElement("img");
+      img.onerror = () => resolve(imageData);
       img.onload = () => {
         const canvas = watermarkCanvasRef.current;
         if (!canvas) return resolve(imageData);
@@ -155,14 +190,14 @@ export default function MonitoringPage() {
 
         ctx.drawImage(img, 0, 0);
 
-        const now = new Date();
-        const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
-        const tanggal = now.toLocaleDateString("id-ID", {
+        const t = new Date();
+        const hari = t.toLocaleDateString("id-ID", { weekday: "long" });
+        const tanggal = t.toLocaleDateString("id-ID", {
           day: "numeric",
           month: "long",
           year: "numeric",
         });
-        const jam = now.toLocaleTimeString("id-ID", {
+        const jam = t.toLocaleTimeString("id-ID", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
@@ -218,29 +253,35 @@ export default function MonitoringPage() {
         const qrY = boxY + 20;
         const qrData = `https://maps.google.com/?q=${latitude},${longitude}`;
 
-        QRCode.toDataURL(qrData, { width: 150, margin: 1 }).then((qrUrl) => {
-          const qrImage = new window.Image();
-          qrImage.onload = () => {
-            ctx.drawImage(qrImage, qrX, qrY, 140, 140);
-            ctx.fillStyle = "rgba(255,255,255,0.9)";
-            ctx.fillRect(qrX, qrY + 140, 140, 24);
-            ctx.fillStyle = "#000";
-            ctx.font = "bold 13px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
-            ctx.textAlign = "left";
+        const finish = () => {
+          const watermarkedImage = canvas.toDataURL("image/jpeg", 0.7);
+          resolve(watermarkedImage);
+        };
 
-            const watermarkedImage = canvas.toDataURL("image/jpeg", 0.6);
-            resolve(watermarkedImage);
-          };
-          qrImage.src = qrUrl;
-        });
+        QRCode.toDataURL(qrData, { width: 150, margin: 1 })
+          .then((qrUrl) => {
+            const qrImage = new window.Image();
+            qrImage.onload = () => {
+              ctx.drawImage(qrImage, qrX, qrY, 140, 140);
+              ctx.fillStyle = "rgba(255,255,255,0.9)";
+              ctx.fillRect(qrX, qrY + 140, 140, 24);
+              ctx.fillStyle = "#000";
+              ctx.font = "bold 13px Arial";
+              ctx.textAlign = "center";
+              ctx.fillText("BARCODE LOKASI", qrX + 70, qrY + 156);
+              ctx.textAlign = "left";
+              finish();
+            };
+            qrImage.onerror = finish;
+            qrImage.src = qrUrl;
+          })
+          .catch(finish);
       };
       img.src = imageData;
     });
   }
 
-  // FUNGSI AMBIL FOTO
+  // Fungsi Ambil / Ulang Foto
   async function capturePhoto() {
     if (photo) {
       setPhoto("");
@@ -250,6 +291,8 @@ export default function MonitoringPage() {
       setAlamat("-");
       setAccuracy("-");
       setGpsSuccess(false);
+      setGpsLoading(false);
+      setStep(1);
       await startCamera();
       return;
     }
@@ -258,13 +301,8 @@ export default function MonitoringPage() {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    if (video.readyState !== 4) {
-      alert("Kamera masih mempersiapkan gambar.");
-      return;
-    }
-
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      alert("Kamera belum siap.");
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      warn("Kamera masih mempersiapkan gambar. Tunggu sebentar.");
       return;
     }
 
@@ -273,31 +311,37 @@ export default function MonitoringPage() {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
 
-    const image = canvas.toDataURL("image/jpeg", 0.6);
+    const image = canvas.toDataURL("image/jpeg", 0.7);
     setPhoto(image);
     setPhotoSuccess(true);
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+    stopStream();
     setCameraReady(false);
 
-    getLocation();
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        navigator.vibrate(80);
+      } catch (_) {}
+    }
+
+    // Ambil GPS dan otomatis lanjut langkah jika lokasi terkunci
+    getLocation(true);
   }
 
-  // FUNGSI GPS
-  function getLocation() {
+  // Fungsi GPS
+  function getLocation(autoNext = false) {
     if (!navigator.geolocation) {
-      alert("GPS tidak didukung.");
+      warn("Fitur GPS tidak didukung di browser ini.");
       return;
     }
 
+    const run = ++gpsRunRef.current;
     setGpsLoading(true);
     setAlamat("Mencari alamat lokasi...");
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        if (run !== gpsRunRef.current) return;
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         setLatitude(lat);
@@ -306,90 +350,130 @@ export default function MonitoringPage() {
         setGpsSuccess(true);
         setGpsLoading(false);
 
+        if (autoNext) {
+          setStep((s) => (s === 1 ? 2 : s));
+        }
+
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`
           );
           const data = await res.json();
-          if (data && data.display_name) {
-            setAlamat(data.display_name);
-          } else {
-            setAlamat("Alamat tidak ditemukan");
+          if (run === gpsRunRef.current) {
+            setAlamat(data && data.display_name ? data.display_name : "Detail alamat tidak ditemukan");
           }
         } catch (err) {
-          setAlamat("Gagal memuat alamat");
+          if (run === gpsRunRef.current) {
+            setAlamat("Alamat tidak termuat (koordinat GPS tetap tersimpan)");
+          }
         }
       },
-      () => {
+      (err) => {
+        if (run !== gpsRunRef.current) return;
         setGpsLoading(false);
         setAlamat("-");
-        alert("Lokasi tidak dapat diperoleh.");
+        warn(
+          "Lokasi GPS tidak dapat diperoleh. Pastikan Lokasi HP aktif dan izin lokasi browser diizinkan."
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 5000,
-      },
+        timeout: 12000,
+        maximumAge: 3000,
+      }
     );
   }
 
-  // ---- TAMBAHAN: kontrol garis progress (murni visual, tidak menyentuh jaringan) ----
-  // Garis bergerak pendek ke arah 90% selama request berjalan (melambat
-  // mendekati ujung agar tidak terkesan "bohong" kalau prosesnya lama),
-  // lalu baru lompat ke 100% setelah response BENAR-BENAR diterima.
-  function startSaveProgress(label) {
-    setSaveLabel(label);
-    let current = 6;
-    setSaveProgress(current);
-    handleSaveMonitoring;
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+  // Navigasi Langkah
+  const gpsOk = latitude !== "-";
+  const fotoLengkap = !!photo && gpsOk;
 
-    progressIntervalRef.current = setInterval(() => {
-      const remaining = 90 - current;
-      current += Math.max(remaining * 0.06, 0.4);
-      if (current >= 90) current = 90;
-      setSaveProgress(Math.round(current));
-    }, 200);
+  function goStep(n) {
+    if (n > 1 && !fotoLengkap) {
+      warn(!photo ? "Ambil foto lingkungan terlebih dahulu." : "Lokasi GPS belum didapatkan.");
+      return;
+    }
+    if (n > 2 && !status) {
+      setStep(2);
+      return;
+    }
+    if (n > 3 && keterangan.trim().length < 3) {
+      setStep(3);
+      warn("Isi catatan / temuan monitoring terlebih dahulu.");
+      return;
+    }
+    setStep(n);
   }
 
-  function finishSaveProgress() {
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    setSaveProgress(100);
+  function nextFromKondisi() {
+    setStep(3);
   }
 
-  function resetSaveProgress() {
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    setSaveProgress(0);
-    setSaveLabel("");
+  function nextFromKeterangan() {
+    if (keterangan.trim().length < 3) {
+      warn("Jelaskan temuan kondisi siswa di lapangan terlebih dahulu.");
+      return;
+    }
+    setStep(4);
   }
 
-  // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API
-  // 3. Ringkas handleSaveMonitoring menjadi 1 Panggilan API (+ garis progress)
+  // Fokus otomatis ke textarea saat step 3 aktif
+  useEffect(() => {
+    if (step === 3) {
+      const t = setTimeout(() => {
+        if (textRef.current) textRef.current.focus({ preventScroll: false });
+      }, 180);
+      return () => clearTimeout(t);
+    }
+  }, [step]);
+
+  // Simpan Monitoring dengan Animasi Progress Bar
   async function handleSaveMonitoring() {
+    if (submittingRef.current) return;
+
     if (!photo) {
-      alert("Silakan ambil foto monitoring.");
+      setStep(1);
+      warn("Silakan ambil foto monitoring terlebih dahulu.");
       return;
     }
     if (latitude === "-") {
-      alert("Lokasi GPS belum diperoleh.");
+      setStep(1);
+      warn("Lokasi GPS belum diperoleh. Pastikan titik koordinat sudah terkunci.");
+      return;
+    }
+    if (keterangan.trim().length < 3) {
+      setStep(3);
+      warn("Keterangan monitoring wajib diisi.");
       return;
     }
 
+    submittingRef.current = true;
+    let progressTimer = null;
+
     try {
       setSaving(true);
-      startSaveProgress("Memproses watermark...");
+      setSaveProgress(15);
+      setSaveStatusText("Menyiapkan foto & lokasi...");
 
       // Proses watermark lokal di browser
       const photoWithWatermark = await addWatermark(photo);
+      setSaveProgress(40);
+      setSaveStatusText("Memproses watermark & barcode...");
 
-      startSaveProgress("Mengirim ke server...");
+      progressTimer = setInterval(() => {
+        setSaveProgress((prev) =>
+          prev < 90 ? prev + Math.floor(Math.random() * 4 + 2) : prev
+        );
+      }, 300);
 
-      // Kirim 1 request gabungan ke backend (tidak berubah)
+      setSaveStatusText("Mengirim data monitoring ke server...");
+      setSaveProgress((prev) => Math.max(prev, 60));
+
       const result = await saveMonitoring({
         idGuru: user.id,
         namaGuru: user.nama,
         tempatMagang: tempatMagang,
-        base64Photo: photoWithWatermark, // Kirim Base64 langsung
+        base64Photo: photoWithWatermark,
         latitude: latitude,
         longitude: longitude,
         mapUrl: "https://www.google.com/maps?q=" + latitude + "," + longitude,
@@ -397,28 +481,57 @@ export default function MonitoringPage() {
         keterangan: keterangan,
       });
 
-      finishSaveProgress();
+      if (progressTimer) clearInterval(progressTimer);
 
-      if (result.success) {
-        setSaveLabel("Selesai");
-        alert("Monitoring berhasil disimpan.");
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
-        router.replace("/magang/guru");
+      if (result && result.success) {
+        setSaveProgress(100);
+        setSaveStatusText("Data monitoring berhasil terkirim!");
+        await new Promise((res) => setTimeout(res, 350));
+
+        stopStream();
+
+        const goHome = () => {
+          if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+          router.replace("/magang/guru");
+        };
+
+        showDialog({
+          type: "success",
+          title: "Monitoring Berhasil Disimpan",
+          message: `Data monitoring di ${tempatMagang} telah tersimpan dan diverifikasi.`,
+          actions: [
+            { label: "Ke Beranda Sekarang", primary: true, onClick: goHome },
+          ],
+        });
+
+        redirectTimerRef.current = setTimeout(goHome, 3500);
       } else {
-        alert(result.message);
+        showDialog({
+          type: "error",
+          title: "Gagal Menyimpan Monitoring",
+          message: (result && result.message) || "Server menolak permintaan. Silakan coba lagi.",
+          actions: [{ label: "Tutup", primary: true, onClick: closeDialog }],
+        });
       }
     } catch (err) {
+      if (progressTimer) clearInterval(progressTimer);
       console.error(err);
-      alert("Terjadi kesalahan sistem saat menyimpan.");
+      showDialog({
+        type: "error",
+        title: "Terjadi Kesalahan",
+        message: "Data monitoring gagal dikirim. Periksa koneksi internet Anda lalu coba kirim lagi.",
+        actions: [{ label: "Tutup", primary: true, onClick: closeDialog }],
+      });
     } finally {
+      if (progressTimer) clearInterval(progressTimer);
+      submittingRef.current = false;
       setSaving(false);
-      resetSaveProgress();
+      setSaveProgress(0);
+      setSaveStatusText("");
     }
   }
 
+  // Lifecycle Session
   useEffect(() => {
     async function init() {
       if (!isLoggedIn()) {
@@ -435,7 +548,7 @@ export default function MonitoringPage() {
       const tempat = localStorage.getItem("tempatMagangMonitoring");
       if (!tempat) {
         alert("Silakan pilih tempat magang terlebih dahulu.");
-        router.replace("/magang/guru/pilih-tempat");
+        router.replace("/magang/guru");
         return;
       }
       setTempatMagang(tempat);
@@ -444,11 +557,21 @@ export default function MonitoringPage() {
     init();
   }, [router]);
 
+  // Nyalakan kamera otomatis saat pertama kali dibuka jika belum ada foto
+  useEffect(() => {
+    if (loading || !user) return;
+    const t = setTimeout(() => {
+      if (!photo) startCamera();
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user]);
+
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      gpsRunRef.current += 1;
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+      stopStream();
     };
   }, []);
 
@@ -456,11 +579,11 @@ export default function MonitoringPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="relative mx-auto h-14 w-14">
+          <div className="relative mx-auto h-12 w-12">
             <div className="absolute inset-0 rounded-full border-4 border-blue-200"></div>
             <div className="absolute inset-0 rounded-full border-4 border-blue-700 border-t-transparent animate-spin"></div>
           </div>
-          <p className="mt-4 text-base font-bold text-slate-600 tracking-wide">
+          <p className="mt-3 text-sm font-bold text-slate-600 tracking-wide">
             Menyiapkan Modul Monitoring...
           </p>
         </div>
@@ -468,38 +591,42 @@ export default function MonitoringPage() {
     );
   }
 
-  const now = new Date();
   const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
   const tanggal = now.toLocaleDateString("id-ID", {
     day: "numeric",
-    month: "long",
+    month: "short",
     year: "numeric",
   });
   const jam = now.toLocaleTimeString("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   });
 
+  const accNum = parseInt(String(accuracy), 10);
+  const accBuruk = !isNaN(accNum) && accNum > 50;
+
   return (
     <main className="min-h-screen bg-slate-50 pb-12">
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-3">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
+      {/* NAVBAR */}
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-md border-b border-blue-700/50">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="bg-white/10 p-1 sm:p-1.5 rounded-xl border border-white/20 backdrop-blur-sm shadow-inner">
               <Image
                 src="/logo.png"
                 alt="Logo"
-                width={38}
-                height={38}
-                className="object-contain"
+                width={32}
+                height={32}
+                className="object-contain sm:w-9 sm:h-9"
               />
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
-                MONITORING MAGANG
+              <h1 className="text-xs sm:text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200">
+                MONITORING PKL
               </h1>
-              <p className="text-[10px] sm:text-xs font-medium text-blue-300">
+              <p className="text-[9px] sm:text-xs font-medium text-blue-300">
                 SMKN 1 TELUK KUANTAN
               </p>
             </div>
@@ -507,317 +634,441 @@ export default function MonitoringPage() {
 
           <button
             onClick={handleBack}
-            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-white hover:brightness-110 active:scale-95 shadow-md shadow-indigo-900/30 border border-blue-500/30 transition-all flex items-center gap-1"
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-black text-white hover:brightness-110 active:scale-95 shadow-md border border-blue-500/30 transition-all flex items-center gap-1"
           >
-            🔙 KEMBALI
+            🔙 <span className="hidden xs:inline sm:inline">KEMBALI</span>
           </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-6 sm:pt-8 space-y-6 sm:space-y-8">
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-6 sm:p-8 text-white shadow-xl border border-blue-800">
-          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-amber-400 opacity-10 rounded-full blur-2xl"></div>
-
-          <div className="relative">
-            <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-3 border border-amber-400/30">
-              🔍 Monitoring Lapangan
-            </p>
-            <h2 className="mt-1 text-2xl sm:text-3xl font-black tracking-tight">
-              {user.nama}
-            </h2>
-
-            <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3 border-t border-white/10 pt-5">
-              <Info label="ID GURU" value={user.id} isLight={true} />
-              <Info label="NAMA GURU" value={user.nama} isLight={true} />
-              <Info label="TEMPAT MAGANG" value={tempatMagang} isLight={true} />
+      <div className="mx-auto max-w-5xl px-3 sm:px-6 pt-3 space-y-3">
+        {/* KARTU IDENTITAS GURU — PADAT & ELEGAN */}
+        <section className="rounded-2xl bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-3.5 sm:p-4 text-white shadow-md border border-blue-800 relative overflow-hidden">
+          <div className="pointer-events-none absolute -top-10 -right-10 h-36 w-36 rounded-full bg-blue-500/20 blur-2xl" />
+          <div className="relative z-10 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[9px] sm:text-[10px] font-black uppercase tracking-wider mb-1 border border-amber-400/30">
+                🔍 Monitoring Lapangan
+              </span>
+              <h2 className="text-base sm:text-lg font-black leading-tight text-white truncate">
+                {user.nama}
+              </h2>
+              <p className="mt-0.5 text-[11px] sm:text-xs text-blue-200 truncate">
+                ID Guru: <span className="font-bold text-white">{user.id}</span>
+              </p>
+              <p className="text-[11px] sm:text-xs text-amber-200 font-extrabold truncate flex items-center gap-1 mt-0.5">
+                <span>📍</span>
+                <span className="truncate">{tempatMagang}</span>
+              </p>
             </div>
-
-            <div className="mt-4 grid gap-3 grid-cols-3">
-              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
-                  Hari
-                </p>
-                <p className="mt-0.5 text-sm sm:text-base font-black text-white capitalize">
-                  {hari}
-                </p>
-              </div>
-              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
-                  Tanggal
-                </p>
-                <p className="mt-0.5 text-sm sm:text-base font-black text-white">
-                  {tanggal}
-                </p>
-              </div>
-              <div className="col-span-1 rounded-xl bg-white/5 border border-white/10 p-3 sm:p-4 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
-                  Jam
-                </p>
-                <p className="mt-0.5 text-sm sm:text-base font-black text-amber-300">
-                  {jam}
-                </p>
-              </div>
+            <div className="text-right shrink-0">
+              <p className="text-lg sm:text-2xl font-black text-amber-300 tabular-nums leading-none">
+                {jam}
+              </p>
+              <p className="mt-1 text-[10px] sm:text-xs font-semibold text-blue-200 capitalize leading-tight">
+                {hari}, {tanggal}
+              </p>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div
-          className={`grid gap-6 ${
-            isLandscape ? "grid-cols-1" : "md:grid-cols-2"
-          }`}
-        >
-          {/* SECTION KAMERA DENGAN LAYOUT DINAMIS (KIRI & KANAN SAAT LANDSCAPE) */}
-          <section className="rounded-[2rem] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
-                📸 Foto Lingkungan
-              </h2>
-
-              <div
-                className={`flex ${isLandscape ? "flex-row items-center" : "flex-col"} gap-3 sm:gap-4 w-full`}
-              >
-                {/* AREA KAMERA (KIRI SAAT LANDSCAPE) */}
-                <div
-                  className={`${isLandscape ? "w-[60%]" : "w-full"} flex flex-col gap-3`}
+        {/* STEPPER PROGRES */}
+        <nav className="flex items-center gap-1" aria-label="Langkah monitoring">
+          {STEPS.map((s, i) => {
+            const done =
+              (s.id === 1 && fotoLengkap) ||
+              (s.id === 2 && step > 2) ||
+              (s.id === 3 && keterangan.trim().length >= 3 && step > 3);
+            const active = step === s.id;
+            return (
+              <div key={s.id} className="flex items-center flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => goStep(s.id)}
+                  className={`flex w-full items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] sm:text-xs font-black transition-all ${
+                    active
+                      ? "bg-blue-700 text-white shadow"
+                      : done
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-white text-slate-400 border border-slate-200"
+                  }`}
                 >
-                  <div className="relative overflow-hidden rounded-2xl bg-slate-900 aspect-video w-full shadow-inner border border-slate-200">
-                    {!photo ? (
-                      <>
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full object-cover"
-                        />
-                        {!cameraReady && (
-                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-3 text-center">
-                            <div className="mb-2 text-2xl sm:text-3xl">📷</div>
-                            <button
-                              onClick={startCamera}
-                              className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-3 py-2 sm:px-5 sm:py-3 text-[10px] sm:text-sm font-black text-white shadow-lg animate-pulse hover:brightness-110 active:scale-95 transition-all"
-                            >
-                              Aktifkan Kamera
-                            </button>
-                            <p className="mt-2 text-[9px] sm:text-xs font-semibold text-slate-300">
-                              Wajib ditekan manual
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <img
-                        src={photo}
-                        alt="Monitoring"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                    <canvas ref={canvasRef} className="hidden" />
-                    <canvas ref={watermarkCanvasRef} className="hidden" />
-                  </div>
+                  <span>{done && !active ? "✔" : s.icon}</span>
+                  <span className="truncate">{s.label}</span>
+                </button>
+                {i < STEPS.length - 1 && (
+                  <span className="mx-0.5 text-slate-300 text-xs select-none">›</span>
+                )}
+              </div>
+            );
+          })}
+        </nav>
 
-                  {photoSuccess && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 shadow-sm flex items-center justify-center gap-2">
-                      <span className="text-base sm:text-lg">✅</span>
-                      <p className="text-[11px] sm:text-sm font-black text-emerald-700 tracking-wide">
-                        FOTO TEREKAM
-                      </p>
+        {/* ISI UTAMA: kamera kiri, langkah kanan */}
+        <div className="grid gap-3 md:grid-cols-2 md:items-start">
+          {/* KOLOM KIRI: KAMERA + PANDUAN + STATUS GPS */}
+          <section
+            className={`${
+              step === 1 ? "" : "hidden md:block"
+            } rounded-2xl bg-white p-3 shadow-sm border border-slate-100`}
+          >
+            {/* AREA VIDEO / FOTO */}
+            <div className="relative overflow-hidden rounded-xl bg-slate-900 aspect-video w-full border border-slate-200 shadow-inner">
+              {!photo ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    controls={false}
+                    className="h-full w-full object-cover"
+                  />
+                  {!cameraReady && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-800/95 p-3 text-center">
+                      <div className="mb-2 text-2xl sm:text-3xl">📷</div>
+                      {cameraError ? (
+                        <p className="mb-2 text-[11px] font-semibold text-amber-200 max-w-xs">
+                          {cameraError}
+                        </p>
+                      ) : (
+                        <p className="mb-2 text-[11px] font-semibold text-slate-300">
+                          Kamera belakang siap diaktifkan
+                        </p>
+                      )}
+                      <button
+                        onClick={startCamera}
+                        className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-2 text-xs sm:text-sm font-black text-white shadow-lg active:scale-95 transition-all"
+                      >
+                        {cameraError ? "Coba Aktifkan Kamera" : "Aktifkan Kamera"}
+                      </button>
                     </div>
                   )}
-                </div>
+                </>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photo}
+                  alt="Hasil Foto Monitoring"
+                  className="h-full w-full object-cover"
+                />
+              )}
+              <canvas ref={canvasRef} className="hidden" />
+              <canvas ref={watermarkCanvasRef} className="hidden" />
+            </div>
 
-                {/* AREA TOMBOL (KANAN SAAT LANDSCAPE) */}
-                <div
-                  className={`${isLandscape ? "w-[40%] flex-col justify-center" : "w-full flex-col"} flex gap-2 sm:gap-3`}
-                >
-                  {/* TOMBOL PANDUAN */}
+            {/* KONTROL KAMERA */}
+            <div className="mt-2.5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={capturePhoto}
+                disabled={!cameraReady && !photo}
+                className={`flex-1 rounded-xl py-2.5 text-xs sm:text-sm font-black text-white transition-all shadow active:scale-[0.97] flex items-center justify-center gap-1.5 ${
+                  photo
+                    ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110"
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed"
+                }`}
+              >
+                <span>{photo ? "🔄" : "📸"}</span>
+                <span>{photo ? "Ambil Ulang Foto" : "Ambil Foto & GPS"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLandscapeClick}
+                title="Panduan Mode Landscape"
+                className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700 hover:bg-blue-100 active:scale-95 transition-all shrink-0 flex items-center gap-1"
+              >
+                <span>🔄</span>
+                <span className="hidden xs:inline">Landscape</span>
+              </button>
+            </div>
+
+            {/* RINGKASAN STATUS LOKASI GPS */}
+            <div className="mt-2.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  📡 Status Lokasi GPS
+                </p>
+                {photo && (latitude === "-" || gpsLoading) && (
                   <button
                     type="button"
-                    onClick={handleLandscapeClick}
-                    className="w-full rounded-2xl bg-blue-100 border border-blue-200 px-2 py-3 text-[11px] sm:text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-200 active:scale-95 flex items-center justify-center gap-1.5 leading-tight"
+                    onClick={() => getLocation(true)}
+                    className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700 active:scale-95"
                   >
-                    🔄 Panduan Landscape
+                    ↻ Ambil GPS
                   </button>
-
-                  {/* TOMBOL AMBIL FOTO */}
-                  <button
-                    onClick={capturePhoto}
-                    disabled={!cameraReady && !photo}
-                    className={`w-full rounded-2xl px-2 py-3.5 text-[11px] sm:text-sm font-black text-white transition-all duration-150 shadow-md active:scale-[0.97] flex flex-row items-center justify-center gap-1.5 leading-tight ${
-                      photo
-                        ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-orange-500/20 hover:brightness-110"
-                        : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20 hover:brightness-110 disabled:from-slate-400 disabled:to-slate-400 disabled:scale-100 disabled:cursor-not-allowed"
-                    }`}
-                  >
-                    <span className="text-lg sm:text-xl shrink-0">
-                      {photo ? "🔄" : "📸"}
-                    </span>
-                    <span className="text-center">
-                      {photo ? "AMBIL ULANG" : "AMBIL FOTO & GPS"}
-                    </span>
-                  </button>
-                </div>
+                )}
               </div>
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                <GpsMini label="Latitude" value={latitude} />
+                <GpsMini label="Longitude" value={longitude} />
+                <GpsMini
+                  label="Akurasi"
+                  value={gpsLoading && !gpsOk ? "Mengunci Satelit…" : accuracy}
+                  warn={accBuruk}
+                  loading={gpsLoading && !gpsOk}
+                />
+                <GpsMini
+                  label="Status"
+                  value={
+                    gpsOk
+                      ? "Terkunci ✔"
+                      : gpsLoading
+                        ? "Mengambil…"
+                        : photo
+                          ? "Belum ada"
+                          : "Menunggu foto"
+                  }
+                  loading={gpsLoading && !gpsOk}
+                  ok={gpsOk}
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] font-semibold text-slate-600 line-clamp-2">
+                🗺️{" "}
+                {gpsLoading && alamat === "-"
+                  ? "Mencari alamat…"
+                  : alamat === "-"
+                    ? "Alamat akan muncul setelah foto & GPS diambil"
+                    : alamat}
+              </p>
+              {accBuruk && (
+                <p className="mt-1 text-[10px] font-bold text-amber-600">
+                  ⚠ Akurasi di atas 50 meter. Pindah ke tempat terbuka lalu ambil ulang bila perlu.
+                </p>
+              )}
             </div>
           </section>
 
-          {/* SECTION PELACAKAN LOKASI (GPS) */}
-          <section className="rounded-[2rem] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-800 mb-1">
-                📡 Pelacakan Lokasi
-              </h2>
-              <p className="text-xs font-semibold text-slate-400 mb-4">
-                Memastikan koordinat akurat di tempat instansi.
-              </p>
-
-              <div className="space-y-3">
-                <GpsCard
-                  label="Garis Lintang (Latitude)"
-                  value={latitude}
-                  icon="🌐"
-                />
-                <GpsCard
-                  label="Garis Bujur (Longitude)"
-                  value={longitude}
-                  icon="📍"
-                />
-                <GpsCard
-                  label="Alamat Lokasi"
-                  value={alamat}
-                  icon="🗺️"
-                  isLoading={gpsLoading || String(alamat).includes("Mencari")}
-                />
-                <GpsCard
-                  label="Akurasi Radar"
-                  value={gpsLoading ? "Mengunci Satelit..." : accuracy}
-                  icon="🎯"
-                  isLoading={gpsLoading}
-                />
-              </div>
-
-              {gpsSuccess && latitude !== "-" && (
-                <div className="mt-4 text-center">
-                  <a
-                    href={`https://maps.google.com/?q=${latitude},${longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-bold bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 transition-colors"
-                  >
-                    🗺️ Cek Akurasi via Google Maps
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {gpsSuccess && (
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm flex items-center justify-center gap-2">
-                <span className="text-xl">✅</span>
-                <p className="text-sm font-black text-emerald-700 tracking-wide">
-                  TITIK GPS TERKUNCI
+          {/* KOLOM KANAN: PANEL LANGKAH-LANGKAH BERTAHAP */}
+          <section className="rounded-2xl bg-white p-3 sm:p-4 shadow-sm border border-slate-100">
+            {/* LANGKAH 1 */}
+            {step === 1 && (
+              <div>
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                  <span>📸</span>
+                  <span>Langkah 1 — Foto Lingkungan & GPS</span>
+                </h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500 leading-relaxed">
+                  {photo
+                    ? gpsOk
+                      ? "Foto dan koordinat GPS sudah siap."
+                      : gpsLoading
+                        ? "Foto tersimpan, sedang mengunci lokasi GPS..."
+                        : "Foto tersimpan, namun titik GPS belum didapatkan. Tekan 'Ambil GPS'."
+                    : "Arahkan kamera ke area lingkungan kerja siswa/instansi dan tekan tombol 'Ambil Foto & GPS'."}
                 </p>
+
+                {photo && gpsOk && (
+                  <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 flex items-center gap-2">
+                    <span className="text-base text-emerald-600">✅</span>
+                    <p className="text-[11px] sm:text-xs font-black text-emerald-700">
+                      Foto & Titik GPS berhasil diperoleh!
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => goStep(2)}
+                  disabled={!fotoLengkap}
+                  className="mt-3.5 w-full rounded-xl bg-blue-700 hover:bg-blue-800 py-2.5 text-xs sm:text-sm font-black text-white shadow active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
+                >
+                  Lanjut ke Kondisi Siswa →
+                </button>
+              </div>
+            )}
+
+            {/* LANGKAH 2 */}
+            {step === 2 && (
+              <div>
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                  <span>👨‍🏫</span>
+                  <span>Langkah 2 — Kondisi Lapangan Siswa</span>
+                </h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Pilih kondisi penempatan siswa saat kunjungan monitoring:
+                </p>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    {
+                      name: "BERSAMA SISWA",
+                      icon: "👨‍🏫",
+                      desc: "Siswa berada di lokasi bersama guru pembimbing",
+                      border: "peer-checked:border-emerald-500 peer-checked:bg-emerald-50/70 text-emerald-800",
+                    },
+                    {
+                      name: "SISWA MAGANG DILUAR",
+                      icon: "🏢",
+                      desc: "Siswa sedang penugasan dinas luar / lapangan",
+                      border: "peer-checked:border-amber-500 peer-checked:bg-amber-50/70 text-amber-800",
+                    },
+                  ].map((item) => (
+                    <label
+                      key={item.name}
+                      className="relative cursor-pointer block select-none h-full"
+                    >
+                      <input
+                        type="radio"
+                        className="peer sr-only"
+                        checked={status === item.name}
+                        onChange={() => setStatus(item.name)}
+                      />
+                      <div
+                        className={`flex flex-col items-center justify-center text-center p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-200 font-bold transition-all duration-150 active:scale-[0.97] ${item.border} peer-checked:shadow-sm`}
+                      >
+                        <span className="text-2xl mb-1">{item.icon}</span>
+                        <span className="text-xs sm:text-sm font-black">{item.name}</span>
+                        <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
+                          {item.desc}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-3.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs sm:text-sm font-black text-slate-600 active:scale-95"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextFromKondisi}
+                    className="flex-1 rounded-xl bg-blue-700 hover:bg-blue-800 py-2.5 text-xs sm:text-sm font-black text-white shadow active:scale-[0.98] transition-all"
+                  >
+                    Lanjut ke Laporan →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* LANGKAH 3 */}
+            {step === 3 && (
+              <div>
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                  <span>📝</span>
+                  <span>Langkah 3 — Keterangan & Catatan Monitoring</span>
+                </h3>
+                <label className="mt-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  Temuan di Lapangan / Catatan Bimbingan <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  ref={textRef}
+                  rows={4}
+                  value={keterangan}
+                  onChange={(e) => setKeterangan(e.target.value)}
+                  placeholder="Jelaskan temuan di lapangan, sikap siswa, kedisiplinan, materi yang dipelajari, kendala..."
+                  className="mt-1 w-full rounded-xl border-2 border-slate-200 p-3 text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:outline-none transition-colors resize-none"
+                />
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                  Minimal 3 karakter untuk melanjutkan.
+                </p>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs sm:text-sm font-black text-slate-600 active:scale-95"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextFromKeterangan}
+                    disabled={keterangan.trim().length < 3}
+                    className="flex-1 rounded-xl bg-blue-700 hover:bg-blue-800 py-2.5 text-xs sm:text-sm font-black text-white shadow active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
+                  >
+                    Lanjut ke Periksa & Kirim →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* LANGKAH 4 */}
+            {step === 4 && (
+              <div>
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                  <span>🚀</span>
+                  <span>Langkah 4 — Periksa & Kirim</span>
+                </h3>
+
+                <dl className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50 text-xs">
+                  <Ringkas label="Guru" value={user.nama} onEdit={null} />
+                  <Ringkas label="Lokasi Magang" value={tempatMagang} onEdit={null} />
+                  <Ringkas label="Status Kondisi" value={status} onEdit={() => setStep(2)} />
+                  <Ringkas
+                    label="Foto & GPS"
+                    value={fotoLengkap ? "Siap ✔" : "Belum lengkap"}
+                    onEdit={() => setStep(1)}
+                  />
+                  <Ringkas
+                    label="Keterangan"
+                    value={keterangan}
+                    onEdit={() => setStep(3)}
+                  />
+                </dl>
+
+                <div className="mt-3.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="rounded-xl border border-slate-200 px-3 py-3 text-xs sm:text-sm font-black text-slate-600 active:scale-95"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMonitoring}
+                    disabled={!fotoLengkap || saving || keterangan.trim().length < 3}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:cursor-not-allowed transition-all"
+                  >
+                    {saving
+                      ? `🔄 Menyimpan… (${Math.round(saveProgress)}%)`
+                      : "🚀 SIMPAN DATA MONITORING"}
+                  </button>
+                </div>
+                {!fotoLengkap && !saving && (
+                  <p className="mt-2 text-center text-[11px] font-bold text-rose-500">
+                    Foto lingkungan dan titik GPS harus terkunci dulu (langkah 1).
+                  </p>
+                )}
               </div>
             )}
           </section>
         </div>
-
-        {/* LAPORAN AKTIVITAS */}
-        <section className="rounded-[2rem] bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100">
-          <h2 className="text-2xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">
-            📝 Laporan Aktivitas
-          </h2>
-
-          <div className="space-y-6">
-            <div>
-              <label className="text-sm font-black text-slate-700 uppercase tracking-wider block mb-3">
-                Kondisi Lapangan Siswa
-              </label>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  {
-                    name: "BERSAMA SISWA",
-                    icon: "👨‍🏫",
-                    color:
-                      "peer-checked:border-emerald-500 peer-checked:bg-emerald-50 text-emerald-700 bg-emerald-50/20",
-                  },
-                  {
-                    name: "SISWA MAGANG DILUAR",
-                    icon: "🏢",
-                    color:
-                      "peer-checked:border-amber-500 peer-checked:bg-amber-50 text-amber-700 bg-amber-50/20",
-                  },
-                ].map((item) => (
-                  <label
-                    key={item.name}
-                    className="relative cursor-pointer block select-none h-full"
-                  >
-                    <input
-                      type="radio"
-                      className="peer sr-only"
-                      checked={status === item.name}
-                      onChange={() => setStatus(item.name)}
-                    />
-                    <div
-                      className={`flex flex-col items-center justify-center h-full text-center py-4 px-2 rounded-2xl border-2 border-slate-200 font-black text-sm transition-all duration-150 active:scale-[0.96] ${item.color} peer-checked:shadow-sm`}
-                    >
-                      <span className="text-2xl mb-1">{item.icon}</span>
-                      {item.name}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col">
-              <label className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">
-                Keterangan Monitoring <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                rows={4}
-                value={keterangan}
-                onChange={(e) => setKeterangan(e.target.value)}
-                placeholder="Jelaskan temuan di lapangan, sikap siswa, kedisiplinan, dll..."
-                className="w-full rounded-2xl border-2 border-slate-200 p-4 font-semibold text-slate-800 focus:border-blue-500 focus:ring-0 focus:outline-none transition-colors resize-none"
-              />
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={handleSaveMonitoring}
-                disabled={saving || !photo || latitude === "-"}
-                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-5 text-lg font-black text-white hover:brightness-110 shadow-lg shadow-emerald-500/30 active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:scale-100 disabled:cursor-not-allowed transition-all"
-              >
-                {saving ? `🔄 ${saveLabel}` : "🚀 SIMPAN DATA MONITORING"}
-              </button>
-
-              {/* ---- TAMBAHAN: garis progress pendek -> penuh ---- */}
-              {saving && (
-                <div className="mt-3">
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-200 ease-linear"
-                      style={{ width: `${saveProgress}%` }}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-center text-[11px] font-bold text-slate-500">
-                    {saveProgress}%
-                  </p>
-                </div>
-              )}
-
-              {(!photo || latitude === "-") && !saving && (
-                <p className="mt-3 text-center text-xs font-bold text-rose-500 animate-pulse">
-                  *Akses simpan terkunci. Pastikan Foto Lingkungan & Titik GPS
-                  sudah didapatkan.
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
       </div>
 
-      {/* MODAL INDIKATOR LANDSCAPE OTOMATIS */}
+      {/* OVERLAY PROGRES SIMPAN DENGAN PERSENTASE BAR */}
+      {saving && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-xs text-center bg-white p-5 rounded-3xl shadow-2xl border border-slate-100">
+            <p className="mb-3 text-sm font-bold text-slate-700">
+              {saveStatusText || "Menyimpan Data Monitoring..."}
+            </p>
+            <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${saveProgress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-black text-slate-400">
+              {Math.round(saveProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFIKASI TENGAH LAYAR */}
+      {dialog && !saving && (
+        <CenterDialog dialog={dialog} onClose={closeDialog} />
+      )}
+
+      {/* MODAL INDIKATOR LANDSCAPE OTOMATIS (DIPERTAHANKAN PENUH) */}
       {showLandscapeGuide && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm transition-all">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
@@ -830,9 +1081,7 @@ export default function MonitoringPage() {
                   Ubah Mode Foto Mendatar
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                  Silahkan ubah setting di notifikasi HP menjadi ROTASI OTOMATIS
-                  dan putar HP Anda ke posisi mendatar agar area lingkungan
-                  tempat magang terlihat lebih luas.
+                  Silahkan ubah setting di notifikasi HP menjadi ROTASI OTOMATIS dan putar HP Anda ke posisi mendatar agar area lingkungan tempat magang terlihat lebih luas.
                 </p>
                 <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm font-black text-amber-700 flex items-center justify-center gap-2">
                   <span className="animate-spin">🔄</span> Putar HP →
@@ -872,51 +1121,108 @@ export default function MonitoringPage() {
   );
 }
 
-/* --- REUSABLE SUB-COMPONENTS --- */
+/* --- REUSABLE SUB-COMPONENTS (SAMA SEPERTI PRESENSI/PAGE.JS) --- */
 
-function Info({ label, value, isLight = false }) {
+function CenterDialog({ dialog, onClose }) {
+  const tone = {
+    success: { icon: "✅", ring: "bg-emerald-100", title: "text-emerald-700" },
+    error: { icon: "❌", ring: "bg-rose-100", title: "text-rose-700" },
+    gps: { icon: "📍", ring: "bg-amber-100", title: "text-amber-700" },
+    warn: { icon: "⚠️", ring: "bg-amber-100", title: "text-amber-700" },
+  }[dialog.type] || { icon: "ℹ️", ring: "bg-blue-100", title: "text-blue-700" };
+
   return (
     <div
-      className={`rounded-xl p-3 sm:p-4 ${isLight ? "bg-white/10 border border-white/5" : "bg-slate-50 border border-slate-100"}`}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/60 p-5 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={dialog.type === "success" ? undefined : onClose}
     >
-      <p
-        className={`text-[10px] font-black uppercase tracking-wider ${isLight ? "text-blue-300" : "text-slate-400"}`}
+      <div
+        className="w-full max-w-sm rounded-3xl bg-white p-5 text-center shadow-2xl border border-slate-100"
+        onClick={(e) => e.stopPropagation()}
       >
-        {label}
-      </p>
-      <p
-        className={`text-sm sm:text-base font-extrabold mt-0.5 truncate ${isLight ? "text-white" : "text-slate-800"}`}
-      >
-        {value}
-      </p>
+        <div
+          className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl ${tone.ring} ${
+            dialog.type === "success" ? "animate-bounce" : ""
+          }`}
+        >
+          {tone.icon}
+        </div>
+        <h3 className={`mt-3 text-lg font-black ${tone.title}`}>
+          {dialog.title}
+        </h3>
+        <p className="mt-1.5 text-sm font-semibold leading-relaxed text-slate-600">
+          {dialog.message}
+        </p>
+        {dialog.type === "success" && (
+          <p className="mt-2 text-[11px] font-bold text-slate-400">
+            Otomatis menuju beranda…
+          </p>
+        )}
+        <div className="mt-4 flex flex-col gap-2">
+          {(dialog.actions || []).map((a) => (
+            <button
+              key={a.label}
+              onClick={a.onClick}
+              className={`w-full rounded-xl py-2.5 text-sm font-black active:scale-[0.97] transition-all ${
+                a.primary
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow"
+                  : "border border-slate-200 text-slate-600"
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function GpsCard({ label, value, icon, isLoading = false }) {
-  const safeValue = String(value);
-
+function Ringkas({ label, value, onEdit }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border-2 border-slate-100 bg-slate-50 p-3 sm:p-4 shadow-sm">
-      <div className="text-xl sm:text-2xl bg-white w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl border border-slate-200 shadow-sm shrink-0">
-        <span className={isLoading ? "animate-bounce" : ""}>{icon}</span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">
-          {label}
-        </p>
-        <p
-          className={`text-sm sm:text-base font-black ${
-            safeValue === "-" ||
-            safeValue.includes("Mencari") ||
-            safeValue.includes("Gagal")
-              ? "text-slate-400"
-              : "text-blue-900"
-          } ${String(label).includes("Alamat") ? "line-clamp-2 text-xs sm:text-sm" : "truncate"}`}
+    <div className="flex items-start justify-between gap-2 px-2.5 py-1.5">
+      <dt className="shrink-0 font-black uppercase tracking-wider text-[10px] text-slate-400 pt-0.5">
+        {label}
+      </dt>
+      <dd className="min-w-0 flex-1 text-right font-bold text-slate-800 break-words line-clamp-2">
+        {value || "-"}
+      </dd>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="shrink-0 text-[10px] font-black text-blue-600 underline"
         >
-          {value}
-        </p>
-      </div>
+          ubah
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GpsMini({ label, value, warn = false, loading = false, ok = false }) {
+  const v = String(value);
+  const kosong = v === "-" || loading;
+  return (
+    <div className="rounded-lg border border-slate-100 bg-white px-2 py-1">
+      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 leading-none">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 truncate text-xs font-black ${
+          warn
+            ? "text-amber-600"
+            : ok
+              ? "text-emerald-600"
+              : kosong
+                ? "text-slate-400"
+                : "text-blue-900"
+        } ${loading ? "animate-pulse" : ""}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

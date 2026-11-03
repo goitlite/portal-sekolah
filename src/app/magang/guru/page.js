@@ -3033,36 +3033,37 @@ function DashboardGuruContent() {
                 title="Kelola Murid PKL"
                 desc="Lihat & kelola siswa bimbingan"
                 icon="🗂️"
-                bgGrad="from-blue-600 to-indigo-700"
+                bgGrad="from-blue-600 via-indigo-600 to-indigo-700"
                 onClick={() => router.push("/magang/siswa")}
               />
               <SolidCompactCard
                 title="Tambah Murid PKL"
                 desc="Registrasi akun siswa baru"
                 icon="➕"
-                bgGrad="from-sky-500 to-cyan-600"
+                bgGrad="from-sky-500 via-cyan-600 to-blue-600"
                 onClick={() => router.push("/magang/tambah")}
               />
               <SolidCompactCard
                 title="Rekap PKL"
                 desc="Rekapitulasi kehadiran & log"
                 icon="📊"
-                bgGrad="from-violet-600 to-purple-800"
+                bgGrad="from-violet-600 via-purple-600 to-indigo-800"
                 onClick={() => router.push("/magang/rekap")}
               />
               <SolidCompactCard
                 title="Isi Jurnal PKL"
                 desc="Catat jurnal pembimbingan individual"
                 icon="📝"
-                bgGrad="from-rose-500 to-pink-600"
+                bgGrad="from-rose-500 via-pink-600 to-rose-700"
                 onClick={() => setShowJurnalPklModal(true)}
               />
               <SolidCompactCard
                 title="Cetak Laporan PKL"
                 desc="Monitoring atau Jurnal PKL"
                 icon="🖨️"
-                bgGrad="from-fuchsia-500 to-pink-600"
+                bgGrad="from-fuchsia-600 via-purple-600 to-pink-600"
                 onClick={() => setShowPilihCetakPklModal(true)}
+                className="col-span-2 sm:col-span-1"
               />
             </div>
           )}
@@ -3210,51 +3211,69 @@ function DashboardGuruContent() {
         {activeMenuTab === "pembimbing" && (
           <>
             {/* MONITORING LAPANGAN */}
-            <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#FFFDF8] via-[#FCE7A4] to-[#F3D36B] p-3.5 sm:p-5 shadow-sm border border-[#D9B44A]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-[#D9B44A]/40 pb-2.5 sm:pb-3">
-                <div>
-                  <h2 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-1.5">
-                    <span>📸</span>
-                    <span>Monitoring Lapangan</span>
-                  </h2>
-                  <p className="text-[11px] sm:text-xs font-semibold text-amber-900/80">
-                    Pilih area penempatan aktif untuk meninjau log presensi
-                    mandiri siswa.
-                  </p>
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-blue-800/60 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-3 sm:p-5 shadow-xl text-white">
+              {/* Ornamen Glow Biru & Amber */}
+              <div className="pointer-events-none absolute -top-12 -right-12 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
+
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 sm:pb-3 border-b border-blue-700/50">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-500 text-amber-950 flex items-center justify-center shadow-md text-sm sm:text-base border border-amber-200/60 font-black select-none">
+                    📸
+                  </div>
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-200 flex items-center gap-1.5">
+                      Monitoring Lapangan PKL
+                    </h2>
+                    <p className="text-[10px] sm:text-xs text-blue-200/80 font-medium">
+                      Pilih area penempatan aktif untuk meninjau log presensi mandiri siswa
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                  <span className="px-2.5 py-1 rounded-full bg-blue-950/80 text-amber-300 border border-amber-400/40 text-[10px] sm:text-xs font-black shadow-inner whitespace-nowrap">
+                    📍 {tempatMagang.length} Lokasi Terdaftar
+                  </span>
                 </div>
               </div>
 
-              <div className="mt-3 sm:mt-4 space-y-2.5 sm:space-y-3">
+              <div className="relative z-10 mt-3 sm:mt-3.5">
                 {tempatMagang.length === 0 ? (
-                  <div className="text-center py-5 bg-white/70 rounded-xl border border-dashed border-[#D9B44A]">
-                    <p className="text-xs sm:text-sm font-bold text-amber-900/60">
+                  <div className="text-center py-6 sm:py-8 bg-blue-950/50 rounded-xl sm:rounded-2xl border border-dashed border-blue-700/60 text-blue-200">
+                    <span className="text-2xl sm:text-3xl block mb-1">📍</span>
+                    <p className="text-xs sm:text-sm font-bold text-white">
                       Belum ada lokasi tempat magang terdaftar.
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-blue-300/70 mt-0.5">
+                      Data lokasi penempatan murid akan muncul otomatis di sini.
                     </p>
                   </div>
                 ) : (
-                  tempatMagang.map((item, index) => (
-                    <div
-                      key={index}
-                      className="rounded-xl sm:rounded-2xl border border-[#D9B44A]/60 bg-white/90 p-3 sm:p-4 shadow-xs hover:shadow-sm transition-all"
-                    >
-                      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-                        {/* BAGIAN INFORMASI TEMPAT & JUMLAH SISWA */}
-                        <div className="min-w-0">
-                          <h3 className="text-sm sm:text-base font-black text-slate-800 flex items-center gap-1.5 truncate">
-                            <span>📍</span>
-                            <span className="truncate">{item.tempat}</span>
-                          </h3>
-                          <p className="text-[11px] sm:text-xs font-bold text-slate-500 mt-0.5">
-                            Terbimbing:{" "}
-                            <span className="text-blue-600 font-extrabold">
-                              {item.jumlah} Siswa
-                            </span>
-                          </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                    {tempatMagang.map((item, index) => (
+                      <div
+                        key={index}
+                        className="group rounded-xl sm:rounded-2xl border border-blue-600/40 bg-gradient-to-br from-blue-900/80 via-indigo-950/90 to-blue-950 p-2.5 sm:p-3.5 shadow-md hover:shadow-xl hover:border-amber-400/60 hover:from-blue-800/90 transition-all duration-200 flex flex-col justify-between gap-2.5 backdrop-blur-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-xs sm:text-sm font-black text-white truncate flex items-center gap-1.5 group-hover:text-amber-200 transition-colors">
+                              <span className="text-xs sm:text-sm select-none">🏢</span>
+                              <span className="truncate">{item.tempat}</span>
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-950/90 text-blue-200 border border-blue-700/60 font-extrabold text-[10px] sm:text-[11px]">
+                                <span>👥</span>
+                                <span>{item.jumlah} Siswa Terbimbing</span>
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
                         {/* BAGIAN TOMBOL - RESPONSIF 2 KOLOM DI HP */}
-                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-1.5 sm:gap-2 shrink-0">
+                        <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-blue-800/60">
                           <button
+                            type="button"
                             onClick={() => {
                               const date = new Date();
                               const namaBulan = [
@@ -3277,7 +3296,7 @@ function DashboardGuruContent() {
                                 "targetTempatRekap",
                                 item.tempat,
                               );
-                              localStorage.setItem("targetGuruRekap", user.id);
+                              localStorage.setItem("targetGuruRekap", user?.id || "");
                               localStorage.setItem(
                                 "targetBulanRekap",
                                 bulanTerbaru,
@@ -3285,152 +3304,206 @@ function DashboardGuruContent() {
 
                               router.push("/magang/rekap");
                             }}
-                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black text-white shadow-xs active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-1 sm:gap-1.5 transition-all truncate"
+                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 border border-amber-300/40 truncate"
                           >
                             <span>👁️</span>
                             <span className="truncate">Aktivitas</span>
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => mulaiMonitoring(item.tempat)}
-                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black text-white shadow-xs active:scale-[0.97] hover:brightness-110 flex items-center justify-center gap-1 sm:gap-1.5 transition-all truncate"
+                            className="rounded-lg sm:rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-black text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 border border-sky-300/40 truncate"
                           >
                             <span>📷</span>
                             <span className="truncate">Monitoring</span>
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* STATISTIK CARD GRID */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <Card
-                title="Jumlah Siswa"
-                value={dashboard?.jumlahSiswa ?? "--"}
-                accentColor="border-indigo-500"
-                textColor="text-indigo-600"
-                icon="👥"
-                onClick={() =>
-                  handleCardClick(
-                    "Daftar Jumlah Siswa",
-                    dashboard?.listJumlahSiswa,
-                  )
-                }
-              />
-              <Card
-                title="Hadir Hari Ini"
-                value={dashboard?.hadirHariIni ?? "--"}
-                accentColor="border-emerald-500"
-                textColor="text-emerald-600"
-                icon="✅"
-                onClick={() =>
-                  handleCardClick(
-                    "Siswa Hadir Hari Ini",
-                    dashboard?.listHadirHariIni,
-                  )
-                }
-              />
-              <Card
-                title="Total Kehadiran"
-                value={dashboard?.totalHadir ?? "--"}
-                accentColor="border-blue-500"
-                textColor="text-blue-600"
-                icon="📊"
-                onClick={() =>
-                  handleCardClick(
-                    "Log Total Kehadiran",
-                    dashboard?.listTotalHadir,
-                  )
-                }
-              />
-              <Card
-                title="Izin / Sakit"
-                value={dashboard?.izinSakit ?? "--"}
-                accentColor="border-amber-500"
-                textColor="text-amber-600"
-                icon="🤒"
-                onClick={() =>
-                  handleCardClick(
-                    "Daftar Siswa Izin / Sakit",
-                    dashboard?.listIzinSakit,
-                  )
-                }
-              />
+            {/* STATISTIK PRESENSI PKL */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-700 to-indigo-900 text-white flex items-center justify-center text-xs sm:text-sm shadow-xs border border-blue-500/40 select-none">
+                    📊
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-blue-950 uppercase tracking-wider">
+                      Presensi & Rekapitulasi PKL
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] font-semibold text-blue-800/80">
+                      Ringkasan kehadiran siswa bimbingan hari ini
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-extrabold text-blue-800 bg-blue-100/90 border border-blue-300 px-2.5 py-0.5 rounded-full shadow-xs">
+                  💡 Klik kartu untuk detail
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                <Card
+                  title="Jumlah Siswa"
+                  value={dashboard?.jumlahSiswa ?? "--"}
+                  accentColor="border-indigo-500"
+                  textColor="text-indigo-600"
+                  icon="👥"
+                  onClick={() =>
+                    handleCardClick(
+                      "Daftar Jumlah Siswa",
+                      dashboard?.listJumlahSiswa,
+                    )
+                  }
+                />
+                <Card
+                  title="Hadir Hari Ini"
+                  value={dashboard?.hadirHariIni ?? "--"}
+                  accentColor="border-emerald-500"
+                  textColor="text-emerald-600"
+                  icon="✅"
+                  onClick={() =>
+                    handleCardClick(
+                      "Siswa Hadir Hari Ini",
+                      dashboard?.listHadirHariIni,
+                    )
+                  }
+                />
+                <Card
+                  title="Total Kehadiran"
+                  value={dashboard?.totalHadir ?? "--"}
+                  accentColor="border-blue-500"
+                  textColor="text-blue-600"
+                  icon="📊"
+                  onClick={() =>
+                    handleCardClick(
+                      "Log Total Kehadiran",
+                      dashboard?.listTotalHadir,
+                    )
+                  }
+                />
+                <Card
+                  title="Izin / Sakit"
+                  value={dashboard?.izinSakit ?? "--"}
+                  accentColor="border-amber-500"
+                  textColor="text-amber-600"
+                  icon="🤒"
+                  onClick={() =>
+                    handleCardClick(
+                      "Daftar Siswa Izin / Sakit",
+                      dashboard?.listIzinSakit,
+                    )
+                  }
+                />
+              </div>
             </div>
 
             {/* TABEL AKTIVITAS TERBARU */}
-            <div className="rounded-[2rem] bg-white border border-slate-200 shadow-md overflow-hidden">
-              <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-                    ⚡ Aktivitas Terkini
-                  </h2>
-                  <p className="text-xs sm:text-sm font-medium text-slate-500">
-                    Log pengiriman presensi & pemantauan foto riil siswa di
-                    lapangan.
-                  </p>
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-blue-800/60 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-3 sm:p-5 shadow-xl text-white">
+              {/* Ornamen Glow Biru & Cyan */}
+              <div className="pointer-events-none absolute -top-12 -right-12 h-44 w-44 rounded-full bg-sky-500/20 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
+
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 sm:pb-3 border-b border-blue-700/50">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-md text-sm sm:text-base border border-sky-300/40 select-none">
+                    ⚡
+                  </div>
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-amber-200 flex items-center gap-2">
+                      <span>Aktivitas Terkini</span>
+                      {aktivitas.length > 0 && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                        </span>
+                      )}
+                    </h2>
+                    <p className="text-[10px] sm:text-xs text-blue-200/80 font-medium">
+                      Log presensi & foto riil siswa di lapangan hari ini
+                    </p>
+                  </div>
                 </div>
                 {aktivitas.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => {
                       setGalleryIndex(0);
                       setShowGallery(true);
                     }}
-                    className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold py-2.5 px-5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="self-stretch sm:self-auto rounded-lg sm:rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-[11px] sm:text-xs font-black py-1.5 sm:py-2 px-3 sm:px-4 shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-sky-300/40"
                   >
-                    <span>👁️</span> Lihat Semuanya
+                    <span>👁️</span>
+                    <span>Lihat Semuanya ({aktivitas.length})</span>
                   </button>
                 )}
               </div>
 
-              <div className="p-4 sm:p-6">
+              <div className="relative z-10 mt-3 sm:mt-3.5">
                 {aktivitas.length === 0 ? (
-                  <p className="text-center py-8 text-sm font-semibold text-slate-400">
-                    Belum ada aktivitas presensi masuk hari ini.
-                  </p>
+                  <div className="text-center py-8 bg-blue-950/50 rounded-xl sm:rounded-2xl border border-dashed border-blue-700/60 text-blue-200">
+                    <span className="text-2xl sm:text-3xl block mb-1">📷</span>
+                    <p className="text-xs sm:text-sm font-bold text-white">
+                      Belum ada aktivitas presensi masuk hari ini.
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-blue-300/70 mt-0.5">
+                      Log foto dan waktu kehadiran siswa akan otomatis tampil saat siswa presensi.
+                    </p>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                     {aktivitas.map((item, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-3.5 rounded-2xl border border-slate-100 bg-gradient-to-br from-white to-slate-50/50 p-3.5 shadow-sm"
+                        onClick={() => {
+                          setGalleryIndex(index);
+                          setShowGallery(true);
+                        }}
+                        title="Klik untuk perbesar foto"
+                        className="group flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-blue-600/40 bg-gradient-to-br from-blue-900/80 via-indigo-950/90 to-blue-950 p-2 sm:p-2.5 shadow-md hover:shadow-xl hover:border-amber-400/60 hover:from-blue-800/90 active:scale-[0.98] transition-all cursor-pointer backdrop-blur-sm"
                       >
-                        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
+                        <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-lg sm:rounded-xl bg-blue-950 border border-blue-500/50 group-hover:border-amber-300 transition-colors">
                           <img
                             src={optimizeFotoUrl(item.foto, 160)}
-                            alt="Aktivitas"
-                            className="h-full w-full object-cover"
+                            alt={item.nama || "Aktivitas"}
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
                             decoding="async"
                             onError={(e) => {
                               e.currentTarget.style.border = "2px solid red";
                             }}
                           />
+                          <div className="absolute inset-0 bg-blue-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs select-none">
+                            🔍
+                          </div>
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <span
-                            className={`inline-block rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                            className={`inline-block rounded-md px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
                               item.jenis === "PRESENSI"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-blue-50 text-blue-700 border border-blue-200"
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/40"
+                                : "bg-sky-500/20 text-sky-300 border border-sky-400/40"
                             }`}
                           >
                             {item.jenis}
                           </span>
 
-                          <h3 className="mt-1 text-xs sm:text-sm font-black text-slate-800 truncate">
+                          <h3 className="mt-0.5 text-xs sm:text-sm font-black text-white truncate group-hover:text-amber-200 transition-colors">
                             {item.nama}
                           </h3>
-                          <p className="text-[11px] font-bold text-slate-500 truncate flex items-center gap-0.5">
-                            📍 {item.tempat}
+                          <p className="text-[10px] sm:text-xs font-semibold text-blue-200/90 truncate flex items-center gap-1 mt-0.5">
+                            <span>📍</span>
+                            <span className="truncate">{item.tempat}</span>
                           </p>
-                          <p className="text-[10px] font-medium text-slate-400 mt-0.5">
-                            ⏱️ {formatTanggal(item.waktu)}
+                          <p className="text-[9px] sm:text-[10px] font-medium text-blue-300/70 flex items-center gap-1 mt-0.5 truncate">
+                            <span>⏱️</span>
+                            <span>{formatTanggal(item.waktu)}</span>
                           </p>
                         </div>
                       </div>
@@ -7294,58 +7367,81 @@ export default function DashboardGuru() {
 }
 
 function Card({ title, value, accentColor, textColor, icon, onClick }) {
-  const bgMap = {
-    "border-indigo-500": "from-indigo-600 via-indigo-700 to-blue-800",
-    "border-emerald-500": "from-emerald-500 via-green-600 to-teal-700",
-    "border-blue-500": "from-blue-600 via-sky-700 to-indigo-800",
-    "border-amber-500": "from-amber-500 via-orange-500 to-amber-700",
+  const themeMap = {
+    "border-indigo-500": {
+      bg: "from-blue-700 via-indigo-800 to-blue-950",
+      border: "border-blue-400/40",
+      glow: "shadow-blue-950/40",
+    },
+    "border-emerald-500": {
+      bg: "from-emerald-600 via-teal-700 to-blue-950",
+      border: "border-emerald-400/40",
+      glow: "shadow-emerald-950/40",
+    },
+    "border-blue-500": {
+      bg: "from-sky-600 via-blue-700 to-indigo-950",
+      border: "border-sky-400/40",
+      glow: "shadow-blue-950/40",
+    },
+    "border-amber-500": {
+      bg: "from-amber-500 via-orange-600 to-blue-950",
+      border: "border-amber-400/40",
+      glow: "shadow-amber-950/40",
+    },
   };
 
-  const bg = bgMap[accentColor] || "from-slate-600 to-slate-700";
+  const theme = themeMap[accentColor] || {
+    bg: "from-slate-700 via-slate-800 to-slate-900",
+    border: "border-slate-500/30",
+    glow: "shadow-slate-500/20",
+  };
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`
         group relative overflow-hidden
-        rounded-2xl sm:rounded-3xl
-        bg-gradient-to-br ${bg}
+        rounded-xl sm:rounded-2xl
+        bg-gradient-to-br ${theme.bg}
         text-white
-        p-3 sm:p-4
+        p-2.5 sm:p-3.5
         w-full
-        shadow-md
-        active:scale-95
-        transition-all duration-300
+        shadow-sm hover:shadow-md ${theme.glow}
+        border ${theme.border}
+        active:scale-[0.97]
+        hover:brightness-105
+        transition-all duration-200
+        text-left
       `}
     >
-      {/* Icon + Arrow */}
-      <div className="relative flex items-start justify-between">
-        <div className="h-8 w-8 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-sm sm:text-xl shadow">
+      {/* Icon + Detail Badge */}
+      <div className="relative z-10 flex items-center justify-between">
+        <div className="h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-xs border border-white/25 flex items-center justify-center text-xs sm:text-base shadow-xs select-none">
           {icon}
         </div>
 
-        <div className="rounded-full bg-white/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
+        <div className="rounded-full bg-white/20 backdrop-blur-xs px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-bold border border-white/20 flex items-center gap-0.5">
           <span>Detail</span>
-          <span className="group-hover:translate-x-1 transition-transform ml-0.5">
+          <span className="group-hover:translate-x-0.5 transition-transform text-[8px] sm:text-[10px]">
             →
           </span>
         </div>
       </div>
 
-      {/* Title */}
-      <div className="relative mt-2.5 sm:mt-5 text-left">
-        <p className="text-[9px] sm:text-xs uppercase tracking-wider sm:tracking-[2px] text-white/80 font-bold truncate">
+      {/* Title & Value */}
+      <div className="relative z-10 mt-2 sm:mt-2.5">
+        <p className="text-[9px] sm:text-[11px] uppercase tracking-wider text-white/90 font-bold truncate">
           {title}
         </p>
-
-        <h2 className="mt-0.5 sm:mt-1 text-2xl sm:text-4xl font-black leading-none">
+        <h2 className="mt-0.5 text-lg sm:text-2xl lg:text-3xl font-black leading-tight drop-shadow-xs">
           {value}
         </h2>
       </div>
 
-      {/* Garis */}
-      <div className="relative mt-2.5 sm:mt-4 h-1 rounded-full bg-white/20 overflow-hidden">
-        <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-500"></div>
+      {/* Animated accent line */}
+      <div className="relative z-10 mt-2 sm:mt-2.5 h-0.5 rounded-full bg-white/20 overflow-hidden">
+        <div className="h-full w-0 bg-white group-hover:w-full transition-all duration-300"></div>
       </div>
     </button>
   );
@@ -7440,6 +7536,7 @@ function SolidCompactCard({
   bgGrad,
   onClick,
   disabled = false,
+  className = "",
 }) {
   const formatTitleWithBadge = (text) => {
     if (!text) return text;
@@ -7466,20 +7563,20 @@ function SolidCompactCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`group relative flex flex-col justify-center min-h-[64px] sm:min-h-[76px] rounded-xl p-2.5 sm:p-3 text-left transition-all duration-300 overflow-hidden shadow-md ${
+      className={`group relative flex flex-col justify-center min-h-[58px] sm:min-h-[72px] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-left transition-all duration-300 overflow-hidden shadow-xs hover:shadow-md ${
         disabled
           ? "opacity-60 cursor-not-allowed bg-slate-800 text-slate-400 border border-slate-700"
-          : `bg-gradient-to-br ${bgGrad} text-white hover:scale-[1.02] active:scale-[0.98]`
-      }`}
+          : `bg-gradient-to-br ${bgGrad} text-white hover:brightness-105 active:scale-[0.98]`
+      } ${className}`}
     >
-      <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-20 transition-transform duration-300 group-hover:rotate-6">
-        <span className="text-4xl sm:text-6xl rotate-12 select-none">
+      <div className="pointer-events-none absolute -bottom-2 -right-2 z-0 flex items-center justify-center opacity-15 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+        <span className="text-3xl sm:text-5xl rotate-12 select-none">
           {icon}
         </span>
       </div>
 
       <div className="relative z-10 w-full space-y-0.5">
-        <h4 className="text-[11px] font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-sm flex flex-wrap items-center">
+        <h4 className="text-[11px] font-extrabold leading-normal tracking-wide sm:text-sm text-white drop-shadow-xs flex flex-wrap items-center">
           {formatTitleWithBadge(title)}
         </h4>
         <p className="text-[9px] text-white/80 leading-tight sm:text-xs font-medium line-clamp-1 sm:line-clamp-2">
