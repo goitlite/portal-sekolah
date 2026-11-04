@@ -200,6 +200,12 @@ export default function StartExamPage() {
 
   const keyboardGraceRef = useRef(true);
 
+  // Ref untuk membaca soalLocked terbaru di dalam event handler (hindari stale closure)
+  const soalLockedRef = useRef(false);
+  useEffect(() => {
+    soalLockedRef.current = soalLocked;
+  }, [soalLocked]);
+
   // =========================
   // LOAD SESSION
   // =========================
@@ -736,24 +742,29 @@ export default function StartExamPage() {
   }, [ignoreFullscreen, violations]);
 
   // =========================
-  // BLOK BACK BUTTON — Tampilkan Konfirmasi, Bukan Langsung Logout
+  // BLOK BACK BUTTON — Konsisten setiap saat, Pelanggaran setelah soal dikunci
   // =========================
   useEffect(() => {
-    // Pasang dua history state agar back pertama hanya memunculkan konfirmasi,
-    // bukan langsung keluar dari halaman
-    window.history.pushState(null, "", window.location.href);
+    // Pasang SATU state awal. Handler akan selalu memasang ulang.
     window.history.pushState(null, "", window.location.href);
 
     function handlePopState() {
       if (logoutRef.current) return;
 
-      // Pasang ulang state agar back berikutnya tetap terjebak di sini
+      // Pasang ulang state SEGERA agar back berikutnya selalu tertangkap
       window.history.pushState(null, "", window.location.href);
 
-      // Jika konfirmasi sedang terbuka, abaikan (tombol back fisik menutup dialog)
+      // Jika soal sudah dikunci (setelah 1m30s atau dikunci admin) → langsung pelanggaran
+      if (soalLockedRef.current) {
+        forceLogout("Tombol Back ditekan saat sesi ujian sedang berjalan");
+        return;
+      }
+
+      // Jika dialog konfirmasi sedang terbuka → tekan back lagi = tutup dialog & tetap
       if (exitConfirmRef.current) {
         setShowExitConfirm(false);
         exitConfirmRef.current = false;
+        setIgnoreFullscreen(false);
         return;
       }
 
@@ -1173,6 +1184,8 @@ export default function StartExamPage() {
           setShowExitConfirm(false);
           exitConfirmRef.current = false;
         }
+        // Pasang ulang history state agar tombol back tetap tertangkap setelah kembali dari Recent
+        window.history.pushState(null, "", window.location.href);
       }
     }
 
@@ -2820,7 +2833,11 @@ export default function StartExamPage() {
                     setShowExitConfirm(false);
                     exitConfirmRef.current = false;
                     setIgnoreFullscreen(false);
-                    // Pastikan kembali fullscreen jika perlu
+
+                    // Pasang state baru agar back berikutnya tetap tertangkap
+                    window.history.pushState(null, "", window.location.href);
+
+                    // Kembali fullscreen jika diperlukan
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
                     if (!isIOS && !document.fullscreenElement) {
