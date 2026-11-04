@@ -18,7 +18,7 @@ const GAS_API_URL =
  * Token ini diperlukan untuk memanggil getSiswa dan getDashboardKepsekWaliKelas.
  */
 async function getGasAdminToken() {
-  const adminPin = process.env.PIN_ADMIN_RAHASIA || "663355";
+  const adminPin = process.env.PIN_ADMIN_RAHASIA || "Adm!n#982Skola";
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 
 import { getSession, isLoggedIn } from "../../../lib/auth";
+import { verifikasiKodePembimbing } from "@/app/magang/admin/actions";
 import {
   addSiswa,
   editSiswa,
@@ -580,24 +581,26 @@ function TambahSiswaWaliContent() {
   // =========================================================
   // GURU PEMBIMBING
   // =========================================================
-  const handleKlikGantiPembimbing = () => {
+  const handleKlikGantiPembimbing = async () => {
     const inputKode = window.prompt(
       "Masukkan kode konfirmasi untuk mengubah Guru Pembimbing:",
     );
 
-    if (inputKode === "663355") {
+    const isValid = await verifikasiKodePembimbing(inputKode);
+    if (isValid) {
       setModeGantiGuru(true);
     } else if (inputKode !== null) {
       alert("Kode konfirmasi salah!");
     }
   };
 
-  const handleKlikHapusPembimbing = () => {
+  const handleKlikHapusPembimbing = async () => {
     const inputKode = window.prompt(
       "Masukkan kode konfirmasi untuk menghapus Guru Pembimbing:",
     );
 
-    if (inputKode === "663355") {
+    const isValid = await verifikasiKodePembimbing(inputKode);
+    if (isValid) {
       setPilihGuruPembimbing("");
       setNamaGuruPembimbing("");
       setModeGantiGuru(false);

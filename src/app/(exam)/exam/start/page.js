@@ -17,6 +17,10 @@ export default function StartExamPage() {
   const [kelas, setKelas] = useState("");
   const [idSiswa, setIdSiswa] = useState("");
   const [pesan, setPesan] = useState("");
+  const lastDismissedPesanRef = useRef("");
+  const lastExecutedCommandRef = useRef("");
+  const lockTimerRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
@@ -46,6 +50,8 @@ export default function StartExamPage() {
   const [showPanduanModal, setShowPanduanModal] = useState(false);
 
   const [examStarted, setExamStarted] = useState(false);
+  // Countdown detik sebelum soal dikunci (null = tidak aktif)
+  const [lockCountdown, setLockCountdown] = useState(null);
   // =========================
   // EMERGENCY ACCESS
   // =========================
@@ -115,13 +121,17 @@ export default function StartExamPage() {
     const savedKodeKirim = (localStorage.getItem("kodeKirim") || "").trim();
     const inputCode = emergencyCode.trim();
 
-    // KODE BENAR: Bisa kodeKirim dari spreadsheet asesmen atau kode darurat 67676767
+    // KODE BENAR: hanya kodeKirim dari spreadsheet asesmen (kode darurat dihapus)
     const isCodeValid =
-      (savedKodeKirim !== "" &&
-        inputCode.toLowerCase() === savedKodeKirim.toLowerCase()) ||
-      inputCode === "67676767";
+      savedKodeKirim !== "" &&
+      inputCode.toLowerCase() === savedKodeKirim.toLowerCase();
 
     if (isCodeValid) {
+      // Hentikan hitungan mundur auto-lock dan hapus notif
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      setLockCountdown(null);
+
       // timer langsung habis
       setTimeLeft(0);
 
@@ -251,24 +261,8 @@ export default function StartExamPage() {
       setKelas(savedKelas || "");
       if (savedId) setIdSiswa(savedId);
 
-      // Cek apakah masa pemulihan 80 menit sudah habis
+      // Ambil pelanggaran dari localStorage (reset hanya via admin / pesan HAPUS PELANGGARAN)
       let savedViolation = parseInt(localStorage.getItem("violations") || "0");
-      const violationStartTime = localStorage.getItem("violationStartTime");
-
-      if (violationStartTime) {
-        const timePassed = Date.now() - parseInt(violationStartTime);
-        const cooldownPeriod = 80 * 60 * 1000; // 80 menit dalam milidetik
-
-        if (timePassed >= cooldownPeriod) {
-          // Jika sudah lewat 80 menit, bersihkan status pelanggaran
-          localStorage.removeItem("violations");
-          localStorage.removeItem("violationStartTime");
-          localStorage.removeItem("penaltyPassed");
-          localStorage.removeItem("lastPenaltyServedAtViolation");
-          savedViolation = 0;
-          catatPelanggaran(savedNama, savedKelas || "", savedId, 0);
-        }
-      }
 
       // Ambil data pelanggaran tersimpan dari spreadsheet database (agar konsisten lintas perangkat)
       try {
@@ -423,78 +417,112 @@ export default function StartExamPage() {
     }, 2000);
   }
 
-  // =========================
-  // LIVE AUTO RESET PELANGGARAN (80 MENIT)
-  // =========================
-  useEffect(() => {
-    const checkAutoResetLive = () => {
-      const startTime = localStorage.getItem("violationStartTime");
-      if (!startTime) return;
-
-      const timePassed = Date.now() - parseInt(startTime);
-      const cooldownPeriod = 80 * 60 * 1000; // 80 menit
-
-      if (timePassed >= cooldownPeriod) {
-        localStorage.removeItem("violations");
-        localStorage.removeItem("violationStartTime");
-        localStorage.removeItem("penaltyPassed");
-        localStorage.removeItem("lastPenaltyServedAtViolation");
-
-        setViolations(0);
-        setPenaltyOpen(false);
-        document.body.style.overflow = "auto";
-
-        const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
-        catatPelanggaran(nama, kelas, currentId, 0);
-
-        showModal(
-          "⏱️ Masa pemulihan 80 menit telah selesai.\n\nSemua catatan pelanggaran Anda telah di-reset menjadi 0. Anda dapat mengikuti ujian kembali dengan normal.",
-        );
-      }
-    };
-
-    // Jalankan pengecekan otomatis setiap 10 detik
-    const interval = setInterval(checkAutoResetLive, 10000);
-    return () => clearInterval(interval);
-  }, [nama, kelas, idSiswa]);
+  // [DIHAPUS] LIVE AUTO RESET PELANGGARAN (80 MENIT)
+  // Reset pelanggaran hanya bisa dilakukan admin via pesan "HAPUS PELANGGARAN"
 
   // =========================
-  // CEK PESAN REALTIME
+  // CEK PESAN REALTIME & COMMAND ADMIN (REC-1 & REC-2)
   // =========================
   useEffect(() => {
     if (!nama || !kelas) return;
 
     const interval = setInterval(async () => {
-      const result = await cekPesan(nama, kelas);
+      try {
+        const result = await cekPesan(nama, kelas);
 
-      if (result.status === "success") {
-        const isiPesan = result.pesan || "";
-        setPesan(isiPesan);
+        if (result && result.status === "success") {
+          const isiPesan = (result.pesan || "").trim();
 
-        // Jika backend mengirimkan info pelanggaran terbaru (misal admin mengubah di sheet)
-        if (result.pelanggaran !== undefined && result.pelanggaran !== null) {
-          const remoteCount = parseInt(result.pelanggaran) || 0;
-          setViolations((prev) => {
-            if (remoteCount > prev) {
-              localStorage.setItem("violations", String(remoteCount));
-              return remoteCount;
+          // 1. Sinkronisasi info pelanggaran terbaru dari database
+          if (result.pelanggaran !== undefined && result.pelanggaran !== null) {
+            const remoteCount = parseInt(result.pelanggaran) || 0;
+            setViolations((prev) => {
+              if (remoteCount > prev) {
+                localStorage.setItem("violations", String(remoteCount));
+                return remoteCount;
+              }
+              return prev;
+            });
+          }
+
+          // 2. REC-1: Tampilkan pesan HANYA jika ada dan belum di-close oleh siswa
+          if (isiPesan) {
+            if (isiPesan !== lastDismissedPesanRef.current) {
+              setPesan(isiPesan);
             }
-            return prev;
-          });
-        }
+          } else {
+            // Jika pesan dihapus oleh guru/admin di server, kosongkan state & tracker
+            lastDismissedPesanRef.current = "";
+            lastExecutedCommandRef.current = "";
+            setPesan("");
+          }
 
-        if (isiPesan.toUpperCase() === "UJIAN DI RESET") {
-          showModal("Ujian telah direset oleh admin");
-          setTimeout(() => {
-            localStorage.removeItem("examLink");
-            router.push("/exam");
-          }, 2000);
+          // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (Hanya diproses 1x per perintah)
+          const pesanUpper = isiPesan.toUpperCase();
+          if (pesanUpper && lastExecutedCommandRef.current !== pesanUpper) {
+            if (pesanUpper === "UJIAN DI RESET") {
+              lastExecutedCommandRef.current = pesanUpper;
+              showModal("Ujian telah direset oleh admin");
+              setTimeout(() => {
+                localStorage.removeItem("examLink");
+                router.push("/exam");
+              }, 2000);
+            } else if (pesanUpper === "BUKA KUNCI") {
+              lastExecutedCommandRef.current = pesanUpper;
+              // Hentikan hitungan mundur auto-lock dan hapus notif
+              if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+              if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+              setLockCountdown(null);
+
+              setTimeLeft(0);
+              setSoalLocked(false);
+              showModal(
+                "✅ KUNCI WAKTU DIBUKA\n\n" +
+                  "Pengawas / Guru telah membuka kunci ujian.\n" +
+                  "Soal dan formulir sekarang dapat dikerjakan dan dikirimkan.",
+              );
+            } else if (pesanUpper === "HAPUS PELANGGARAN") {
+              lastExecutedCommandRef.current = pesanUpper;
+              setViolations(0);
+              localStorage.setItem("violations", "0");
+              localStorage.removeItem("violationStartTime");
+              localStorage.removeItem("penaltyPassed");
+              localStorage.removeItem("lastPenaltyServedAtViolation");
+              setPenaltyOpen(false);
+              document.body.style.overflow = "auto";
+              const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+              catatPelanggaran(nama, kelas, currentId, 0);
+              showModal(
+                "✅ CATATAN PELANGGARAN DIRESET\n\n" +
+                  "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.",
+              );
+            } else if (pesanUpper === "KUNCI SOAL") {
+              lastExecutedCommandRef.current = pesanUpper;
+              setSoalLocked(true);
+              showModal(
+                "🔒 SOAL DIKUNCI\n\n" +
+                  "Akses pengisian formulir soal telah dikunci oleh pengawas / admin.",
+              );
+            } else if (/^TAMBAH WAKTU \d+$/.test(pesanUpper)) {
+              lastExecutedCommandRef.current = pesanUpper;
+              const menit = parseInt(pesanUpper.replace("TAMBAH WAKTU ", "").trim()) || 0;
+              if (menit > 0) {
+                setTimeLeft((prev) => prev + menit * 60);
+                showModal(
+                  `⏱️ WAKTU DITAMBAH\n\n` +
+                    `Waktu ujian Anda telah ditambah sebanyak ${menit} menit oleh pengawas / admin.`,
+                );
+              }
+            }
+          }
         }
+      } catch (err) {
+        console.error("Gagal cek pesan realtime:", err);
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [nama, kelas]);
+  }, [nama, kelas, idSiswa]);
 
   // =========================
   // KIRIM PENGADUAN
@@ -724,13 +752,31 @@ export default function StartExamPage() {
   }, [examStarted]);
 
   // =========================
-  // AUTO LOCK SOAL SETELAH 2 MENIT
+  // AUTO LOCK SOAL SETELAH 1 MENIT 30 DETIK + NOTIF COUNTDOWN
   // =========================
   useEffect(() => {
     if (!examStarted) return;
 
-    const lockTimer = setTimeout(
+    // Bersihkan timer lama jika ada
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    // Mulai countdown 1 menit 30 detik (90 detik) sebelum soal dikunci
+    setLockCountdown(90);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setLockCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    lockTimerRef.current = setTimeout(
       () => {
+        setLockCountdown(null);
         setSoalLocked(true);
 
         showModal(
@@ -743,10 +789,13 @@ export default function StartExamPage() {
             "3. Tekan tombol Kirim/Submit",
         );
       },
-      1 * 60 * 1000,
+      90 * 1000,
     );
 
-    return () => clearTimeout(lockTimer);
+    return () => {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
   }, [examStarted]);
 
   // =========================
@@ -1260,59 +1309,9 @@ export default function StartExamPage() {
     };
   }, []);
 
-  // =========================
-  // =========================
-  // DETEKSI TAB FREEZE
-  // SUPER STABIL
-  // =========================
-  useEffect(() => {
-    freezeCheckRef.current = Date.now();
-
-    const interval = setInterval(() => {
-      if (logoutRef.current) return;
-
-      if (ignoreFullscreen) {
-        freezeCheckRef.current = Date.now();
-        return;
-      }
-
-      // abaikan saat modal aktif
-      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
-        freezeCheckRef.current = Date.now();
-        return;
-      }
-
-      // abaikan safe action
-      if (safeActionRef.current) {
-        freezeCheckRef.current = Date.now();
-        return;
-      }
-
-      // abaikan jika textarea sedang fokus
-      const activeEl = document.activeElement;
-
-      if (
-        activeEl &&
-        (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT")
-      ) {
-        freezeCheckRef.current = Date.now();
-        return;
-      }
-
-      const now = Date.now();
-
-      const diff = now - freezeCheckRef.current;
-
-      // naikkan threshold agar Android tidak false positive
-      if (diff > 20000) {
-        forceLogout("Aplikasi dibekukan / pindah aplikasi terdeteksi");
-      }
-
-      freezeCheckRef.current = now;
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
+  // [DIHAPUS] DETEKSI TAB FREEZE
+  // Redundan dengan visibilitychange + blur + touch heartbeat.
+  // Berpotensi false positive di HP lambat (GC pause > 20 detik).
 
   // =========================
   // BLOCK LONG PRESS MOBILE
@@ -1905,7 +1904,10 @@ export default function StartExamPage() {
             >
               <button
                 type="button"
-                onClick={() => setPesan("")}
+                onClick={() => {
+                  lastDismissedPesanRef.current = pesan;
+                  setPesan("");
+                }}
                 className="absolute top-2 right-2 text-white/80 hover:text-white bg-black/20 hover:bg-black/40 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold leading-none transition"
                 title="Tutup Pesan"
               >
@@ -1988,6 +1990,18 @@ export default function StartExamPage() {
 
         {/* OVERLAY BLOCKER - BLOK CLICK TAPI IZINKAN SCROLL */}
       </div>
+
+      {/* NOTIF COUNTDOWN SEBELUM SOAL DIKUNCI */}
+      {lockCountdown !== null && (
+        <div className="fixed top-[115px] left-1/2 -translate-x-1/2 z-[998] flex items-center gap-2 bg-amber-500 text-black text-xs font-black px-4 py-2 rounded-full shadow-xl border border-amber-300 animate-pulse pointer-events-none select-none whitespace-nowrap">
+          ⏳ Soal dikunci dalam{" "}
+          <span className="font-mono text-sm">
+            {String(Math.floor(lockCountdown / 60)).padStart(2, "0")}:
+            {String(lockCountdown % 60).padStart(2, "0")}
+          </span>
+          {" "}— isi identitas & jawaban sekarang!
+        </div>
+      )}
 
       {/* TOMBOL CEPAT SCROLL KE PALING ATAS FORM */}
       {showScrollTop && (
@@ -2448,7 +2462,7 @@ export default function StartExamPage() {
                       langsung pada Google Form selama
                       <span className="font-black text-blue-700">
                         {" "}
-                        1 menit pertama
+                        1 menit 30 detik pertama
                       </span>
                       .
                     </p>
@@ -2467,7 +2481,7 @@ export default function StartExamPage() {
                     </h3>
 
                     <p className="text-gray-600 leading-relaxed mt-1">
-                      Setelah 1 menit, Google Form otomatis terkunci dan tidak
+                      Setelah 1 menit 30 detik, Google Form otomatis terkunci dan tidak
                       dapat disentuh lagi hingga waktu asesmen selesai.
                     </p>
                   </div>

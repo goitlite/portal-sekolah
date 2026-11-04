@@ -1113,33 +1113,91 @@ export default function ModalPantauAsesmenKelas({
                 />
               </div>
 
-              {/* Template Cepat */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                  Pilihan Cepat:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setPesanInput("Fokus pada soal ujian Anda!")}
-                    className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
-                  >
-                    Fokus pada soal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPesanInput("Sisa waktu 15 menit lagi.")}
-                    className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
-                  >
-                    Sisa waktu 15 menit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPesanInput("UJIAN DI RESET")}
-                    className="text-[10px] bg-rose-100 hover:bg-rose-200 px-2 py-1 rounded-md text-rose-800 font-bold cursor-pointer"
-                  >
-                    UJIAN DI RESET
-                  </button>
+              {/* Template Cepat & Perintah Khusus */}
+              <div className="space-y-2">
+                <div>
+                  <span className="text-[10px] font-black text-amber-800 uppercase flex items-center gap-1">
+                    <span>⚡</span> Perintah Otomatis Asesmen:
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("BUKA KUNCI")}
+                      className="text-[10px] bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 text-emerald-900 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Membuka kunci soal & timer selesai agar siswa bisa submit sekarang"
+                    >
+                      <span>🔓</span> BUKA KUNCI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("HAPUS PELANGGARAN")}
+                      className="text-[10px] bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Reset pelanggaran siswa jadi 0 & tutup layar hukuman 3 menit"
+                    >
+                      <span>0️⃣</span> HAPUS PELANGGARAN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("KUNCI SOAL")}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Kunci kembali formulir soal ujian siswa"
+                    >
+                      <span>🔒</span> KUNCI SOAL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("TAMBAH WAKTU 10")}
+                      className="text-[10px] bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-900 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Menambah 10 menit sisa waktu ujian siswa"
+                    >
+                      <span>⏱️</span> +10 MENIT
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("TAMBAH WAKTU 5")}
+                      className="text-[10px] bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-900 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Menambah 5 menit sisa waktu ujian siswa"
+                    >
+                      <span>⏱️</span> +5 MENIT
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("UJIAN DI RESET")}
+                      className="text-[10px] bg-rose-100 hover:bg-rose-200 border border-rose-300 text-rose-900 font-black px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      title="Batalkan sesi ujian & keluarkan siswa ke halaman /exam"
+                    >
+                      <span>⚠️</span> UJIAN DI RESET
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Pesan Arahan Biasa:
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("Fokus pada soal ujian Anda!")}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
+                    >
+                      Fokus pada soal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("Sisa waktu 15 menit lagi.")}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
+                    >
+                      Sisa waktu 15 menit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPesanInput("Periksa kembali jawaban Anda sebelum submit.")}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
+                    >
+                      Periksa jawaban
+                    </button>
+                  </div>
                 </div>
               </div>
 

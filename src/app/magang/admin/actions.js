@@ -14,3 +14,10 @@ export async function verifikasiPinHapus(kodeHapus) {
   if (!PIN_HAPUS || PIN_HAPUS.length < 6) return false;
   return kodeHapus === PIN_HAPUS;
 }
+
+export async function verifikasiKodePembimbing(inputKode) {
+  // Verifikasi kode konfirmasi ubah/hapus pembimbing di server (aman dari inspect browser)
+  const PIN_ASLI = process.env.PIN_ADMIN_RAHASIA;
+  if (!PIN_ASLI || PIN_ASLI.length < 6) return false;
+  return inputKode === PIN_ASLI;
+}
