@@ -190,6 +190,12 @@ export default function StartExamPage() {
   const suspiciousResizeRef = useRef(0);
   const lastTouchRef = useRef(Date.now());
   const wakeLockRef = useRef(null);
+
+  const keyboardCountRef = useRef(0);
+  const keyboardOpenedRef = useRef(false);
+  const keyboardTestRef = useRef(null);
+  const keyboardGraceRef = useRef(true);
+
   // Ref untuk membaca soalLocked, penaltyOpen, dan panduan terbaru di dalam event handler (hindari stale closure)
   const soalLockedRef = useRef(false);
   useEffect(() => {
