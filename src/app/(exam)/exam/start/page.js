@@ -190,21 +190,21 @@ export default function StartExamPage() {
   const suspiciousResizeRef = useRef(0);
   const lastTouchRef = useRef(Date.now());
   const wakeLockRef = useRef(null);
-  const freezeCheckRef = useRef(Date.now());
-
-  const keyboardCountRef = useRef(0);
-
-  const keyboardOpenedRef = useRef(false);
-
-  const keyboardTestRef = useRef(null);
-
-  const keyboardGraceRef = useRef(true);
-
-  // Ref untuk membaca soalLocked terbaru di dalam event handler (hindari stale closure)
+  // Ref untuk membaca soalLocked, penaltyOpen, dan panduan terbaru di dalam event handler (hindari stale closure)
   const soalLockedRef = useRef(false);
   useEffect(() => {
     soalLockedRef.current = soalLocked;
   }, [soalLocked]);
+
+  const penaltyOpenRef = useRef(false);
+  useEffect(() => {
+    penaltyOpenRef.current = penaltyOpen;
+  }, [penaltyOpen]);
+
+  const showPanduanModalRef = useRef(false);
+  useEffect(() => {
+    showPanduanModalRef.current = showPanduanModal;
+  }, [showPanduanModal]);
 
   // =========================
   // LOAD SESSION
@@ -344,7 +344,7 @@ export default function StartExamPage() {
         setDraftMode(JSON.parse(savedDraftMode));
       }
 
-      startSafeAction(2000);
+      startSafeAction(4000);
     }
 
     init();
@@ -415,7 +415,10 @@ export default function StartExamPage() {
 
     if (safeActionRef.current) return;
 
-    const totalViolation = violations + 1;
+    logoutRef.current = true;
+
+    const currentViolations = parseInt(localStorage.getItem("violations") || "0");
+    const totalViolation = currentViolations + 1;
     localStorage.setItem("violations", totalViolation.toString());
     setViolations(totalViolation);
 
@@ -473,8 +476,10 @@ export default function StartExamPage() {
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
               setShowPanduanModal(false);
-              setExamStarted(true);
-              setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+              if (!examStarted) {
+                setExamStarted(true);
+                setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+              }
             } else {
               setViolations((prev) => {
                 if (remoteCount !== prev) {
@@ -533,8 +538,10 @@ export default function StartExamPage() {
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
               setShowPanduanModal(false);
-              setExamStarted(true);
-              setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+              if (!examStarted) {
+                setExamStarted(true);
+                setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+              }
               const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
               catatPelanggaran(nama, kelas, currentId, 0);
               showModal(
@@ -728,6 +735,7 @@ export default function StartExamPage() {
       fullscreenTimeout.current = setTimeout(() => {
         if (logoutRef.current) return;
         if (ignoreFullscreen) return;
+        if (safeActionRef.current) return;
         if (!document.fullscreenElement) {
           forceLogout("Anda keluar dari fullscreen");
         }
@@ -760,11 +768,28 @@ export default function StartExamPage() {
         return;
       }
 
-      // Jika dialog konfirmasi sedang terbuka → tekan back lagi = tutup dialog & tetap
+      // Jika modal panduan atau penalti aktif, jangan tampilkan dialog keluar
+      if (penaltyOpenRef.current || showPanduanModalRef.current) {
+        return;
+      }
+
+      // Jika dialog konfirmasi sedang terbuka → tekan back lagi = tutup dialog & tetap di asesmen
       if (exitConfirmRef.current) {
         setShowExitConfirm(false);
         exitConfirmRef.current = false;
-        setIgnoreFullscreen(false);
+        overlayRiskRef.current = 0;
+        overlayTriggeredRef.current = false;
+        suspiciousResizeRef.current = 0;
+        startSafeAction(2000);
+
+        const isIOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (typeof navigator !== "undefined" &&
+            navigator.platform === "MacIntel" &&
+            navigator.maxTouchPoints > 1);
+        if (!isIOS && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
         return;
       }
 
@@ -1023,6 +1048,14 @@ export default function StartExamPage() {
     const interval = setInterval(() => {
       if (logoutRef.current) return;
 
+      // Di HP (Android / iOS) outerHeight & innerHeight dinamis karena status/navigation bar
+      const isMobile =
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
+      if (isMobile) return;
+
       const widthGap = window.outerWidth - window.innerWidth;
       const heightGap = window.outerHeight - window.innerHeight;
 
@@ -1151,9 +1184,11 @@ export default function StartExamPage() {
 
       const blurDuration = Date.now() - lastBlurAtRef.current;
 
-      // blur cukup lama = mencurigakan
-      if (blurDuration > 1000 && blurDuration < 15000) {
-        addOverlayRisk(20, "Long Blur");
+      // Jika kembali dalam toleransi sah (< 3.5 detik), reset total akumulasi risiko
+      if (blurDuration < 3500) {
+        overlayRiskRef.current = 0;
+        overlayTriggeredRef.current = false;
+        suspiciousResizeRef.current = 0;
       }
     }
 
@@ -1179,13 +1214,26 @@ export default function StartExamPage() {
         clearTimeout(visibilityTimeoutRef.current);
         clearTimeout(blurTimeoutRef.current);
         setIsWindowUnfocused(false);
+
+        // RESET TOTAL RISIKO & INDIKATOR CURIGA — siswa kembali dengan sah dalam < 3 detik
+        overlayRiskRef.current = 0;
+        overlayTriggeredRef.current = false;
+        suspiciousResizeRef.current = 0;
+
         // Reset exit confirm jika siswa kembali dari Recent
         if (exitConfirmRef.current) {
           setShowExitConfirm(false);
           exitConfirmRef.current = false;
         }
+
         // Pasang ulang history state agar tombol back tetap tertangkap setelah kembali dari Recent
         window.history.pushState(null, "", window.location.href);
+
+        // Beri jeda safeAction singkat (1000ms) agar transisi animasi kembali tidak memicu false positive
+        safeActionRef.current = true;
+        setTimeout(() => {
+          safeActionRef.current = false;
+        }, 1000);
       }
     }
 
@@ -1221,9 +1269,12 @@ export default function StartExamPage() {
         if (widthDiff > 180 || heightDiff > 180) {
           suspiciousResizeRef.current++;
 
-          if (suspiciousResizeRef.current >= 1) {
+          if (suspiciousResizeRef.current >= 2) {
             triggerViolation("Split screen / floating mode terdeteksi");
+            suspiciousResizeRef.current = 0;
           }
+        } else {
+          suspiciousResizeRef.current = 0;
         }
       }, 800);
     }
@@ -1261,9 +1312,9 @@ export default function StartExamPage() {
       const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
       lastViewportHeightRef.current = currentHeight;
 
-      // resize besar lebih mencurigakan
-      if (diff > 160) {
-        addOverlayRisk(20, "Large Viewport Resize");
+      // HANYA tambah risiko jika terjadi resize drastis di luar input resmi yang diizinkan
+      if (diff > 160 && !isAllowedInput) {
+        addOverlayRisk(15, "Large Viewport Resize");
       }
 
       if (!window.visualViewport) return;
@@ -1371,16 +1422,16 @@ export default function StartExamPage() {
       }
     }
 
-    // Deteksi interupsi sentuhan oleh OS Android (misal ketika ada floating overlay / bubble yang menimpa)
-    function handleTouchCancel() {
-      if (safeActionRef.current) return;
-      addOverlayRisk(35, "Touch Cancelled by System/Overlay");
-    }
+    // Auto decay risiko overlay setiap 3 detik agar tidak terakumulasi secara permanen
+    const decayInterval = setInterval(() => {
+      if (overlayRiskRef.current > 0) {
+        overlayRiskRef.current = Math.max(0, overlayRiskRef.current - 15);
+      }
+    }, 3000);
 
     // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus); // ← TAMBAH INI
-    window.addEventListener("touchcancel", handleTouchCancel, true);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", () => {
       if (!safeActionRef.current) {
@@ -1396,13 +1447,13 @@ export default function StartExamPage() {
     }
 
     return () => {
+      clearInterval(decayInterval);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(visibilityTimeoutRef.current);
       clearTimeout(resizeTimeoutRef.current);
 
       window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus); // ← TAMBAH INI
-      window.removeEventListener("touchcancel", handleTouchCancel, true);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientation);
@@ -2832,10 +2883,17 @@ export default function StartExamPage() {
                   onClick={() => {
                     setShowExitConfirm(false);
                     exitConfirmRef.current = false;
-                    setIgnoreFullscreen(false);
 
-                    // Pasang state baru agar back berikutnya tetap tertangkap
+                    // Reset semua skor risiko dan indikator resize mencurigakan
+                    overlayRiskRef.current = 0;
+                    overlayTriggeredRef.current = false;
+                    suspiciousResizeRef.current = 0;
+
+                    // Pasang state baru agar back berikutnya tetap tertangkap konsisten
                     window.history.pushState(null, "", window.location.href);
+
+                    // Beri grace period 2.5 detik untuk transisi fullscreen & layout settling
+                    startSafeAction(2500);
 
                     // Kembali fullscreen jika diperlukan
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
