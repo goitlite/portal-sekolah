@@ -92,10 +92,8 @@ export default function StartExamPage() {
   const armHistoryTrap = useCallback(() => {
     try {
       if (typeof window !== "undefined") {
-        if (!window.location.hash.includes("ujian")) {
-          window.location.hash = "ujian";
-        }
-        window.history.pushState({ examTrap: true, time: Date.now() }, "", window.location.href);
+        const targetUrl = window.location.pathname + window.location.search + "#ujian";
+        window.history.pushState({ examTrap: true, time: Date.now() }, "", targetUrl);
       }
     } catch (e) {}
   }, []);
@@ -211,11 +209,14 @@ export default function StartExamPage() {
   const overlayTriggeredRef = useRef(false);
 
   const lastBlurAtRef = useRef(0);
+  const lastHiddenAtRef = useRef(0);
 
   const lastViewportHeightRef = useRef(0);
   const blurTimeoutRef = useRef(null);
   const visibilityTimeoutRef = useRef(null);
   const [isWindowUnfocused, setIsWindowUnfocused] = useState(false);
+  const [toleranceCountdown, setToleranceCountdown] = useState(null);
+  const toleranceIntervalRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
   const focusTimeoutRef = useRef(null);
   const lastWidthRef = useRef(0);
@@ -802,16 +803,17 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
-  // BLOK BACK BUTTON — KONSISTEN & STABIL PADA HP (HASH & POPSTATE DUAL TRAP)
+  // BLOK BACK BUTTON — KONSISTEN & STABIL PADA HP (POPSTATE TRAP)
   // =========================
   useEffect(() => {
-    // Pasang trap awal
+    // Pasang trap awal (dua kali agar stack history selalu memiliki buffer cadangan)
+    armHistoryTrap();
     armHistoryTrap();
 
     // Re-arm history trap pada setiap sentuhan / klik user agar browser di HP tidak pernah melewati trap
     function handleUserInteraction() {
       try {
-        if (!window.location.hash.includes("ujian")) {
+        if (typeof window !== "undefined" && !window.location.hash.includes("ujian")) {
           armHistoryTrap();
         }
       } catch (e) {}
@@ -869,12 +871,10 @@ export default function StartExamPage() {
     }
 
     window.addEventListener("popstate", handleBackNavigation);
-    window.addEventListener("hashchange", handleBackNavigation);
     return () => {
       window.removeEventListener("touchstart", handleUserInteraction);
       window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("popstate", handleBackNavigation);
-      window.removeEventListener("hashchange", handleBackNavigation);
     };
   }, [armHistoryTrap, triggerSecurityToast]);
 
@@ -920,7 +920,12 @@ export default function StartExamPage() {
   // AUTO LOCK SOAL SETELAH 50 DETIK + NOTIF COUNTDOWN
   // =========================
   useEffect(() => {
-    if (!examStarted) return;
+    if (!examStarted || soalLocked) {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      setLockCountdown(null);
+      return;
+    }
 
     // Bersihkan timer lama jika ada
     if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
@@ -958,7 +963,7 @@ export default function StartExamPage() {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
     };
-  }, [examStarted]);
+  }, [examStarted, soalLocked]);
 
   // =========================
   // KEYBOARD HANDLER - EFEKTIF & SEDERHANA
@@ -1165,8 +1170,6 @@ export default function StartExamPage() {
     function triggerViolation(reason) {
       if (logoutRef.current) return;
 
-      if (ignoreFullscreenRef.current) return;
-
       if (safeActionRef.current) return;
 
       forceLogout(reason);
@@ -1177,8 +1180,6 @@ export default function StartExamPage() {
 
     function addOverlayRisk(score, reason) {
       if (logoutRef.current) return;
-
-      if (ignoreFullscreenRef.current) return;
 
       if (safeActionRef.current) return;
 
@@ -1207,9 +1208,6 @@ export default function StartExamPage() {
     // BLUR - Deteksi fokus keluar dari window (Toleransi Panggilan / Notif)
     // ======================
     function handleBlur() {
-      lastBlurAtRef.current = Date.now();
-      clearTimeout(blurTimeoutRef.current);
-
       const isIframeFocused =
         iframeRef.current && document.activeElement === iframeRef.current;
 
@@ -1222,44 +1220,74 @@ export default function StartExamPage() {
         !isConfirmHapusOpen &&
         !showEmergencyInput
       ) {
+        lastBlurAtRef.current = Date.now();
         setIsWindowUnfocused(true);
+        setToleranceCountdown(3);
+
+        if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+        toleranceIntervalRef.current = setInterval(() => {
+          setToleranceCountdown((prev) => {
+            if (prev === null || prev <= 1) {
+              if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
         triggerSecurityToast("🚨 Jendela ujian kehilangan fokus! Sisa toleransi: 3 detik.", "danger", 3000);
-      }
 
-      blurTimeoutRef.current = setTimeout(() => {
-        const stillIframeFocused =
-          iframeRef.current && document.activeElement === iframeRef.current;
+        clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = setTimeout(() => {
+          const stillIframeFocused =
+            iframeRef.current && document.activeElement === iframeRef.current;
 
-        if (!document.hasFocus() && !stillIframeFocused) {
-          if (
-            modalOpen ||
-            isModalPengaduanOpen ||
-            isConfirmHapusOpen ||
-            showEmergencyInput ||
-            safeActionRef.current
-          ) {
-            return;
+          if (!document.hasFocus() && !stillIframeFocused) {
+            if (
+              modalOpen ||
+              isModalPengaduanOpen ||
+              isConfirmHapusOpen ||
+              showEmergencyInput ||
+              safeActionRef.current
+            ) {
+              return;
+            }
+
+            triggerViolation(
+              "Aplikasi lain / floating window / jendela kehilangan fokus > 3 detik",
+            );
           }
-
-          triggerViolation(
-            "Aplikasi lain / floating window / panggilan tidak segera ditolak (> 3 detik)",
-          );
-        }
-      }, 3000); // Toleransi ketat 3 detik
+        }, 3000); // Toleransi ketat 3 detik
+      }
     }
 
     // ======================
     // FOCUS - Deteksi ketika fokus kembali (cegah false positive iframe & hilangkan blur)
     // ======================
     function handleFocus() {
+      if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(visibilityTimeoutRef.current);
+
+      const now = Date.now();
+      const blurDuration = lastBlurAtRef.current > 0 ? now - lastBlurAtRef.current : 0;
+      lastBlurAtRef.current = 0;
+
+      // Jika user berada di luar fokus > 3.2 detik (misal membuka kalkulator / aplikasi lain)
+      if (blurDuration > 3200 && !safeActionRef.current) {
+        setIsWindowUnfocused(false);
+        setToleranceCountdown(null);
+        forceLogout(
+          `Jendela ujian kehilangan fokus selama ${Math.round(blurDuration / 1000)} detik (batas toleransi 3 detik)`,
+        );
+        return;
+      }
+
       setIsWindowUnfocused(false);
+      setToleranceCountdown(null);
 
-      const blurDuration = Date.now() - lastBlurAtRef.current;
-
-      // Jika kembali dalam toleransi sah (< 3.5 detik), reset total akumulasi risiko
-      if (blurDuration < 3500 && blurDuration > 300) {
+      // Jika kembali dalam toleransi sah (< 3.2 detik), reset total akumulasi risiko
+      if (blurDuration <= 3200 && blurDuration > 300) {
         overlayRiskRef.current = 0;
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
@@ -1268,30 +1296,61 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISIBILITY - Toleransi 3 Detik (Panggilan) + Proteksi Tombol Recent
+    // VISIBILITY - Toleransi 3 Detik (Panggilan) + Proteksi Tombol Recent / Tab Switch / Buka App Lain
     // ======================
     function handleVisibility() {
       if (document.hidden) {
         if (safeActionRef.current) return;
         addOverlayRisk(40, "Document Hidden");
 
-        // Langsung aktifkan efek blur anti-intip seketika (mencegah soal terlihat di thumbnail Recent)
+        lastHiddenAtRef.current = Date.now();
         setIsWindowUnfocused(true);
-        triggerSecurityToast("🚨 Tombol Recent / Pindah Aplikasi terdeteksi! Segera kembali dalam 3 detik.", "danger", 3000);
+        setToleranceCountdown(3);
+
+        if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+        toleranceIntervalRef.current = setInterval(() => {
+          setToleranceCountdown((prev) => {
+            if (prev === null || prev <= 1) {
+              if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        triggerSecurityToast("🚨 Meninggalkan aplikasi terdeteksi! Segera kembali dalam 3 detik.", "danger", 3000);
 
         clearTimeout(visibilityTimeoutRef.current);
         visibilityTimeoutRef.current = setTimeout(() => {
           if (document.hidden) {
-            triggerViolation("Anda meninggalkan halaman ujian (pindah aplikasi / panggilan tidak segera ditolak > 3 detik)");
+            triggerViolation("Anda meninggalkan halaman ujian (pindah tab / aplikasi kalkulator / recent > 3 detik)");
           }
-        }, 3000); // Toleransi ketat 3 detik (cukup untuk tolak panggilan, tidak cukup untuk contek)
+        }, 3000); // Toleransi ketat 3 detik
       } else {
-        // Panggilan ditolak / siswa kembali ke ujian dalam waktu < 3 detik
+        if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
         clearTimeout(visibilityTimeoutRef.current);
         clearTimeout(blurTimeoutRef.current);
-        setIsWindowUnfocused(false);
 
-        // RESET TOTAL RISIKO & INDIKATOR CURIGA — siswa kembali dengan sah dalam < 3 detik
+        const now = Date.now();
+        const awayDuration = lastHiddenAtRef.current > 0 ? now - lastHiddenAtRef.current : 0;
+        lastHiddenAtRef.current = 0;
+
+        // CEK WALL-CLOCK TIMESTAMP: Jika siswa meninggalkan halaman ujian > 3.2 detik
+        // (Browser membekukan timer setTimeout saat di background, sehingga wall-clock check ini mutlak!)
+        if (awayDuration > 3200 && !safeActionRef.current) {
+          setIsWindowUnfocused(false);
+          setToleranceCountdown(null);
+          forceLogout(
+            `Anda meninggalkan halaman ujian selama ${Math.round(awayDuration / 1000)} detik (batas toleransi 3 detik)`,
+          );
+          return;
+        }
+
+        // Siswa kembali ke ujian tepat waktu dalam toleransi < 3.2 detik
+        setIsWindowUnfocused(false);
+        setToleranceCountdown(null);
+
+        // RESET TOTAL RISIKO & INDIKATOR CURIGA
         overlayRiskRef.current = 0;
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
@@ -1306,13 +1365,13 @@ export default function StartExamPage() {
         armHistoryTrap();
 
         // Tampilkan notifikasi peringatan bahwa Recent terdeteksi dan berhasil kembali tepat waktu
-        triggerSecurityToast("⚠️ Peringatan: Tombol Recent / Pindah Aplikasi terdeteksi! (Kembali tepat waktu: Aman).", "warning", 3500);
+        triggerSecurityToast("⚠️ Peringatan: Pindah Aplikasi terdeteksi! (Kembali tepat waktu: Aman).", "warning", 3000);
 
-        // Beri jeda safeAction singkat (1000ms) agar transisi animasi kembali tidak memicu false positive
+        // Beri jeda safeAction singkat (800ms) agar transisi animasi kembali tidak memicu false positive
         safeActionRef.current = true;
         setTimeout(() => {
           safeActionRef.current = false;
-        }, 1000);
+        }, 800);
       }
     }
 
@@ -1527,6 +1586,7 @@ export default function StartExamPage() {
 
     return () => {
       clearInterval(decayInterval);
+      if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(visibilityTimeoutRef.current);
       clearTimeout(resizeTimeoutRef.current);
@@ -2288,18 +2348,30 @@ export default function StartExamPage() {
         {/* OVERLAY BLOCKER - BLOK CLICK TAPI IZINKAN SCROLL */}
       </div>
 
-      {/* OVERLAY PERINGATAN SAAT WINDOW HILANG FOKUS / PANGGILAN MASUK (ANTI-INTIP) */}
+      {/* OVERLAY PERINGATAN SAAT WINDOW HILANG FOKUS / PANGGILAN MASUK (ANTI-INTIP + HITUNGAN 3 DETIK) */}
       {isWindowUnfocused && (
-        <div className="fixed inset-0 z-[99990] bg-slate-950/60 backdrop-blur-md flex flex-col items-center justify-center p-5 text-center text-white pointer-events-none select-none">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-2xl mb-2 shadow-lg">
-            📞
+        <div className="fixed inset-0 z-[99990] bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 text-center text-white pointer-events-none select-none">
+          <div className="w-16 h-16 rounded-3xl bg-red-600/30 border-2 border-red-500 flex items-center justify-center text-3xl mb-3 shadow-2xl animate-bounce">
+            🚨
           </div>
-          <h3 className="text-sm sm:text-base font-black uppercase text-amber-300 tracking-wide">
+          <h3 className="text-sm sm:text-base font-black uppercase text-red-400 tracking-wider">
             Layar Ujian Disamarkan
           </h3>
-          <p className="text-[11px] sm:text-xs text-slate-200 max-w-xs mt-1 leading-relaxed">
-            Terdeteksi panggilan masuk atau perpindahan jendela. Segera tolak panggilan atau kembali ke aplikasi dalam{" "}
-            <span className="font-bold text-amber-400 underline">3 detik</span> untuk melanjutkan ujian.
+          <p className="text-xs text-slate-300 max-w-xs mt-1">
+            Terdeteksi perpindahan tab, aplikasi lain, atau layar kehilangan fokus.
+          </p>
+
+          <div className="my-4 px-5 py-2.5 rounded-2xl bg-red-600/90 border border-red-400 shadow-2xl flex flex-col items-center justify-center">
+            <span className="text-[10px] sm:text-xs font-bold text-red-100 uppercase tracking-widest">
+              Sisa Waktu Kembali
+            </span>
+            <span className="text-3xl sm:text-4xl font-mono font-black text-white leading-tight">
+              {toleranceCountdown !== null ? toleranceCountdown : 3} Detik
+            </span>
+          </div>
+
+          <p className="text-[11px] sm:text-xs text-amber-300 font-bold max-w-xs">
+            ⚠️ Segera kembali ke layar ujian sebelum waktu habis atau Anda otomatis dikeluarkan!
           </p>
         </div>
       )}
