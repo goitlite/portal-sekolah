@@ -1322,9 +1322,16 @@ export default function StartExamPage() {
       }
     }
 
+    // Deteksi interupsi sentuhan oleh OS Android (misal ketika ada floating overlay / bubble yang menimpa)
+    function handleTouchCancel() {
+      if (safeActionRef.current) return;
+      addOverlayRisk(35, "Touch Cancelled by System/Overlay");
+    }
+
     // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus); // ← TAMBAH INI
+    window.addEventListener("touchcancel", handleTouchCancel, true);
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", () => {
       if (!safeActionRef.current) {
@@ -1346,6 +1353,7 @@ export default function StartExamPage() {
 
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus); // ← TAMBAH INI
+      window.removeEventListener("touchcancel", handleTouchCancel, true);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientation);
