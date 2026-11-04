@@ -1065,7 +1065,7 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // BLUR - Deteksi fokus keluar dari window (Toleransi 10 Detik untuk Panggilan / Notif)
+    // BLUR - Deteksi fokus keluar dari window (Floating App / Notif / Panggilan)
     // ======================
     function handleBlur() {
       lastBlurAtRef.current = Date.now();
@@ -1074,27 +1074,42 @@ export default function StartExamPage() {
       const isIframeFocused =
         iframeRef.current && document.activeElement === iframeRef.current;
 
-      // Aktifkan blur anti-intip seketika jika bukan fokus ke iframe atau modal sah
-      if (!isIframeFocused && !safeActionRef.current && !modalOpen && !isModalPengaduanOpen && !isConfirmHapusOpen && !showEmergencyInput) {
+      // Selisih waktu sejak sentuhan terakhir pada halaman ujian
+      const touchAge = Date.now() - lastTouchRef.current;
+      // Ketukan sah ke iframe selalu memicu touchstart tepat sebelum blur (< 400ms)
+      const isLegitimateIframeTap = isIframeFocused && touchAge < 400;
+
+      // Aktifkan blur anti-intip seketika jika BUKAN ketukan sah ke iframe dan bukan modal resmi
+      if (
+        !isLegitimateIframeTap &&
+        !safeActionRef.current &&
+        !modalOpen &&
+        !isModalPengaduanOpen &&
+        !isConfirmHapusOpen &&
+        !showEmergencyInput
+      ) {
         setIsWindowUnfocused(true);
+        addOverlayRisk(35, "Window blur tanpa ketukan iframe");
       }
 
       blurTimeoutRef.current = setTimeout(() => {
-        const stillIframeFocused =
-          iframeRef.current && document.activeElement === iframeRef.current;
+        if (
+          modalOpen ||
+          isModalPengaduanOpen ||
+          isConfirmHapusOpen ||
+          showEmergencyInput ||
+          safeActionRef.current
+        ) {
+          return;
+        }
 
-        if (!document.hasFocus() && !stillIframeFocused) {
-          if (
-            modalOpen ||
-            isModalPengaduanOpen ||
-            isConfirmHapusOpen ||
-            showEmergencyInput ||
-            safeActionRef.current
-          ) {
-            return;
-          }
-
-          triggerViolation("Aplikasi lain / floating window / panggilan tidak segera ditolak (> 3 detik)");
+        // Cek apakah window benar-benar tidak fokus dan tidak ada interaksi di halaman ujian
+        const idleSinceBlur = Date.now() - lastTouchRef.current;
+        if (!document.hasFocus() && (!isIframeFocused || idleSinceBlur >= 2800)) {
+          setSoalLocked(true);
+          triggerViolation(
+            "Aplikasi lain / floating window / panggilan tidak segera ditolak (> 3 detik)",
+          );
         }
       }, 3000); // Toleransi ketat 3 detik
     }
@@ -1475,11 +1490,9 @@ export default function StartExamPage() {
       const now = Date.now();
 
       const idleTime = now - lastTouchRef.current;
-      const isIframeFocused =
-        iframeRef.current && document.activeElement === iframeRef.current;
 
-      // jika tidak fokus + tidak ada touch (dan siswa sedang tidak aktif mengisi form di iframe)
-      if (idleTime > 6000 && !document.hasFocus() && !isIframeFocused) {
+      // Jika window kehilangan fokus sistem dan tidak ada sentuhan selama > 8 detik (Floating App dibiarkan aktif)
+      if (idleTime > 8000 && !document.hasFocus()) {
         forceLogout("Floating window / aplikasi lain terdeteksi");
       }
     }, 1500);
