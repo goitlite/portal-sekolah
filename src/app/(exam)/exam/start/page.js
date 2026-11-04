@@ -92,6 +92,9 @@ export default function StartExamPage() {
   const armHistoryTrap = useCallback(() => {
     try {
       if (typeof window !== "undefined") {
+        if (!window.location.hash.includes("ujian")) {
+          window.location.hash = "ujian";
+        }
         window.history.pushState({ examTrap: true, time: Date.now() }, "", window.location.href);
       }
     } catch (e) {}
@@ -241,6 +244,21 @@ export default function StartExamPage() {
   useEffect(() => {
     showPanduanModalRef.current = showPanduanModal;
   }, [showPanduanModal]);
+
+  const examStartedRef = useRef(false);
+  useEffect(() => {
+    examStartedRef.current = examStarted;
+  }, [examStarted]);
+
+  const isModalPengaduanOpenRef = useRef(false);
+  useEffect(() => {
+    isModalPengaduanOpenRef.current = isModalPengaduanOpen;
+  }, [isModalPengaduanOpen]);
+
+  const showEmergencyInputRef = useRef(false);
+  useEffect(() => {
+    showEmergencyInputRef.current = showEmergencyInput;
+  }, [showEmergencyInput]);
 
   // =========================
   // LOAD SESSION
@@ -512,9 +530,8 @@ export default function StartExamPage() {
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
               setShowPanduanModal(false);
-              if (!examStarted) {
+              if (!examStartedRef.current) {
                 setExamStarted(true);
-                setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
               }
             } else {
               setViolations((prev) => {
@@ -574,9 +591,8 @@ export default function StartExamPage() {
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
               setShowPanduanModal(false);
-              if (!examStarted) {
+              if (!examStartedRef.current) {
                 setExamStarted(true);
-                setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
               }
               const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
               catatPelanggaran(nama, kelas, currentId, 0);
@@ -786,16 +802,16 @@ export default function StartExamPage() {
   }, []);
 
   // =========================
-  // BLOK BACK BUTTON — Konsisten setiap saat, Pelanggaran setelah soal dikunci
+  // BLOK BACK BUTTON — KONSISTEN & STABIL PADA HP (HASH & POPSTATE DUAL TRAP)
   // =========================
   useEffect(() => {
     // Pasang trap awal
     armHistoryTrap();
 
-    // Re-arm history trap pada setiap sentuhan / klik user agar Chrome di Android tidak mengabaikan popstate
+    // Re-arm history trap pada setiap sentuhan / klik user agar browser di HP tidak pernah melewati trap
     function handleUserInteraction() {
       try {
-        if (!window.history.state || !window.history.state.examTrap) {
+        if (!window.location.hash.includes("ujian")) {
           armHistoryTrap();
         }
       } catch (e) {}
@@ -804,19 +820,27 @@ export default function StartExamPage() {
     window.addEventListener("touchstart", handleUserInteraction, { passive: true });
     window.addEventListener("click", handleUserInteraction, { passive: true });
 
-    function handlePopState() {
+    function handleBackNavigation() {
       if (logoutRef.current) return;
 
-      // Pasang ulang state SEGERA agar back berikutnya selalu tertangkap
+      // Re-arm hash SEGERA agar back berikutnya selalu tertangkap lagi
       armHistoryTrap();
 
-      // Jika modal panduan atau penalti aktif, beri toast peringatan
+      // 1. Jika modal pengaduan terbuka, tekan back = tutup modal pengaduan dengan aman
+      if (isModalPengaduanOpenRef.current) {
+        setIsModalPengaduanOpen(false);
+        setIgnoreFullscreen(false);
+        triggerSecurityToast("ℹ️ Form pengaduan ditutup.", "info", 2000);
+        return;
+      }
+
+      // 2. Jika modal panduan atau penalti aktif, beri toast peringatan
       if (penaltyOpenRef.current || showPanduanModalRef.current) {
         triggerSecurityToast("⚠️ Anda berada di sesi asesmen. Selesaikan langkah pada layar.", "warning");
         return;
       }
 
-      // Jika dialog konfirmasi sedang terbuka → tekan back lagi = tutup dialog & tetap di asesmen
+      // 3. Jika dialog konfirmasi sedang terbuka → tekan back lagi = tutup dialog & tetap di asesmen
       if (exitConfirmRef.current) {
         setShowExitConfirm(false);
         exitConfirmRef.current = false;
@@ -824,7 +848,7 @@ export default function StartExamPage() {
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
         startSafeAction(2000);
-        triggerSecurityToast("✅ Tetap melanjutkan asesmen.", "success");
+        triggerSecurityToast("✅ Tetap melanjutkan asesmen.", "success", 2500);
 
         const isIOS =
           /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -837,18 +861,20 @@ export default function StartExamPage() {
         return;
       }
 
-      // Tampilkan notifikasi toast & dialog konfirmasi keluar
+      // 4. Kondisi normal: Tampilkan notifikasi toast & dialog konfirmasi keluar
       triggerSecurityToast("⚠️ Peringatan: Tombol Kembali / Back terdeteksi!", "warning", 4000);
       setIgnoreFullscreen(true);
       setShowExitConfirm(true);
       exitConfirmRef.current = true;
     }
 
-    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("popstate", handleBackNavigation);
+    window.addEventListener("hashchange", handleBackNavigation);
     return () => {
       window.removeEventListener("touchstart", handleUserInteraction);
       window.removeEventListener("click", handleUserInteraction);
-      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("popstate", handleBackNavigation);
+      window.removeEventListener("hashchange", handleBackNavigation);
     };
   }, [armHistoryTrap, triggerSecurityToast]);
 
@@ -1397,8 +1423,8 @@ export default function StartExamPage() {
       // KEYBOARD RESMI: HANYA DIIZINKAN PADA MODAL PENGADUAN & KODE DARURAT
       // ======================
       const isAllowedInput =
-        isModalPengaduanOpen ||
-        showEmergencyInput ||
+        isModalPengaduanOpenRef.current ||
+        showEmergencyInputRef.current ||
         document.activeElement?.tagName === "TEXTAREA" ||
         document.activeElement?.tagName === "INPUT";
 
@@ -1461,7 +1487,7 @@ export default function StartExamPage() {
           navigator.maxTouchPoints > 1);
       if (isIOS || keyboardGraceRef.current || safeActionRef.current) return;
       if (!window.visualViewport) return;
-      if (isModalPengaduanOpen || showEmergencyInput) return;
+      if (isModalPengaduanOpenRef.current || showEmergencyInputRef.current) return;
 
       if (
         window.visualViewport.offsetTop > 15 ||
@@ -1849,10 +1875,9 @@ export default function StartExamPage() {
                 setModalOpen(false);
 
                 // Setelah hukuman selesai atau pelanggaran direset, langsung aktifkan ujian
-                if (!examStarted) {
+                if (!examStartedRef.current) {
                   setShowPanduanModal(false);
                   setExamStarted(true);
-                  setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
                 }
 
                 setTimeout(() => {
@@ -2279,8 +2304,8 @@ export default function StartExamPage() {
         </div>
       )}
 
-      {/* NOTIF COUNTDOWN SEBELUM SOAL DIKUNCI */}
-      {lockCountdown !== null && (
+      {/* NOTIF COUNTDOWN SEBELUM SOAL DIKUNCI (HANYA AKTIF SAAT SOAL BELUM DIKUNCI) */}
+      {!soalLocked && lockCountdown !== null && lockCountdown > 0 && (
         <div className="fixed top-[115px] left-1/2 -translate-x-1/2 z-[998] flex items-center gap-2 bg-amber-500 text-black text-xs font-black px-4 py-2 rounded-full shadow-xl border border-amber-300 animate-pulse pointer-events-none select-none whitespace-nowrap">
           ⏳ Soal dikunci dalam{" "}
           <span className="font-mono text-sm">
@@ -2989,14 +3014,14 @@ export default function StartExamPage() {
           Recent, atau kehilangan fokus yang terdeteksi
           ============================================================ */}
       {securityToast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] max-w-sm w-[92%] pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999999] max-w-sm w-[92%] pointer-events-none transition-all duration-300 drop-shadow-2xl">
           <div
-            className={`px-4 py-3.5 rounded-2xl shadow-2xl border text-xs sm:text-sm font-black flex items-center gap-3 backdrop-blur-md ${
+            className={`px-4 py-3.5 rounded-2xl shadow-2xl border-2 text-xs sm:text-sm font-black flex items-center gap-3 backdrop-blur-md ${
               securityToast.type === "danger"
-                ? "bg-red-600/95 text-white border-red-400 shadow-red-900/50"
+                ? "bg-red-600 text-white border-red-300 shadow-red-950/60"
                 : securityToast.type === "success"
-                ? "bg-emerald-600/95 text-white border-emerald-400 shadow-emerald-900/50"
-                : "bg-amber-500/95 text-slate-950 border-amber-300 shadow-amber-900/50"
+                ? "bg-emerald-600 text-white border-emerald-300 shadow-emerald-950/60"
+                : "bg-amber-400 text-slate-950 border-amber-200 shadow-amber-950/60"
             }`}
           >
             <span className="text-2xl shrink-0">
