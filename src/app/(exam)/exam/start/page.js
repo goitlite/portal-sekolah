@@ -27,6 +27,10 @@ export default function StartExamPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [ignoreFullscreen, setIgnoreFullscreen] = useState(false);
+  const ignoreFullscreenRef = useRef(false);
+  useEffect(() => {
+    ignoreFullscreenRef.current = ignoreFullscreen;
+  }, [ignoreFullscreen]);
   const [draftAnswers, setDraftAnswers] = useState({});
   const [draftMode, setDraftMode] = useState({});
   const [draftMinimized, setDraftMinimized] = useState(false);
@@ -407,7 +411,7 @@ export default function StartExamPage() {
           setPenaltyOpen(false);
           setShowPanduanModal(false);
           setExamStarted(true);
-          setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+          setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
 
           showModal(
             "Waktu hukuman 3 menit selesai.\n\nKlik OK untuk melanjutkan ujian.",
@@ -510,7 +514,7 @@ export default function StartExamPage() {
               setShowPanduanModal(false);
               if (!examStarted) {
                 setExamStarted(true);
-                setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+                setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
               }
             } else {
               setViolations((prev) => {
@@ -572,7 +576,7 @@ export default function StartExamPage() {
               setShowPanduanModal(false);
               if (!examStarted) {
                 setExamStarted(true);
-                setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+                setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
               }
               const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
               catatPelanggaran(nama, kelas, currentId, 0);
@@ -766,7 +770,7 @@ export default function StartExamPage() {
       clearTimeout(fullscreenTimeout.current);
       fullscreenTimeout.current = setTimeout(() => {
         if (logoutRef.current) return;
-        if (ignoreFullscreen) return;
+        if (ignoreFullscreenRef.current) return;
         if (safeActionRef.current) return;
         if (!document.fullscreenElement) {
           forceLogout("Anda keluar dari fullscreen");
@@ -779,7 +783,7 @@ export default function StartExamPage() {
       clearTimeout(fullscreenTimeout.current);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
-  }, [ignoreFullscreen, violations]);
+  }, []);
 
   // =========================
   // BLOK BACK BUTTON — Konsisten setiap saat, Pelanggaran setelah soal dikunci
@@ -805,13 +809,6 @@ export default function StartExamPage() {
 
       // Pasang ulang state SEGERA agar back berikutnya selalu tertangkap
       armHistoryTrap();
-
-      // Jika soal sudah dikunci (setelah 1m30s atau dikunci admin) → langsung pelanggaran
-      if (soalLockedRef.current) {
-        triggerSecurityToast("🚨 Tombol Back ditekan saat soal telah dikunci!", "danger", 4000);
-        forceLogout("Tombol Back ditekan saat sesi ujian sedang berjalan");
-        return;
-      }
 
       // Jika modal panduan atau penalti aktif, beri toast peringatan
       if (penaltyOpenRef.current || showPanduanModalRef.current) {
@@ -894,7 +891,7 @@ export default function StartExamPage() {
   }, [examStarted]);
 
   // =========================
-  // AUTO LOCK SOAL SETELAH 1 MENIT 30 DETIK + NOTIF COUNTDOWN
+  // AUTO LOCK SOAL SETELAH 50 DETIK + NOTIF COUNTDOWN
   // =========================
   useEffect(() => {
     if (!examStarted) return;
@@ -919,7 +916,7 @@ export default function StartExamPage() {
         setSoalLocked(true);
 
         showModal(
-          "🔒 Waktu pengisian data telah selesai.\n\n" +
+          "🔒 Waktu pengisian data telah selesai (50 detik).\n\n" +
             "Soal sekarang dikunci otomatis.\n\n" +
             "Silahkan kerjakan jawaban pada panel DRAFT di samping layar.\n\n" +
             "Setelah waktu asesmen 30 menit selesai:\n" +
@@ -928,7 +925,7 @@ export default function StartExamPage() {
             "3. Tekan tombol Kirim/Submit",
         );
       },
-      90 * 1000,
+      50 * 1000,
     );
 
     return () => {
@@ -1142,7 +1139,7 @@ export default function StartExamPage() {
     function triggerViolation(reason) {
       if (logoutRef.current) return;
 
-      if (ignoreFullscreen) return;
+      if (ignoreFullscreenRef.current) return;
 
       if (safeActionRef.current) return;
 
@@ -1155,7 +1152,7 @@ export default function StartExamPage() {
     function addOverlayRisk(score, reason) {
       if (logoutRef.current) return;
 
-      if (ignoreFullscreen) return;
+      if (ignoreFullscreenRef.current) return;
 
       if (safeActionRef.current) return;
 
@@ -1519,7 +1516,7 @@ export default function StartExamPage() {
         window.visualViewport.removeEventListener("scroll", handleViewportScroll);
       }
     };
-  }, [ignoreFullscreen, violations]);
+  }, []);
 
   // =========================
   // SCREEN WAKE LOCK
@@ -1855,7 +1852,7 @@ export default function StartExamPage() {
                 if (!examStarted) {
                   setShowPanduanModal(false);
                   setExamStarted(true);
-                  setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
+                  setLockCountdown((prev) => (prev === null && !soalLocked ? 50 : prev));
                 }
 
                 setTimeout(() => {
@@ -2753,7 +2750,7 @@ export default function StartExamPage() {
                       langsung pada Google Form selama
                       <span className="font-black text-blue-700">
                         {" "}
-                        1 menit 30 detik pertama
+                        50 detik pertama
                       </span>
                       .
                     </p>
@@ -2772,7 +2769,7 @@ export default function StartExamPage() {
                     </h3>
 
                     <p className="text-gray-600 leading-relaxed mt-1">
-                      Setelah 1 menit 30 detik, Google Form otomatis terkunci dan tidak
+                      Setelah 50 detik, Google Form otomatis terkunci dan tidak
                       dapat disentuh lagi hingga waktu asesmen selesai.
                     </p>
                   </div>
@@ -2878,8 +2875,8 @@ export default function StartExamPage() {
                   // Pasang history trap dengan user gesture resmi agar Android Chrome mengunci tombol back
                   armHistoryTrap();
 
-                  // mulai sistem ujian & countdown 1 menit 30 detik
-                  setLockCountdown(90);
+                  // mulai sistem ujian & countdown 50 detik
+                  setLockCountdown(50);
                   setExamStarted(true);
                   triggerSecurityToast("✅ Asesmen dimulai. Sistem keamanan aktif.", "success", 2500);
 
