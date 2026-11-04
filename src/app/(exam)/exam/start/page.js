@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   cekPesan,
@@ -62,10 +62,36 @@ export default function StartExamPage() {
   const emergencyPressTimer = useRef(null);
 
   // =========================
-  // KONFIRMASI KELUAR (BACK / RECENT)
+  // KONFIRMASI KELUAR (BACK / RECENT) & FLOATING TOAST NOTIFIKASI
   // =========================
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const exitConfirmRef = useRef(false);
+  const [securityToast, setSecurityToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+
+  const triggerSecurityToast = useCallback((message, type = "warning", duration = 3000) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setSecurityToast({ message, type });
+
+    // Haptic feedback getar di smartphone Android (jika didukung)
+    try {
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(type === "danger" ? [100, 50, 100] : 80);
+      }
+    } catch (e) {}
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setSecurityToast(null);
+    }, duration);
+  }, []);
+
+  const armHistoryTrap = useCallback(() => {
+    try {
+      if (typeof window !== "undefined") {
+        window.history.pushState({ examTrap: true, time: Date.now() }, "", window.location.href);
+      }
+    } catch (e) {}
+  }, []);
 
   function isChromeBrowser() {
     const ua = navigator.userAgent;
@@ -759,23 +785,37 @@ export default function StartExamPage() {
   // BLOK BACK BUTTON — Konsisten setiap saat, Pelanggaran setelah soal dikunci
   // =========================
   useEffect(() => {
-    // Pasang SATU state awal. Handler akan selalu memasang ulang.
-    window.history.pushState(null, "", window.location.href);
+    // Pasang trap awal
+    armHistoryTrap();
+
+    // Re-arm history trap pada setiap sentuhan / klik user agar Chrome di Android tidak mengabaikan popstate
+    function handleUserInteraction() {
+      try {
+        if (!window.history.state || !window.history.state.examTrap) {
+          armHistoryTrap();
+        }
+      } catch (e) {}
+    }
+
+    window.addEventListener("touchstart", handleUserInteraction, { passive: true });
+    window.addEventListener("click", handleUserInteraction, { passive: true });
 
     function handlePopState() {
       if (logoutRef.current) return;
 
       // Pasang ulang state SEGERA agar back berikutnya selalu tertangkap
-      window.history.pushState(null, "", window.location.href);
+      armHistoryTrap();
 
       // Jika soal sudah dikunci (setelah 1m30s atau dikunci admin) → langsung pelanggaran
       if (soalLockedRef.current) {
+        triggerSecurityToast("🚨 Tombol Back ditekan saat soal telah dikunci!", "danger", 4000);
         forceLogout("Tombol Back ditekan saat sesi ujian sedang berjalan");
         return;
       }
 
-      // Jika modal panduan atau penalti aktif, jangan tampilkan dialog keluar
+      // Jika modal panduan atau penalti aktif, beri toast peringatan
       if (penaltyOpenRef.current || showPanduanModalRef.current) {
+        triggerSecurityToast("⚠️ Anda berada di sesi asesmen. Selesaikan langkah pada layar.", "warning");
         return;
       }
 
@@ -787,6 +827,7 @@ export default function StartExamPage() {
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
         startSafeAction(2000);
+        triggerSecurityToast("✅ Tetap melanjutkan asesmen.", "success");
 
         const isIOS =
           /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -799,7 +840,8 @@ export default function StartExamPage() {
         return;
       }
 
-      // Tampilkan dialog konfirmasi keluar
+      // Tampilkan notifikasi toast & dialog konfirmasi keluar
+      triggerSecurityToast("⚠️ Peringatan: Tombol Kembali / Back terdeteksi!", "warning", 4000);
       setIgnoreFullscreen(true);
       setShowExitConfirm(true);
       exitConfirmRef.current = true;
@@ -807,9 +849,11 @@ export default function StartExamPage() {
 
     window.addEventListener("popstate", handlePopState);
     return () => {
+      window.removeEventListener("touchstart", handleUserInteraction);
+      window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("popstate", handlePopState);
     };
-  }, []);
+  }, [armHistoryTrap, triggerSecurityToast]);
 
   // =========================
   // BLOK REFRESH
@@ -1156,6 +1200,7 @@ export default function StartExamPage() {
         !showEmergencyInput
       ) {
         setIsWindowUnfocused(true);
+        triggerSecurityToast("🚨 Jendela ujian kehilangan fokus! Sisa toleransi: 3 detik.", "danger", 3000);
       }
 
       blurTimeoutRef.current = setTimeout(() => {
@@ -1191,10 +1236,11 @@ export default function StartExamPage() {
       const blurDuration = Date.now() - lastBlurAtRef.current;
 
       // Jika kembali dalam toleransi sah (< 3.5 detik), reset total akumulasi risiko
-      if (blurDuration < 3500) {
+      if (blurDuration < 3500 && blurDuration > 300) {
         overlayRiskRef.current = 0;
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
+        triggerSecurityToast("✅ Fokus kembali ke lembar ujian (Aman).", "success", 2500);
       }
     }
 
@@ -1208,6 +1254,7 @@ export default function StartExamPage() {
 
         // Langsung aktifkan efek blur anti-intip seketika (mencegah soal terlihat di thumbnail Recent)
         setIsWindowUnfocused(true);
+        triggerSecurityToast("🚨 Tombol Recent / Pindah Aplikasi terdeteksi! Segera kembali dalam 3 detik.", "danger", 3000);
 
         clearTimeout(visibilityTimeoutRef.current);
         visibilityTimeoutRef.current = setTimeout(() => {
@@ -1233,7 +1280,10 @@ export default function StartExamPage() {
         }
 
         // Pasang ulang history state agar tombol back tetap tertangkap setelah kembali dari Recent
-        window.history.pushState(null, "", window.location.href);
+        armHistoryTrap();
+
+        // Tampilkan notifikasi peringatan bahwa Recent terdeteksi dan berhasil kembali tepat waktu
+        triggerSecurityToast("⚠️ Peringatan: Tombol Recent / Pindah Aplikasi terdeteksi! (Kembali tepat waktu: Aman).", "warning", 3500);
 
         // Beri jeda safeAction singkat (1000ms) agar transisi animasi kembali tidak memicu false positive
         safeActionRef.current = true;
@@ -2825,9 +2875,13 @@ export default function StartExamPage() {
                 onClick={() => {
                   setShowPanduanModal(false);
 
+                  // Pasang history trap dengan user gesture resmi agar Android Chrome mengunci tombol back
+                  armHistoryTrap();
+
                   // mulai sistem ujian & countdown 1 menit 30 detik
                   setLockCountdown(90);
                   setExamStarted(true);
+                  triggerSecurityToast("✅ Asesmen dimulai. Sistem keamanan aktif.", "success", 2500);
 
                   setTimeout(() => {
                     setIgnoreFullscreen(false);
@@ -2896,10 +2950,11 @@ export default function StartExamPage() {
                     suspiciousResizeRef.current = 0;
 
                     // Pasang state baru agar back berikutnya tetap tertangkap konsisten
-                    window.history.pushState(null, "", window.location.href);
+                    armHistoryTrap();
 
                     // Beri grace period 2.5 detik untuk transisi fullscreen & layout settling
                     startSafeAction(2500);
+                    triggerSecurityToast("✅ Pilihan Anda: Tetap di Asesmen.", "success", 2500);
 
                     // Kembali fullscreen jika diperlukan
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -2927,6 +2982,30 @@ export default function StartExamPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          FLOATING SECURITY TOAST NOTIFICATION
+          Memberi tahu siswa secara visual setiap kali ada tombol Back,
+          Recent, atau kehilangan fokus yang terdeteksi
+          ============================================================ */}
+      {securityToast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] max-w-sm w-[92%] pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+          <div
+            className={`px-4 py-3.5 rounded-2xl shadow-2xl border text-xs sm:text-sm font-black flex items-center gap-3 backdrop-blur-md ${
+              securityToast.type === "danger"
+                ? "bg-red-600/95 text-white border-red-400 shadow-red-900/50"
+                : securityToast.type === "success"
+                ? "bg-emerald-600/95 text-white border-emerald-400 shadow-emerald-900/50"
+                : "bg-amber-500/95 text-slate-950 border-amber-300 shadow-amber-900/50"
+            }`}
+          >
+            <span className="text-2xl shrink-0">
+              {securityToast.type === "danger" ? "🚨" : securityToast.type === "success" ? "✅" : "⚠️"}
+            </span>
+            <span className="flex-1 leading-snug">{securityToast.message}</span>
           </div>
         </div>
       )}
