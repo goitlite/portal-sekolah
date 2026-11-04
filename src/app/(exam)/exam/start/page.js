@@ -61,6 +61,12 @@ export default function StartExamPage() {
 
   const emergencyPressTimer = useRef(null);
 
+  // =========================
+  // KONFIRMASI KELUAR (BACK / RECENT)
+  // =========================
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const exitConfirmRef = useRef(false);
+
   function isChromeBrowser() {
     const ua = navigator.userAgent;
     const isIOS =
@@ -730,15 +736,31 @@ export default function StartExamPage() {
   }, [ignoreFullscreen, violations]);
 
   // =========================
-  // BLOK BACK BUTTON
+  // BLOK BACK BUTTON — Tampilkan Konfirmasi, Bukan Langsung Logout
   // =========================
   useEffect(() => {
+    // Pasang dua history state agar back pertama hanya memunculkan konfirmasi,
+    // bukan langsung keluar dari halaman
+    window.history.pushState(null, "", window.location.href);
     window.history.pushState(null, "", window.location.href);
 
     function handlePopState() {
       if (logoutRef.current) return;
+
+      // Pasang ulang state agar back berikutnya tetap terjebak di sini
       window.history.pushState(null, "", window.location.href);
-      forceLogout("Tombol back terdeteksi");
+
+      // Jika konfirmasi sedang terbuka, abaikan (tombol back fisik menutup dialog)
+      if (exitConfirmRef.current) {
+        setShowExitConfirm(false);
+        exitConfirmRef.current = false;
+        return;
+      }
+
+      // Tampilkan dialog konfirmasi keluar
+      setIgnoreFullscreen(true);
+      setShowExitConfirm(true);
+      exitConfirmRef.current = true;
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -1125,14 +1147,14 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISIBILITY - Toleransi 10 Detik untuk Panggilan Masuk Layar Penuh
+    // VISIBILITY - Toleransi 3 Detik (Panggilan) + Proteksi Tombol Recent
     // ======================
     function handleVisibility() {
       if (document.hidden) {
         if (safeActionRef.current) return;
         addOverlayRisk(40, "Document Hidden");
 
-        // Langsung aktifkan efek blur anti-intip seketika
+        // Langsung aktifkan efek blur anti-intip seketika (mencegah soal terlihat di thumbnail Recent)
         setIsWindowUnfocused(true);
 
         clearTimeout(visibilityTimeoutRef.current);
@@ -1146,6 +1168,11 @@ export default function StartExamPage() {
         clearTimeout(visibilityTimeoutRef.current);
         clearTimeout(blurTimeoutRef.current);
         setIsWindowUnfocused(false);
+        // Reset exit confirm jika siswa kembali dari Recent
+        if (exitConfirmRef.current) {
+          setShowExitConfirm(false);
+          exitConfirmRef.current = false;
+        }
       }
     }
 
@@ -2755,6 +2782,69 @@ export default function StartExamPage() {
               >
                 Saya Mengerti, Mulai Asesmen
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL KONFIRMASI KELUAR (Back / Recent)
+          Muncul saat siswa menekan tombol Back secara tidak sengaja.
+          Siswa harus memilih: "Tetap di Asesmen" atau "Keluar & Batalkan Ujian".
+          ============================================================ */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden">
+            {/* Header Peringatan */}
+            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-5 text-center">
+              <div className="text-4xl mb-2">⚠️</div>
+              <h2 className="text-white text-xl font-black uppercase tracking-wide">
+                Keluar dari Asesmen?
+              </h2>
+            </div>
+
+            {/* Isi Pesan */}
+            <div className="p-6 text-center">
+              <p className="text-gray-700 text-sm leading-relaxed mb-1">
+                Kamu menekan tombol <strong>Kembali / Back</strong>.
+              </p>
+              <p className="text-gray-700 text-sm leading-relaxed mb-5">
+                Jika keluar sekarang, ujian akan <strong className="text-red-600">dibatalkan</strong> dan
+                dianggap <strong className="text-red-600">pelanggaran</strong>.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* TETAP DI UJIAN */}
+                <button
+                  onClick={() => {
+                    setShowExitConfirm(false);
+                    exitConfirmRef.current = false;
+                    setIgnoreFullscreen(false);
+                    // Pastikan kembali fullscreen jika perlu
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+                    if (!isIOS && !document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                  }}
+                  className="py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm transition active:scale-95"
+                >
+                  ✅ Tetap di Asesmen
+                </button>
+
+                {/* KELUAR & BATALKAN */}
+                <button
+                  onClick={() => {
+                    setShowExitConfirm(false);
+                    exitConfirmRef.current = false;
+                    logoutRef.current = true;
+                    forceLogout("Keluar dari halaman ujian secara manual");
+                  }}
+                  className="py-3 rounded-2xl bg-red-100 hover:bg-red-200 text-red-700 font-black text-sm transition active:scale-95 border border-red-300"
+                >
+                  ❌ Keluar & Batalkan
+                </button>
+              </div>
             </div>
           </div>
         </div>
