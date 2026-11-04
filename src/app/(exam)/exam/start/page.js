@@ -361,6 +361,9 @@ export default function StartExamPage() {
           document.body.style.overflow = "auto";
 
           setPenaltyOpen(false);
+          setShowPanduanModal(false);
+          setExamStarted(true);
+          setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
 
           showModal(
             "Waktu hukuman 3 menit selesai.\n\nKlik OK untuk melanjutkan ujian.",
@@ -457,6 +460,9 @@ export default function StartExamPage() {
               setPenaltyOpen(false);
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
+              setShowPanduanModal(false);
+              setExamStarted(true);
+              setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
             } else {
               setViolations((prev) => {
                 if (remoteCount !== prev) {
@@ -512,12 +518,17 @@ export default function StartExamPage() {
               localStorage.removeItem("penaltyPassed");
               localStorage.removeItem("lastPenaltyServedAtViolation");
               setPenaltyOpen(false);
+              setPenaltyDone(true);
               document.body.style.overflow = "auto";
+              setShowPanduanModal(false);
+              setExamStarted(true);
+              setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
               const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
               catatPelanggaran(nama, kelas, currentId, 0);
               showModal(
                 "✅ CATATAN PELANGGARAN DIRESET\n\n" +
-                  "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.",
+                  "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.\n" +
+                  "Waktu ujian dan pengerjaan soal telah dimulai kembali.",
               );
             } else if (pesanUpper === "KUNCI SOAL") {
               lastExecutedCommandRef.current = pesanUpper;
@@ -1183,7 +1194,7 @@ export default function StartExamPage() {
     }
 
     // ======================
-    // VISUAL VIEWPORT (Android) - VERSI BARU: LANGSUNG BLOKIR
+    // VISUAL VIEWPORT (Android) - DETEKSI DOCKED & FLOATING KEYBOARD
     // ======================
     function handleViewport() {
       const isIOS =
@@ -1216,41 +1227,44 @@ export default function StartExamPage() {
       const widthRatio = viewportWidth / screenWidth;
       const heightRatio = viewportHeight / screenHeight;
 
-      // Hitung penyusutan layar akibat keyboard standar android
+      // Hitung penyusutan layar akibat keyboard android
       const keyboardDiff = window.innerHeight - viewportHeight;
-      const widthShrink = viewportWidth < window.innerWidth * 0.9;
+      const widthShrink = viewportWidth < window.innerWidth * 0.94;
 
-      // Deteksi jika keyboard normal terbuka
-      const keyboardOpen = keyboardDiff > 150;
+      // Klasifikasi jenis keyboard:
+      // 1. Keyboard standar Android yang docked ke bawah (> 150px)
+      const isDockedKeyboard = keyboardDiff > 150;
+      // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 150px ATAU layar samping menyusut
+      const isFloatingKeyboard =
+        (keyboardDiff > 25 && keyboardDiff <= 150) ||
+        (widthShrink && keyboardDiff > 10);
+      const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // ======================
-      // KEYBOARD AMAN UNTUK INPUT/MODAL PENGADUAN
+      // KEYBOARD RESMI: HANYA DIIZINKAN PADA MODAL PENGADUAN & KODE DARURAT
       // ======================
-      if (
-        keyboardOpen &&
-        (isModalPengaduanOpen ||
-          document.activeElement?.tagName === "TEXTAREA" ||
-          document.activeElement?.tagName === "INPUT")
-      ) {
+      const isAllowedInput =
+        isModalPengaduanOpen ||
+        showEmergencyInput ||
+        document.activeElement?.tagName === "TEXTAREA" ||
+        document.activeElement?.tagName === "INPUT";
+
+      if (anyKeyboardOpen && isAllowedInput) {
         return;
       }
 
       // ======================
-      // LOGIKA DETEKSI BARU: LANGSUNG BLOKIR TANPA TOLERANSI
+      // LOGIKA DETEKSI: KUNCI & CATAT PELANGGARAN JIKA KEYBOARD DIBUKA ILEGAL
       // ======================
-      if (keyboardOpen) {
-        // Izinkan jika siswa sedang membuka modal pengaduan resmi
-        if (isModalPengaduanOpen) return;
+      if (anyKeyboardOpen) {
+        if (isAllowedInput) return;
 
         // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
 
-        // JIKA KONDISI FLOATING KEYBOARD TERPENUHI (Ukurannya tidak memotong layar standar atau mengecil ke samping)
-        const isFloating = keyboardDiff < 180 || widthShrink;
-
-        if (isFloating) {
-          // LANGSUNG KONCI UJIAN PERMANEN
+        if (isFloatingKeyboard) {
+          // LANGSUNG KUNCI UJIAN PERMANEN
           setSoalLocked(true);
           showModal(
             "❌ Pelanggaran Berat: Terdeteksi penggunaan Floating Keyboard (Keyboard Mengambang) atau modifikasi tampilan layar standar. Akses ujian langsung dikunci!",
@@ -1258,7 +1272,7 @@ export default function StartExamPage() {
           triggerViolation("Floating Keyboard terdeteksi di area ujian");
           return;
         } else {
-          // Jika keyboard standar Android tidak sengaja terbuka di luar input pengaduan, langsung kunci juga tanpa toleransi
+          // Keyboard standar Android terbuka tanpa izin
           setSoalLocked(true);
           showModal(
             "❌ Pelanggaran: Membuka keyboard tidak diizinkan selama ujian berlangsung. Akses ujian langsung dikunci!",
@@ -1269,19 +1283,42 @@ export default function StartExamPage() {
       }
 
       // RESET STATE JIKA KEYBOARD DITUTUP
-      if (!keyboardOpen) {
+      if (!anyKeyboardOpen) {
         keyboardOpenedRef.current = false;
       }
 
       if (safeActionRef.current) return;
 
       // DETEKSI SPLIT SCREEN / FLOATING WINDOW APLIKASI LAIN
-      if (widthRatio < 0.75 || heightRatio < 0.75) {
+      if (widthRatio < 0.88 || heightRatio < 0.80) {
         setSoalLocked(true);
         showModal(
           "❌ Pelanggaran Berat: Split screen atau Floating Window aplikasi lain terdeteksi. Akses ujian langsung dikunci!",
         );
         triggerViolation("Floating window / split screen terdeteksi");
+      }
+    }
+
+    // Deteksi pergeseran viewport Android akibat floating overlay / floating keyboard
+    function handleViewportScroll() {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
+      if (isIOS || keyboardGraceRef.current || safeActionRef.current) return;
+      if (!window.visualViewport) return;
+      if (isModalPengaduanOpen || showEmergencyInput) return;
+
+      if (
+        window.visualViewport.offsetTop > 15 ||
+        window.visualViewport.pageTop > 15
+      ) {
+        setSoalLocked(true);
+        showModal(
+          "❌ Pelanggaran Berat: Terdeteksi pergeseran layar / Floating overlay. Akses ujian langsung dikunci!",
+        );
+        triggerViolation("Floating overlay / pergeseran layar terdeteksi");
       }
     }
 
@@ -1299,6 +1336,7 @@ export default function StartExamPage() {
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewport);
+      window.visualViewport.addEventListener("scroll", handleViewportScroll);
     }
 
     return () => {
@@ -1314,6 +1352,7 @@ export default function StartExamPage() {
 
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleViewport);
+        window.visualViewport.removeEventListener("scroll", handleViewportScroll);
       }
     };
   }, [ignoreFullscreen, violations]);
@@ -1363,19 +1402,38 @@ export default function StartExamPage() {
   // Berpotensi false positive di HP lambat (GC pause > 20 detik).
 
   // =========================
-  // BLOCK LONG PRESS MOBILE
+  // BLOCK LONG PRESS MOBILE & CLIPBOARD CONTEK GLOBAL
   // =========================
   useEffect(() => {
     function preventContextMenu(e) {
       e.preventDefault();
     }
 
+    function handleGlobalPaste(e) {
+      if (isModalPengaduanOpen) return;
+      e.preventDefault();
+      e.stopPropagation();
+      forceLogout("Aksi Paste / tempel teks dari clipboard terdeteksi!");
+    }
+
+    function handleGlobalCopy(e) {
+      if (isModalPengaduanOpen) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     document.addEventListener("contextmenu", preventContextMenu);
+    document.addEventListener("paste", handleGlobalPaste, true);
+    document.addEventListener("copy", handleGlobalCopy, true);
+    document.addEventListener("cut", handleGlobalCopy, true);
 
     return () => {
       document.removeEventListener("contextmenu", preventContextMenu);
+      document.removeEventListener("paste", handleGlobalPaste, true);
+      document.removeEventListener("copy", handleGlobalCopy, true);
+      document.removeEventListener("cut", handleGlobalCopy, true);
     };
-  }, []);
+  }, [isModalPengaduanOpen]);
 
   const isTimeRunningOut = timeLeft > 0;
   // =========================
@@ -1629,9 +1687,11 @@ export default function StartExamPage() {
               onClick={() => {
                 setModalOpen(false);
 
-                // setelah hukuman selesai
-                if (!showPanduanModal && !examStarted) {
-                  setShowPanduanModal(true);
+                // Setelah hukuman selesai atau pelanggaran direset, langsung aktifkan ujian
+                if (!examStarted) {
+                  setShowPanduanModal(false);
+                  setExamStarted(true);
+                  setLockCountdown((prev) => (prev === null && !soalLocked ? 90 : prev));
                 }
 
                 setTimeout(() => {
