@@ -109,6 +109,9 @@ export default function StartExamPage() {
     try {
       if (typeof window !== "undefined") {
         const targetUrl = window.location.pathname + window.location.search + "#ujian";
+        // Dua entri cadangan membuat satu Back yang melewati fullscreen
+        // tetap tertahan di halaman ujian pada browser Android.
+        window.history.pushState({ examTrap: true, time: Date.now() }, "", targetUrl);
         window.history.pushState({ examTrap: true, time: Date.now() }, "", targetUrl);
       }
     } catch (e) {}
@@ -923,7 +926,6 @@ export default function StartExamPage() {
   useEffect(() => {
     // Pasang trap awal (dua kali agar stack history selalu memiliki buffer cadangan)
     armHistoryTrap();
-    armHistoryTrap();
 
     // Re-arm history trap pada setiap sentuhan / klik user agar browser di HP tidak pernah melewati trap
     function handleUserInteraction() {
@@ -957,6 +959,9 @@ export default function StartExamPage() {
 
       // Re-arm hash SEGERA agar back berikutnya selalu tertangkap lagi
       armHistoryTrap();
+      // Sebagian browser Android mengirim popstate setelah animasi fullscreen.
+      // Pasang ulang trap setelah event selesai agar stack tidak habis.
+      setTimeout(armHistoryTrap, 0);
 
       // 1. Jika modal pengaduan terbuka, tekan back = tutup modal pengaduan dengan aman
       if (isModalPengaduanOpenRef.current) {
@@ -3292,8 +3297,8 @@ export default function StartExamPage() {
           Siswa harus memilih: "Tetap di Asesmen" atau "Keluar & Batalkan Ujian".
           ============================================================ */}
       {showExitConfirm && (
-        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-5">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden">
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center overflow-y-auto overscroll-contain p-5">
+          <div className="my-auto max-h-[calc(100dvh-2.5rem)] overflow-y-auto bg-white rounded-3xl shadow-2xl max-w-sm w-full">
             {/* Header Peringatan */}
             <div className="bg-gradient-to-r from-red-600 to-orange-500 p-5 text-center">
               <div className="text-4xl mb-2">⚠️</div>
