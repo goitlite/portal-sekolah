@@ -218,6 +218,10 @@ export default function StartExamPage() {
   }
 
   const fullscreenTimeout = useRef(null);
+  const fullscreenReturnTimeoutRef = useRef(null);
+  const fullscreenCountdownIntervalRef = useRef(null);
+  const fullscreenWasActiveRef = useRef(false);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
   const logoutRef = useRef(false);
   const violationGraceTimerRef = useRef(null);
   const pendingViolationRef = useRef("");
@@ -863,12 +867,43 @@ export default function StartExamPage() {
       if (isIOS) return;
 
       clearTimeout(fullscreenTimeout.current);
+      if (document.fullscreenElement) {
+        fullscreenWasActiveRef.current = true;
+        clearTimeout(fullscreenReturnTimeoutRef.current);
+        clearInterval(fullscreenCountdownIntervalRef.current);
+        setShowFullscreenPrompt(false);
+        setToleranceCountdown(null);
+        return;
+      }
+      // Jangan membuat prompt atau pelanggaran jika browser tidak pernah
+      // berhasil masuk fullscreen (misalnya izin/API tidak tersedia).
+      if (
+        !fullscreenWasActiveRef.current ||
+        typeof document.documentElement.requestFullscreen !== "function"
+      ) {
+        return;
+      }
       fullscreenTimeout.current = setTimeout(() => {
         if (logoutRef.current) return;
         if (ignoreFullscreenRef.current) return;
         if (safeActionRef.current) return;
         if (!document.fullscreenElement) {
-          forceLogout("Anda keluar dari fullscreen");
+          setShowFullscreenPrompt(true);
+          setToleranceCountdown(3);
+          const startedAt = Date.now();
+          clearInterval(fullscreenCountdownIntervalRef.current);
+          fullscreenCountdownIntervalRef.current = setInterval(() => {
+            const remaining = Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000));
+            setToleranceCountdown(remaining);
+            if (remaining <= 0) clearInterval(fullscreenCountdownIntervalRef.current);
+          }, 250);
+          clearTimeout(fullscreenReturnTimeoutRef.current);
+          fullscreenReturnTimeoutRef.current = setTimeout(() => {
+            if (!document.fullscreenElement) {
+              setShowFullscreenPrompt(false);
+              forceLogout("Anda keluar dari fullscreen");
+            }
+          }, 3000);
         }
       }, 1000);
     }
@@ -876,6 +911,8 @@ export default function StartExamPage() {
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
       clearTimeout(fullscreenTimeout.current);
+      clearTimeout(fullscreenReturnTimeoutRef.current);
+      clearInterval(fullscreenCountdownIntervalRef.current);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
@@ -2510,6 +2547,35 @@ export default function StartExamPage() {
       </div>
 
       {/* OVERLAY PERINGATAN SAAT WINDOW HILANG FOKUS / PANGGILAN MASUK (ANTI-INTIP + HITUNGAN 3 DETIK) */}
+      {showFullscreenPrompt && (
+        <div className="fixed inset-0 z-[10000000] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-5 text-center text-white">
+          <div className="w-full max-w-md rounded-3xl border border-white/20 bg-slate-900 p-7 shadow-2xl sm:p-10">
+            <div className="mb-4 text-5xl" aria-hidden="true">⛶</div>
+            <h2 className="text-2xl font-black sm:text-3xl">Kembali ke Layar Penuh</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              Tekan tombol di bawah untuk melanjutkan ujian dalam mode layar penuh.
+            </p>
+            <p className="mt-4 text-sm font-bold text-amber-300">
+              Toleransi: {toleranceCountdown ?? 3} detik
+            </p>
+            <button
+              type="button"
+              className="mt-6 min-h-16 w-full rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-5 text-lg font-black text-white shadow-xl transition hover:from-cyan-400 hover:to-blue-500 active:scale-[0.98]"
+              onClick={async () => {
+                startSafeAction(3000);
+                try {
+                  await document.documentElement.requestFullscreen();
+                } catch (_) {
+                  setShowFullscreenPrompt(true);
+                }
+              }}
+            >
+              ⛶ KEMBALI KE FULLSCREEN
+            </button>
+          </div>
+        </div>
+      )}
+
       {isWindowUnfocused && (
         <div className="fixed inset-0 z-[99990] bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 text-center text-white pointer-events-none select-none">
           <div className="w-16 h-16 rounded-3xl bg-red-600/30 border-2 border-red-500 flex items-center justify-center text-3xl mb-3 shadow-2xl animate-bounce">
