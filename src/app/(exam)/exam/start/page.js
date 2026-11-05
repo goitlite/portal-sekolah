@@ -601,12 +601,16 @@ export default function StartExamPage() {
             }
           }
 
-          // 2. Tampilkan pesan pengawas / admin jika ada
+          // 2. REC-1: Tampilkan pesan HANYA jika ada dan berbeda dari pesan yang ditutup siswa
           if (isiPesan) {
-            setPesan(isiPesan);
+            if (isiPesan !== lastDismissedPesanRef.current) {
+              setPesan(isiPesan);
+            }
           } else {
-            setPesan("");
+            // Jika pesan dikosongkan oleh admin di server, reset tracker
+            lastDismissedPesanRef.current = "";
             lastExecutedCommandRef.current = "";
+            setPesan("");
           }
 
           // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (fleksibel & responsif)
