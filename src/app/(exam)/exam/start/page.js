@@ -1139,12 +1139,16 @@ export default function StartExamPage() {
       // 1. BLOKIR MUTLAK TOMBOL BERBAHAYA KAPAN PUN (SEPANJANG UJIAN)
       //    Aktif baik sebelum 1m 30s maupun setelah Buka Kunci Waktu!
       // ===============================================================
+      // Android tidak memiliki Developer Tools browser biasa; tombol/shortcut
+      // pada keyboard eksternal tidak boleh mengganggu jalannya ujian.
+      const isAndroid = /Android/i.test(navigator.userAgent);
       const isDangerous =
-        e.key === "F12" ||
-        e.key === "F11" ||
-        (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key)) ||
-        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "u") ||
-        (e.altKey && e.key === "Tab");
+        !isAndroid &&
+        (e.key === "F12" ||
+          e.key === "F11" ||
+          (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key)) ||
+          ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "u") ||
+          (e.altKey && e.key === "Tab"));
 
       if (isDangerous) {
         e.preventDefault();
@@ -1473,6 +1477,12 @@ export default function StartExamPage() {
       }
     }
 
+    function handlePageHide() {
+      if (!safeActionRef.current) {
+        triggerViolation("Anda meninggalkan halaman ujian");
+      }
+    }
+
     // ======================
     // RESIZE DETECTION
     // ======================
@@ -1538,8 +1548,22 @@ export default function StartExamPage() {
         (typeof navigator !== "undefined" &&
           navigator.platform === "MacIntel" &&
           navigator.maxTouchPoints > 1);
-      // Di iPhone keyboard selalu docked & tidak ada floating keyboard. Proteksi perpindahan aplikasi dihandle visibilitychange & pagehide
-      if (isIOS) return;
+      // iOS memakai ukuran visual viewport untuk mengenali keyboard docked.
+      if (isIOS) {
+        if (!window.visualViewport) return;
+        const iosKeyboardOpen =
+          window.innerHeight - window.visualViewport.height > 120;
+        if (!iosKeyboardOpen) {
+          keyboardOpenedRef.current = false;
+          return;
+        }
+        if (keyboardOpenedRef.current) return;
+        keyboardOpenedRef.current = true;
+        if (soalLockedRef.current) {
+          forceLogout("Keyboard dibuka saat soal terkunci");
+        }
+        return;
+      }
 
       if (keyboardGraceRef.current) {
         return;
@@ -1590,29 +1614,28 @@ export default function StartExamPage() {
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // ======================
-      // LOGIKA DETEKSI: KUNCI SOAL & TINDAKAN PELANGGARAN RESMI (LEMPAR SISWA KE AWAL SEPERTI PELANGGARAN LAINNYA)
+      // Keyboard tidak dihitung sebagai pelanggaran selama 50 detik pertama.
+      // Setelah soal terkunci, keyboard yang terdeteksi menjadi satu pelanggaran.
       // ======================
       if (anyKeyboardOpen) {
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
+        if (soalLockedRef.current) {
+          const alasan = isFloatingKeyboard
+            ? "Floating Keyboard terdeteksi di area ujian"
+            : "Membuka keyboard standar tanpa izin saat soal terkunci";
 
-        // 1. Kunci soal segera
-        setSoalLocked(true);
-        soalLockedRef.current = true;
+          triggerSecurityToast(
+            `🚨 Pelanggaran Berat: ${alasan}! Anda dikeluarkan dari ujian.`,
+            "danger",
+            3000
+          );
+          forceLogout(alasan);
+          return;
+        }
 
-        const alasan = isFloatingKeyboard
-          ? "Floating Keyboard terdeteksi di area ujian"
-          : "Membuka keyboard standar tanpa izin";
-
-        // 2. Tampilkan notif deteksi pelanggaran
-        triggerSecurityToast(
-          `🚨 Pelanggaran Berat: ${alasan}! Anda dikeluarkan dari ujian.`,
-          "danger",
-          3000
-        );
-
-        // 3. Eksekusi tindakan pelanggaran resmi: catat pelanggaran & lempar siswa ke awal seperti pelanggaran lainnya
-        forceLogout(alasan);
+        // Keyboard normal atau floating selama masa awal tidak melanggar.
+        // Hindari salah klasifikasi penyusutan viewport sebagai split-screen.
         return;
       }
 
@@ -1624,7 +1647,7 @@ export default function StartExamPage() {
       if (safeActionRef.current) return;
 
       // DETEKSI SPLIT SCREEN / FLOATING WINDOW APLIKASI LAIN
-      if (widthRatio < 0.88 || heightRatio < 0.80) {
+      if (!anyKeyboardOpen && (widthRatio < 0.88 || heightRatio < 0.80)) {
         setSoalLocked(true);
         soalLockedRef.current = true;
         showModal(
@@ -1706,11 +1729,7 @@ export default function StartExamPage() {
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("pagehide", () => {
-      if (!safeActionRef.current) {
-        triggerViolation("Anda meninggalkan halaman ujian");
-      }
-    });
+    window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleOrientation);
 
@@ -1729,6 +1748,7 @@ export default function StartExamPage() {
 
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientation);
@@ -3213,7 +3233,6 @@ export default function StartExamPage() {
                   onClick={() => {
                     setShowExitConfirm(false);
                     exitConfirmRef.current = false;
-                    logoutRef.current = true;
                     forceLogout("Keluar dari halaman ujian secara manual");
                   }}
                   className="py-3 rounded-2xl bg-red-100 hover:bg-red-200 text-red-700 font-black text-sm transition active:scale-95 border border-red-300"
