@@ -903,6 +903,21 @@ export default function StartExamPage() {
     function handleBackNavigation() {
       if (logoutRef.current) return;
 
+      // Saat hukuman berlangsung, Back berarti keluar dari ujian tanpa
+      // menambah pelanggaran. Jangan memasang ulang history trap pada kasus ini.
+      if (penaltyOpenRef.current) {
+        logoutRef.current = true;
+        document.body.style.overflow = "auto";
+        localStorage.removeItem("examLink");
+        router.replace("/exam");
+        return;
+      }
+
+      // Back dapat membuat browser keluar dari fullscreen sebelum dialog tampil.
+      // Tandai transisi ini aman segera agar fullscreenchange tidak salah
+      // mencatatnya sebagai pelanggaran dan notifikasi Back tetap konsisten.
+      startSafeAction(3000);
+
       // Re-arm hash SEGERA agar back berikutnya selalu tertangkap lagi
       armHistoryTrap();
 
@@ -926,8 +941,8 @@ export default function StartExamPage() {
         return;
       }
 
-      // 2. Jika modal panduan atau penalti aktif, beri toast peringatan
-      if (penaltyOpenRef.current || showPanduanModalRef.current) {
+      // Jika modal panduan aktif, beri toast peringatan
+      if (showPanduanModalRef.current) {
         triggerSecurityToast("⚠️ Anda berada di sesi asesmen. Selesaikan langkah pada layar.", "warning");
         return;
       }
@@ -966,7 +981,7 @@ export default function StartExamPage() {
       window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("popstate", handleBackNavigation);
     };
-  }, [armHistoryTrap, triggerSecurityToast]);
+  }, [armHistoryTrap, router, triggerSecurityToast]);
 
   // =========================
   // BLOK REFRESH
