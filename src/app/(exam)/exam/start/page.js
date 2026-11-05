@@ -963,6 +963,31 @@ export default function StartExamPage() {
       // Pasang ulang trap setelah event selesai agar stack tidak habis.
       setTimeout(armHistoryTrap, 0);
 
+      const isIOS =
+        /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const isStandalonePwa =
+        window.matchMedia?.("(display-mode: standalone)").matches ||
+        navigator.standalone === true;
+
+      // In-app PWA sudah berjalan tanpa chrome browser. Di browser biasa,
+      // satu Back dari fullscreen langsung menampilkan tombol pemulihan.
+      if (
+        fullscreenWasActiveRef.current &&
+        !isIOS &&
+        !isStandalonePwa &&
+        typeof document.documentElement.requestFullscreen === "function"
+      ) {
+        setShowFullscreenPrompt(true);
+        setToleranceCountdown(3);
+        triggerSecurityToast(
+          "Layar penuh ditutup. Tekan tombol di tengah layar untuk kembali.",
+          "warning",
+          3000,
+        );
+        return;
+      }
+
       // 1. Jika modal pengaduan terbuka, tekan back = tutup modal pengaduan dengan aman
       if (isModalPengaduanOpenRef.current) {
         setIsModalPengaduanOpen(false);
