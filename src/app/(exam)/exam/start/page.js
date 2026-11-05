@@ -218,6 +218,8 @@ export default function StartExamPage() {
 
   const fullscreenTimeout = useRef(null);
   const logoutRef = useRef(false);
+  const violationGraceTimerRef = useRef(null);
+  const pendingViolationRef = useRef("");
   const iframeRef = useRef(null);
   const iframeContainerRef = useRef(null);
   // =========================
@@ -520,11 +522,25 @@ export default function StartExamPage() {
   }
 
   function forceLogout(reason = "Pelanggaran ujian") {
-    if (logoutRef.current) return;
-
-    if (safeActionRef.current) return;
-
-    logoutRef.current = true;
+    if (logoutRef.current || safeActionRef.current) return;
+    // Semua sumber pelanggaran masuk satu antrean: satu timer toleransi,
+    // satu notifikasi yang diperbarui, dan satu pencatatan akhir.
+    pendingViolationRef.current = reason;
+    if (violationGraceTimerRef.current) return;
+    triggerSecurityToast(
+      `⚠️ ${reason}. Kembali ke ujian dalam 3 detik untuk membatalkan pelanggaran.`,
+      "warning",
+      3000,
+    );
+    violationGraceTimerRef.current = setTimeout(() => {
+      violationGraceTimerRef.current = null;
+      if (logoutRef.current || safeActionRef.current) {
+        pendingViolationRef.current = "";
+        return;
+      }
+      const finalReason = pendingViolationRef.current || reason;
+      pendingViolationRef.current = "";
+      logoutRef.current = true;
 
     const currentViolations = parseInt(localStorage.getItem("violations") || "0");
     const totalViolation = currentViolations + 1;
@@ -548,12 +564,13 @@ export default function StartExamPage() {
       console.error("Gagal catat pelanggaran:", e);
     }
 
-    showModal(reason + "\nTotal pelanggaran: " + totalViolation);
+    showModal(finalReason + "\nTotal pelanggaran: " + totalViolation);
 
     setTimeout(() => {
       localStorage.removeItem("examLink");
       router.push("/exam");
     }, 2000);
+    }, 3000);
   }
 
   // [DIHAPUS] LIVE AUTO RESET PELANGGARAN (80 MENIT)
