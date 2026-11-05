@@ -13,9 +13,24 @@ export default function StartExamPage() {
   const router = useRouter();
 
   const [examLink, setExamLink] = useState("");
-  const [nama, setNama] = useState("");
-  const [kelas, setKelas] = useState("");
-  const [idSiswa, setIdSiswa] = useState("");
+  const [nama, setNama] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("nama") || "";
+    }
+    return "";
+  });
+  const [kelas, setKelas] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("kelas") || "";
+    }
+    return "";
+  });
+  const [idSiswa, setIdSiswa] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("id_siswa") || "";
+    }
+    return "";
+  });
   const [pesan, setPesan] = useState("");
   const lastDismissedPesanRef = useRef("");
   const lastExecutedCommandRef = useRef("");
@@ -174,6 +189,15 @@ export default function StartExamPage() {
 
       // buka lock soal
       setSoalLocked(false);
+      soalLockedRef.current = false;
+
+      // Tutup modal darurat SEBELUM showModal agar tidak ada dua modal sekaligus
+      setShowEmergencyInput(false);
+      showEmergencyInputRef.current = false;
+      setEmergencyCode("");
+
+      // Safe action 5 detik agar transisi dari modal ke layar utama aman
+      startSafeAction(5000);
 
       showModal(
         "✅ KUNCI WAKTU DIBUKA\n\n" +
@@ -181,13 +205,13 @@ export default function StartExamPage() {
           "Soal dan formulir dapat dikerjakan dan dikirimkan.",
       );
 
-      setShowEmergencyInput(false);
-      showEmergencyInputRef.current = false;
-      setEmergencyCode("");
       return;
     }
 
     // KODE SALAH: Bukan pelanggaran! Sama seperti form pengaduan yang aman
+    // Perpanjang safe action agar keyboard dismiss tidak dianggap pelanggaran
+    startSafeAction(5000);
+    showEmergencyInputRef.current = true;
     triggerSecurityToast("❌ Kode buka kunci waktu tidak sesuai / salah. Silakan coba lagi.", "danger", 4000);
     setEmergencyCode("");
   }
@@ -256,6 +280,23 @@ export default function StartExamPage() {
   useEffect(() => {
     showEmergencyInputRef.current = showEmergencyInput;
   }, [showEmergencyInput]);
+
+  // Ref untuk membaca modalOpen & isConfirmHapusOpen di dalam stale-closure event handler
+  const modalOpenRef = useRef(false);
+  useEffect(() => {
+    modalOpenRef.current = modalOpen;
+  }, [modalOpen]);
+
+  const isConfirmHapusOpenRef = useRef(false);
+  useEffect(() => {
+    isConfirmHapusOpenRef.current = isConfirmHapusOpen;
+  }, [isConfirmHapusOpen]);
+
+  // Ref untuk membaca timeLeft & soalLocked terkini di dalam stale-closure event handler
+  const timeLeftRef = useRef(30 * 60);
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
 
   // =========================
   // LOAD SESSION
@@ -443,7 +484,15 @@ export default function StartExamPage() {
   }, [penaltyOpen, penaltyDone, violations]);
 
   function showModal(message) {
+    // Setiap kali modal info muncul, aktifkan safe action selama 8 detik
+    // agar transisi layar (blur, visibility) tidak dianggap pelanggaran
+    safeActionRef.current = true;
     setIgnoreFullscreen(true);
+    setIsWindowUnfocused(false);
+    setToleranceCountdown(null);
+    if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+    if (visibilityTimeoutRef.current) clearTimeout(visibilityTimeoutRef.current);
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
     setModalMessage(message);
     setModalOpen(true);
   }
@@ -452,6 +501,13 @@ export default function StartExamPage() {
     safeActionRef.current = true;
     setIgnoreFullscreen(true);
     setIsWindowUnfocused(false);
+    setToleranceCountdown(null);
+    lastBlurAtRef.current = 0;
+    lastHiddenAtRef.current = 0;
+    if (toleranceIntervalRef.current) {
+      clearInterval(toleranceIntervalRef.current);
+      toleranceIntervalRef.current = null;
+    }
     if (visibilityTimeoutRef.current) clearTimeout(visibilityTimeoutRef.current);
     if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
 
@@ -505,11 +561,13 @@ export default function StartExamPage() {
   // CEK PESAN REALTIME & COMMAND ADMIN (REC-1 & REC-2)
   // =========================
   useEffect(() => {
-    if (!nama || !kelas) return;
+    const activeNama = nama || (typeof window !== "undefined" ? localStorage.getItem("nama") || "" : "");
+    const activeKelas = kelas || (typeof window !== "undefined" ? localStorage.getItem("kelas") || "" : "");
+    if (!activeNama) return;
 
-    const interval = setInterval(async () => {
+    async function checkMessages() {
       try {
-        const result = await cekPesan(nama, kelas);
+        const result = await cekPesan(activeNama, activeKelas);
 
         if (result && result.status === "success") {
           const isiPesan = (result.pesan || "").trim();
@@ -556,15 +614,14 @@ export default function StartExamPage() {
           // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (Hanya diproses 1x per perintah)
           const pesanUpper = isiPesan.toUpperCase();
           if (pesanUpper && lastExecutedCommandRef.current !== pesanUpper) {
+            lastExecutedCommandRef.current = pesanUpper;
             if (pesanUpper === "UJIAN DI RESET") {
-              lastExecutedCommandRef.current = pesanUpper;
               showModal("Ujian telah direset oleh admin");
               setTimeout(() => {
                 localStorage.removeItem("examLink");
                 router.push("/exam");
               }, 2000);
             } else if (pesanUpper === "BUKA KUNCI") {
-              lastExecutedCommandRef.current = pesanUpper;
               // Hentikan hitungan mundur auto-lock dan hapus notif
               if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
               if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -572,13 +629,15 @@ export default function StartExamPage() {
 
               setTimeLeft(0);
               setSoalLocked(false);
+              soalLockedRef.current = false;
+              // Safe action agar transisi buka kunci dari admin tidak memicu false positive
+              startSafeAction(5000);
               showModal(
                 "✅ KUNCI WAKTU DIBUKA\n\n" +
                   "Pengawas / Guru telah membuka kunci ujian.\n" +
                   "Soal dan formulir sekarang dapat dikerjakan dan dikirimkan.",
               );
             } else if (pesanUpper === "HAPUS PELANGGARAN") {
-              lastExecutedCommandRef.current = pesanUpper;
               setViolations(0);
               localStorage.setItem("violations", "0");
               localStorage.removeItem("violationStartTime");
@@ -592,21 +651,20 @@ export default function StartExamPage() {
                 setExamStarted(true);
               }
               const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
-              catatPelanggaran(nama, kelas, currentId, 0);
+              catatPelanggaran(activeNama, activeKelas, currentId, 0);
               showModal(
                 "✅ CATATAN PELANGGARAN DIRESET\n\n" +
                   "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.\n" +
                   "Waktu ujian dan pengerjaan soal telah dimulai kembali.",
               );
             } else if (pesanUpper === "KUNCI SOAL") {
-              lastExecutedCommandRef.current = pesanUpper;
               setSoalLocked(true);
+              soalLockedRef.current = true;
               showModal(
                 "🔒 SOAL DIKUNCI\n\n" +
                   "Akses pengisian formulir soal telah dikunci oleh pengawas / admin.",
               );
             } else if (/^TAMBAH WAKTU \d+$/.test(pesanUpper)) {
-              lastExecutedCommandRef.current = pesanUpper;
               const menit = parseInt(pesanUpper.replace("TAMBAH WAKTU ", "").trim()) || 0;
               if (menit > 0) {
                 setTimeLeft((prev) => prev + menit * 60);
@@ -621,7 +679,11 @@ export default function StartExamPage() {
       } catch (err) {
         console.error("Gagal cek pesan realtime:", err);
       }
-    }, 5000);
+    }
+
+    // Panggil langsung saat effect jalan pertama kali
+    checkMessages();
+    const interval = setInterval(checkMessages, 4000);
 
     return () => clearInterval(interval);
   }, [nama, kelas, idSiswa]);
@@ -828,7 +890,19 @@ export default function StartExamPage() {
       if (isModalPengaduanOpenRef.current) {
         setIsModalPengaduanOpen(false);
         setIgnoreFullscreen(false);
+        startSafeAction(2000);
         triggerSecurityToast("ℹ️ Form pengaduan ditutup.", "info", 2000);
+        return;
+      }
+
+      // 1b. Jika modal buka kunci waktu terbuka, tekan back = tutup modal darurat dengan aman
+      if (showEmergencyInputRef.current) {
+        setShowEmergencyInput(false);
+        showEmergencyInputRef.current = false;
+        setEmergencyCode("");
+        setIgnoreFullscreen(false);
+        startSafeAction(2000);
+        triggerSecurityToast("ℹ️ Menu buka kunci waktu ditutup.", "info", 2000);
         return;
       }
 
@@ -916,26 +990,39 @@ export default function StartExamPage() {
   // AUTO LOCK SOAL SETELAH 50 DETIK + NOTIF COUNTDOWN
   // =========================
   useEffect(() => {
-    if (!examStarted || soalLocked) return;
+    // Jika ujian belum mulai atau soal sudah terkunci, abaikan
+    if (!examStarted || soalLocked) {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      return;
+    }
 
-    // Bersihkan timer lama jika ada
+    // Hitung mundur berbasis wall-clock timestamp (tahan freeze browser/Android)
+    const startTime = Date.now();
+    const duration = 50 * 1000;
+
+    const initCountdownTimer = setTimeout(() => {
+      setLockCountdown(50);
+    }, 0);
+
     if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
 
     countdownIntervalRef.current = setInterval(() => {
-      setLockCountdown((prev) => {
-        if (prev === null || prev <= 1) {
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          return null;
-        }
-        return prev - 1;
-      });
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+      setLockCountdown(remaining);
+
+      if (remaining <= 0) {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      }
     }, 1000);
 
     lockTimerRef.current = setTimeout(
       () => {
         setLockCountdown(null);
         setSoalLocked(true);
+        soalLockedRef.current = true;
 
         showModal(
           "🔒 Waktu pengisian data telah selesai (50 detik).\n\n" +
@@ -947,12 +1034,14 @@ export default function StartExamPage() {
             "3. Tekan tombol Kirim/Submit",
         );
       },
-      50 * 1000,
+      duration,
     );
 
     return () => {
+      clearTimeout(initCountdownTimer);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      setLockCountdown(null);
     };
   }, [examStarted, soalLocked]);
 
@@ -1019,10 +1108,11 @@ export default function StartExamPage() {
           return;
         }
         // MODAL DARURAT
-        if (showEmergencyInput) {
+        if (showEmergencyInputRef.current) {
           setShowEmergencyInput(false);
-
+          showEmergencyInputRef.current = false;
           setEmergencyCode("");
+          startSafeAction(2000);
 
           setTimeout(async () => {
             try {
@@ -1086,15 +1176,15 @@ export default function StartExamPage() {
       if (allowedScroll.includes(e.key)) return;
 
       // Izinkan ketik di modal darurat & modal pengaduan
-      if (showEmergencyInput && document.activeElement?.tagName === "INPUT") {
+      if (showEmergencyInputRef.current && document.activeElement?.tagName === "INPUT") {
         return;
       }
-      if (isModalPengaduanOpen && document.activeElement?.tagName === "TEXTAREA") {
+      if (isModalPengaduanOpenRef.current && document.activeElement?.tagName === "TEXTAREA") {
         return;
       }
 
-      // Selama soal dikunci (setelah 1m 30s), blokir semua input keyboard lainnya
-      if (soalLocked && timeLeft > 0) {
+      // Selama soal dikunci (setelah 50s), blokir semua input keyboard lainnya
+      if (soalLockedRef.current) {
         e.preventDefault();
       }
     }
@@ -1174,7 +1264,7 @@ export default function StartExamPage() {
 
       if (safeActionRef.current) return;
 
-      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+      if (modalOpenRef.current || isModalPengaduanOpenRef.current || isConfirmHapusOpenRef.current) {
         return;
       }
 
@@ -1199,71 +1289,90 @@ export default function StartExamPage() {
     // BLUR - Deteksi fokus keluar dari window (Toleransi Panggilan / Notif / Floating App / Kalkulator)
     // ======================
     function handleBlur() {
-      clearTimeout(blurTimeoutRef.current);
+      // Jika ujian belum dimulai (panduan terbuka / hukuman aktif), abaikan
+      if (!examStartedRef.current || showPanduanModalRef.current || penaltyOpenRef.current) return;
+      if (logoutRef.current || safeActionRef.current) return;
+      if (modalOpenRef.current || isModalPengaduanOpenRef.current || isConfirmHapusOpenRef.current || showEmergencyInputRef.current) return;
 
-      // Beri jeda 150ms untuk membedakan apakah fokus hanya berpindah ke Google Form di dalam iframe
-      // atau browser benar-benar kehilangan fokus karena buka kalkulator / floating window / split screen
-      blurTimeoutRef.current = setTimeout(() => {
-        if (logoutRef.current || safeActionRef.current) return;
-        if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen || showEmergencyInputRef.current) return;
+      const isIframeFocused =
+        iframeRef.current && document.activeElement === iframeRef.current;
 
-        // Di browser, jika fokus berada di dalam iframe anak, document.hasFocus() tetap TRUE.
-        // Jika document.hasFocus() FALSE, user PASTI membuka kalkulator/aplikasi lain di luar browser!
-        if (!document.hasFocus()) {
-          lastBlurAtRef.current = Date.now();
-          setIsWindowUnfocused(true);
-          setToleranceCountdown(3);
+      // Jika dokumen masih memegang fokus dan hanya berpindah ke iframe Google Form
+      if (document.hasFocus() && isIframeFocused) {
+        lastBlurAtRef.current = 0;
+        return;
+      }
 
-          if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
-          toleranceIntervalRef.current = setInterval(() => {
-            setToleranceCountdown((prev) => {
-              if (prev === null || prev <= 1) {
-                if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
+      // Catat waktu blur seketika tanpa jeda (wall-clock timestamp instan)
+      const blurTime = Date.now();
+      if (!lastBlurAtRef.current) {
+        lastBlurAtRef.current = blurTime;
+      }
 
-          triggerSecurityToast("🚨 Jendela ujian kehilangan fokus / aplikasi lain aktif! Sisa toleransi: 3 detik.", "danger", 3000);
+      // Tampilkan blur overlay & hitungan mundur 3 detik
+      setIsWindowUnfocused(true);
+      setToleranceCountdown(3);
 
-          setTimeout(() => {
-            if (!document.hasFocus() && !safeActionRef.current && !logoutRef.current) {
-              if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen || showEmergencyInputRef.current) return;
-              triggerViolation("Aplikasi lain / floating window / kalkulator aktif > 3 detik");
+      if (toleranceIntervalRef.current) {
+        clearInterval(toleranceIntervalRef.current);
+        toleranceIntervalRef.current = null;
+      }
+      toleranceIntervalRef.current = setInterval(() => {
+        setToleranceCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            if (toleranceIntervalRef.current) {
+              clearInterval(toleranceIntervalRef.current);
+              toleranceIntervalRef.current = null;
             }
-          }, 3200); // Toleransi ketat 3.2 detik
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      triggerSecurityToast("🚨 Jendela ujian kehilangan fokus / Recent apps aktif! Sisa toleransi: 3 detik.", "danger", 3000);
+
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = setTimeout(() => {
+        if (!document.hasFocus() && !safeActionRef.current && !logoutRef.current) {
+          if (modalOpenRef.current || isModalPengaduanOpenRef.current || isConfirmHapusOpenRef.current || showEmergencyInputRef.current) return;
+          triggerViolation("Aplikasi lain / floating window / kalkulator aktif > 3 detik");
         }
-      }, 150);
+      }, 3200); // Toleransi ketat 3.2 detik
     }
 
     // ======================
     // FOCUS - Deteksi ketika fokus kembali (cegah false positive iframe & hilangkan blur)
     // ======================
     function handleFocus() {
-      if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
+      if (toleranceIntervalRef.current) {
+        clearInterval(toleranceIntervalRef.current);
+        toleranceIntervalRef.current = null;
+      }
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(visibilityTimeoutRef.current);
 
       const now = Date.now();
       const blurDuration = lastBlurAtRef.current > 0 ? now - lastBlurAtRef.current : 0;
-      lastBlurAtRef.current = 0;
+      const hiddenDuration = lastHiddenAtRef.current > 0 ? now - lastHiddenAtRef.current : 0;
+      const awayDuration = Math.max(blurDuration, hiddenDuration);
 
-      // Jika user berada di luar fokus > 3.2 detik (misal membuka kalkulator / aplikasi lain)
-      if (blurDuration > 3200) {
-        setIsWindowUnfocused(false);
-        setToleranceCountdown(null);
-        forceLogout(
-          `Jendela ujian kehilangan fokus selama ${Math.round(blurDuration / 1000)} detik (batas toleransi 3 detik)`,
-        );
-        return;
-      }
+      lastBlurAtRef.current = 0;
+      lastHiddenAtRef.current = 0;
 
       setIsWindowUnfocused(false);
       setToleranceCountdown(null);
 
+      // Jika user berada di luar fokus > 3.2 detik (misal membuka kalkulator / aplikasi lain)
+      if (awayDuration > 3200) {
+        forceLogout(
+          `Jendela ujian ditinggalkan selama ${Math.round(awayDuration / 1000)} detik (batas toleransi 3 detik)`,
+        );
+        return;
+      }
+
       // Jika kembali dalam toleransi sah (< 3.2 detik), reset total akumulasi risiko
-      if (blurDuration <= 3200 && blurDuration > 300) {
+      if (awayDuration <= 3200 && awayDuration > 300) {
         overlayRiskRef.current = 0;
         overlayTriggeredRef.current = false;
         suspiciousResizeRef.current = 0;
@@ -1275,10 +1384,17 @@ export default function StartExamPage() {
     // VISIBILITY - Toleransi 3 Detik (Panggilan) + Proteksi Tombol Recent / Tab Switch / Buka App Lain
     // ======================
     function handleVisibility() {
+      // Jika ujian belum dimulai (panduan terbuka / hukuman aktif), abaikan
+      if (!examStartedRef.current || showPanduanModalRef.current || penaltyOpenRef.current) return;
+
       if (document.hidden) {
         addOverlayRisk(40, "Document Hidden");
 
-        lastHiddenAtRef.current = Date.now();
+        const hiddenTime = Date.now();
+        if (!lastHiddenAtRef.current) {
+          lastHiddenAtRef.current = hiddenTime;
+        }
+
         setIsWindowUnfocused(true);
         setToleranceCountdown(3);
 
@@ -1307,8 +1423,12 @@ export default function StartExamPage() {
         clearTimeout(blurTimeoutRef.current);
 
         const now = Date.now();
-        const awayDuration = lastHiddenAtRef.current > 0 ? now - lastHiddenAtRef.current : 0;
+        const blurDuration = lastBlurAtRef.current > 0 ? now - lastBlurAtRef.current : 0;
+        const hiddenDuration = lastHiddenAtRef.current > 0 ? now - lastHiddenAtRef.current : 0;
+        const awayDuration = Math.max(blurDuration, hiddenDuration);
+
         lastHiddenAtRef.current = 0;
+        lastBlurAtRef.current = 0;
 
         // CEK WALL-CLOCK TIMESTAMP: Jika siswa meninggalkan halaman ujian > 3.2 detik
         // (Browser membekukan timer setTimeout saat di background, sehingga wall-clock check ini mutlak!)
@@ -1364,7 +1484,7 @@ export default function StartExamPage() {
 
       if (safeActionRef.current) return;
 
-      if (modalOpen || isModalPengaduanOpen || isConfirmHapusOpen) {
+      if (modalOpenRef.current || isModalPengaduanOpenRef.current || isConfirmHapusOpenRef.current) {
         return;
       }
       clearTimeout(resizeTimeoutRef.current);
@@ -1422,14 +1542,20 @@ export default function StartExamPage() {
         return;
       }
 
-      // Input yang sah keyboardnya:
-      // 1. Modal Pengaduan
-      // 2. Modal Darurat / Buka Kunci Waktu
-      // 3. Ketika kunci soal telah dibuka (!soalLockedRef.current) -> siswa boleh mengisi formulir Google Form
-      // 4. Elemen input atau textarea apa pun yang sah
-      const isAllowedInput =
+      // JIKA SEDANG DI DALAM MODAL RESMI (Pengaduan / Buka Kunci Waktu) ATAU SAFE ACTION:
+      // Keyboard sepenuhnya aman dan diizinkan, sama seperti tombol pengaduan yang aman
+      if (
         isModalPengaduanOpenRef.current ||
         showEmergencyInputRef.current ||
+        safeActionRef.current
+      ) {
+        return;
+      }
+
+      // Input yang sah keyboardnya:
+      // 1. Ketika kunci soal telah dibuka (!soalLockedRef.current) -> siswa boleh mengisi formulir Google Form
+      // 2. Elemen input atau textarea apa pun yang sah
+      const isAllowedInput =
         !soalLockedRef.current ||
         document.activeElement?.tagName === "TEXTAREA" ||
         document.activeElement?.tagName === "INPUT";
@@ -1462,13 +1588,13 @@ export default function StartExamPage() {
       const isDockedKeyboard = keyboardDiff > 150;
       // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 150px ATAU layar samping menyusut
       const isFloatingKeyboard =
-        (keyboardDiff > 25 && keyboardDiff <= 150) ||
-        (widthShrink && keyboardDiff > 10);
+        !isAllowedInput &&
+        ((keyboardDiff > 25 && keyboardDiff <= 150) ||
+        (widthShrink && keyboardDiff > 10));
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // Jika keyboard dibuka pada input resmi yang diizinkan (atau setelah kunci dibuka)
-      // DAN bukan floating keyboard mencurigakan:
-      if (anyKeyboardOpen && isAllowedInput && !isFloatingKeyboard) {
+      if (anyKeyboardOpen && isAllowedInput) {
         return;
       }
 
@@ -1476,7 +1602,7 @@ export default function StartExamPage() {
       // LOGIKA DETEKSI: KUNCI & CATAT PELANGGARAN JIKA KEYBOARD DIBUKA ILEGAL
       // ======================
       if (anyKeyboardOpen) {
-        if (isAllowedInput && !isFloatingKeyboard) return;
+        if (isAllowedInput) return;
 
         // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
@@ -1485,6 +1611,7 @@ export default function StartExamPage() {
         if (isFloatingKeyboard) {
           // Floating keyboard dilarang kapan pun (indikator contek/overlay)
           setSoalLocked(true);
+          soalLockedRef.current = true;
           showModal(
             "❌ Pelanggaran Berat: Terdeteksi penggunaan Floating Keyboard (Keyboard Mengambang) atau modifikasi tampilan layar standar. Akses ujian langsung dikunci!",
           );
@@ -1493,6 +1620,7 @@ export default function StartExamPage() {
         } else if (soalLockedRef.current) {
           // Keyboard standar Android terbuka tanpa izin HANYA jika soal sedang dikunci
           setSoalLocked(true);
+          soalLockedRef.current = true;
           showModal(
             "❌ Pelanggaran: Membuka keyboard tidak diizinkan selama ujian berlangsung. Akses ujian langsung dikunci!",
           );
@@ -1509,8 +1637,9 @@ export default function StartExamPage() {
       if (safeActionRef.current) return;
 
       // DETEKSI SPLIT SCREEN / FLOATING WINDOW APLIKASI LAIN
-      if (widthRatio < 0.88 || heightRatio < 0.80) {
+      if (!isAllowedInput && (widthRatio < 0.88 || heightRatio < 0.80)) {
         setSoalLocked(true);
+        soalLockedRef.current = true;
         showModal(
           "❌ Pelanggaran Berat: Split screen atau Floating Window aplikasi lain terdeteksi. Akses ujian langsung dikunci!",
         );
@@ -1527,13 +1656,21 @@ export default function StartExamPage() {
           navigator.maxTouchPoints > 1);
       if (isIOS || keyboardGraceRef.current || safeActionRef.current) return;
       if (!window.visualViewport) return;
-      if (isModalPengaduanOpenRef.current || showEmergencyInputRef.current) return;
+      if (
+        isModalPengaduanOpenRef.current ||
+        showEmergencyInputRef.current ||
+        safeActionRef.current ||
+        !soalLockedRef.current
+      ) {
+        return;
+      }
 
       if (
         window.visualViewport.offsetTop > 15 ||
         window.visualViewport.pageTop > 15
       ) {
         setSoalLocked(true);
+        soalLockedRef.current = true;
         showModal(
           "❌ Pelanggaran Berat: Terdeteksi pergeseran layar / Floating overlay. Akses ujian langsung dikunci!",
         );
@@ -1547,6 +1684,37 @@ export default function StartExamPage() {
         overlayRiskRef.current = Math.max(0, overlayRiskRef.current - 15);
       }
     }, 3000);
+
+    // Watchdog pemeriksa fokus berkala (250ms)
+    // Menjamin deteksi kehilangan fokus di semua browser/OS (Windows key, Start menu, taskbar, Alt+Tab, Split screen)
+    // bahkan jika fokus sebelumnya berada di dalam iframe Google Form
+    const focusWatchdog = setInterval(() => {
+      if (logoutRef.current || safeActionRef.current) return;
+      if (modalOpenRef.current || isModalPengaduanOpenRef.current || isConfirmHapusOpenRef.current || showEmergencyInputRef.current) return;
+      if (!examStartedRef.current || showPanduanModalRef.current || penaltyOpenRef.current) return;
+
+      const hasFocus = document.hasFocus();
+
+      if (!hasFocus) {
+        // Jika belum tercatat blur, jalankan handleBlur
+        if (!lastBlurAtRef.current) {
+          handleBlur();
+        } else {
+          // Jika sudah tercatat blur dan melebihi batas toleransi 3.2 detik
+          const awayTime = Date.now() - lastBlurAtRef.current;
+          if (awayTime > 3200) {
+            forceLogout(
+              `Jendela ujian ditinggalkan selama ${Math.round(awayTime / 1000)} detik (batas toleransi 3 detik)`,
+            );
+          }
+        }
+      } else {
+        // Jika fokus telah kembali ke halaman/iframe
+        if (lastBlurAtRef.current > 0) {
+          handleFocus();
+        }
+      }
+    }, 250);
 
     // EVENT LISTENER
     window.addEventListener("blur", handleBlur);
@@ -1567,6 +1735,7 @@ export default function StartExamPage() {
 
     return () => {
       clearInterval(decayInterval);
+      clearInterval(focusWatchdog);
       if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
       clearTimeout(blurTimeoutRef.current);
       clearTimeout(visibilityTimeoutRef.current);
@@ -1683,14 +1852,21 @@ export default function StartExamPage() {
     const interval = setInterval(() => {
       if (logoutRef.current) return;
 
-      if (ignoreFullscreen) return;
+      if (ignoreFullscreenRef.current) return;
+
+      if (safeActionRef.current) return;
 
       // jangan cek saat modal aktif
-      if (modalOpen) return;
+      if (modalOpenRef.current) return;
 
-      if (isModalPengaduanOpen) return;
+      if (isModalPengaduanOpenRef.current) return;
 
-      if (isConfirmHapusOpen) return;
+      if (isConfirmHapusOpenRef.current) return;
+
+      if (showEmergencyInputRef.current) return;
+
+      // Jangan cek jika ujian belum dimulai atau panduan/hukuman terbuka
+      if (!examStartedRef.current || showPanduanModalRef.current || penaltyOpenRef.current) return;
 
       const now = Date.now();
 
@@ -1713,7 +1889,7 @@ export default function StartExamPage() {
 
       window.removeEventListener("click", updateTouch, true);
     };
-  }, [ignoreFullscreen, modalOpen, isModalPengaduanOpen, isConfirmHapusOpen]);
+  }, []);
 
   // =========================
   // BLOCK NON CHROME
@@ -1873,7 +2049,7 @@ export default function StartExamPage() {
                   showEmergencyInputRef.current = false;
                   setEmergencyCode("");
                   setIgnoreFullscreen(false);
-                  startSafeAction(1500);
+                  startSafeAction(3000);
                 }}
                 className="
             py-3
@@ -1921,9 +2097,10 @@ export default function StartExamPage() {
                   setExamStarted(true);
                 }
 
-                setTimeout(() => {
-                  setIgnoreFullscreen(false);
-                }, 500);
+                // Beri grace period 3 detik agar transisi layar setelah modal OK tidak memicu false positive
+                // Juga reset logoutRef agar keamanan aktif kembali setelah modal pelanggaran ditutup
+                logoutRef.current = false;
+                startSafeAction(3000);
               }}
               className="w-full bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition"
             >
@@ -2177,6 +2354,7 @@ export default function StartExamPage() {
               {/* PENGADUAN */}
               <button
                 onClick={() => {
+                  startSafeAction(5000);
                   setIgnoreFullscreen(true);
                   setIsModalPengaduanOpen(true);
                 }}
@@ -2221,61 +2399,6 @@ export default function StartExamPage() {
               </button>
             </div>
           </div>
-
-          {/* PESAN ADMIN */}
-          {pesan && (
-            <div
-              className="
-          mt-2
-          max-w-xl
-          relative
-          rounded-xl
-          bg-gradient-to-r
-          from-red-600
-          to-rose-500
-          px-3
-          py-2
-          pr-8
-          text-white
-          shadow-md
-        "
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  lastDismissedPesanRef.current = pesan;
-                  setPesan("");
-                }}
-                className="absolute top-2 right-2 text-white/80 hover:text-white bg-black/20 hover:bg-black/40 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold leading-none transition"
-                title="Tutup Pesan"
-              >
-                ✕
-              </button>
-              <p
-                className="
-            text-[9px]
-            md:text-[10px]
-            font-black
-            uppercase
-            tracking-wide
-          "
-              >
-                PESAN ADMIN
-              </p>
-
-              <p
-                className="
-            mt-1
-            text-[11px]
-            md:text-xs
-            text-red-50
-            leading-relaxed
-          "
-              >
-                {pesan}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* GARIS BAWAH */}
@@ -2360,14 +2483,49 @@ export default function StartExamPage() {
       )}
 
       {/* NOTIF COUNTDOWN SEBELUM SOAL DIKUNCI (HANYA AKTIF SAAT SOAL BELUM DIKUNCI) */}
-      {!soalLocked && lockCountdown !== null && lockCountdown > 0 && (
-        <div className="fixed top-[115px] left-1/2 -translate-x-1/2 z-[998] flex items-center gap-2 bg-amber-500 text-black text-xs font-black px-4 py-2 rounded-full shadow-xl border border-amber-300 animate-pulse pointer-events-none select-none whitespace-nowrap">
-          ⏳ Soal dikunci dalam{" "}
-          <span className="font-mono text-sm">
-            {String(Math.floor(lockCountdown / 60)).padStart(2, "0")}:
-            {String(lockCountdown % 60).padStart(2, "0")}
+      {!soalLocked && examStarted && lockCountdown !== null && lockCountdown > 0 && (
+        <div className="fixed top-[115px] left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 text-xs sm:text-sm font-black px-4 py-2 sm:px-5 sm:py-2.5 rounded-full shadow-2xl border-2 border-yellow-200 animate-pulse pointer-events-none select-none whitespace-nowrap">
+          ⏳ Soal dikunci otomatis dalam{" "}
+          <span className="font-mono text-sm sm:text-base font-extrabold px-2 py-0.5 rounded-lg bg-black text-yellow-300">
+            {lockCountdown}s
           </span>
           {" "}— isi identitas & jawaban sekarang!
+        </div>
+      )}
+
+      {/* PESAN DARI PENGAWAS / ADMIN (FLOATING BANNER SELALU TERLIHAT DI ATAS IFRAME) */}
+      {pesan && (
+        <div
+          className={`fixed ${
+            !soalLocked && examStarted && lockCountdown !== null && lockCountdown > 0
+              ? "top-[170px]"
+              : "top-[115px]"
+          } left-1/2 -translate-x-1/2 z-[9999] max-w-xl w-[94%] sm:w-[88%] rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 p-3 sm:p-4 text-white shadow-2xl border-2 border-red-300 backdrop-blur-md`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-2xl shrink-0">📢</span>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-red-200">
+                  PESAN DARI PENGAWAS / ADMIN
+                </p>
+                <p className="mt-0.5 text-xs sm:text-sm font-bold text-white leading-relaxed break-words">
+                  {pesan}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                lastDismissedPesanRef.current = pesan;
+                setPesan("");
+              }}
+              className="shrink-0 text-white/80 hover:text-white bg-black/30 hover:bg-black/50 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black leading-none transition"
+              title="Tutup Pesan"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
@@ -2475,6 +2633,7 @@ export default function StartExamPage() {
               <button
                 type="button"
                 onClick={() => {
+                  startSafeAction(3000);
                   setIgnoreFullscreen(true);
                   setIsConfirmHapusOpen(true);
                 }}
@@ -2701,6 +2860,7 @@ export default function StartExamPage() {
                 <button
                   onClick={() => {
                     setIsModalPengaduanOpen(false);
+                    startSafeAction(2000);
                     setIgnoreFullscreen(false);
                   }}
                   className="flex-1 py-2 font-bold text-gray-400 hover:text-gray-600"
@@ -2731,7 +2891,10 @@ export default function StartExamPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setIsConfirmHapusOpen(false)}
+                onClick={() => {
+                  setIsConfirmHapusOpen(false);
+                  startSafeAction(2000);
+                }}
                 className="flex-1 py-2 text-sm font-bold text-gray-400"
               >
                 Batal
@@ -2953,6 +3116,18 @@ export default function StartExamPage() {
               <button
                 onClick={() => {
                   setShowPanduanModal(false);
+                  showPanduanModalRef.current = false;
+                  examStartedRef.current = true;
+
+                  // Masuk mode fullscreen resmi dengan interaksi user gesture
+                  const isIOS =
+                    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                    (typeof navigator !== "undefined" &&
+                      navigator.platform === "MacIntel" &&
+                      navigator.maxTouchPoints > 1);
+                  if (!isIOS && !document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                  }
 
                   // Pasang history trap dengan user gesture resmi agar Android Chrome mengunci tombol back
                   armHistoryTrap();
