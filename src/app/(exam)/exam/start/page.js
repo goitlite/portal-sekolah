@@ -860,6 +860,8 @@ export default function StartExamPage() {
   // DETEKSI FULLSCREEN
   // =========================
   useEffect(() => {
+    fullscreenWasActiveRef.current = Boolean(document.fullscreenElement);
+
     function handleFullscreenChange() {
       const isIOS =
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -967,9 +969,9 @@ export default function StartExamPage() {
       // In-app PWA sudah berjalan tanpa chrome browser. Di browser biasa,
       // satu Back dari fullscreen langsung menampilkan tombol pemulihan.
       if (
-        fullscreenWasActiveRef.current &&
         !isIOS &&
         !isStandalonePwa &&
+        !document.fullscreenElement &&
         typeof document.documentElement.requestFullscreen === "function"
       ) {
         setShowFullscreenPrompt(true);
