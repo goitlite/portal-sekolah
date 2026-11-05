@@ -1586,106 +1586,35 @@ export default function StartExamPage() {
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // ======================
-      // LOGIKA DETEKSI: KUNCI SOAL, CATAT PELANGGARAN RESMI, & BLUR OVERLAY DENGAN COUNTDOWN 3 DETIK
+      // LOGIKA DETEKSI: KUNCI SOAL & TINDAKAN PELANGGARAN RESMI (LEMPAR SISWA KE AWAL SEPERTI PELANGGARAN LAINNYA)
       // ======================
       if (anyKeyboardOpen) {
-        // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
 
-        // 1. KUNCI SOAL SEGERA
+        // 1. Kunci soal segera
         setSoalLocked(true);
         soalLockedRef.current = true;
-
-        // 2. CATAT SEBAGAI PELANGGARAN RESMI & UPDATE KE SERVER / DATABASE SPREADSHEET
-        const currentViolations = parseInt(localStorage.getItem("violations") || "0");
-        const totalViolation = currentViolations + 1;
-        localStorage.setItem("violations", totalViolation.toString());
-        setViolations(totalViolation);
-
-        if (!localStorage.getItem("violationStartTime")) {
-          localStorage.setItem("violationStartTime", Date.now().toString());
-        }
-        if (totalViolation >= 3 && totalViolation % 3 === 0) {
-          localStorage.removeItem("penaltyPassed");
-        }
 
         const alasan = isFloatingKeyboard
           ? "Floating Keyboard terdeteksi di area ujian"
           : "Membuka keyboard standar tanpa izin";
 
-        try {
-          const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
-          const activeNama = localStorage.getItem("nama") || nama || "";
-          const activeKelas = localStorage.getItem("kelas") || localStorage.getItem("selectedKelas") || kelas || "";
-          catatPelanggaran(activeNama, activeKelas, currentId, totalViolation);
-        } catch (e) {
-          console.error("Gagal catat pelanggaran keyboard:", e);
-        }
-
-        // 3. Catat waktu mulai terdeteksi keyboard untuk wall-clock check
-        lastBlurAtRef.current = Date.now();
-
-        // 4. TAMPILKAN NOTIF BLUR DISAMARKAN & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
-        setIsWindowUnfocused(true);
-        setToleranceCountdown(3);
-
-        if (toleranceIntervalRef.current) {
-          clearInterval(toleranceIntervalRef.current);
-          toleranceIntervalRef.current = null;
-        }
-
-        toleranceIntervalRef.current = setInterval(() => {
-          setToleranceCountdown((prev) => {
-            if (prev === null || prev <= 1) {
-              if (toleranceIntervalRef.current) {
-                clearInterval(toleranceIntervalRef.current);
-                toleranceIntervalRef.current = null;
-              }
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-
+        // 2. Tampilkan notif deteksi pelanggaran
         triggerSecurityToast(
-          `🚨 Pelanggaran ${totalViolation} tercatat: ${alasan}! Tutup keyboard dalam 3 detik atau Anda dikeluarkan.`,
+          `🚨 Pelanggaran Berat: ${alasan}! Anda dikeluarkan dari ujian.`,
           "danger",
-          4000
+          3000
         );
 
-        clearTimeout(blurTimeoutRef.current);
-        blurTimeoutRef.current = setTimeout(() => {
-          const currentVv = window.visualViewport;
-          const currentDiff = currentVv ? window.innerHeight - currentVv.height : 0;
-          if (currentDiff > 20 && !safeActionRef.current && !logoutRef.current) {
-            forceLogout(`Keyboard terbuka di area ujian > 3 detik (${alasan})`);
-          }
-        }, 3200);
-
+        // 3. Eksekusi tindakan pelanggaran resmi: catat pelanggaran & lempar siswa ke awal seperti pelanggaran lainnya
+        forceLogout(alasan);
         return;
       }
 
       // RESET STATE JIKA KEYBOARD DITUTUP
       if (!anyKeyboardOpen) {
-        if (keyboardOpenedRef.current) {
-          keyboardOpenedRef.current = false;
-
-          // Jika siswa segera menutup keyboard kembali dalam batas toleransi 3 detik
-          if (lastBlurAtRef.current > 0) {
-            const awayTime = Date.now() - lastBlurAtRef.current;
-            if (awayTime <= 3200) {
-              setIsWindowUnfocused(false);
-              setToleranceCountdown(null);
-              if (toleranceIntervalRef.current) {
-                clearInterval(toleranceIntervalRef.current);
-                toleranceIntervalRef.current = null;
-              }
-              lastBlurAtRef.current = 0;
-              triggerSecurityToast("✅ Keyboard ditutup kembali tepat waktu (Aman).", "success", 2500);
-            }
-          }
-        }
+        keyboardOpenedRef.current = false;
       }
 
       if (safeActionRef.current) return;
