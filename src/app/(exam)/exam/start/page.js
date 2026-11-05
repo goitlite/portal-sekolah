@@ -886,29 +886,23 @@ export default function StartExamPage() {
       ) {
         return;
       }
-      fullscreenTimeout.current = setTimeout(() => {
-        if (logoutRef.current) return;
-        if (ignoreFullscreenRef.current) return;
-        if (safeActionRef.current) return;
+      if (logoutRef.current || document.fullscreenElement) return;
+      setShowFullscreenPrompt(true);
+      setToleranceCountdown(3);
+      const startedAt = Date.now();
+      clearInterval(fullscreenCountdownIntervalRef.current);
+      fullscreenCountdownIntervalRef.current = setInterval(() => {
+        const remaining = Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000));
+        setToleranceCountdown(remaining);
+        if (remaining <= 0) clearInterval(fullscreenCountdownIntervalRef.current);
+      }, 250);
+      clearTimeout(fullscreenReturnTimeoutRef.current);
+      fullscreenReturnTimeoutRef.current = setTimeout(() => {
         if (!document.fullscreenElement) {
-          setShowFullscreenPrompt(true);
-          setToleranceCountdown(3);
-          const startedAt = Date.now();
-          clearInterval(fullscreenCountdownIntervalRef.current);
-          fullscreenCountdownIntervalRef.current = setInterval(() => {
-            const remaining = Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000));
-            setToleranceCountdown(remaining);
-            if (remaining <= 0) clearInterval(fullscreenCountdownIntervalRef.current);
-          }, 250);
-          clearTimeout(fullscreenReturnTimeoutRef.current);
-          fullscreenReturnTimeoutRef.current = setTimeout(() => {
-            if (!document.fullscreenElement) {
-              setShowFullscreenPrompt(false);
-              forceLogout("Anda keluar dari fullscreen");
-            }
-          }, 3000);
+          setShowFullscreenPrompt(false);
+          forceLogout("Anda keluar dari fullscreen");
         }
-      }, 1000);
+      }, 3000);
     }
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -980,11 +974,6 @@ export default function StartExamPage() {
       ) {
         setShowFullscreenPrompt(true);
         setToleranceCountdown(3);
-        triggerSecurityToast(
-          "Layar penuh ditutup. Tekan tombol di tengah layar untuk kembali.",
-          "warning",
-          3000,
-        );
         return;
       }
 
