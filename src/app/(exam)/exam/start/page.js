@@ -37,6 +37,7 @@ export default function StartExamPage() {
   const lockTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
+  const timerExpiredRef = useRef(false);
   const [loadingPengaduan, setLoadingPengaduan] = useState(false);
   const [violations, setViolations] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -686,6 +687,7 @@ export default function StartExamPage() {
               const match = pesanUpper.match(/TAMBAH WAKTU (\d+)/);
               const menit = match ? parseInt(match[1]) : 0;
               if (menit > 0) {
+                timerExpiredRef.current = false;
                 setTimeLeft((prev) => prev + menit * 60);
                 showModal(
                   `⏱️ WAKTU DITAMBAH\n\n` +
@@ -990,9 +992,10 @@ export default function StartExamPage() {
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
-
-          showModal("⏰ Waktu ujian habis! Tombol Submit sekarang tersedia.");
+          if (prev > 0 && !timerExpiredRef.current) {
+            timerExpiredRef.current = true;
+            showModal("⏰ Waktu ujian habis! Tombol Submit sekarang tersedia.");
+          }
 
           return 0;
         }
@@ -1568,6 +1571,20 @@ export default function StartExamPage() {
       // iOS memakai ukuran visual viewport untuk mengenali keyboard docked.
       if (isIOS) {
         if (!window.visualViewport) return;
+        // Jangan menganggap keyboard untuk formulir pengaduan/kode darurat
+        // atau transisi aman sebagai pelanggaran.
+        if (
+          keyboardGraceRef.current ||
+          safeActionRef.current ||
+          isModalPengaduanOpenRef.current ||
+          showEmergencyInputRef.current ||
+          modalOpenRef.current ||
+          isConfirmHapusOpenRef.current ||
+          document.activeElement?.tagName === "INPUT" ||
+          document.activeElement?.tagName === "TEXTAREA"
+        ) {
+          return;
+        }
         const iosKeyboardOpen =
           window.innerHeight - window.visualViewport.height > 120;
         if (!iosKeyboardOpen) {
