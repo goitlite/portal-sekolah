@@ -563,12 +563,12 @@ export default function StartExamPage() {
   // CEK PESAN REALTIME & COMMAND ADMIN (REC-1 & REC-2)
   // =========================
   useEffect(() => {
-    const activeNama = nama || (typeof window !== "undefined" ? localStorage.getItem("nama") || "" : "");
-    const activeKelas = kelas || (typeof window !== "undefined" ? localStorage.getItem("kelas") || "" : "");
-    if (!activeNama) return;
-
     async function checkMessages() {
       try {
+        const activeNama = localStorage.getItem("nama") || nama || "";
+        const activeKelas = localStorage.getItem("kelas") || localStorage.getItem("selectedKelas") || kelas || "";
+        if (!activeNama) return;
+
         const result = await cekPesan(activeNama, activeKelas);
 
         if (result && result.status === "success") {
@@ -601,29 +601,25 @@ export default function StartExamPage() {
             }
           }
 
-          // 2. REC-1: Tampilkan pesan HANYA jika ada dan belum di-close oleh siswa
+          // 2. Tampilkan pesan pengawas / admin jika ada
           if (isiPesan) {
-            if (isiPesan !== lastDismissedPesanRef.current) {
-              setPesan(isiPesan);
-            }
+            setPesan(isiPesan);
           } else {
-            // Jika pesan dihapus oleh guru/admin di server, kosongkan state & tracker
-            lastDismissedPesanRef.current = "";
-            lastExecutedCommandRef.current = "";
             setPesan("");
+            lastExecutedCommandRef.current = "";
           }
 
-          // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (Hanya diproses 1x per perintah)
+          // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (fleksibel & responsif)
           const pesanUpper = isiPesan.toUpperCase();
           if (pesanUpper && lastExecutedCommandRef.current !== pesanUpper) {
             lastExecutedCommandRef.current = pesanUpper;
-            if (pesanUpper === "UJIAN DI RESET") {
+            if (pesanUpper === "UJIAN DI RESET" || pesanUpper === "RESET") {
               showModal("Ujian telah direset oleh admin");
               setTimeout(() => {
                 localStorage.removeItem("examLink");
                 router.push("/exam");
               }, 2000);
-            } else if (pesanUpper === "BUKA KUNCI") {
+            } else if (pesanUpper.includes("BUKA") || pesanUpper === "BUKA KUNCI") {
               // Hentikan hitungan mundur auto-lock dan hapus notif
               if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
               if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -632,14 +628,13 @@ export default function StartExamPage() {
               setTimeLeft(0);
               setSoalLocked(false);
               soalLockedRef.current = false;
-              // Safe action agar transisi buka kunci dari admin tidak memicu false positive
               startSafeAction(5000);
               showModal(
                 "✅ KUNCI WAKTU DIBUKA\n\n" +
                   "Pengawas / Guru telah membuka kunci ujian.\n" +
                   "Soal dan formulir sekarang dapat dikerjakan dan dikirimkan.",
               );
-            } else if (pesanUpper === "HAPUS PELANGGARAN") {
+            } else if (pesanUpper.includes("HAPUS PELANGGARAN") || pesanUpper === "CLEAR") {
               setViolations(0);
               localStorage.setItem("violations", "0");
               localStorage.removeItem("violationStartTime");
@@ -659,15 +654,16 @@ export default function StartExamPage() {
                   "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.\n" +
                   "Waktu ujian dan pengerjaan soal telah dimulai kembali.",
               );
-            } else if (pesanUpper === "KUNCI SOAL") {
+            } else if (pesanUpper === "KUNCI SOAL" || pesanUpper === "KUNCI") {
               setSoalLocked(true);
               soalLockedRef.current = true;
               showModal(
                 "🔒 SOAL DIKUNCI\n\n" +
                   "Akses pengisian formulir soal telah dikunci oleh pengawas / admin.",
               );
-            } else if (/^TAMBAH WAKTU \d+$/.test(pesanUpper)) {
-              const menit = parseInt(pesanUpper.replace("TAMBAH WAKTU ", "").trim()) || 0;
+            } else if (/TAMBAH WAKTU \d+/.test(pesanUpper)) {
+              const match = pesanUpper.match(/TAMBAH WAKTU (\d+)/);
+              const menit = match ? parseInt(match[1]) : 0;
               if (menit > 0) {
                 setTimeLeft((prev) => prev + menit * 60);
                 showModal(
@@ -683,9 +679,8 @@ export default function StartExamPage() {
       }
     }
 
-    // Panggil langsung saat effect jalan pertama kali
     checkMessages();
-    const interval = setInterval(checkMessages, 4000);
+    const interval = setInterval(checkMessages, 3500);
 
     return () => clearInterval(interval);
   }, [nama, kelas, idSiswa]);
@@ -1572,35 +1567,66 @@ export default function StartExamPage() {
       const widthRatio = viewportWidth / screenWidth;
       const heightRatio = viewportHeight / screenHeight;
 
-      // Hitung penyusutan layar akibat keyboard android
-      const keyboardDiff = window.innerHeight - viewportHeight;
-      const widthShrink = viewportWidth < window.innerWidth * 0.94;
+      // Hitung penyusutan layar akibat keyboard android (Multi-metrik: adaptif di semua jenis browser/OS Android)
+      const keyboardDiff = Math.max(
+        currentHeight - viewportHeight,
+        lastHeightRef.current > 0 ? lastHeightRef.current - viewportHeight : 0,
+        lastHeightRef.current > 0 ? lastHeightRef.current - currentHeight : 0,
+        screenHeight - viewportHeight - 60
+      );
+      const widthShrink = viewportWidth < window.innerWidth * 0.90;
 
       // Klasifikasi jenis keyboard Android:
-      // 1. Keyboard standar Android yang docked ke bawah (> 150px) (tanpa mengambang)
-      const isDockedKeyboard = keyboardDiff > 150;
-      // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 150px ATAU layar samping menyusut
+      // 1. Keyboard standar Android yang docked ke bawah (> 100px) (tanpa mengambang)
+      const isDockedKeyboard = keyboardDiff > 100;
+      // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 100px ATAU layar samping menyusut
       const isFloatingKeyboard =
-        (keyboardDiff > 25 && keyboardDiff <= 150) ||
+        (keyboardDiff > 25 && keyboardDiff <= 100) ||
         (widthShrink && keyboardDiff > 10);
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // ======================
-      // LOGIKA DETEKSI: BLUR OVERLAY & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
+      // LOGIKA DETEKSI: KUNCI SOAL, CATAT PELANGGARAN RESMI, & BLUR OVERLAY DENGAN COUNTDOWN 3 DETIK
       // ======================
       if (anyKeyboardOpen) {
         // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
 
-        // Kunci soal segera
+        // 1. KUNCI SOAL SEGERA
         setSoalLocked(true);
         soalLockedRef.current = true;
 
-        // Catat waktu mulai terdeteksi keyboard untuk wall-clock check
+        // 2. CATAT SEBAGAI PELANGGARAN RESMI & UPDATE KE SERVER / DATABASE SPREADSHEET
+        const currentViolations = parseInt(localStorage.getItem("violations") || "0");
+        const totalViolation = currentViolations + 1;
+        localStorage.setItem("violations", totalViolation.toString());
+        setViolations(totalViolation);
+
+        if (!localStorage.getItem("violationStartTime")) {
+          localStorage.setItem("violationStartTime", Date.now().toString());
+        }
+        if (totalViolation >= 3 && totalViolation % 3 === 0) {
+          localStorage.removeItem("penaltyPassed");
+        }
+
+        const alasan = isFloatingKeyboard
+          ? "Floating Keyboard terdeteksi di area ujian"
+          : "Membuka keyboard standar tanpa izin";
+
+        try {
+          const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+          const activeNama = localStorage.getItem("nama") || nama || "";
+          const activeKelas = localStorage.getItem("kelas") || localStorage.getItem("selectedKelas") || kelas || "";
+          catatPelanggaran(activeNama, activeKelas, currentId, totalViolation);
+        } catch (e) {
+          console.error("Gagal catat pelanggaran keyboard:", e);
+        }
+
+        // 3. Catat waktu mulai terdeteksi keyboard untuk wall-clock check
         lastBlurAtRef.current = Date.now();
 
-        // TAMPILKAN NOTIF BLUR DISAMARKAN & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
+        // 4. TAMPILKAN NOTIF BLUR DISAMARKAN & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
         setIsWindowUnfocused(true);
         setToleranceCountdown(3);
 
@@ -1622,25 +1648,21 @@ export default function StartExamPage() {
           });
         }, 1000);
 
-        const pesanPeringatan = isFloatingKeyboard
-          ? "🚨 Floating Keyboard terdeteksi! Tutup keyboard dalam 3 detik atau Anda dikeluarkan."
-          : "🚨 Keyboard terdeteksi di area ujian! Tutup keyboard dalam 3 detik atau Anda dikeluarkan.";
-        triggerSecurityToast(pesanPeringatan, "danger", 3000);
+        triggerSecurityToast(
+          `🚨 Pelanggaran ${totalViolation} tercatat: ${alasan}! Tutup keyboard dalam 3 detik atau Anda dikeluarkan.`,
+          "danger",
+          4000
+        );
 
         clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => {
           const currentVv = window.visualViewport;
           const currentDiff = currentVv ? window.innerHeight - currentVv.height : 0;
-          if (currentDiff > 25 && !safeActionRef.current && !logoutRef.current) {
-            forceLogout("Keyboard terbuka di area ujian > 3 detik (batas toleransi habis)");
+          if (currentDiff > 20 && !safeActionRef.current && !logoutRef.current) {
+            forceLogout(`Keyboard terbuka di area ujian > 3 detik (${alasan})`);
           }
         }, 3200);
 
-        if (isFloatingKeyboard) {
-          triggerViolation("Floating Keyboard terdeteksi di area ujian");
-        } else {
-          triggerViolation("Membuka keyboard standar tanpa izin");
-        }
         return;
       }
 

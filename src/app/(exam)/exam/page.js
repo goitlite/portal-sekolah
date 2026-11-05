@@ -668,53 +668,7 @@ export default function ExamPage() {
                           e.preventDefault();
                           if (loadingToken) return;
 
-                          // =========================
-                          // DETEKSI FLOATING KEYBOARD
-                          // =========================
-                          const isDesktop =
-                            window.innerWidth > 900 &&
-                            !/Android|iPhone|iPad|iPod/i.test(
-                              navigator.userAgent,
-                            );
-                          const isIOS =
-                            /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                            (typeof navigator !== "undefined" &&
-                              navigator.platform === "MacIntel" &&
-                              navigator.maxTouchPoints > 1);
-                          let keyboardSafe = true;
-
-                          if (!isDesktop && !isIOS && window.visualViewport) {
-                            await new Promise((resolve) => setTimeout(resolve, 150));
-                            const viewport = window.visualViewport;
-                            const diff = window.innerHeight - viewport.height;
-                            const widthShrink =
-                              viewport.width < window.innerWidth * 0.85;
-
-                            // HANYA keyboard mengambang (floating) jika keyboard aktif (>35px)
-                            // DAN ukurannya sangat kecil (<130px) atau menyusut ke samping (lebar < 85%)
-                            const isFloating =
-                              (diff > 35 && diff < 130) || (diff > 35 && widthShrink);
-
-                            if (isFloating) {
-                              keyboardSafe = false;
-                            }
-                          }
-
-                          // simpan status
-                          sessionStorage.setItem(
-                            "keyboardSafe",
-                            keyboardSafe ? "yes" : "no",
-                          );
-
-                          if (!keyboardSafe) {
-                            setTokenMessage(
-                              "❌ Keyboard mengambang (floating) terdeteksi.\n\nSilakan nonaktifkan mode floating dan gunakan keyboard standar penuh Android.",
-                            );
-                            setTokenModal(true);
-                            return;
-                          }
-
-                          // LANJUT UJIAN
+                          // LANJUT UJIAN LANGSUNG DENGAN AMAN
                           handleCheckToken(true);
                         }}
                         autoCapitalize="characters"
