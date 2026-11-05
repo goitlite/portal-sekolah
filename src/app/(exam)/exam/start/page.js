@@ -484,17 +484,19 @@ export default function StartExamPage() {
   }, [penaltyOpen, penaltyDone, violations]);
 
   function showModal(message) {
-    // Setiap kali modal info muncul, aktifkan safe action selama 8 detik
-    // agar transisi layar (blur, visibility) tidak dianggap pelanggaran
     safeActionRef.current = true;
     setIgnoreFullscreen(true);
-    setIsWindowUnfocused(false);
-    setToleranceCountdown(null);
-    if (toleranceIntervalRef.current) clearInterval(toleranceIntervalRef.current);
-    if (visibilityTimeoutRef.current) clearTimeout(visibilityTimeoutRef.current);
-    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
     setModalMessage(message);
     setModalOpen(true);
+    modalOpenRef.current = true;
+
+    // Timeout pengaman agar safeAction tidak macet jika modal ditutup
+    setTimeout(() => {
+      if (!modalOpenRef.current) {
+        safeActionRef.current = false;
+        setIgnoreFullscreen(false);
+      }
+    }, 4000);
   }
 
   function startSafeAction(duration = 3000) {
@@ -1060,6 +1062,8 @@ export default function StartExamPage() {
         // Jika modal terbuka → tutup modal SAJA
         if (modalOpen) {
           setModalOpen(false);
+          modalOpenRef.current = false;
+          startSafeAction(2000);
 
           setTimeout(async () => {
             try {
@@ -1582,37 +1586,84 @@ export default function StartExamPage() {
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
       // ======================
-      // LOGIKA DETEKSI: KUNCI & CATAT PELANGGARAN JIKA KEYBOARD DIBUKA (MENGAMBANG MAUPUN TANPA MENGAMBANG)
+      // LOGIKA DETEKSI: BLUR OVERLAY & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
       // ======================
       if (anyKeyboardOpen) {
         // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
 
-        if (isFloatingKeyboard) {
-          // Deteksi Keyboard Mengambang
-          setSoalLocked(true);
-          soalLockedRef.current = true;
-          showModal(
-            "❌ Pelanggaran Berat: Terdeteksi penggunaan Floating Keyboard (Keyboard Mengambang) atau modifikasi tampilan layar standar. Akses ujian langsung dikunci!",
-          );
-          triggerViolation("Floating Keyboard terdeteksi di area ujian");
-          return;
-        } else {
-          // Deteksi Keyboard Standar Android (Tanpa Mengambang)
-          setSoalLocked(true);
-          soalLockedRef.current = true;
-          showModal(
-            "❌ Pelanggaran: Membuka keyboard tidak diizinkan selama ujian berlangsung. Akses ujian langsung dikunci!",
-          );
-          triggerViolation("Membuka keyboard standar tanpa izin");
-          return;
+        // Kunci soal segera
+        setSoalLocked(true);
+        soalLockedRef.current = true;
+
+        // Catat waktu mulai terdeteksi keyboard untuk wall-clock check
+        lastBlurAtRef.current = Date.now();
+
+        // TAMPILKAN NOTIF BLUR DISAMARKAN & HITUNGAN MUNDUR 3 DETIK MENUJU HALAMAN AWAL
+        setIsWindowUnfocused(true);
+        setToleranceCountdown(3);
+
+        if (toleranceIntervalRef.current) {
+          clearInterval(toleranceIntervalRef.current);
+          toleranceIntervalRef.current = null;
         }
+
+        toleranceIntervalRef.current = setInterval(() => {
+          setToleranceCountdown((prev) => {
+            if (prev === null || prev <= 1) {
+              if (toleranceIntervalRef.current) {
+                clearInterval(toleranceIntervalRef.current);
+                toleranceIntervalRef.current = null;
+              }
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        const pesanPeringatan = isFloatingKeyboard
+          ? "🚨 Floating Keyboard terdeteksi! Tutup keyboard dalam 3 detik atau Anda dikeluarkan."
+          : "🚨 Keyboard terdeteksi di area ujian! Tutup keyboard dalam 3 detik atau Anda dikeluarkan.";
+        triggerSecurityToast(pesanPeringatan, "danger", 3000);
+
+        clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = setTimeout(() => {
+          const currentVv = window.visualViewport;
+          const currentDiff = currentVv ? window.innerHeight - currentVv.height : 0;
+          if (currentDiff > 25 && !safeActionRef.current && !logoutRef.current) {
+            forceLogout("Keyboard terbuka di area ujian > 3 detik (batas toleransi habis)");
+          }
+        }, 3200);
+
+        if (isFloatingKeyboard) {
+          triggerViolation("Floating Keyboard terdeteksi di area ujian");
+        } else {
+          triggerViolation("Membuka keyboard standar tanpa izin");
+        }
+        return;
       }
 
       // RESET STATE JIKA KEYBOARD DITUTUP
       if (!anyKeyboardOpen) {
-        keyboardOpenedRef.current = false;
+        if (keyboardOpenedRef.current) {
+          keyboardOpenedRef.current = false;
+
+          // Jika siswa segera menutup keyboard kembali dalam batas toleransi 3 detik
+          if (lastBlurAtRef.current > 0) {
+            const awayTime = Date.now() - lastBlurAtRef.current;
+            if (awayTime <= 3200) {
+              setIsWindowUnfocused(false);
+              setToleranceCountdown(null);
+              if (toleranceIntervalRef.current) {
+                clearInterval(toleranceIntervalRef.current);
+                toleranceIntervalRef.current = null;
+              }
+              lastBlurAtRef.current = 0;
+              triggerSecurityToast("✅ Keyboard ditutup kembali tepat waktu (Aman).", "success", 2500);
+            }
+          }
+        }
       }
 
       if (safeActionRef.current) return;

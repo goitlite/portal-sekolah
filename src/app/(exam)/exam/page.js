@@ -101,19 +101,8 @@ export default function ExamPage() {
       // =========================
       // VALIDASI KEYBOARD
       // =========================
-      const keyboardSafe = sessionStorage.getItem("keyboardSafe");
-      const isIOSDevice =
-        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (typeof navigator !== "undefined" &&
-          navigator.platform === "MacIntel" &&
-          navigator.maxTouchPoints > 1);
-
-      // Hanya blokir jika sudah divalidasi dan terbukti TIDAK aman ("no") pada Android / non-iOS
-      if (!isIOSDevice && keyboardSafe === "no") {
-        alert("Keyboard tidak valid.\nGunakan keyboard standar Android.");
-        router.push("/magang/dashboard_siswa");
-        return;
-      }
+      // Bersihkan flag lama agar siswa tidak terkunci permanen karena false positive
+      sessionStorage.removeItem("keyboardSafe");
 
       // =========================
       // VALIDASI SESSION
@@ -695,15 +684,18 @@ export default function ExamPage() {
                           let keyboardSafe = true;
 
                           if (!isDesktop && !isIOS && window.visualViewport) {
+                            await new Promise((resolve) => setTimeout(resolve, 150));
                             const viewport = window.visualViewport;
                             const diff = window.innerHeight - viewport.height;
                             const widthShrink =
-                              viewport.width < window.innerWidth * 0.9;
+                              viewport.width < window.innerWidth * 0.85;
 
-                            // Menggunakan logika deteksi < 180 atau penyusutan lebar
-                            const floatingLike = diff < 180 || widthShrink;
+                            // HANYA keyboard mengambang (floating) jika keyboard aktif (>35px)
+                            // DAN ukurannya sangat kecil (<130px) atau menyusut ke samping (lebar < 85%)
+                            const isFloating =
+                              (diff > 35 && diff < 130) || (diff > 35 && widthShrink);
 
-                            if (floatingLike) {
+                            if (isFloating) {
                               keyboardSafe = false;
                             }
                           }
@@ -716,7 +708,7 @@ export default function ExamPage() {
 
                           if (!keyboardSafe) {
                             setTokenMessage(
-                              "❌ Keyboard mengambang tidak diperbolehkan.\n\nGunakan keyboard standar Android.",
+                              "❌ Keyboard mengambang (floating) terdeteksi.\n\nSilakan nonaktifkan mode floating dan gunakan keyboard standar penuh Android.",
                             );
                             setTokenModal(true);
                             return;
