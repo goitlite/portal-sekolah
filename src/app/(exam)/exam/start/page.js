@@ -1547,27 +1547,16 @@ export default function StartExamPage() {
       if (
         isModalPengaduanOpenRef.current ||
         showEmergencyInputRef.current ||
-        safeActionRef.current
+        safeActionRef.current ||
+        document.activeElement?.tagName === "TEXTAREA" ||
+        document.activeElement?.tagName === "INPUT"
       ) {
         return;
       }
 
-      // Input yang sah keyboardnya:
-      // 1. Ketika kunci soal telah dibuka (!soalLockedRef.current) -> siswa boleh mengisi formulir Google Form
-      // 2. Elemen input atau textarea apa pun yang sah
-      const isAllowedInput =
-        !soalLockedRef.current ||
-        document.activeElement?.tagName === "TEXTAREA" ||
-        document.activeElement?.tagName === "INPUT";
-
       const currentHeight = window.innerHeight;
       const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
       lastViewportHeightRef.current = currentHeight;
-
-      // HANYA tambah risiko jika terjadi resize drastis di luar input resmi yang diizinkan
-      if (diff > 160 && !isAllowedInput) {
-        addOverlayRisk(15, "Large Viewport Resize");
-      }
 
       if (!window.visualViewport) return;
 
@@ -1583,33 +1572,25 @@ export default function StartExamPage() {
       const keyboardDiff = window.innerHeight - viewportHeight;
       const widthShrink = viewportWidth < window.innerWidth * 0.94;
 
-      // Klasifikasi jenis keyboard:
-      // 1. Keyboard standar Android yang docked ke bawah (> 150px)
+      // Klasifikasi jenis keyboard Android:
+      // 1. Keyboard standar Android yang docked ke bawah (> 150px) (tanpa mengambang)
       const isDockedKeyboard = keyboardDiff > 150;
       // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 150px ATAU layar samping menyusut
       const isFloatingKeyboard =
-        !isAllowedInput &&
-        ((keyboardDiff > 25 && keyboardDiff <= 150) ||
-        (widthShrink && keyboardDiff > 10));
+        (keyboardDiff > 25 && keyboardDiff <= 150) ||
+        (widthShrink && keyboardDiff > 10);
       const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
 
-      // Jika keyboard dibuka pada input resmi yang diizinkan (atau setelah kunci dibuka)
-      if (anyKeyboardOpen && isAllowedInput) {
-        return;
-      }
-
       // ======================
-      // LOGIKA DETEKSI: KUNCI & CATAT PELANGGARAN JIKA KEYBOARD DIBUKA ILEGAL
+      // LOGIKA DETEKSI: KUNCI & CATAT PELANGGARAN JIKA KEYBOARD DIBUKA (MENGAMBANG MAUPUN TANPA MENGAMBANG)
       // ======================
       if (anyKeyboardOpen) {
-        if (isAllowedInput) return;
-
         // Cegah spam alert berulang saat keyboard masih posisi terbuka
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
 
         if (isFloatingKeyboard) {
-          // Floating keyboard dilarang kapan pun (indikator contek/overlay)
+          // Deteksi Keyboard Mengambang
           setSoalLocked(true);
           soalLockedRef.current = true;
           showModal(
@@ -1617,8 +1598,8 @@ export default function StartExamPage() {
           );
           triggerViolation("Floating Keyboard terdeteksi di area ujian");
           return;
-        } else if (soalLockedRef.current) {
-          // Keyboard standar Android terbuka tanpa izin HANYA jika soal sedang dikunci
+        } else {
+          // Deteksi Keyboard Standar Android (Tanpa Mengambang)
           setSoalLocked(true);
           soalLockedRef.current = true;
           showModal(
@@ -1637,7 +1618,7 @@ export default function StartExamPage() {
       if (safeActionRef.current) return;
 
       // DETEKSI SPLIT SCREEN / FLOATING WINDOW APLIKASI LAIN
-      if (!isAllowedInput && (widthRatio < 0.88 || heightRatio < 0.80)) {
+      if (widthRatio < 0.88 || heightRatio < 0.80) {
         setSoalLocked(true);
         soalLockedRef.current = true;
         showModal(
@@ -1659,8 +1640,7 @@ export default function StartExamPage() {
       if (
         isModalPengaduanOpenRef.current ||
         showEmergencyInputRef.current ||
-        safeActionRef.current ||
-        !soalLockedRef.current
+        safeActionRef.current
       ) {
         return;
       }
