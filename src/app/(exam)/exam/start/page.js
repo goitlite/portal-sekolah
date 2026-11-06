@@ -261,6 +261,8 @@ export default function StartExamPage() {
   const fullscreenWasActiveRef = useRef(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
   const logoutRef = useRef(false);
+  const forceLogoutRef = useRef(null);
+  const showModalRef = useRef(null);
   const violationGraceTimerRef = useRef(null);
   const pendingViolationRef = useRef("");
   const iframeRef = useRef(null);
@@ -397,7 +399,20 @@ export default function StartExamPage() {
       const isStandalonePwa =
         window.matchMedia("(display-mode: standalone)").matches ||
         navigator.standalone === true;
-      if (isAndroid && !isStandalonePwa) {
+      const testingPinAllowed =
+        sessionStorage.getItem("examPwaAccess") === "testing-pin" ||
+        localStorage.getItem("examPwaPinAuthorized") === "true";
+      const standaloneGatePassed =
+        sessionStorage.getItem("examPwaAccess") === "standalone";
+      if (
+        isAndroid &&
+        !testingPinAllowed &&
+        (!isStandalonePwa || !standaloneGatePassed)
+      ) {
+        if (isStandalonePwa) {
+          router.replace("/exam");
+          return;
+        }
         setPwaRequired(true);
         return;
       }
@@ -528,7 +543,7 @@ export default function StartExamPage() {
     }
 
     init();
-  }, []);
+  }, [router]);
 
   // =========================
   // TIMER HUKUMAN (3 MENIT)
@@ -556,7 +571,7 @@ export default function StartExamPage() {
           setShowPanduanModal(false);
           setExamStarted(true);
           setLockCountdown((prev) =>
-            prev === null && !soalLocked ? 50 : prev,
+            prev === null && !soalLockedRef.current ? 50 : prev,
           );
 
           showModal(
@@ -589,6 +604,10 @@ export default function StartExamPage() {
     }, 4000);
   }
 
+  useEffect(() => {
+    showModalRef.current = showModal;
+  });
+
   function startSafeAction(duration = 3000) {
     safeActionRef.current = true;
     setIgnoreFullscreen(true);
@@ -610,7 +629,7 @@ export default function StartExamPage() {
     }, duration);
   }
 
-  function forceLogout(reason = "Pelanggaran ujian") {
+  const forceLogout = useCallback((reason = "Pelanggaran ujian") => {
     if (logoutRef.current || safeActionRef.current) return;
     // Semua sumber pelanggaran masuk satu antrean: satu timer toleransi,
     // satu notifikasi yang diperbarui, dan satu pencatatan akhir.
@@ -655,14 +674,18 @@ export default function StartExamPage() {
         console.error("Gagal catat pelanggaran:", e);
       }
 
-      showModal(finalReason + "\nTotal pelanggaran: " + totalViolation);
+      showModalRef.current?.(finalReason + "\nTotal pelanggaran: " + totalViolation);
 
       setTimeout(() => {
         localStorage.removeItem("examLink");
         router.push("/exam");
       }, 2000);
     }, 3000);
-  }
+  }, [idSiswa, kelas, nama, router, triggerSecurityToast]);
+
+  useEffect(() => {
+    forceLogoutRef.current = forceLogout;
+  }, [forceLogout]);
 
   // [DIHAPUS] LIVE AUTO RESET PELANGGARAN (80 MENIT)
   // Reset pelanggaran hanya bisa dilakukan admin via pesan "HAPUS PELANGGARAN"
@@ -808,7 +831,7 @@ export default function StartExamPage() {
     const interval = setInterval(checkMessages, 3500);
 
     return () => clearInterval(interval);
-  }, [nama, kelas, idSiswa]);
+  }, [nama, kelas, idSiswa, router]);
 
   // =========================
   // KIRIM PENGADUAN
@@ -955,6 +978,7 @@ export default function StartExamPage() {
   // DETEKSI FULLSCREEN
   // =========================
   useEffect(() => {
+    const fullscreenTimeoutOnSetup = fullscreenTimeout.current;
     fullscreenWasActiveRef.current = Boolean(document.fullscreenElement);
 
     function handleFullscreenChange() {
@@ -1001,14 +1025,14 @@ export default function StartExamPage() {
       fullscreenReturnTimeoutRef.current = setTimeout(() => {
         if (!document.fullscreenElement) {
           setShowFullscreenPrompt(false);
-          forceLogout("Anda keluar dari fullscreen");
+          forceLogoutRef.current?.("Anda keluar dari fullscreen");
         }
       }, 3000);
     }
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
-      clearTimeout(fullscreenTimeout.current);
+      clearTimeout(fullscreenTimeoutOnSetup);
       clearTimeout(fullscreenReturnTimeoutRef.current);
       clearInterval(fullscreenCountdownIntervalRef.current);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -1336,7 +1360,7 @@ export default function StartExamPage() {
         }
 
         // Jika tidak ada modal
-        forceLogout("Tombol ESC terdeteksi");
+        forceLogoutRef.current?.("Tombol ESC terdeteksi");
         return;
       }
 
@@ -1358,7 +1382,7 @@ export default function StartExamPage() {
       if (isDangerous) {
         e.preventDefault();
         e.stopPropagation();
-        forceLogout("Akses terlarang terdeteksi (F12/DevTools/Alt+Tab)!");
+        forceLogoutRef.current?.("Akses terlarang terdeteksi (F12/DevTools/Alt+Tab)!");
         return;
       }
 
@@ -1437,12 +1461,12 @@ export default function StartExamPage() {
       const heightGap = window.outerHeight - window.innerHeight;
 
       if (widthGap > threshold || heightGap > threshold) {
-        forceLogout("Developer tools terbuka");
+        forceLogoutRef.current?.("Developer tools terbuka");
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [violations]);
+  }, []);
   // Ganti section ANTI SPLIT SCREEN dengan ini:
 
   // =========================
@@ -1471,7 +1495,7 @@ export default function StartExamPage() {
 
       if (safeActionRef.current) return;
 
-      forceLogout(reason);
+      forceLogoutRef.current?.(reason);
     }
     // ======================
     // SAFE OVERLAY RISK
@@ -1616,7 +1640,7 @@ export default function StartExamPage() {
 
       // Jika user berada di luar fokus > 3.2 detik (misal membuka kalkulator / aplikasi lain)
       if (awayDuration > 3200) {
-        forceLogout(
+        forceLogoutRef.current?.(
           `Jendela ujian ditinggalkan selama ${Math.round(awayDuration / 1000)} detik (batas toleransi 3 detik)`,
         );
         return;
@@ -1706,7 +1730,7 @@ export default function StartExamPage() {
         if (awayDuration > 3200) {
           setIsWindowUnfocused(false);
           setToleranceCountdown(null);
-          forceLogout(
+          forceLogoutRef.current?.(
             `Anda meninggalkan halaman ujian selama ${Math.round(awayDuration / 1000)} detik (batas toleransi 3 detik)`,
           );
           return;
@@ -1846,7 +1870,7 @@ export default function StartExamPage() {
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
         if (soalLockedRef.current) {
-          forceLogout("Keyboard dibuka saat soal terkunci");
+          forceLogoutRef.current?.("Keyboard dibuka saat soal terkunci");
         }
         return;
       }
@@ -1898,7 +1922,7 @@ export default function StartExamPage() {
         if (keyboardOpenedRef.current) return;
         keyboardOpenedRef.current = true;
         if (soalLockedRef.current) {
-          forceLogout(
+          forceLogoutRef.current?.(
             isFloatingKeyboard
               ? "Floating Keyboard terdeteksi di area ujian"
               : "Membuka keyboard standar tanpa izin saat soal terkunci",
@@ -1988,7 +2012,7 @@ export default function StartExamPage() {
           // Jika sudah tercatat blur dan melebihi batas toleransi 3.2 detik
           const awayTime = Date.now() - lastBlurAtRef.current;
           if (awayTime > 3200) {
-            forceLogout(
+            forceLogoutRef.current?.(
               `Jendela ujian ditinggalkan selama ${Math.round(awayTime / 1000)} detik (batas toleransi 3 detik)`,
             );
           }
@@ -2038,7 +2062,7 @@ export default function StartExamPage() {
         );
       }
     };
-  }, []);
+  }, [armHistoryTrap, triggerSecurityToast]);
 
   // =========================
   // SCREEN WAKE LOCK
@@ -2096,7 +2120,7 @@ export default function StartExamPage() {
       if (isModalPengaduanOpen) return;
       e.preventDefault();
       e.stopPropagation();
-      forceLogout("Aksi Paste / tempel teks dari clipboard terdeteksi!");
+      forceLogoutRef.current?.("Aksi Paste / tempel teks dari clipboard terdeteksi!");
     }
 
     function handleGlobalCopy(e) {
@@ -2167,7 +2191,7 @@ export default function StartExamPage() {
 
       // jika tidak fokus + tidak ada touch (dan siswa sedang tidak aktif mengisi form di iframe)
       if (idleTime > 6000 && !document.hasFocus() && !isIframeFocused) {
-        forceLogout("Floating window / aplikasi lain terdeteksi");
+        forceLogoutRef.current?.("Floating window / aplikasi lain terdeteksi");
       }
     }, 1500);
 

@@ -5,6 +5,9 @@ import { cekPesan, registerStudent } from "@/services/authService";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+// HANYA UNTUK PENGUJIAN SEMENTARA. Nilai ini terlihat di bundle browser.
+const PWA_TEST_BYPASS_PIN = "293031";
+
 export default function ExamPage() {
   async function enterFullscreen() {
     try {
@@ -21,6 +24,112 @@ export default function ExamPage() {
     }
   }
   const router = useRouter();
+
+  const [pwaGateMode, setPwaGateMode] = useState("checking");
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [pwaPin, setPwaPin] = useState("");
+  const [pwaGateMessage, setPwaGateMessage] = useState("");
+  const [installStepsVisible, setInstallStepsVisible] = useState(false);
+
+  useEffect(() => {
+    function syncInstallPrompt() {
+      const promptEvent = window.__portalDeferredInstallPrompt || null;
+      if (promptEvent) setInstallPromptEvent(promptEvent);
+    }
+    function handleBeforeInstallPrompt(event) {
+      event.preventDefault();
+      window.__portalDeferredInstallPrompt = event;
+      setInstallPromptEvent(event);
+    }
+
+    syncInstallPrompt();
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    const classifyTimer = setTimeout(() => {
+      const ua = navigator.userAgent;
+      const isAndroid = /Android/i.test(ua);
+      const isIOS =
+        /iPad|iPhone|iPod/i.test(ua) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      // Otorisasi perangkat disimpan setelah PIN pengawas benar; PIN mentah tidak disimpan.
+      if (
+        isAndroid &&
+        localStorage.getItem("examPwaPinAuthorized") === "true"
+      ) {
+        setPwaGateMode("allowed");
+        return;
+      }
+
+      if (!isAndroid || isIOS) {
+        setPwaGateMode("allowed");
+        return;
+      }
+
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        navigator.standalone === true;
+      setPwaGateMode(standalone ? "standalone-check" : "browser");
+    }, 0);
+
+    return () => {
+      clearTimeout(classifyTimer);
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
+    };
+  }, []);
+
+  async function installPwaFromExamGate() {
+    if (!installPromptEvent) {
+      setInstallStepsVisible(true);
+      return;
+    }
+    try {
+      const promptEvent = installPromptEvent;
+      window.__portalDeferredInstallPrompt = null;
+      setInstallPromptEvent(null);
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      setPwaGateMessage(
+        choice.outcome === "accepted"
+          ? "Pemasangan dimulai. Setelah selesai, buka Portal Sekolah dari ikon layar utama."
+          : "Pemasangan belum dipilih. Ikuti panduan manual atau masukkan PIN uji.",
+      );
+      if (choice.outcome !== "accepted") setInstallStepsVisible(true);
+    } catch (_) {
+      setPwaGateMessage(
+        "Dialog instal tidak tersedia. Ikuti panduan manual atau masukkan PIN uji.",
+      );
+      setInstallStepsVisible(true);
+    }
+  }
+
+  function continueFromPwaGate() {
+    if (pwaGateMode === "standalone-check") {
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        navigator.standalone === true;
+      if (!standalone) {
+        setPwaGateMessage(
+          "PWA standalone belum terdeteksi. Buka aplikasi dari ikon layar utama.",
+        );
+        return;
+      }
+      sessionStorage.setItem("examPwaAccess", "standalone");
+      setPwaGateMode("allowed");
+      return;
+    }
+
+    if (pwaPin.trim() !== PWA_TEST_BYPASS_PIN) {
+      setPwaGateMessage("PIN pengecualian tidak sesuai.");
+      return;
+    }
+    sessionStorage.setItem("examPwaAccess", "testing-pin");
+    localStorage.setItem("examPwaPinAuthorized", "true");
+    setPwaGateMode("allowed");
+  }
 
   // =========================
   // STATE SISWA
@@ -60,13 +169,16 @@ export default function ExamPage() {
   const [tokenMessage, setTokenMessage] = useState("");
 
   useEffect(() => {
+    if (pwaGateMode !== "allowed") return;
     enterFullscreen();
-  }, []);
+  }, [pwaGateMode]);
 
   // =========================
   // LOAD SESSION
   // =========================
   useEffect(() => {
+    if (pwaGateMode !== "allowed") return;
+
     async function initSession() {
       let savedNama = localStorage.getItem("nama");
       let savedKelas = localStorage.getItem("kelas");
@@ -127,11 +239,10 @@ export default function ExamPage() {
           wa_ortu: "-",
         }).catch(() => {});
       }
-
     }
 
     initSession();
-  }, [router]);
+  }, [pwaGateMode, router]);
 
   // =========================
   // CEK PESAN ADMIN
@@ -221,6 +332,8 @@ export default function ExamPage() {
   // AUTO LOAD DATA UJIAN REALTIME
   // =========================
   useEffect(() => {
+    if (pwaGateMode !== "allowed") return;
+
     let isMounted = true;
     const fetchExam = async () => {
       try {
@@ -263,7 +376,7 @@ export default function ExamPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [pwaGateMode]);
 
   // ======================================
   // LIST JENJANG
@@ -404,6 +517,132 @@ export default function ExamPage() {
 
       console.log(error);
     }
+  }
+
+  if (pwaGateMode !== "allowed") {
+    const isCheckingPwa = pwaGateMode === "checking";
+    const isStandaloneGate = pwaGateMode === "standalone-check";
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
+        <section className="w-full max-w-lg rounded-3xl border border-white/15 bg-slate-900 p-6 shadow-2xl sm:p-8">
+          {isCheckingPwa ? (
+            <div
+              className="flex flex-col items-center gap-4 py-12"
+              role="status"
+            >
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-400 border-t-transparent" />
+              <p className="text-sm text-slate-300">Memeriksa mode aplikasi…</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-center">
+                <div className="text-5xl" aria-hidden="true">
+                  📲
+                </div>
+                <h1 className="mt-4 text-2xl font-black">
+                  {isStandaloneGate
+                    ? "Konfirmasi Aplikasi PWA"
+                    : "Instal atau Buka PWA"}
+                </h1>
+                <p className="mt-3 text-sm leading-relaxed text-slate-300">
+                  {isStandaloneGate
+                    ? "Tekan deteksi untuk memastikan portal dibuka dari aplikasi PWA standalone."
+                    : "Ujian Android harus dibuka dari aplikasi Portal Sekolah. Tab Chrome biasa tidak dapat melanjutkan tanpa pengecualian pengawas."}
+                </p>
+              </div>
+
+              {isStandaloneGate ? (
+                <button
+                  type="button"
+                  onClick={continueFromPwaGate}
+                  className="mt-6 w-full rounded-2xl bg-cyan-500 px-5 py-4 font-black text-slate-950 shadow-lg active:scale-[0.99]"
+                >
+                  Deteksi PWA dan Lanjutkan
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={installPwaFromExamGate}
+                    className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4 font-black text-slate-950 shadow-lg active:scale-[0.99]"
+                  >
+                    📲 Instal PWA Sekarang
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInstallStepsVisible((visible) => !visible)
+                    }
+                    className="mt-4 w-full rounded-2xl border border-white/20 bg-white/10 px-5 py-3 font-bold text-white"
+                  >
+                    Cara instal / membuka aplikasi
+                  </button>
+
+                  {installStepsVisible && (
+                    <ol className="mt-4 space-y-2 rounded-2xl bg-black/30 p-4 text-sm text-slate-200">
+                      <li>1. Di Chrome, buka menu ⋮.</li>
+                      <li>
+                        2. Pilih <b>Install app</b> atau{" "}
+                        <b>Tambahkan ke layar utama</b>.
+                      </li>
+                      <li>
+                        3. Setelah dipasang, tutup tab dan buka ikon Portal
+                        Sekolah.
+                      </li>
+                      <li>
+                        4. Jika opsi instal tidak tersedia, minta PIN
+                        pengecualian kepada pengawas.
+                      </li>
+                    </ol>
+                  )}
+
+                  <form
+                    className="mt-6 border-t border-white/10 pt-5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      continueFromPwaGate();
+                    }}
+                  >
+                    <label
+                      htmlFor="pwa-fallback-pin"
+                      className="block text-sm font-bold text-slate-200"
+                    >
+                      PIN pengecualian pengawas (uji sementara)
+                    </label>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        id="pwa-fallback-pin"
+                        type="password"
+                        value={pwaPin}
+                        onChange={(event) => setPwaPin(event.target.value)}
+                        autoComplete="one-time-code"
+                        className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-800 px-3 py-3 text-white outline-none focus:border-cyan-400"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-xl bg-cyan-500 px-4 py-3 font-black text-slate-950"
+                      >
+                        Lanjut
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+
+              {pwaGateMessage && (
+                <p
+                  role="status"
+                  className="mt-4 rounded-xl bg-amber-500/15 p-3 text-sm text-amber-200"
+                >
+                  {pwaGateMessage}
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      </main>
+    );
   }
 
   return (

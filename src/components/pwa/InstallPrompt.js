@@ -37,6 +37,8 @@ export default function InstallPrompt() {
 
       console.log("PWA Install tersedia");
 
+      // Keep the one-shot browser event available when SPA navigation reaches /exam.
+      window.__portalDeferredInstallPrompt = e;
       setDeferredPrompt(e);
 
       setTimeout(() => {
@@ -69,6 +71,7 @@ export default function InstallPrompt() {
 
     console.log(choice.outcome);
 
+    window.__portalDeferredInstallPrompt = null;
     setDeferredPrompt(null);
     setShow(false);
   }
