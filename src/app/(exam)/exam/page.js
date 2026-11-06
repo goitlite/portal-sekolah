@@ -51,11 +51,15 @@ export default function ExamPage() {
       const isIOS =
         /iPad|iPhone|iPod/i.test(ua) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const pwaSessionGatePassed =
+        sessionStorage.getItem("examPwaAccess") === "standalone";
 
-      // Otorisasi perangkat disimpan setelah PIN pengawas benar; PIN mentah tidak disimpan.
+      // Jangan minta deteksi ulang saat route kembali ke /exam dalam sesi PWA yang sudah lolos.
+      // Otorisasi PIN perangkat juga disimpan tanpa menyimpan PIN mentah.
       if (
         isAndroid &&
-        localStorage.getItem("examPwaPinAuthorized") === "true"
+        (pwaSessionGatePassed ||
+          localStorage.getItem("examPwaPinAuthorized") === "true")
       ) {
         setPwaGateMode("allowed");
         return;
