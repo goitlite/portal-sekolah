@@ -59,6 +59,9 @@ export default function StartExamPage() {
   const safeActionRef = useRef(false);
 
   const [browserBlocked, setBrowserBlocked] = useState(false);
+  const [pwaRequired, setPwaRequired] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [installFeedback, setInstallFeedback] = useState("");
   const [penaltyOpen, setPenaltyOpen] = useState(false);
 
   const [penaltyTime, setPenaltyTime] = useState(3 * 60);
@@ -358,6 +361,25 @@ export default function StartExamPage() {
   // LOAD SESSION
   // =========================
   useEffect(() => {
+    function handleBeforeInstallPrompt(event) {
+      event.preventDefault();
+      setDeferredInstallPrompt(event);
+    }
+    function handleAppInstalled() {
+      setDeferredInstallPrompt(null);
+      setInstallFeedback(
+        "PWA berhasil dipasang. Buka Portal Sekolah dari ikon di layar utama untuk mulai ujian.",
+      );
+    }
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
     async function init() {
       // =========================
       // VALIDASI GOOGLE CHROME
@@ -367,6 +389,15 @@ export default function StartExamPage() {
         console.log("VENDOR:", navigator.vendor);
 
         setBrowserBlocked(true);
+        return;
+      }
+
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isStandalonePwa =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        navigator.standalone === true;
+      if (isAndroid && !isStandalonePwa) {
+        setPwaRequired(true);
         return;
       }
 
@@ -2210,6 +2241,62 @@ export default function StartExamPage() {
             </p>
           </div>
         </div>
+      </main>
+    );
+  }
+
+  if (pwaRequired) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
+        <section className="w-full max-w-lg rounded-3xl border border-white/15 bg-slate-900 p-6 shadow-2xl sm:p-8">
+          <div className="text-center">
+            <div className="text-5xl" aria-hidden="true">📲</div>
+            <h1 className="mt-4 text-2xl font-black sm:text-3xl">Ujian Dibuka dari PWA</h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              Untuk memulai ujian di Android, pasang Portal Sekolah lalu buka kembali dari ikon aplikasi di layar utama.
+            </p>
+          </div>
+
+          <ol className="mt-6 space-y-3 rounded-2xl bg-black/30 p-4 text-sm text-slate-200">
+            <li><b>1.</b> Di Chrome, pilih menu ⋮ di kanan atas.</li>
+            <li><b>2.</b> Pilih <b>Install app</b> atau <b>Add to Home screen</b>, lalu konfirmasi pemasangan.</li>
+            <li><b>3.</b> Kembali ke layar utama dan buka ikon <b>Portal Sekolah</b>.</li>
+            <li><b>4.</b> Masuk ke ujian kembali dari PWA tersebut.</li>
+          </ol>
+
+          {installFeedback && (
+            <p role="status" className="mt-4 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-200">
+              {installFeedback}
+            </p>
+          )}
+
+          {deferredInstallPrompt && (
+            <button
+              type="button"
+              onClick={async () => {
+                const promptEvent = deferredInstallPrompt;
+                setDeferredInstallPrompt(null);
+                try {
+                  await promptEvent.prompt();
+                  const choice = await promptEvent.userChoice;
+                  setInstallFeedback(
+                    choice.outcome === "accepted"
+                      ? "Pemasangan dimulai. Setelah selesai, buka aplikasi dari ikon layar utama."
+                      : "Pemasangan belum dilakukan. Pilih Install app dari menu Chrome untuk melanjutkan.",
+                  );
+                } catch (_) {
+                  setInstallFeedback("Gunakan menu ⋮ Chrome lalu pilih Install app atau Add to Home screen.");
+                }
+              }}
+              className="mt-5 w-full rounded-2xl bg-cyan-500 px-5 py-4 font-black text-slate-950 shadow-lg active:scale-[0.99]"
+            >
+              Pasang Portal Sekolah
+            </button>
+          )}
+          <p className="mt-5 text-center text-xs text-slate-400">
+            Jika PWA sudah terpasang, tutup tab ini lalu buka aplikasi dari ikonnya.
+          </p>
+        </section>
       </main>
     );
   }
