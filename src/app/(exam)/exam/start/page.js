@@ -402,12 +402,14 @@ export default function StartExamPage() {
       const testingPinAllowed =
         sessionStorage.getItem("examPwaAccess") === "testing-pin" ||
         localStorage.getItem("examPwaPinAuthorized") === "true";
+      // Mode PWA diverifikasi di /exam; gunakan penanda itu selama navigasi ini,
+      // karena hasil display-mode dapat berbeda setelah transisi fullscreen/token.
       const standaloneGatePassed =
         sessionStorage.getItem("examPwaAccess") === "standalone";
       if (
         isAndroid &&
         !testingPinAllowed &&
-        (!isStandalonePwa || !standaloneGatePassed)
+        !standaloneGatePassed
       ) {
         if (isStandalonePwa) {
           router.replace("/exam");
