@@ -275,6 +275,7 @@ export default function StartExamPage() {
   const keyboardCountRef = useRef(0);
   const keyboardOpenedRef = useRef(false);
   const keyboardTestRef = useRef(null);
+  const keyboardConfirmTimeoutRef = useRef(null);
   const keyboardGraceRef = useRef(true);
 
   // Ref untuk membaca soalLocked, penaltyOpen, dan panduan terbaru di dalam event handler (hindari stale closure)
@@ -1404,6 +1405,8 @@ export default function StartExamPage() {
     lastWidthRef.current = window.innerWidth;
     lastHeightRef.current = window.innerHeight;
     lastViewportHeightRef.current = window.innerHeight;
+    let keyboardBaselineInnerHeight = window.innerHeight;
+    let keyboardBaselineVisualHeight = window.visualViewport?.height || window.innerHeight;
 
     function triggerViolation(reason) {
       if (logoutRef.current) return;
@@ -1806,68 +1809,68 @@ export default function StartExamPage() {
         return;
       }
 
-      const currentHeight = window.innerHeight;
-      const diff = Math.abs(currentHeight - lastViewportHeightRef.current);
-      lastViewportHeightRef.current = currentHeight;
-
       if (!window.visualViewport) return;
 
       const viewportWidth = window.visualViewport.width;
       const viewportHeight = window.visualViewport.height;
-      const screenWidth = window.screen.width;
-      const screenHeight = window.screen.height;
-
-      const widthRatio = viewportWidth / screenWidth;
-      const heightRatio = viewportHeight / screenHeight;
-
-      // Hitung penyusutan layar akibat keyboard android (Multi-metrik: adaptif di semua jenis browser/OS Android)
-      const keyboardDiff = Math.max(
-        currentHeight - viewportHeight,
-        lastHeightRef.current > 0 ? lastHeightRef.current - viewportHeight : 0,
-        lastHeightRef.current > 0 ? lastHeightRef.current - currentHeight : 0,
-        screenHeight - viewportHeight - 60,
-      );
-      const widthShrink = viewportWidth < window.innerWidth * 0.9;
-
-      // Klasifikasi jenis keyboard Android:
-      // 1. Keyboard standar Android yang docked ke bawah (> 100px) (tanpa mengambang)
-      const isDockedKeyboard = keyboardDiff > 100;
-      // 2. Floating Keyboard Android (Keyboard Mengambang): penyusutan kecil 25px - 100px ATAU layar samping menyusut
-      const isFloatingKeyboard =
-        (keyboardDiff > 25 && keyboardDiff <= 100) ||
-        (widthShrink && keyboardDiff > 10);
-      const anyKeyboardOpen = isDockedKeyboard || isFloatingKeyboard;
+      const currentInnerHeight = window.innerHeight;
+      const innerLoss = keyboardBaselineInnerHeight - currentInnerHeight;
+      const visualLoss = keyboardBaselineVisualHeight - viewportHeight;
+      const virtualKeyboardHeight =
+        navigator.virtualKeyboard?.boundingRect?.height || 0;
+      const widthLossRatio =
+        (window.innerWidth - viewportWidth) / Math.max(window.innerWidth, 1);
+      const dockedKeyboard =
+        innerLoss > 110 || visualLoss > 110 || virtualKeyboardHeight > 100;
+      const floatingKeyboard =
+        (innerLoss > 35 && innerLoss <= 110) ||
+        (visualLoss > 35 && visualLoss <= 110) ||
+        (widthLossRatio > 0.06 && (innerLoss > 15 || visualLoss > 15));
+      const anyKeyboardOpen = dockedKeyboard || floatingKeyboard;
 
       // ======================
       // Keyboard tidak dihitung sebagai pelanggaran selama 50 detik pertama.
       // Setelah soal terkunci, keyboard yang terdeteksi menjadi satu pelanggaran.
       // ======================
       if (anyKeyboardOpen) {
-        if (keyboardOpenedRef.current) return;
-        keyboardOpenedRef.current = true;
-        if (soalLockedRef.current) {
-          const alasan = isFloatingKeyboard
-            ? "Floating Keyboard terdeteksi di area ujian"
-            : "Membuka keyboard standar tanpa izin saat soal terkunci";
+        if (keyboardOpenedRef.current || keyboardConfirmTimeoutRef.current) return;
+        // Stabilkan sebentar agar resize animasi browser tidak menjadi pelanggaran.
+        keyboardConfirmTimeoutRef.current = setTimeout(() => {
+          keyboardConfirmTimeoutRef.current = null;
+          const latestVisualHeight = window.visualViewport?.height || window.innerHeight;
+          const latestInnerLoss = keyboardBaselineInnerHeight - window.innerHeight;
+          const latestVisualLoss = keyboardBaselineVisualHeight - latestVisualHeight;
+          const latestVirtualKeyboardHeight =
+            navigator.virtualKeyboard?.boundingRect?.height || 0;
+          if (
+            latestInnerLoss <= 35 &&
+            latestVisualLoss <= 35 &&
+            latestVirtualKeyboardHeight <= 80
+          ) return;
 
-          triggerSecurityToast(
-            `🚨 Pelanggaran Berat: ${alasan}! Anda dikeluarkan dari ujian.`,
-            "danger",
-            3000,
-          );
-          forceLogout(alasan);
-          return;
-        }
-
-        // Keyboard normal atau floating selama masa awal tidak melanggar.
-        // Hindari salah klasifikasi penyusutan viewport sebagai split-screen.
+          keyboardOpenedRef.current = true;
+          if (soalLockedRef.current) {
+            const reason = floatingKeyboard
+              ? "Floating Keyboard terdeteksi di area ujian"
+              : "Membuka keyboard standar tanpa izin saat soal terkunci";
+            forceLogout(reason);
+          }
+        }, 250);
         return;
       }
 
-      // RESET STATE JIKA KEYBOARD DITUTUP
-      if (!anyKeyboardOpen) {
-        keyboardOpenedRef.current = false;
+      // Saat keyboard tertutup, reset dedupe dan perbarui baseline bila
+      // browser chrome/address bar mengubah tinggi halaman.
+      keyboardOpenedRef.current = false;
+      if (keyboardConfirmTimeoutRef.current) {
+        clearTimeout(keyboardConfirmTimeoutRef.current);
+        keyboardConfirmTimeoutRef.current = null;
       }
+      keyboardBaselineInnerHeight = Math.max(keyboardBaselineInnerHeight, currentInnerHeight);
+      keyboardBaselineVisualHeight = Math.max(keyboardBaselineVisualHeight, viewportHeight);
+
+      const widthRatio = viewportWidth / Math.max(window.screen.width, 1);
+      const heightRatio = viewportHeight / Math.max(window.screen.height, 1);
 
       if (safeActionRef.current) return;
 
@@ -1973,6 +1976,7 @@ export default function StartExamPage() {
       window.visualViewport.addEventListener("resize", handleViewport);
       window.visualViewport.addEventListener("scroll", handleViewportScroll);
     }
+    navigator.virtualKeyboard?.addEventListener?.("geometrychange", handleViewport);
 
     return () => {
       clearInterval(decayInterval);
@@ -1996,6 +2000,11 @@ export default function StartExamPage() {
           "scroll",
           handleViewportScroll,
         );
+      }
+      navigator.virtualKeyboard?.removeEventListener?.("geometrychange", handleViewport);
+      if (keyboardConfirmTimeoutRef.current) {
+        clearTimeout(keyboardConfirmTimeoutRef.current);
+        keyboardConfirmTimeoutRef.current = null;
       }
     };
   }, []);
