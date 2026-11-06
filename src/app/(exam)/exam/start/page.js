@@ -62,6 +62,7 @@ export default function StartExamPage() {
   const [pwaRequired, setPwaRequired] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const [installFeedback, setInstallFeedback] = useState("");
+  const [showManualInstallSteps, setShowManualInstallSteps] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
 
   const [penaltyTime, setPenaltyTime] = useState(3 * 60);
@@ -2257,12 +2258,14 @@ export default function StartExamPage() {
             </p>
           </div>
 
-          <ol className="mt-6 space-y-3 rounded-2xl bg-black/30 p-4 text-sm text-slate-200">
-            <li><b>1.</b> Di Chrome, pilih menu ⋮ di kanan atas.</li>
-            <li><b>2.</b> Pilih <b>Install app</b> atau <b>Add to Home screen</b>, lalu konfirmasi pemasangan.</li>
-            <li><b>3.</b> Kembali ke layar utama dan buka ikon <b>Portal Sekolah</b>.</li>
-            <li><b>4.</b> Masuk ke ujian kembali dari PWA tersebut.</li>
-          </ol>
+          {(!deferredInstallPrompt || showManualInstallSteps) && (
+            <ol className="mt-5 space-y-3 rounded-2xl bg-black/30 p-4 text-left text-sm text-slate-200">
+              <li><b>1.</b> Di Chrome, pilih menu ⋮ di kanan atas.</li>
+              <li><b>2.</b> Pilih <b>Install app</b> atau <b>Add to Home screen</b>, lalu konfirmasi pemasangan.</li>
+              <li><b>3.</b> Kembali ke layar utama dan buka ikon <b>Portal Sekolah</b>.</li>
+              <li><b>4.</b> Masuk ke ujian kembali dari PWA tersebut.</li>
+            </ol>
+          )}
 
           {installFeedback && (
             <p role="status" className="mt-4 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-200">
@@ -2274,23 +2277,25 @@ export default function StartExamPage() {
             <button
               type="button"
               onClick={async () => {
-                const promptEvent = deferredInstallPrompt;
-                setDeferredInstallPrompt(null);
-                try {
-                  await promptEvent.prompt();
-                  const choice = await promptEvent.userChoice;
-                  setInstallFeedback(
-                    choice.outcome === "accepted"
-                      ? "Pemasangan dimulai. Setelah selesai, buka aplikasi dari ikon layar utama."
-                      : "Pemasangan belum dilakukan. Pilih Install app dari menu Chrome untuk melanjutkan.",
-                  );
-                } catch (_) {
-                  setInstallFeedback("Gunakan menu ⋮ Chrome lalu pilih Install app atau Add to Home screen.");
-                }
+              const promptEvent = deferredInstallPrompt;
+              setDeferredInstallPrompt(null);
+              try {
+                await promptEvent.prompt();
+                const choice = await promptEvent.userChoice;
+                setInstallFeedback(
+                  choice.outcome === "accepted"
+                    ? "Pemasangan dimulai. Setelah selesai, buka aplikasi dari ikon layar utama."
+                    : "Pemasangan belum dilakukan. Gunakan petunjuk instalasi di bawah. ",
+                );
+                if (choice.outcome !== "accepted") setShowManualInstallSteps(true);
+              } catch (_) {
+                setShowManualInstallSteps(true);
+                setInstallFeedback("Gunakan menu ⋮ Chrome lalu pilih Install app atau Add to Home screen.");
+              }
               }}
-              className="mt-5 w-full rounded-2xl bg-cyan-500 px-5 py-4 font-black text-slate-950 shadow-lg active:scale-[0.99]"
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4 text-base font-black text-slate-950 shadow-lg active:scale-[0.99]"
             >
-              Pasang Portal Sekolah
+              📲 Instal Sekarang
             </button>
           )}
           <p className="mt-5 text-center text-xs text-slate-400">
