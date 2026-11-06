@@ -8,6 +8,7 @@ import {
   hapusDataUjian,
   fetchSemuaSiswaAsesmen,
   resetPelanggaranSiswa,
+  resetDeviceSiswa,
   kirimPesanUjian,
   hapusPesanUjian,
   hapusAkunSiswaAsesmen,
@@ -43,8 +44,22 @@ function getWarnaKelas(namaKelas) {
 
 export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) {
   // Mode Admin Asesmen (Super Admin Ujian)
-  const [isAdminAsesmen, setIsAdminAsesmen] = useState(false);
-  const [pinAdminAsesmen, setPinAdminAsesmen] = useState("");
+  const [isAdminAsesmen, setIsAdminAsesmen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return sessionStorage.getItem("is_admin_asesmen") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [pinAdminAsesmen, setPinAdminAsesmen] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return sessionStorage.getItem("pin_admin_asesmen") || "";
+    } catch {
+      return "";
+    }
+  });
   const [showModalPin, setShowModalPin] = useState(false);
   const [inputPin, setInputPin] = useState("");
   const [pinError, setPinError] = useState("");
@@ -110,18 +125,6 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   const [pesanInput, setPesanInput] = useState("");
   const [targetPesan, setTargetPesan] = useState({ tipe: "kelas", kelas: "SEMUA", nama: "" });
 
-  // Cek sessionStorage untuk PIN Admin yang pernah dimasukkan
-  useEffect(() => {
-    try {
-      const savedAdmin = sessionStorage.getItem("is_admin_asesmen");
-      const savedPin = sessionStorage.getItem("pin_admin_asesmen");
-      if (savedAdmin === "true" && savedPin) {
-        setIsAdminAsesmen(true);
-        setPinAdminAsesmen(savedPin);
-      }
-    } catch {}
-  }, []);
-
   // 1. Muat Data Sheet UJIAN
   const loadUjian = useCallback(async () => {
     setLoadingUjian(true);
@@ -159,8 +162,11 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   }, []);
 
   useEffect(() => {
-    loadUjian();
-    loadSiswa();
+    const timer = setTimeout(() => {
+      loadUjian();
+      loadSiswa();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadUjian, loadSiswa]);
 
   // Daftar Unik Opsi Mapel & Kelas yang Diajar Guru Ini
@@ -344,7 +350,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
   // Reset page saat filter berubah
   useEffect(() => {
-    setCurrentPage(1);
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [filterKelas, filterNamaSiswa, filterIdSiswa, filterPelanggaran, pageSize]);
 
   // --- 1. AKSI TAMBAH UJIAN (APPEND BARU) ---
@@ -542,20 +551,56 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     }
   };
 
+  // Aksi Reset Perangkat HP Siswa (Admin/Guru)
+  const handleResetDeviceSiswa = async (s) => {
+    if (
+      !confirm(
+        `Reset sesi perangkat untuk ${s.nama || s.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`
+      )
+    )
+      return;
+
+    setActionLoading(true);
+    try {
+      const res = await resetDeviceSiswa({
+        id_siswa: s.id_siswa,
+        nama: s.nama,
+        kelas: s.kelas,
+        id_guru: user?.id || "",
+        pin_admin: pinAdminAsesmen,
+      });
+      if (res.status === "success") {
+        setSuksesMsg(`Perangkat ${s.nama} berhasil direset! Siswa dapat login di HP baru.`);
+        loadSiswa();
+      } else {
+        setErrorMsg(res.message || "Gagal mereset perangkat");
+      }
+    } catch (err) {
+      setErrorMsg("Error: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleHapusAkunSiswa = async (s) => {
     const konfirmasi = confirm(
-      `⚠️ HAPUS AKUN SISWA:\n\nNama: ${s.nama}\nKelas: ${s.kelas}\nID Siswa: ${s.id_siswa}\n\nSesuai mekanisme sistem:\n- Kolom C (ID Siswa) AKAN TETAP TERSIMPAN agar siswa dapat registrasi ulang.\n- Data Nama, Kelas, Pelanggaran, dan Pesan akan dibersihkan.\n\nLanjutkan?`
+      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nNama: ${s.nama}\nKelas: ${s.kelas}\nID Siswa: ${s.id_siswa}\n\nSeluruh baris siswa ini akan DIHAPUS TOTAL dari spreadsheet database.\n\nLanjutkan?`
     );
     if (!konfirmasi) return;
 
     setActionLoading(true);
     try {
-      const res = await hapusAkunSiswaAsesmen(s.id_siswa, pinAdminAsesmen);
+      const res = await hapusAkunSiswaAsesmen(
+        s.id_siswa,
+        pinAdminAsesmen,
+        s.nama,
+        s.kelas
+      );
       if (res.status === "success") {
-        setSuksesMsg(`Akun siswa ${s.nama} (${s.id_siswa}) berhasil dihapus!`);
+        setSuksesMsg(`Baris siswa ${s.nama} (${s.id_siswa}) berhasil dihapus total!`);
         loadSiswa();
       } else {
-        setErrorMsg(res.message || "Gagal menghapus akun");
+        setErrorMsg(res.message || "Gagal menghapus baris siswa");
       }
     } catch (err) {
       setErrorMsg("Error: " + err.message);
@@ -1138,7 +1183,25 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                             {nomorUrut}
                           </td>
                           <td className="px-2.5 py-1.5 font-bold text-slate-900 leading-tight">
-                            {s.nama || "-"}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{s.nama || "-"}</span>
+                              {s.status_sesi === "AKTIF" && s.device_id && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300"
+                                  title={`Terkunci di HP (Mapel: ${s.mapel_aktif || "-"})`}
+                                >
+                                  📱 Terkunci HP
+                                </span>
+                              )}
+                              {s.status_sesi === "RESET" && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300"
+                                  title="Sesi perangkat telah direset oleh admin/guru, siswa dapat login dari HP baru"
+                                >
+                                  🔄 Boleh HP Baru
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-2.5 py-1.5 font-black whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${warna.badge}`}>
@@ -1185,6 +1248,17 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                           </td>
                           <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
+                              {/* Reset Perangkat HP */}
+                              <button
+                                onClick={() => handleResetDeviceSiswa(s)}
+                                disabled={actionLoading}
+                                className="rounded bg-teal-600 hover:bg-teal-700 text-white px-1.5 py-0.5 sm:px-2 sm:py-0.5 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-0.5 cursor-pointer disabled:opacity-40"
+                                title="Reset kunci perangkat siswa ini agar bisa login di HP baru"
+                              >
+                                <span>📱</span>
+                                <span className="hidden sm:inline">Reset HP</span>
+                              </button>
+
                               <button
                                 onClick={() => handleResetPelanggaranSiswa(s)}
                                 disabled={actionLoading || s.pelanggaran === 0}
@@ -1214,7 +1288,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                   onClick={() => handleHapusAkunSiswa(s)}
                                   disabled={actionLoading}
                                   className="rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 text-[10px] font-bold transition-all flex items-center gap-0.5 cursor-pointer"
-                                  title="Hapus akun siswa (ID tetap tersimpan)"
+                                  title="Hapus total baris siswa dari spreadsheet database"
                                 >
                                   <span>🗑️</span>
                                   <span className="hidden sm:inline">Hapus</span>

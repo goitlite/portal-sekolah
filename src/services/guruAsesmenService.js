@@ -54,6 +54,27 @@ export async function resetPelanggaranSiswa({ id_siswa, nama, kelas, id_guru, pi
   }
 }
 
+export async function resetDeviceSiswa({ id_siswa, nama, kelas, id_guru, pin_admin }) {
+  try {
+    const res = await fetch("/api/guru/asesmen/database", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guru_reset_device",
+        id_siswa,
+        nama,
+        kelas,
+        id_guru,
+        pin_admin,
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    return { status: "error", message: err.message };
+  }
+}
+
+
 export async function kirimPesanUjian({ kelas, nama, pesan, id_guru, pin_admin }) {
   try {
     const res = await fetch("/api/guru/asesmen/database", {
@@ -93,7 +114,7 @@ export async function hapusPesanUjian({ kelas, nama, id_guru, pin_admin }) {
   }
 }
 
-export async function hapusAkunSiswaAsesmen(id_siswa, pin_admin) {
+export async function hapusAkunSiswaAsesmen(id_siswa, pin_admin, nama, kelas) {
   try {
     const res = await fetch("/api/guru/asesmen/database", {
       method: "POST",
@@ -101,6 +122,8 @@ export async function hapusAkunSiswaAsesmen(id_siswa, pin_admin) {
       body: JSON.stringify({
         action: "guru_hapus_akun",
         id_siswa,
+        nama: nama || "",
+        kelas: kelas || "",
         pin_admin,
       }),
     });

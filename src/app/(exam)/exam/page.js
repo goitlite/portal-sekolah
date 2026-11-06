@@ -1,7 +1,7 @@
 "use client";
 
 import { getExamData, checkToken } from "@/services/examService";
-import { cekPesan, registerStudent } from "@/services/authService";
+import { cekPesan, registerStudent, kunciSesiUjian } from "@/services/authService";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -478,6 +478,41 @@ export default function ExamPage() {
 
       // TOKEN BENAR
       if (result.status === "success") {
+        // ==========================================
+        // KUNCI SESI PERANGKAT (1 NAMA 1 HP - ANTI JOKI)
+        // ==========================================
+        try {
+          let devId = localStorage.getItem("exam_device_id");
+          if (!devId) {
+            devId = "dev_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+            localStorage.setItem("exam_device_id", devId);
+          }
+
+          const lockRes = await kunciSesiUjian({
+            nama,
+            kelas: selectedKelas || kelas,
+            idSiswa,
+            mapel: selectedMapel,
+            deviceId: devId,
+          });
+
+          if (lockRes && lockRes.status === "error") {
+            setLoadingToken(false);
+            setTokenMessage(
+              lockRes.message ||
+                "Akses ditolak: Akun Anda sedang aktif ujian di perangkat lain."
+            );
+            setTokenModal(true);
+
+            setTimeout(() => {
+              enterFullscreen();
+            }, 300);
+            return;
+          }
+        } catch (errLock) {
+          console.warn("Gagal validasi kunci sesi:", errLock);
+        }
+
         setExamLink(result.link);
 
         // SIMPAN LINK, KODE KIRIM, MAPEL & KELAS KE LOCALSTORAGE

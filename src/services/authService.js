@@ -158,3 +158,33 @@ export async function getPelanggaran(nama, kelas, idSiswa) {
     };
   }
 }
+
+// ===================================================
+// KUNCI SESI PERANGKAT UJIAN (1 NAMA 1 HP - ANTI JOKI)
+// ===================================================
+export async function kunciSesiUjian({ nama, kelas, idSiswa, mapel, deviceId }) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("action", "kunci_sesi_ujian");
+    formData.append("nama", nama || "");
+    formData.append("kelas", kelas || "");
+    formData.append("id_siswa", idSiswa || "");
+    formData.append("mapel", mapel || "");
+    formData.append("device_id", deviceId || "");
+
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    return await response.json();
+  } catch (error) {
+    // Jika offline/gagal koneksi, izinkan lanjut agar tidak memblokir siswa saat koneksi lambat
+    console.warn("Gagal menghubungi server kunci sesi:", error);
+    return {
+      status: "success",
+      message: "Koneksi offline, sesi lokal digunakan",
+    };
+  }
+}
+

@@ -5453,8 +5453,8 @@ function DashboardGuruContent() {
 
         {/* MODAL POPUP PUSAT KELOLA UJIAN & ASESMEN SEKOLAH */}
         {showModalKelolaUjian && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fadeIn">
-            <div className="relative w-full max-w-5xl rounded-3xl bg-slate-50 p-4 sm:p-6 shadow-2xl border border-slate-200 my-auto max-h-[96vh] overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 sm:p-3 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+            <div className="relative w-full max-w-[98vw] 2xl:max-w-[1650px] rounded-2xl sm:rounded-3xl bg-slate-50 p-3 sm:p-5 shadow-2xl border border-slate-200 my-auto max-h-[97vh] overflow-y-auto">
               <TabKelolaUjian user={user} daftarMapelGuru={daftarMapel} onClose={() => setShowModalKelolaUjian(false)} />
             </div>
           </div>

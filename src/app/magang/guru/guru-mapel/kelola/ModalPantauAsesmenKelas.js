@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   fetchSemuaSiswaAsesmen,
   resetPelanggaranSiswa,
+  resetDeviceSiswa,
   kirimPesanUjian,
   hapusPesanUjian,
   hapusAkunSiswaAsesmen,
@@ -107,15 +108,18 @@ export default function ModalPantauAsesmenKelas({
 
   useEffect(() => {
     if (isOpen) {
-      muatData();
-      setPesanInput("");
-      setSuksesMsg("");
-      setErrorMsg("");
-      setShowFormUjian(false);
-      setSearchNama("");
-      setSearchId("");
-      setFilterPelanggaran("SEMUA");
-      setSortOrder("asc");
+      const timer = setTimeout(() => {
+        muatData();
+        setPesanInput("");
+        setSuksesMsg("");
+        setErrorMsg("");
+        setShowFormUjian(false);
+        setSearchNama("");
+        setSearchId("");
+        setFilterPelanggaran("SEMUA");
+        setSortOrder("asc");
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, muatData]);
 
@@ -348,6 +352,36 @@ export default function ModalPantauAsesmenKelas({
     }
   };
 
+  // Aksi Reset Perangkat HP Siswa (Mengizinkan ganti HP)
+  const handleResetDeviceSiswa = async (siswa) => {
+    if (
+      !confirm(
+        `Reset sesi perangkat untuk ${siswa.nama || siswa.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`
+      )
+    )
+      return;
+
+    setActionLoading(true);
+    try {
+      const res = await resetDeviceSiswa({
+        id_siswa: siswa.id_siswa,
+        nama: siswa.nama,
+        kelas: kelasTarget,
+        id_guru: user?.id || "",
+      });
+      if (res.status === "success") {
+        setSuksesMsg(`Perangkat ${siswa.nama} berhasil direset! Siswa dapat login di HP baru.`);
+        muatData();
+      } else {
+        setErrorMsg(res.message || "Gagal mereset perangkat");
+      }
+    } catch (e) {
+      setErrorMsg("Error: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Aksi Reset Pelanggaran Sekelas
   const handleResetPelanggaranSekelas = async () => {
     if (
@@ -376,24 +410,29 @@ export default function ModalPantauAsesmenKelas({
     }
   };
 
-  // Aksi Hapus Akun Siswa (Sesuai Rule Admin: Pertahankan ID, Hapus Nama & Kelas di Sheet)
+  // Aksi Hapus Total Baris Siswa dari Spreadsheet
   const handleHapusAkunSiswa = async (siswa) => {
     const konfirmasi = confirm(
-      `⚠️ HAPUS / RESET AKUN SISWA:\n\nApakah Anda yakin ingin menghapus akun siswa "${siswa.nama}" (ID: ${siswa.id_siswa})?\n\n- Sesuai aturan: ID siswa akan TETAP DIPERTAHANKAN di database Google Sheet.\n- Nama dan kelas siswa akan dikosongkan.\n- Ketika siswa membuka ujian kembali, siswa WAJIB mengisi Nama dan Kelas kembali.\n- Tindakan ini hanya berlaku untuk siswa kelas ${kelasTarget}.`
+      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nApakah Anda yakin ingin menghapus seluruh baris data siswa "${siswa.nama}" (ID: ${siswa.id_siswa})?\n\n- Seluruh baris nama dan data siswa akan DIHAPUS TOTAL dari spreadsheet database.\n- Tindakan ini berlaku permanen untuk siswa kelas ${kelasTarget}.`
     );
     if (!konfirmasi) return;
 
     setActionLoading(true);
     setErrorMsg("");
     try {
-      const res = await hapusAkunSiswaAsesmen(siswa.id_siswa);
+      const res = await hapusAkunSiswaAsesmen(
+        siswa.id_siswa,
+        "",
+        siswa.nama,
+        kelasTarget
+      );
       if (res.status === "success") {
         setSuksesMsg(
-          `Akun siswa "${siswa.nama}" berhasil direset! ID tetap tersimpan. Siswa wajib mengisi nama & kelas kembali saat masuk ujian.`
+          `Baris data siswa "${siswa.nama}" berhasil dihapus total dari database!`
         );
         muatData();
       } else {
-        setErrorMsg(res.message || "Gagal menghapus akun siswa");
+        setErrorMsg(res.message || "Gagal menghapus baris siswa");
       }
     } catch (err) {
       setErrorMsg("Error: " + err.message);
@@ -974,7 +1013,25 @@ export default function ModalPantauAsesmenKelas({
                           {idx + 1}
                         </td>
                         <td className="px-2.5 py-2 font-bold text-slate-900">
-                          {s.nama || <span className="text-rose-500 italic">(Dihapus/Kosong)</span>}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{s.nama || <span className="text-rose-500 italic">(Dihapus/Kosong)</span>}</span>
+                            {s.status_sesi === "AKTIF" && s.device_id && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300"
+                                title={`Terkunci di HP (Mapel: ${s.mapel_aktif || "-"})`}
+                              >
+                                📱 Terkunci HP
+                              </span>
+                            )}
+                            {s.status_sesi === "RESET" && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300"
+                                title="Sesi perangkat telah direset oleh guru, siswa dapat login dari HP baru"
+                              >
+                                🔄 Boleh HP Baru
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-2.5 py-2 text-center">
                           <span
@@ -1023,6 +1080,18 @@ export default function ModalPantauAsesmenKelas({
                         </td>
                         <td className="px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            {/* Reset Perangkat HP */}
+                            <button
+                              type="button"
+                              onClick={() => handleResetDeviceSiswa(s)}
+                              disabled={actionLoading}
+                              className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-2xs flex items-center gap-0.5"
+                              title="Reset sesi perangkat siswa ini agar bisa masuk di HP baru"
+                            >
+                              <span>📱</span>
+                              <span className="hidden sm:inline">Reset HP</span>
+                            </button>
+
                             {/* Reset 0 */}
                             <button
                               type="button"
