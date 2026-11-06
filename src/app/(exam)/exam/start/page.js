@@ -297,6 +297,21 @@ export default function StartExamPage() {
     soalLockedRef.current = soalLocked;
   }, [soalLocked]);
 
+  // Ketika soal dikunci, keluarkan fokus dari Google Form iframe agar
+  // keyboard/IME yang masih aktif tidak terus mengirim input ke form.
+  useEffect(() => {
+    if (!soalLocked) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    try {
+      iframe.blur();
+      iframe.contentWindow?.blur();
+    } catch (_) {
+      // contentWindow dapat dibatasi same-origin, iframe.blur tetap dicoba.
+    }
+  }, [soalLocked]);
+
   const penaltyOpenRef = useRef(false);
   useEffect(() => {
     penaltyOpenRef.current = penaltyOpen;
