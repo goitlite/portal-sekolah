@@ -319,9 +319,39 @@ export default function StartExamPage() {
   }, [soalLocked]);
 
   const penaltyOpenRef = useRef(false);
+  const penaltyExitStartedRef = useRef(false);
+  const exitPenaltyToExamRef = useRef(null);
   useEffect(() => {
     penaltyOpenRef.current = penaltyOpen;
   }, [penaltyOpen]);
+
+  useEffect(() => {
+    exitPenaltyToExamRef.current = () => {
+      if (!penaltyOpenRef.current || penaltyExitStartedRef.current) return;
+
+      penaltyExitStartedRef.current = true;
+      logoutRef.current = true;
+      pendingViolationRef.current = "";
+      if (violationGraceTimerRef.current) {
+        clearTimeout(violationGraceTimerRef.current);
+        violationGraceTimerRef.current = null;
+      }
+      if (fullscreenReturnTimeoutRef.current) {
+        clearTimeout(fullscreenReturnTimeoutRef.current);
+        fullscreenReturnTimeoutRef.current = null;
+      }
+      if (fullscreenCountdownIntervalRef.current) {
+        clearInterval(fullscreenCountdownIntervalRef.current);
+        fullscreenCountdownIntervalRef.current = null;
+      }
+
+      setShowFullscreenPrompt(false);
+      setToleranceCountdown(null);
+      document.body.style.overflow = "auto";
+      localStorage.removeItem("examLink");
+      router.replace("/exam");
+    };
+  }, [router]);
 
   const showPanduanModalRef = useRef(false);
   useEffect(() => {
@@ -517,12 +547,21 @@ export default function StartExamPage() {
         savedViolation > 0 && targetTier >= 3 && lastPenaltyServed < targetTier;
 
       if (mustServePenalty) {
+        penaltyOpenRef.current = true;
+        penaltyExitStartedRef.current = false;
+        if (violationGraceTimerRef.current) {
+          clearTimeout(violationGraceTimerRef.current);
+          violationGraceTimerRef.current = null;
+        }
+        pendingViolationRef.current = "";
         setPenaltyTime(3 * 60);
         setPenaltyDone(false);
         setPenaltyOpen(true);
         setShowPanduanModal(false);
         document.body.style.overflow = "hidden";
       } else {
+        penaltyOpenRef.current = false;
+        penaltyExitStartedRef.current = false;
         setPenaltyOpen(false);
         setPenaltyDone(true);
         document.body.style.overflow = "auto";
@@ -555,10 +594,13 @@ export default function StartExamPage() {
 
     const interval = setInterval(() => {
       setPenaltyTime((prev) => {
+        if (penaltyExitStartedRef.current) return prev;
         if (prev <= 1) {
           clearInterval(interval);
 
           setPenaltyDone(true);
+          penaltyOpenRef.current = false;
+          penaltyExitStartedRef.current = false;
 
           localStorage.setItem("penaltyPassed", "true");
           const curTier = Math.floor(violations / 3) * 3;
@@ -632,7 +674,7 @@ export default function StartExamPage() {
   }
 
   const forceLogout = useCallback((reason = "Pelanggaran ujian") => {
-    if (logoutRef.current || safeActionRef.current) return;
+    if (logoutRef.current || safeActionRef.current || penaltyOpenRef.current) return;
     // Semua sumber pelanggaran masuk satu antrean: satu timer toleransi,
     // satu notifikasi yang diperbarui, dan satu pencatatan akhir.
     pendingViolationRef.current = reason;
@@ -644,7 +686,7 @@ export default function StartExamPage() {
     );
     violationGraceTimerRef.current = setTimeout(() => {
       violationGraceTimerRef.current = null;
-      if (logoutRef.current || safeActionRef.current) {
+      if (logoutRef.current || safeActionRef.current || penaltyOpenRef.current) {
         pendingViolationRef.current = "";
         return;
       }
@@ -720,6 +762,8 @@ export default function StartExamPage() {
               localStorage.removeItem("violationStartTime");
               localStorage.removeItem("penaltyPassed");
               localStorage.removeItem("lastPenaltyServedAtViolation");
+              penaltyOpenRef.current = false;
+              penaltyExitStartedRef.current = false;
               setPenaltyOpen(false);
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
@@ -788,6 +832,8 @@ export default function StartExamPage() {
               localStorage.removeItem("violationStartTime");
               localStorage.removeItem("penaltyPassed");
               localStorage.removeItem("lastPenaltyServedAtViolation");
+              penaltyOpenRef.current = false;
+              penaltyExitStartedRef.current = false;
               setPenaltyOpen(false);
               setPenaltyDone(true);
               document.body.style.overflow = "auto";
@@ -1001,6 +1047,10 @@ export default function StartExamPage() {
         setToleranceCountdown(null);
         return;
       }
+      if (penaltyOpenRef.current) {
+        exitPenaltyToExamRef.current?.();
+        return;
+      }
       // Jangan membuat prompt atau pelanggaran jika browser tidak pernah
       // berhasil masuk fullscreen (misalnya izin/API tidak tersedia).
       if (
@@ -1071,10 +1121,7 @@ export default function StartExamPage() {
       // Saat hukuman berlangsung, Back berarti keluar dari ujian tanpa
       // menambah pelanggaran. Jangan memasang ulang history trap pada kasus ini.
       if (penaltyOpenRef.current) {
-        logoutRef.current = true;
-        document.body.style.overflow = "auto";
-        localStorage.removeItem("examLink");
-        router.replace("/exam");
+        exitPenaltyToExamRef.current?.();
         return;
       }
 
@@ -1496,6 +1543,7 @@ export default function StartExamPage() {
       if (logoutRef.current) return;
 
       if (safeActionRef.current) return;
+      if (penaltyOpenRef.current) return;
 
       forceLogoutRef.current?.(reason);
     }
@@ -1665,11 +1713,16 @@ export default function StartExamPage() {
     // VISIBILITY - Toleransi 3 Detik (Panggilan) + Proteksi Tombol Recent / Tab Switch / Buka App Lain
     // ======================
     function handleVisibility() {
+      if (penaltyOpenRef.current) {
+        if (document.hidden) {
+          exitPenaltyToExamRef.current?.();
+        }
+        return;
+      }
       // Jika ujian belum dimulai (panduan terbuka / hukuman aktif), abaikan
       if (
         !examStartedRef.current ||
-        showPanduanModalRef.current ||
-        penaltyOpenRef.current
+        showPanduanModalRef.current
       )
         return;
 
@@ -1772,6 +1825,10 @@ export default function StartExamPage() {
     }
 
     function handlePageHide() {
+      if (penaltyOpenRef.current) {
+        exitPenaltyToExamRef.current?.();
+        return;
+      }
       if (!safeActionRef.current) {
         triggerViolation("Anda meninggalkan halaman ujian");
       }
