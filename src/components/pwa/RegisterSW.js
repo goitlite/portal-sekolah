@@ -5,6 +5,7 @@
 // dengan dukungan auto-update SW dan tombol pemicu izin di Android.
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 /**
  * Konversi base64url VAPID public key ke Uint8Array.
@@ -80,20 +81,37 @@ export async function subscribeToPush(registration, userInfo) {
     await kirimKeServer(subscription, userInfo);
     return subscription;
   } catch (err) {
+    if (
+      err?.name === "NotAllowedError" ||
+      err?.message?.toLowerCase().includes("dismissed")
+    ) {
+      console.warn("[Push] Izin notifikasi dilewati atau ditutup oleh pengguna.");
+      return null;
+    }
     console.error("[Push] Gagal subscribe Web Push:", err);
     return null;
   }
 }
 
 export default function RegisterSW() {
+  const pathname = usePathname();
   const [showPromptBanner, setShowPromptBanner] = useState(false);
 
   useEffect(() => {
+    // Tunggu pathname tersedia agar navigasi awal ke /exam tidak memicu
+    // inisialisasi notifikasi dari state route yang belum diketahui.
+    if (!pathname) return;
     if (!("serviceWorker" in navigator)) return;
 
+    // Saat berada di rute ujian (/exam atau /exam/start), jangan minta izin notifikasi
+    // dan jangan tampilkan banner notifikasi yang mengganggu fokus ujian
+    if (pathname?.startsWith("/exam")) return;
+
+    let active = true;
     navigator.serviceWorker
       .register("/sw.js")
       .then(async (registration) => {
+        if (!active) return;
         console.log("[SW] Terdaftar v3.");
         // Paksa periksa dan unduh versi baru sw.js di background
         registration.update().catch(() => {});
@@ -101,7 +119,7 @@ export default function RegisterSW() {
         // Cek apakah user sudah login
         try {
           const sessStr = localStorage.getItem("magang_session");
-          if (!sessStr) return;
+          if (!sessStr || !active) return;
           const sess = JSON.parse(sessStr);
           const userId = String(sess?.id || "").trim();
           const role = String(sess?.role || "").trim();
@@ -121,9 +139,13 @@ export default function RegisterSW() {
         }
       })
       .catch((err) => {
-        console.error("[SW] Gagal mendaftar:", err);
+        if (active) console.error("[SW] Gagal mendaftar:", err);
       });
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
 
   async function handleAktifkanNotif() {
     setShowPromptBanner(false);

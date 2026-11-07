@@ -9,6 +9,66 @@ import {
   getPelanggaran,
 } from "@/services/authService";
 
+const PENDING_VIOLATION_SYNC_KEY = "examPendingViolationSync";
+
+function getViolationStudentKey(nama, kelas, idSiswa) {
+  const normalizedId = String(idSiswa || "").trim();
+  if (normalizedId && normalizedId !== "-") return `id:${normalizedId}`;
+  return `student:${String(nama || "").trim().toLowerCase()}|${String(kelas || "").trim().toLowerCase()}`;
+}
+
+function readPendingViolationSync(studentKey) {
+  try {
+    const pending = JSON.parse(
+      localStorage.getItem(PENDING_VIOLATION_SYNC_KEY) || "null",
+    );
+    return pending?.studentKey === studentKey ? pending : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function savePendingViolationSync(record) {
+  try {
+    localStorage.setItem(PENDING_VIOLATION_SYNC_KEY, JSON.stringify(record));
+  } catch (_) {}
+}
+
+function clearPendingViolationSync(record) {
+  const pending = readPendingViolationSync(record.studentKey);
+  if (pending?.writeId !== record.writeId) return;
+  localStorage.removeItem(PENDING_VIOLATION_SYNC_KEY);
+}
+
+function makePendingViolationSync(nama, kelas, idSiswa, count) {
+  const updatedAt = Date.now();
+  return {
+    studentKey: getViolationStudentKey(nama, kelas, idSiswa),
+    nama,
+    kelas,
+    idSiswa: idSiswa || "",
+    count,
+    updatedAt,
+    writeId: `${updatedAt}:${count}:${Math.random().toString(36).slice(2, 8)}`,
+  };
+}
+
+async function syncPendingViolation(record) {
+  try {
+    const result = await catatPelanggaran(
+      record.nama,
+      record.kelas,
+      record.idSiswa,
+      record.count,
+    );
+    if (result?.status !== "success") return false;
+    clearPendingViolationSync(record);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export default function StartExamPage() {
   const router = useRouter();
 
@@ -321,6 +381,7 @@ export default function StartExamPage() {
   const penaltyOpenRef = useRef(false);
   const penaltyExitStartedRef = useRef(false);
   const exitPenaltyToExamRef = useRef(null);
+  const lastViolationWriteAtRef = useRef(0);
   useEffect(() => {
     penaltyOpenRef.current = penaltyOpen;
   }, [penaltyOpen]);
@@ -504,6 +565,17 @@ export default function StartExamPage() {
 
       // Ambil pelanggaran dari localStorage (reset hanya via admin / pesan HAPUS PELANGGARAN)
       let savedViolation = parseInt(localStorage.getItem("violations") || "0");
+      const studentKey = getViolationStudentKey(
+        savedNama,
+        savedKelas || "",
+        savedId,
+      );
+      const pendingViolation = readPendingViolationSync(studentKey);
+      if (pendingViolation) {
+        savedViolation = Math.max(savedViolation, Number(pendingViolation.count) || 0);
+        localStorage.setItem("violations", String(savedViolation));
+        lastViolationWriteAtRef.current = pendingViolation.updatedAt || Date.now();
+      }
 
       // Ambil data pelanggaran tersimpan dari spreadsheet database (agar konsisten lintas perangkat)
       try {
@@ -518,14 +590,30 @@ export default function StartExamPage() {
           remoteRes.pelanggaran !== undefined
         ) {
           const remoteCount = parseInt(remoteRes.pelanggaran) || 0;
-          // SINKRONISASI LENGKAP: Jika di database 0 (direset admin), hapus semua penanda hukuman!
-          if (remoteCount === 0) {
+          // Jangan biarkan hasil baca lama/0 menimpa pelanggaran yang belum
+          // terkonfirmasi tersimpan di server.
+          if (pendingViolation && Number(pendingViolation.count) === 0) {
             savedViolation = 0;
             localStorage.setItem("violations", "0");
             localStorage.removeItem("violationStartTime");
             localStorage.removeItem("penaltyPassed");
             localStorage.removeItem("lastPenaltyServedAtViolation");
-          } else if (remoteCount !== savedViolation) {
+            void syncPendingViolation(pendingViolation);
+          } else if (
+            pendingViolation &&
+            remoteCount < (Number(pendingViolation.count) || 0)
+          ) {
+            savedViolation = Math.max(savedViolation, Number(pendingViolation.count) || 0);
+            localStorage.setItem("violations", String(savedViolation));
+            void syncPendingViolation(pendingViolation);
+          } else if (pendingViolation) {
+            clearPendingViolationSync(pendingViolation);
+            savedViolation = Math.max(savedViolation, remoteCount);
+            localStorage.setItem("violations", String(savedViolation));
+          } else if (remoteCount === 0) {
+            // Nilai 0 baru dianggap reset setelah dikonfirmasi polling; respons
+            // awal GAS yang kosong/error tidak langsung menghapus status lokal.
+          } else if (remoteCount > savedViolation) {
             savedViolation = remoteCount;
             localStorage.setItem("violations", String(savedViolation));
           }
@@ -710,13 +798,18 @@ export default function StartExamPage() {
         localStorage.removeItem("penaltyPassed");
       }
 
-      // Catat ke spreadsheet database secara otomatis
-      try {
-        const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
-        catatPelanggaran(nama, kelas, currentId, totalViolation);
-      } catch (e) {
-        console.error("Gagal catat pelanggaran:", e);
-      }
+      // Persist antrean sebelum navigasi agar pelanggaran tidak hilang jika
+      // jaringan lambat atau halaman ujian dibuka kembali sebelum POST selesai.
+      const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+      const pendingSync = makePendingViolationSync(
+        nama,
+        kelas,
+        currentId,
+        totalViolation,
+      );
+      savePendingViolationSync(pendingSync);
+      lastViolationWriteAtRef.current = pendingSync.updatedAt;
+      void syncPendingViolation(pendingSync);
 
       showModalRef.current?.(finalReason + "\nTotal pelanggaran: " + totalViolation);
 
@@ -738,7 +831,14 @@ export default function StartExamPage() {
   // CEK PESAN REALTIME & COMMAND ADMIN (REC-1 & REC-2)
   // =========================
   useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    let consecutiveEmptyMessages = 0;
+    let consecutiveZeroCounts = 0;
+
     async function checkMessages() {
+      if (!active || inFlight) return;
+      inFlight = true;
       try {
         const activeNama = localStorage.getItem("nama") || nama || "";
         const activeKelas =
@@ -749,31 +849,78 @@ export default function StartExamPage() {
         if (!activeNama) return;
 
         const result = await cekPesan(activeNama, activeKelas);
+        if (!active) return;
 
         if (result && result.status === "success") {
           const isiPesan = (result.pesan || "").trim();
+          const activeId = idSiswa || localStorage.getItem("id_siswa") || "";
+          const pendingSync = readPendingViolationSync(
+            getViolationStudentKey(activeNama, activeKelas, activeId),
+          );
 
           // 1. Sinkronisasi info pelanggaran terbaru dari database (bisa naik atau turun ke 0)
           if (result.pelanggaran !== undefined && result.pelanggaran !== null) {
             const remoteCount = parseInt(result.pelanggaran) || 0;
-            if (remoteCount === 0) {
-              setViolations(0);
-              localStorage.setItem("violations", "0");
-              localStorage.removeItem("violationStartTime");
-              localStorage.removeItem("penaltyPassed");
-              localStorage.removeItem("lastPenaltyServedAtViolation");
-              penaltyOpenRef.current = false;
-              penaltyExitStartedRef.current = false;
-              setPenaltyOpen(false);
-              setPenaltyDone(true);
-              document.body.style.overflow = "auto";
-              setShowPanduanModal(false);
-              if (!examStartedRef.current) {
-                setExamStarted(true);
+            if (pendingSync && remoteCount < (Number(pendingSync.count) || 0)) {
+              consecutiveZeroCounts = 0;
+              void syncPendingViolation(pendingSync);
+            } else if (
+              remoteCount === 0 &&
+              (pendingSync || Date.now() - lastViolationWriteAtRef.current < 10000)
+            ) {
+              // Abaikan nilai nol yang mungkin berasal dari pembacaan server
+              // sebelum pencatatan pelanggaran terbaru selesai.
+              consecutiveZeroCounts = 0;
+            } else if (remoteCount === 0) {
+              const localCount =
+                parseInt(localStorage.getItem("violations") || "0") || 0;
+              const verification =
+                localCount > 0
+                  ? await getPelanggaran(activeNama, activeKelas, activeId)
+                  : { status: "success", pelanggaran: 0 };
+              if (!active) return;
+              const verifiedCount =
+                verification?.status === "success"
+                  ? parseInt(verification.pelanggaran) || 0
+                  : localCount;
+
+              if (verifiedCount > 0) {
+                consecutiveZeroCounts = 0;
+                setViolations((prev) => {
+                  if (verifiedCount > prev) {
+                    localStorage.setItem("violations", String(verifiedCount));
+                    return verifiedCount;
+                  }
+                  return prev;
+                });
+              } else if (verification?.status !== "success") {
+                consecutiveZeroCounts = 0;
+              } else {
+                consecutiveZeroCounts += 1;
+                if (consecutiveZeroCounts >= 2) {
+                  setViolations(0);
+                  localStorage.setItem("violations", "0");
+                  localStorage.removeItem("violationStartTime");
+                  localStorage.removeItem("penaltyPassed");
+                  localStorage.removeItem("lastPenaltyServedAtViolation");
+                  penaltyOpenRef.current = false;
+                  penaltyExitStartedRef.current = false;
+                  setPenaltyOpen(false);
+                  setPenaltyDone(true);
+                  document.body.style.overflow = "auto";
+                  setShowPanduanModal(false);
+                  if (!examStartedRef.current) {
+                    setExamStarted(true);
+                  }
+                }
               }
             } else {
+              consecutiveZeroCounts = 0;
+              if (pendingSync && remoteCount >= (Number(pendingSync.count) || 0)) {
+                clearPendingViolationSync(pendingSync);
+              }
               setViolations((prev) => {
-                if (remoteCount !== prev) {
+                if (remoteCount > prev) {
                   localStorage.setItem("violations", String(remoteCount));
                   return remoteCount;
                 }
@@ -784,14 +931,19 @@ export default function StartExamPage() {
 
           // 2. REC-1: Tampilkan pesan HANYA jika ada dan berbeda dari pesan yang ditutup siswa
           if (isiPesan) {
+            consecutiveEmptyMessages = 0;
             if (isiPesan !== lastDismissedPesanRef.current) {
               setPesan(isiPesan);
             }
           } else {
-            // Jika pesan dikosongkan oleh admin di server, reset tracker
-            lastDismissedPesanRef.current = "";
-            lastExecutedCommandRef.current = "";
-            setPesan("");
+            // Dua respons kosong berturut-turut menghindari pesan lama/kosong
+            // yang datang terlambat menghapus pesan admin yang baru.
+            consecutiveEmptyMessages += 1;
+            if (consecutiveEmptyMessages >= 2) {
+              lastDismissedPesanRef.current = "";
+              lastExecutedCommandRef.current = "";
+              setPesan("");
+            }
           }
 
           // 3. REC-2: PERINTAH BUKA KUNCI & MANAJEMEN VIA PESAN ADMIN (fleksibel & responsif)
@@ -829,6 +981,7 @@ export default function StartExamPage() {
             ) {
               setViolations(0);
               localStorage.setItem("violations", "0");
+              localStorage.removeItem(PENDING_VIOLATION_SYNC_KEY);
               localStorage.removeItem("violationStartTime");
               localStorage.removeItem("penaltyPassed");
               localStorage.removeItem("lastPenaltyServedAtViolation");
@@ -843,7 +996,15 @@ export default function StartExamPage() {
               }
               const currentId =
                 idSiswa || localStorage.getItem("id_siswa") || "";
-              catatPelanggaran(activeNama, activeKelas, currentId, 0);
+              const resetSync = makePendingViolationSync(
+                activeNama,
+                activeKelas,
+                currentId,
+                0,
+              );
+              savePendingViolationSync(resetSync);
+              void syncPendingViolation(resetSync);
+              consecutiveZeroCounts = 0;
               showModal(
                 "✅ CATATAN PELANGGARAN DIRESET\n\n" +
                   "Semua catatan pelanggaran Anda telah direset menjadi 0 oleh admin.\n" +
@@ -872,13 +1033,18 @@ export default function StartExamPage() {
         }
       } catch (err) {
         console.error("Gagal cek pesan realtime:", err);
+      } finally {
+        inFlight = false;
       }
     }
 
     checkMessages();
     const interval = setInterval(checkMessages, 3500);
 
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [nama, kelas, idSiswa, router]);
 
   // =========================
@@ -2787,49 +2953,41 @@ export default function StartExamPage() {
 
               {/* PENGADUAN */}
               <button
+                type="button"
                 onClick={() => {
                   startSafeAction(5000);
                   setIgnoreFullscreen(true);
                   setIsModalPengaduanOpen(true);
                 }}
-                className="
-    relative
-
-    w-[120px] md:w-[160px]
-    h-10 md:h-11
-
-    rounded-xl
-
-    text-[10px] md:text-[12px]
-    font-black
-
-    flex items-center justify-center
-
-    text-center leading-tight
-
-    text-white
-
-    bg-gradient-to-r
-    from-orange-500 via-amber-400 to-orange-500
-
-    hover:from-orange-600 hover:to-amber-500
-
-    active:scale-95
-
-    shadow-lg shadow-orange-500/30
-
-    transition-all duration-200
-  "
+                aria-label="Buka form pengaduan"
+                className="group relative flex h-11 w-[120px] items-center justify-center gap-2 overflow-hidden rounded-xl border border-orange-200/50 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 px-3 text-white shadow-lg shadow-orange-950/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-orange-500/30 active:translate-y-0 active:scale-[0.98] md:w-[160px]"
               >
-                <span className="flex flex-col leading-none">
-                  <span>Pengaduan</span>
-                  <span className="text-[8px] md:text-[10px] opacity-90">
-                    Laporkan Masalah
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-5 w-5 shrink-0 drop-shadow-sm"
+                >
+                  <path
+                    d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.1A7.5 7.5 0 1 1 20 11.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M8 10h8M8 14h5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="flex min-w-0 flex-col text-left leading-tight">
+                  <span className="text-[10px] font-extrabold md:text-xs">Bantuan</span>
+                  <span className="text-[8px] font-medium text-orange-50/90 md:text-[10px]">
+                    Kirim pengaduan
                   </span>
                 </span>
-
-                {/* glow halus */}
-                <span className="absolute inset-0 rounded-xl bg-white/10 opacity-0 hover:opacity-100 transition"></span>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 to-transparent opacity-0 transition group-hover:opacity-100" />
               </button>
             </div>
           </div>
@@ -2976,7 +3134,7 @@ export default function StartExamPage() {
             lockCountdown > 0
               ? "top-[170px]"
               : "top-[115px]"
-          } left-1/2 -translate-x-1/2 z-[9999] max-w-xl w-[94%] sm:w-[88%] rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 p-3 sm:p-4 text-white shadow-2xl border-2 border-red-300 backdrop-blur-md`}
+          } left-1/2 -translate-x-1/2 z-[1000000] max-w-xl w-[94%] sm:w-[88%] rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 p-3 sm:p-4 text-white shadow-2xl border-2 border-red-300 backdrop-blur-md`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -3316,39 +3474,92 @@ export default function StartExamPage() {
         </div>
       )}
       {isModalPengaduanOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
-            <div className="bg-orange-500 p-4 text-white text-center">
-              <h3 className="font-bold text-lg">⚠️ FORM PENGADUAN</h3>
-              <p className="text-[10px] opacity-80">
-                Input keyboard hanya aktif di kotak ini
-              </p>
-            </div>
-            <div className="p-5">
-              <textarea
-                autoFocus
-                className="w-full h-32 p-3 border-2 border-gray-100 rounded-xl focus:border-orange-400 focus:outline-none text-gray-700 text-sm"
-                placeholder="Tuliskan kendala Anda di sini..."
-                value={teksPengaduan}
-                onChange={(e) => setTeksPengaduan(e.target.value)}
-              />
-              <div className="flex gap-3 mt-4">
+        <div className="fixed inset-0 z-[1000001] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="exam-complaint-title"
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.7)]"
+          >
+            <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-amber-400 px-5 py-5 text-white sm:px-7 sm:py-6">
+              <div aria-hidden="true" className="absolute -right-8 -top-12 h-36 w-36 rounded-full border-[18px] border-white/10" />
+              <div className="relative flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/15 shadow-inner">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+                    <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                    <path d="M8 10h8M8 14h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="exam-complaint-title" className="text-lg font-black tracking-tight sm:text-xl">
+                    Bantuan & Pengaduan
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-orange-50 sm:text-sm">
+                    Sampaikan kendala ujian kepada pengawas. Pesan akan dikirim bersama identitas peserta.
+                  </p>
+                </div>
                 <button
+                  type="button"
+                  aria-label="Tutup form pengaduan"
                   onClick={() => {
                     setIsModalPengaduanOpen(false);
                     startSafeAction(2000);
                     setIgnoreFullscreen(false);
                   }}
-                  className="flex-1 py-2 font-bold text-gray-400 hover:text-gray-600"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-black/10 text-lg font-bold text-white/90 transition hover:bg-black/20"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="relative mt-4 flex flex-wrap gap-2 text-[10px] font-semibold sm:text-xs">
+                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">{nama || "Peserta"}</span>
+                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">{kelas || "Kelas belum tersedia"}</span>
+              </div>
+            </div>
+            <div className="p-5 sm:p-7">
+              <label htmlFor="exam-complaint-message" className="mb-2 block text-sm font-bold text-slate-800">
+                Ceritakan kendala yang Anda alami
+              </label>
+              <textarea
+                autoFocus
+                id="exam-complaint-message"
+                className="h-36 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                placeholder="Contoh: halaman soal tidak terbuka atau waktu ujian berhenti..."
+                value={teksPengaduan}
+                onChange={(e) => setTeksPengaduan(e.target.value)}
+              />
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                Gunakan tombol ini hanya untuk kendala yang berkaitan dengan ujian.
+              </p>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalPengaduanOpen(false);
+                    startSafeAction(2000);
+                    setIgnoreFullscreen(false);
+                  }}
+                  className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 active:scale-[0.99] sm:min-w-28"
                 >
                   Batal
                 </button>
                 <button
+                  type="button"
                   onClick={handleKirimPengaduan}
                   disabled={loadingPengaduan || !teksPengaduan.trim()}
-                  className="flex-1 py-2 rounded-xl font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-orange-200 transition hover:from-orange-700 hover:to-amber-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none sm:min-w-40"
                 >
-                  {loadingPengaduan ? "Proses..." : "Kirim Laporan"}
+                  {loadingPengaduan ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Mengirim...
+                    </>
+                  ) : (
+                    <>
+                      Kirim ke Pengawas
+                      <span aria-hidden="true">→</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

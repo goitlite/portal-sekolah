@@ -6,7 +6,10 @@ import Image from "next/image";
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [show, setShow] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
   useEffect(() => {
     // Jika aplikasi sudah terinstall, jangan tampilkan popup
@@ -14,22 +17,17 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Deteksi iPhone / iPad
-    const ios =
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-    setIsIOS(ios);
+    let showTimer;
 
     // Jika iPhone langsung tampilkan popup
-    if (ios) {
+    if (isIOS) {
       console.log("iPhone terdeteksi");
 
-      setTimeout(() => {
+      showTimer = window.setTimeout(() => {
         setShow(true);
       }, 800);
 
-      return;
+      return () => window.clearTimeout(showTimer);
     }
 
     function handleBeforeInstallPrompt(e) {
@@ -41,7 +39,7 @@ export default function InstallPrompt() {
       window.__portalDeferredInstallPrompt = e;
       setDeferredPrompt(e);
 
-      setTimeout(() => {
+      showTimer = window.setTimeout(() => {
         setShow(true);
       }, 800);
     }
@@ -49,12 +47,13 @@ export default function InstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
+      window.clearTimeout(showTimer);
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
       );
     };
-  }, []);
+  }, [isIOS]);
 
   async function handleInstall() {
     // iPhone tidak memiliki beforeinstallprompt
@@ -65,15 +64,18 @@ export default function InstallPrompt() {
 
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
-
-    const choice = await deferredPrompt.userChoice;
-
-    console.log(choice.outcome);
-
-    window.__portalDeferredInstallPrompt = null;
-    setDeferredPrompt(null);
-    setShow(false);
+    try {
+      await deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      console.log(choice.outcome);
+    } catch (error) {
+      // Pengguna dapat menutup dialog instalasi; itu bukan error fatal.
+      console.info("[PWA] Dialog instalasi ditutup atau tidak tersedia.");
+    } finally {
+      window.__portalDeferredInstallPrompt = null;
+      setDeferredPrompt(null);
+      setShow(false);
+    }
   }
 
   function handleLater() {

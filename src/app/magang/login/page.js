@@ -8,7 +8,6 @@ import { login } from "../lib/api";
 // 1. IMPORT DIPERBARUI: Menambahkan isLoggedIn dan getSession
 import { saveSession, isLoggedIn, getSession } from "../lib/auth";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
-import { initPushAfterLogin } from "@/components/pwa/RegisterSW";
 
 // =====================================================
 // KONFIGURASI PENGAMAN LOGIN (ANTI BRUTE-FORCE)
@@ -219,8 +218,8 @@ export default function LoginMagang() {
     }
   }, []);
 
-  // Auto-subscribe push notification saat halaman login dibuka
-  // Jika sudah ada session (auto-redirect sedang berjalan), juga pastikan push aktif
+  // Pulihkan subscription jika izin notifikasi sudah pernah diberikan.
+  // Izin baru diminta lewat tombol eksplisit di banner RegisterSW, bukan otomatis.
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
 
@@ -262,16 +261,9 @@ export default function LoginMagang() {
               }).catch(() => {});
             }
           }
-        } else if (Notification.permission === "default") {
-          // Minta izin secara halus setelah 2 detik (agar user sudah melihat halaman)
-          await new Promise((r) => setTimeout(r, 2000));
-          const perm = await Notification.requestPermission();
-          if (perm === "granted") {
-            // Langsung setup push setelah izin diberikan
-            setupPush();
-          }
         }
-        // Jika "denied" → tidak lakukan apa-apa
+        // Izin default/ditolak tidak diminta otomatis. Tombol di banner
+        // RegisterSW menyediakan aksi yang jelas dan dipicu langsung pengguna.
       } catch (err) {
         console.warn("[Push Login] Gagal setup push:", err);
       }
