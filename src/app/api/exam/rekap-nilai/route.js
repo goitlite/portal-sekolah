@@ -14,7 +14,7 @@
 // 7. `token` ujian dihapus dari data respon (tidak ada gunanya untuk rekap dan membocorkan token).
 
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -30,9 +30,21 @@ const UJIAN_TTL_MS = 20 * 1000; // daftar sesi ujian dari GAS
 const sheetCache = new Map(); // spreadsheetId -> { at, rows }
 let ujianCache = { at: 0, list: [] };
 
-function buildGoogleAuth() {
+let cachedAccessToken = null;
+let tokenExpiresAt = 0;
+
+/**
+ * Autentikasi Google Service Account murni menggunakan Node.js crypto bawaan.
+ * Tidak membutuhkan package eksternal 'googleapis' sehingga bundle sangat ringan dan bebas error deploy Vercel.
+ */
+async function getGoogleAccessToken() {
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (cachedAccessToken && tokenExpiresAt - nowSec > 60) {
+    return cachedAccessToken;
+  }
+
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
   if (!clientEmail || !privateKey) {
     throw new Error(
@@ -40,10 +52,48 @@ function buildGoogleAuth() {
     );
   }
 
-  return new google.auth.GoogleAuth({
-    credentials: { client_email: clientEmail, private_key: privateKey },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  privateKey = privateKey.replace(/\\n/g, "\n");
+
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/spreadsheets.readonly",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: nowSec + 3600,
+    iat: nowSec,
+  };
+
+  const toBase64Url = (obj) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const unsignedToken = `${toBase64Url(header)}.${toBase64Url(payload)}`;
+
+  const signer = crypto.createSign("RSA-SHA256");
+  signer.update(unsignedToken);
+  const signature = signer.sign(privateKey, "base64url");
+  const assertion = `${unsignedToken}.${signature}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+    cache: "no-store",
   });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    const err = new Error(`Gagal autentikasi Google Service Account (${res.status}): ${errText}`);
+    err.code = res.status;
+    err.response = { status: res.status };
+    throw err;
+  }
+
+  const data = await res.json();
+  cachedAccessToken = data.access_token;
+  tokenExpiresAt = nowSec + (data.expires_in || 3600);
+  return cachedAccessToken;
 }
 
 function extractSheetId(url) {
@@ -156,24 +206,41 @@ function deteksiKolom(headers) {
 // ------------------------------------------------------------------
 // BACA SATU SPREADSHEET (cache + retry + fallback data lama)
 // ------------------------------------------------------------------
-async function ambilBaris(sheetsClient, spreadsheetId) {
-  const meta = await sheetsClient.spreadsheets.get({
-    spreadsheetId,
-    fields: "sheets.properties.title",
+async function fetchGoogleSheetsJson(endpointPath, token) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${endpointPath}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
-  const sheetName = meta.data.sheets?.[0]?.properties?.title;
+  if (!res.ok) {
+    const errText = await res.text();
+    const err = new Error(`Google Sheets API Error (${res.status}): ${errText}`);
+    err.code = res.status;
+    err.response = { status: res.status };
+    throw err;
+  }
+  return await res.json();
+}
+
+async function ambilBaris(spreadsheetId) {
+  const token = await getGoogleAccessToken();
+  const meta = await fetchGoogleSheetsJson(
+    `${spreadsheetId}?fields=sheets.properties.title`,
+    token,
+  );
+  const sheetName = meta.sheets?.[0]?.properties?.title;
   if (!sheetName) return [];
 
   const kutip = `'${String(sheetName).replace(/'/g, "''")}'`;
-  const resValues = await sheetsClient.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${kutip}!A:AZ`,
-    valueRenderOption: "FORMATTED_VALUE",
-  });
-  return resValues.data.values || [];
+  const range = encodeURIComponent(`${kutip}!A:AZ`);
+  const valuesData = await fetchGoogleSheetsJson(
+    `${spreadsheetId}/values/${range}?valueRenderOption=FORMATTED_VALUE`,
+    token,
+  );
+  return valuesData.values || [];
 }
 
-async function bacaSheetDenganCache(sheetsClient, spreadsheetId, forceRefresh) {
+async function bacaSheetDenganCache(spreadsheetId, forceRefresh) {
   const now = Date.now();
   const cached = sheetCache.get(spreadsheetId);
 
@@ -189,7 +256,7 @@ async function bacaSheetDenganCache(sheetsClient, spreadsheetId, forceRefresh) {
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const rows = await ambilBaris(sheetsClient, spreadsheetId);
+      const rows = await ambilBaris(spreadsheetId);
       sheetCache.set(spreadsheetId, { at: Date.now(), rows });
       return { rows, stale: false };
     } catch (err) {
@@ -258,9 +325,6 @@ export async function GET(request) {
       peringatan: [], // kolom tidak ketemu, sheet dipakai bersama, data lama dipakai
     };
 
-    const auth = buildGoogleAuth();
-    const sheetsClient = google.sheets({ version: "v4", auth });
-
     // 1. Daftar sesi ujian
     const daftarUjian = await ambilDaftarUjian(forceRefresh, diagnostics);
     diagnostics.totalSesi = daftarUjian.length;
@@ -297,7 +361,7 @@ export async function GET(request) {
     // 3. Baca spreadsheet paralel
     const hasilBaca = await Promise.allSettled(
       sheetIds.map((id) =>
-        bacaSheetDenganCache(sheetsClient, id, forceRefresh),
+        bacaSheetDenganCache(id, forceRefresh),
       ),
     );
 
