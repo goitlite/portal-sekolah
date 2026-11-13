@@ -1405,7 +1405,7 @@ export default function ExamPage() {
                 </p>
               ) : (
                 <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  Gunakan untuk kendala yang berkaitan dengan portal atau ujian.
+                  Gunakan untuk kendala yang berkaitan dengan ujian.
                 </p>
               )}
               <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
