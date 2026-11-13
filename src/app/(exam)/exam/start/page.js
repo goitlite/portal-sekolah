@@ -1040,8 +1040,10 @@ export default function StartExamPage() {
       }
     }
 
+    // Instan di detik ke-0 saat halaman ujian dibuka
     checkMessages();
-    const interval = setInterval(checkMessages, 3500);
+    // Selanjutnya berjalan aman & stabil setiap 20 detik
+    const interval = setInterval(checkMessages, 20000);
 
     return () => {
       active = false;
@@ -2371,19 +2373,21 @@ export default function StartExamPage() {
 
   const isTimeRunningOut = timeLeft > 0;
   // =========================
-  // TOUCH HEARTBEAT DETECTION
+  // TOUCH & ACTIVITY HEARTBEAT DETECTION
   // =========================
   useEffect(() => {
     function updateTouch() {
       lastTouchRef.current = Date.now();
     }
 
-    // Deteksi semua sentuhan user
-    window.addEventListener("touchstart", updateTouch, true);
+    const listenerOpts = { capture: true, passive: true };
 
-    window.addEventListener("touchmove", updateTouch, true);
-
-    window.addEventListener("click", updateTouch, true);
+    // Deteksi semua interaksi user (passive agar scroll sangat licin di HP low-end & stabil di desktop)
+    window.addEventListener("touchstart", updateTouch, listenerOpts);
+    window.addEventListener("touchmove", updateTouch, listenerOpts);
+    window.addEventListener("click", updateTouch, listenerOpts);
+    window.addEventListener("mousemove", updateTouch, listenerOpts);
+    window.addEventListener("keydown", updateTouch, listenerOpts);
 
     // Monitor kehilangan interaksi
     const interval = setInterval(() => {
@@ -2416,7 +2420,7 @@ export default function StartExamPage() {
       const isIframeFocused =
         iframeRef.current && document.activeElement === iframeRef.current;
 
-      // jika tidak fokus + tidak ada touch (dan siswa sedang tidak aktif mengisi form di iframe)
+      // jika tidak fokus + tidak ada interaksi (dan siswa sedang tidak aktif mengisi form di iframe)
       if (idleTime > 6000 && !document.hasFocus() && !isIframeFocused) {
         forceLogoutRef.current?.("Floating window / aplikasi lain terdeteksi");
       }
@@ -2425,11 +2429,11 @@ export default function StartExamPage() {
     return () => {
       clearInterval(interval);
 
-      window.removeEventListener("touchstart", updateTouch, true);
-
-      window.removeEventListener("touchmove", updateTouch, true);
-
-      window.removeEventListener("click", updateTouch, true);
+      window.removeEventListener("touchstart", updateTouch, listenerOpts);
+      window.removeEventListener("touchmove", updateTouch, listenerOpts);
+      window.removeEventListener("click", updateTouch, listenerOpts);
+      window.removeEventListener("mousemove", updateTouch, listenerOpts);
+      window.removeEventListener("keydown", updateTouch, listenerOpts);
     };
   }, []);
 
