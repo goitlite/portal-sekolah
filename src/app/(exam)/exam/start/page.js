@@ -486,7 +486,11 @@ export default function StartExamPage() {
         return;
       }
 
-      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (typeof navigator !== "undefined" &&
+          navigator.platform === "MacIntel" &&
+          navigator.maxTouchPoints > 1);
       const isStandalonePwa =
         window.matchMedia("(display-mode: standalone)").matches ||
         navigator.standalone === true;
@@ -498,7 +502,7 @@ export default function StartExamPage() {
       const standaloneGatePassed =
         sessionStorage.getItem("examPwaAccess") === "standalone";
       if (
-        isAndroid &&
+        !isIOS &&
         !testingPinAllowed &&
         !standaloneGatePassed
       ) {
@@ -509,8 +513,6 @@ export default function StartExamPage() {
         setPwaRequired(true);
         return;
       }
-
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
       try {
         if (!isIOS && !document.fullscreenElement) {
@@ -2501,18 +2503,17 @@ export default function StartExamPage() {
         <section className="w-full max-w-lg rounded-3xl border border-white/15 bg-slate-900 p-6 shadow-2xl sm:p-8">
           <div className="text-center">
             <div className="text-5xl" aria-hidden="true">📲</div>
-            <h1 className="mt-4 text-2xl font-black sm:text-3xl">Ujian Dibuka dari PWA</h1>
+            <h1 className="mt-4 text-2xl font-black sm:text-3xl">Ujian Wajib Lewat PWA</h1>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              Untuk memulai ujian di Android, pasang Portal Sekolah lalu buka kembali dari ikon aplikasi di layar utama.
+              Ujian harus dibuka dari aplikasi Portal Sekolah terinstal (PWA), atau diotorisasi dengan Kode Masuk Pengawas.
             </p>
           </div>
 
           {(!deferredInstallPrompt || showManualInstallSteps) && (
             <ol className="mt-5 space-y-3 rounded-2xl bg-black/30 p-4 text-left text-sm text-slate-200">
-              <li><b>1.</b> Di Chrome, pilih menu ⋮ di kanan atas.</li>
-              <li><b>2.</b> Pilih <b>Install app</b> atau <b>Add to Home screen</b>, lalu konfirmasi pemasangan.</li>
-              <li><b>3.</b> Kembali ke layar utama dan buka ikon <b>Portal Sekolah</b>.</li>
-              <li><b>4.</b> Masuk ke ujian kembali dari PWA tersebut.</li>
+              <li><b>1. Di HP:</b> Buka menu ⋮ di kanan atas &gt; <b>Install app</b> atau <b>Add to Home screen</b>.</li>
+              <li><b>2. Di Laptop/PC:</b> Klik ikon <b>Install</b> di bilah alamat browser atau menu ⋮ &gt; <b>Install app</b>.</li>
+              <li><b>3. Alternatif:</b> Kembali ke halaman masuk ujian lalu minta <b>Kode Masuk Pengawas</b> kepada guru pengawas.</li>
             </ol>
           )}
 
@@ -2542,12 +2543,21 @@ export default function StartExamPage() {
                 setInstallFeedback("Gunakan menu ⋮ Chrome lalu pilih Install app atau Add to Home screen.");
               }
               }}
-              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4 text-base font-black text-slate-950 shadow-lg active:scale-[0.99]"
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4 text-base font-black text-slate-950 shadow-lg active:scale-[0.99] cursor-pointer"
             >
               📲 Instal Sekarang
             </button>
           )}
-          <p className="mt-5 text-center text-xs text-slate-400">
+
+          <button
+            type="button"
+            onClick={() => router.replace("/exam")}
+            className="mt-4 w-full rounded-2xl border border-white/20 bg-white/10 hover:bg-white/20 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.99] cursor-pointer"
+          >
+            ← Kembali ke Halaman Masuk Ujian
+          </button>
+
+          <p className="mt-4 text-center text-xs text-slate-400">
             Jika PWA sudah terpasang, tutup tab ini lalu buka aplikasi dari ikonnya.
           </p>
         </section>

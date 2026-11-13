@@ -34,6 +34,7 @@ export default function ExamPage() {
   const [pwaPin, setPwaPin] = useState("");
   const [pwaGateMessage, setPwaGateMessage] = useState("");
   const [installStepsVisible, setInstallStepsVisible] = useState(false);
+  const [showAdminPinForm, setShowAdminPinForm] = useState(false);
 
   useEffect(() => {
     function syncInstallPrompt() {
@@ -51,29 +52,31 @@ export default function ExamPage() {
 
     const classifyTimer = setTimeout(() => {
       const ua = navigator.userAgent;
-      const isAndroid = /Android/i.test(ua);
       const isIOS =
         /iPad|iPhone|iPod/i.test(ua) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       const pwaSessionGatePassed =
-        sessionStorage.getItem("examPwaAccess") === "standalone";
+        sessionStorage.getItem("examPwaAccess") === "standalone" ||
+        sessionStorage.getItem("examPwaAccess") === "testing-pin";
 
       // Jangan minta deteksi ulang saat route kembali ke /exam dalam sesi PWA yang sudah lolos.
       // Otorisasi PIN perangkat juga disimpan tanpa menyimpan PIN mentah.
       if (
-        isAndroid &&
-        (pwaSessionGatePassed ||
-          localStorage.getItem("examPwaPinAuthorized") === "true")
+        pwaSessionGatePassed ||
+        localStorage.getItem("examPwaPinAuthorized") === "true"
       ) {
         setPwaGateMode("allowed");
         return;
       }
 
-      if (!isAndroid || isIOS) {
+      // Dukungan khusus iPhone / iPad
+      if (isIOS) {
         setPwaGateMode("allowed");
         return;
       }
 
+      // Baik Android maupun Desktop (termasuk Chrome Mode Desktop):
+      // Wajib periksa apakah aplikasi dibuka dalam mode Standalone PWA terinstal
       const standalone =
         window.matchMedia("(display-mode: standalone)").matches ||
         navigator.standalone === true;
@@ -121,7 +124,7 @@ export default function ExamPage() {
         navigator.standalone === true;
       if (!standalone) {
         setPwaGateMessage(
-          "PWA standalone belum terdeteksi. Buka aplikasi dari ikon layar utama.",
+          "PWA standalone belum terdeteksi. Buka aplikasi dari ikon layar utama / menu aplikasi.",
         );
         return;
       }
@@ -132,11 +135,19 @@ export default function ExamPage() {
       return;
     }
 
-    if (pwaPin.trim() !== PWA_TEST_BYPASS_PIN) {
-      setPwaGateMessage("PIN pengecualian tidak sesuai.");
+    const inputVal = pwaPin.trim();
+    if (!inputVal) {
+      setPwaGateMessage("Silakan masukkan Kode Masuk dari Pengawas.");
       return;
     }
-    // Aktivasi harus terjadi langsung dari tombol PIN, bukan dari effect.
+
+    // Hanya kode PIN pengawas yang valid (siswa tidak bisa menggunakan ID pribadi)
+    if (inputVal !== PWA_TEST_BYPASS_PIN) {
+      setPwaGateMessage("Kode Masuk / PIN Pengawas tidak sesuai.");
+      return;
+    }
+
+    // Aktivasi harus terjadi langsung dari tombol, bukan dari effect.
     void enterFullscreen();
     sessionStorage.setItem("examPwaAccess", "testing-pin");
     localStorage.setItem("examPwaPinAuthorized", "true");
@@ -753,13 +764,13 @@ export default function ExamPage() {
                 </div>
                 <h1 className="mt-4 text-2xl font-black text-slate-900">
                   {isStandaloneGate
-                    ? "Konfirmasi Aplikasi PWA"
-                    : "Instal atau Buka PWA"}
+                    ? "Aplikasi Ujian Terpasang"
+                    : "Buka Lewat Aplikasi Resmi"}
                 </h1>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">
                   {isStandaloneGate
-                    ? "Tekan deteksi untuk memastikan portal dibuka dari aplikasi PWA standalone."
-                    : "Ujian Android harus dibuka dari aplikasi Portal Sekolah. Tab Chrome biasa tidak dapat melanjutkan tanpa pengecualian pengawas."}
+                    ? "Aplikasi Portal Sekolah terdeteksi. Silakan klik tombol di bawah untuk masuk ke ruang ujian."
+                    : "Untuk menjaga fokus dan kelancaran asesmen, ujian harus dibuka melalui Aplikasi Portal Sekolah terpasang di HP atau Laptop Anda."}
                 </p>
               </div>
 
@@ -769,16 +780,16 @@ export default function ExamPage() {
                   onClick={continueFromPwaGate}
                   className="mt-6 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-5 py-4 font-black text-white shadow-lg shadow-blue-600/20 active:scale-[0.99] transition cursor-pointer"
                 >
-                  Deteksi PWA dan Lanjutkan
+                  Masuk Ujian (Layar Penuh)
                 </button>
               ) : (
                 <>
                   <button
                     type="button"
                     onClick={installPwaFromExamGate}
-                    className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 px-5 py-4 font-black text-white shadow-lg shadow-orange-500/25 active:scale-[0.99] transition cursor-pointer"
+                    className="mt-6 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-5 py-4 font-black text-white shadow-lg shadow-blue-600/20 active:scale-[0.99] transition cursor-pointer"
                   >
-                    📲 Instal PWA Sekarang
+                    📲 Pasang Aplikasi Ujian Sekarang
                   </button>
 
                   <button
@@ -786,66 +797,91 @@ export default function ExamPage() {
                     onClick={() =>
                       setInstallStepsVisible((visible) => !visible)
                     }
-                    className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-5 py-3 font-bold text-slate-700 transition"
+                    className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-5 py-3 font-bold text-slate-700 transition cursor-pointer"
                   >
-                    Cara instal / membuka aplikasi
+                    {installStepsVisible ? "Sembunyikan Panduan" : "📖 Panduan Pasang Aplikasi (HP / Laptop)"}
                   </button>
 
                   {installStepsVisible && (
-                    <ol className="mt-4 space-y-2 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700">
-                      <li>1. Di Chrome, buka menu ⋮.</li>
+                    <ol className="mt-4 space-y-2.5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-xs sm:text-sm text-slate-700">
                       <li>
-                        2. Pilih <b>Install app</b> atau{" "}
-                        <b>Tambahkan ke layar utama</b>.
+                        <b>Di Smartphone (Chrome):</b> Buka menu titik tiga <b>(⋮)</b> di pojok kanan atas browser &gt; Pilih <b>Install app</b> atau <b>Tambahkan ke layar utama</b>.
                       </li>
                       <li>
-                        3. Setelah dipasang, tutup tab dan buka ikon Portal
-                        Sekolah.
+                        <b>Di Komputer / Laptop:</b> Klik ikon <b>Install</b> di bilah alamat browser kanan atas atau menu titik tiga <b>(⋮)</b> &gt; <b>Install Portal Sekolah</b>.
                       </li>
                       <li>
-                        4. Jika opsi instal tidak tersedia, minta PIN
-                        pengecualian kepada pengawas.
+                        <b>Setelah Terpasang:</b> Tutup tab browser ini, lalu buka aplikasi dari <b>ikon Portal Sekolah</b> di layar depan perangkat Anda.
                       </li>
                     </ol>
                   )}
 
-                  <form
-                    className="mt-6 border-t border-slate-200 pt-5"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      continueFromPwaGate();
-                    }}
-                  >
-                    <label
-                      htmlFor="pwa-fallback-pin"
-                      className="block text-sm font-bold text-slate-700"
-                    >
-                      PIN pengecualian pengawas (uji sementara)
-                    </label>
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        id="pwa-fallback-pin"
-                        type="password"
-                        value={pwaPin}
-                        onChange={(event) => setPwaPin(event.target.value)}
-                        autoComplete="one-time-code"
-                        className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-slate-50 px-3 py-3 text-slate-900 outline-none focus:border-blue-600 focus:bg-white"
-                      />
+                  {/* FORM PIN PENGAWAS (TERSEMBUNYI SECARA DEFAULT AGAR SISWA TIDAK BINGUNG) */}
+                  <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col items-center">
+                    {!showAdminPinForm ? (
                       <button
-                        type="submit"
-                        className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-3 font-black text-white transition"
+                        type="button"
+                        onClick={() => {
+                          setShowAdminPinForm(true);
+                          setPwaGateMessage("");
+                        }}
+                        className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition flex items-center gap-1 cursor-pointer py-1"
                       >
-                        Lanjut
+                        <span>🔒</span>
+                        <span>Bantuan Khusus Pengawas Ujian</span>
                       </button>
-                    </div>
-                  </form>
+                    ) : (
+                      <form
+                        className="w-full mt-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          continueFromPwaGate();
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                            <span>🔒</span> Akses Pengawas
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAdminPinForm(false);
+                              setPwaPin("");
+                              setPwaGateMessage("");
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+                          >
+                            ✕ Tutup
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            id="pwa-fallback-pin"
+                            type="password"
+                            value={pwaPin}
+                            onChange={(event) => setPwaPin(event.target.value)}
+                            placeholder="PIN Pengawas"
+                            autoComplete="off"
+                            className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-mono font-bold tracking-widest text-slate-900 outline-none focus:border-blue-600"
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            className="rounded-xl bg-slate-800 hover:bg-slate-900 px-4 py-2 text-xs font-black text-white transition active:scale-95 cursor-pointer shrink-0"
+                          >
+                            Buka
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
                 </>
               )}
 
               {pwaGateMessage && (
                 <p
                   role="status"
-                  className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 font-semibold"
+                  className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 font-semibold text-center"
                 >
                   {pwaGateMessage}
                 </p>
