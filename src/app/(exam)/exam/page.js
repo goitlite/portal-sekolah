@@ -7,7 +7,7 @@ import {
   registerStudent,
   kunciSesiUjian,
 } from "@/services/authService";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 // HANYA UNTUK PENGUJIAN SEMENTARA. Nilai ini terlihat di bundle browser.
@@ -168,6 +168,19 @@ export default function ExamPage() {
   });
 
   const [jenjang, setJenjang] = useState("");
+
+  // true hanya setelah daftar ujian berhasil diambil dari server pada sesi ini.
+  // Cache localStorage bisa usang (sesi sudah disembunyikan admin), jadi tidak boleh dipakai sebagai dasar lolos token.
+  const examSegarRef = useRef(false);
+
+  // Hasil ujian terakhir milik siswa ini (sumber sama dengan nilai di Pantau Asesmen)
+  const [hasilUjian, setHasilUjian] = useState({
+    loading: false,
+    terakhir: null,
+    hasil: [],
+    error: "",
+    diag: null,
+  });
   const [selectedKelas, setSelectedKelas] = useState("");
   const [selectedMapel, setSelectedMapel] = useState("");
 
@@ -296,8 +309,31 @@ export default function ExamPage() {
 
       console.log("DATA UJIAN:", data);
 
-      if (Array.isArray(data) && data.length > 0) {
+      if (
+        Array.isArray(data) &&
+        data.length === 0 &&
+        typeof navigator !== "undefined" &&
+        navigator.onLine
+      ) {
+        // Semua sesi sedang disembunyikan admin: kosongkan daftar & cache agar tidak ada sesi usang
+        examSegarRef.current = true;
+        setExamData([]);
+        setSelectedMapel("");
+        try {
+          localStorage.removeItem("cached_exam_data");
+        } catch (_) {}
+        setTokenMessage(
+          "Belum ada sesi ujian yang dibuka. Tunggu sesuai jadwal ujian.",
+        );
+        setTokenModal(true);
+      } else if (Array.isArray(data) && data.length > 0) {
+        examSegarRef.current = true;
         setExamData(data);
+        setSelectedMapel((prev) =>
+          data.some((it) => it?.kls === selectedKelas && it?.mpl === prev)
+            ? prev
+            : "",
+        );
         localStorage.setItem("cached_exam_data", JSON.stringify(data));
         localStorage.setItem("cached_exam_data_time", Date.now().toString());
 
@@ -351,8 +387,24 @@ export default function ExamPage() {
       try {
         const data = await getExamData();
         if (!isMounted) return;
-        if (Array.isArray(data) && data.length > 0) {
+        if (
+          Array.isArray(data) &&
+          data.length === 0 &&
+          typeof navigator !== "undefined" &&
+          navigator.onLine
+        ) {
+          examSegarRef.current = true;
+          setExamData([]);
+          setSelectedMapel("");
+          try {
+            localStorage.removeItem("cached_exam_data");
+          } catch (_) {}
+        } else if (Array.isArray(data) && data.length > 0) {
+          examSegarRef.current = true;
           setExamData(data);
+          setSelectedMapel((prev) =>
+            prev && !data.some((it) => it?.mpl === prev) ? "" : prev,
+          );
           localStorage.setItem("cached_exam_data", JSON.stringify(data));
           localStorage.setItem("cached_exam_data_time", Date.now().toString());
 
@@ -385,10 +437,78 @@ export default function ExamPage() {
 
     fetchExam();
 
+    // Auto refresh: saat halaman dibuka kembali/fokus & berkala selama halaman terlihat
+    const saatTerlihat = () => {
+      if (document.visibilityState === "visible") fetchExam();
+    };
+    document.addEventListener("visibilitychange", saatTerlihat);
+    window.addEventListener("focus", saatTerlihat);
+    const timer = setInterval(saatTerlihat, 30000);
+
     return () => {
       isMounted = false;
+      document.removeEventListener("visibilitychange", saatTerlihat);
+      window.removeEventListener("focus", saatTerlihat);
+      clearInterval(timer);
     };
   }, [pwaGateMode]);
+
+  // =========================
+  // HASIL UJIAN TERAKHIR SISWA (auto refresh)
+  // =========================
+  useEffect(() => {
+    if (pwaGateMode !== "allowed" || !nama) return;
+    let aktif = true;
+    const muatHasil = async () => {
+      try {
+        setHasilUjian((p) => ({ ...p, loading: true }));
+        const qs = new URLSearchParams({
+          nama,
+          kelas: kelas || "",
+          id: idSiswa || "",
+        });
+        const res = await fetch(`/api/exam/nilai-saya?${qs.toString()}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (!aktif) return;
+        if (json.status === "success") {
+          setHasilUjian({
+            loading: false,
+            terakhir: json.terakhir || null,
+            hasil: json.hasil || [],
+            error: "",
+            diag: json.diag || null,
+          });
+        } else {
+          // Gagal: pertahankan hasil sebelumnya, tampilkan pesan singkat
+          setHasilUjian((p) => ({
+            ...p,
+            loading: false,
+            error: json.message || "Gagal memuat hasil",
+          }));
+        }
+      } catch (err) {
+        if (aktif)
+          setHasilUjian((p) => ({
+            ...p,
+            loading: false,
+            error: "Gagal memuat hasil",
+          }));
+      }
+    };
+    muatHasil();
+    const saatTerlihat = () => {
+      if (document.visibilityState === "visible") muatHasil();
+    };
+    document.addEventListener("visibilitychange", saatTerlihat);
+    const timer = setInterval(saatTerlihat, 60000);
+    return () => {
+      aktif = false;
+      document.removeEventListener("visibilitychange", saatTerlihat);
+      clearInterval(timer);
+    };
+  }, [pwaGateMode, nama, kelas, idSiswa]);
 
   // ======================================
   // LIST JENJANG
@@ -405,6 +525,7 @@ export default function ExamPage() {
     ...new Set(
       examData
         .filter((item) => {
+          if (item?.tampil === false) return false;
           if (!item?.kls || !jenjang) return false;
 
           const namaKelas = item.kls.toString().toUpperCase().trim();
@@ -429,7 +550,7 @@ export default function ExamPage() {
   const mapelList = [
     ...new Set(
       examData
-        .filter((item) => item?.kls === selectedKelas)
+        .filter((item) => item?.kls === selectedKelas && item?.tampil !== false)
         .map((item) => item.mpl),
     ),
   ];
@@ -460,15 +581,18 @@ export default function ExamPage() {
       const cleanInputToken = token.trim().toUpperCase();
 
       // 1. Cek kecocokan token langsung dari data spreadsheet yang sudah terbaca
-      const localMatch = examData.find((item) => {
-        if (!item?.kls || !item?.mpl) return false;
-        const kSheet = item.kls.toString().toUpperCase().trim();
-        const mSheet = item.mpl.toString().toUpperCase().trim();
-        return (
-          kSheet === selectedKelas.toUpperCase().trim() &&
-          mSheet === selectedMapel.toUpperCase().trim()
-        );
-      });
+      const localMatch = !examSegarRef.current
+        ? null
+        : examData.find((item) => {
+            if (!item?.kls || !item?.mpl || item?.tampil === false)
+              return false;
+            const kSheet = item.kls.toString().toUpperCase().trim();
+            const mSheet = item.mpl.toString().toUpperCase().trim();
+            return (
+              kSheet === selectedKelas.toUpperCase().trim() &&
+              mSheet === selectedMapel.toUpperCase().trim()
+            );
+          });
 
       let result = null;
 
@@ -496,7 +620,11 @@ export default function ExamPage() {
         try {
           let devId = localStorage.getItem("exam_device_id");
           if (!devId) {
-            devId = "dev_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+            devId =
+              "dev_" +
+              Date.now() +
+              "_" +
+              Math.random().toString(36).slice(2, 9);
             localStorage.setItem("exam_device_id", devId);
           }
 
@@ -512,7 +640,7 @@ export default function ExamPage() {
             setLoadingToken(false);
             setTokenMessage(
               lockRes.message ||
-                "Akses ditolak: Akun Anda sedang aktif ujian di perangkat lain."
+                "Akses ditolak: Akun Anda sedang aktif ujian di perangkat lain.",
             );
             setTokenModal(true);
 
@@ -574,7 +702,9 @@ export default function ExamPage() {
     const message = complaintText.trim();
     if (!message || complaintLoading) return;
     if (!nama) {
-      setComplaintError("Identitas peserta belum siap. Tunggu sebentar lalu coba lagi.");
+      setComplaintError(
+        "Identitas peserta belum siap. Tunggu sebentar lalu coba lagi.",
+      );
       return;
     }
 
@@ -588,7 +718,9 @@ export default function ExamPage() {
         setComplaintNotice("Pengaduan berhasil dikirim kepada pengawas.");
         window.setTimeout(() => setComplaintNotice(""), 4500);
       } else {
-        setComplaintError(result?.message || "Pengaduan belum berhasil dikirim. Coba lagi.");
+        setComplaintError(
+          result?.message || "Pengaduan belum berhasil dikirim. Coba lagi.",
+        );
       }
     } catch (_) {
       setComplaintError("Koneksi bermasalah. Periksa internet lalu coba lagi.");
@@ -609,7 +741,9 @@ export default function ExamPage() {
               role="status"
             >
               <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-              <p className="text-sm font-semibold text-slate-600">Memeriksa mode aplikasi…</p>
+              <p className="text-sm font-semibold text-slate-600">
+                Memeriksa mode aplikasi…
+              </p>
             </div>
           ) : (
             <>
@@ -777,7 +911,8 @@ export default function ExamPage() {
                   </h1>
                   <p className="text-[11px] sm:text-xs text-amber-900/80 mt-1 flex items-center gap-1.5 font-medium">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-                    <span className="text-emerald-700 font-bold">Online</span> • Ujian Digital Siswa
+                    <span className="text-emerald-700 font-bold">Online</span> •
+                    Ujian Digital Siswa
                   </p>
                 </div>
               </div>
@@ -798,7 +933,11 @@ export default function ExamPage() {
                 className="flex-1 sm:flex-initial h-11 sm:h-10 px-3 rounded-xl bg-amber-100/80 hover:bg-amber-100 border border-amber-300/90 text-amber-950 text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer shadow-sm whitespace-nowrap"
                 title="Membaca ulang data ujian & token dari server"
               >
-                <span className={refreshing ? "animate-spin text-sm" : "text-sm"}>🔄</span>
+                <span
+                  className={refreshing ? "animate-spin text-sm" : "text-sm"}
+                >
+                  🔄
+                </span>
                 <span>{refreshing ? "Memuat..." : "Segarkan"}</span>
               </button>
 
@@ -860,7 +999,10 @@ export default function ExamPage() {
                       Peserta Ujian
                     </span>
                   </div>
-                  <h2 className="text-sm sm:text-base font-black text-slate-900 truncate mt-0.5" title={nama}>
+                  <h2
+                    className="text-sm sm:text-base font-black text-slate-900 truncate mt-0.5"
+                    title={nama}
+                  >
                     {nama || "Memuat peserta..."}
                   </h2>
                 </div>
@@ -886,6 +1028,72 @@ export default function ExamPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* HASIL UJIAN TERAKHIR SISWA */}
+          <div className="bg-white/95 border border-emerald-200 rounded-2xl p-3.5 sm:p-4 shadow-lg shadow-emerald-950/5">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-1.5">
+                <span>📈</span>
+                <span>Hasil Ujian Terakhir</span>
+              </h3>
+              {hasilUjian.loading && (
+                <span className="text-[10px] text-slate-400 animate-pulse">
+                  memperbarui...
+                </span>
+              )}
+            </div>
+            {hasilUjian.terakhir ? (
+              <>
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-emerald-900 truncate">
+                      {hasilUjian.terakhir.mapel}
+                    </p>
+                    <p className="text-[10px] text-emerald-800/80 font-mono">
+                      {hasilUjian.terakhir.timestamp || "-"}
+                    </p>
+                  </div>
+                  <span className="text-lg sm:text-xl font-black text-emerald-700 font-mono whitespace-nowrap">
+                    {hasilUjian.terakhir.nilai}
+                  </span>
+                </div>
+                {hasilUjian.hasil.length > 1 && (
+                  <ul className="mt-2 space-y-1">
+                    {hasilUjian.hasil.slice(1, 6).map((h, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between text-[11px] text-slate-700 px-1"
+                      >
+                        <span className="truncate pr-2">{h.mapel}</span>
+                        <span className="font-mono font-bold text-slate-800 whitespace-nowrap">
+                          {h.nilai}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                {hasilUjian.error
+                  ? `⚠️ ${hasilUjian.error}`
+                  : "Belum ada hasil ujian yang tercatat atas nama Anda."}
+                {!hasilUjian.error && hasilUjian.diag && (
+                  <span className="block text-[9px] text-slate-400 mt-0.5">
+                    Server membaca {hasilUjian.diag.dibaca} respon,{" "}
+                    {hasilUjian.diag.cocok} cocok dengan nama Anda
+                    {hasilUjian.diag.sebagian > 0
+                      ? ` (${hasilUjian.diag.sebagian} respon memuat sebagian kata nama Anda)`
+                      : ""}
+                    {hasilUjian.diag.namaDicari
+                      ? ` • dicari: "${hasilUjian.diag.namaDicari}"`
+                      : ""}
+                    .
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           {/* CARD PILIH UJIAN & FORM: CANTIK, BERSIH, TERANG, KOMPAK */}
@@ -953,7 +1161,9 @@ export default function ExamPage() {
                     disabled={!jenjang}
                     className="w-full bg-amber-50/40 hover:bg-white border border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3.5 outline-none transition text-slate-900 text-xs sm:text-sm font-semibold appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:ring-4 focus:ring-amber-400/20"
                   >
-                    <option value="">{jenjang ? "Pilih Kelas" : "Pilih Jenjang Dahulu"}</option>
+                    <option value="">
+                      {jenjang ? "Pilih Kelas" : "Pilih Jenjang Dahulu"}
+                    </option>
                     {kelasList.map((kls) => (
                       <option key={kls} value={kls}>
                         {kls}
@@ -1065,9 +1275,17 @@ export default function ExamPage() {
 
               {/* TIPS CEPAT */}
               <div className="bg-amber-50/80 border border-amber-200 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex items-start gap-2">
-                <span className="text-amber-700 text-sm shrink-0 mt-0.5">💡</span>
+                <span className="text-amber-700 text-sm shrink-0 mt-0.5">
+                  💡
+                </span>
                 <p className="text-amber-900 text-[11px] sm:text-xs leading-relaxed">
-                  Setelah memasukkan token, Anda dapat langsung menekan tombol <span className="font-extrabold text-amber-950">Enter</span> pada keyboard atau klik <span className="font-extrabold text-amber-950">Mulai Ujian</span>.
+                  Setelah memasukkan token, Anda dapat langsung menekan tombol{" "}
+                  <span className="font-extrabold text-amber-950">Enter</span>{" "}
+                  pada keyboard atau klik{" "}
+                  <span className="font-extrabold text-amber-950">
+                    Mulai Ujian
+                  </span>
+                  .
                 </p>
               </div>
             </div>
@@ -1080,9 +1298,18 @@ export default function ExamPage() {
           role="status"
           className="fixed bottom-5 left-1/2 z-[100002] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl border border-emerald-200/20 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300">✓</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300">
+            ✓
+          </span>
           <span className="flex-1">{complaintNotice}</span>
-          <button type="button" aria-label="Tutup notifikasi" onClick={() => setComplaintNotice("")} className="rounded-lg px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white">×</button>
+          <button
+            type="button"
+            aria-label="Tutup notifikasi"
+            onClick={() => setComplaintNotice("")}
+            className="rounded-lg px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -1095,18 +1322,42 @@ export default function ExamPage() {
             className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.7)]"
           >
             <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-amber-400 px-5 py-5 text-white sm:px-7 sm:py-6">
-              <div aria-hidden="true" className="absolute -right-8 -top-12 h-36 w-36 rounded-full border-[18px] border-white/10" />
+              <div
+                aria-hidden="true"
+                className="absolute -right-8 -top-12 h-36 w-36 rounded-full border-[18px] border-white/10"
+              />
               <div className="relative flex items-start gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/15 shadow-inner">
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6">
-                    <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                    <path d="M8 10h8M8 14h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-6 w-6"
+                  >
+                    <path
+                      d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.1A7.5 7.5 0 1 1 20 11.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M8 10h8M8 14h5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 id="exam-page-complaint-title" className="text-lg font-black tracking-tight sm:text-xl">Bantuan & Pengaduan</h2>
+                  <h2
+                    id="exam-page-complaint-title"
+                    className="text-lg font-black tracking-tight sm:text-xl"
+                  >
+                    Bantuan & Pengaduan
+                  </h2>
                   <p className="mt-1 text-xs leading-relaxed text-orange-50 sm:text-sm">
-                    Laporkan kendala sebelum memulai ujian. Pengawas akan menerima pesan beserta identitas Anda.
+                    Laporkan kendala sebelum memulai ujian. Pengawas akan
+                    menerima pesan beserta identitas Anda.
                   </p>
                 </div>
                 <button
@@ -1114,15 +1365,24 @@ export default function ExamPage() {
                   aria-label="Tutup form pengaduan"
                   onClick={() => setComplaintOpen(false)}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-black/10 text-lg font-bold text-white/90 transition hover:bg-black/20"
-                >×</button>
+                >
+                  ×
+                </button>
               </div>
               <div className="relative mt-4 flex flex-wrap gap-2 text-[10px] font-semibold sm:text-xs">
-                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">{nama || "Memuat peserta…"}</span>
-                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">{kelas || "Kelas belum tersedia"}</span>
+                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">
+                  {nama || "Memuat peserta…"}
+                </span>
+                <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1">
+                  {kelas || "Kelas belum tersedia"}
+                </span>
               </div>
             </div>
             <div className="p-5 sm:p-7">
-              <label htmlFor="exam-page-complaint-message" className="mb-2 block text-sm font-bold text-slate-800">
+              <label
+                htmlFor="exam-page-complaint-message"
+                className="mb-2 block text-sm font-bold text-slate-800"
+              >
                 Ceritakan kendala yang Anda alami
               </label>
               <textarea
@@ -1137,9 +1397,16 @@ export default function ExamPage() {
                 className="h-36 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
               />
               {complaintError ? (
-                <p role="alert" className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{complaintError}</p>
+                <p
+                  role="alert"
+                  className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
+                >
+                  {complaintError}
+                </p>
               ) : (
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">Gunakan untuk kendala yang berkaitan dengan portal atau ujian.</p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  Gunakan untuk kendala yang berkaitan dengan portal atau ujian.
+                </p>
               )}
               <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button
@@ -1147,7 +1414,9 @@ export default function ExamPage() {
                   disabled={complaintLoading}
                   onClick={() => setComplaintOpen(false)}
                   className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 active:scale-[0.99] disabled:opacity-50 sm:min-w-28"
-                >Batal</button>
+                >
+                  Batal
+                </button>
                 <button
                   type="button"
                   disabled={complaintLoading || !complaintText.trim()}
@@ -1155,8 +1424,15 @@ export default function ExamPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-orange-200 transition hover:from-orange-700 hover:to-amber-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none sm:min-w-40"
                 >
                   {complaintLoading ? (
-                    <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Mengirim...</>
-                  ) : <>Kirim ke Pengawas <span aria-hidden="true">→</span></>}
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Mengirim...
+                    </>
+                  ) : (
+                    <>
+                      Kirim ke Pengawas <span aria-hidden="true">→</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

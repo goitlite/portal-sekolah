@@ -16,9 +16,12 @@ const PIN_ADMIN_ASESMEN = process.env.PIN_ADMIN_ASESMEN || "4321";
 // GET: Ambil daftar seluruh baris ujian
 export async function GET() {
   try {
-    const response = await fetch(`${GS_ASESMEN_URL}?action=getData`, {
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${GS_ASESMEN_URL}?action=getData&semua=1&ujian_key=${encodeURIComponent(UJIAN_KEY)}`,
+      {
+        cache: "no-store",
+      },
+    );
     const data = await response.json();
     return NextResponse.json({
       status: "success",
@@ -32,7 +35,7 @@ export async function GET() {
         message: error.message || "Gagal mengambil data ujian",
         data: [],
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -46,7 +49,7 @@ export async function POST(request) {
     if (!action) {
       return NextResponse.json(
         { status: "error", message: "Action wajib diisi" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -93,7 +96,7 @@ export async function POST(request) {
         status: "error",
         message: error.message || "Gagal memproses aksi ujian",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

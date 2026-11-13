@@ -34,7 +34,13 @@ export async function fetchSemuaSiswaAsesmen() {
   }
 }
 
-export async function resetPelanggaranSiswa({ id_siswa, nama, kelas, id_guru, pin_admin }) {
+export async function resetPelanggaranSiswa({
+  id_siswa,
+  nama,
+  kelas,
+  id_guru,
+  pin_admin,
+}) {
   try {
     const res = await fetch("/api/guru/asesmen/database", {
       method: "POST",
@@ -54,7 +60,13 @@ export async function resetPelanggaranSiswa({ id_siswa, nama, kelas, id_guru, pi
   }
 }
 
-export async function resetDeviceSiswa({ id_siswa, nama, kelas, id_guru, pin_admin }) {
+export async function resetDeviceSiswa({
+  id_siswa,
+  nama,
+  kelas,
+  id_guru,
+  pin_admin,
+}) {
   try {
     const res = await fetch("/api/guru/asesmen/database", {
       method: "POST",
@@ -74,8 +86,13 @@ export async function resetDeviceSiswa({ id_siswa, nama, kelas, id_guru, pin_adm
   }
 }
 
-
-export async function kirimPesanUjian({ kelas, nama, pesan, id_guru, pin_admin }) {
+export async function kirimPesanUjian({
+  kelas,
+  nama,
+  pesan,
+  id_guru,
+  pin_admin,
+}) {
   try {
     const res = await fetch("/api/guru/asesmen/database", {
       method: "POST",
@@ -155,6 +172,8 @@ export async function tambahDataUjian({
   id_guru,
   nama_guru,
   pin_admin,
+  sheet_respon_url,
+  sheetUrl,
 }) {
   try {
     const res = await fetch("/api/guru/asesmen/ujian", {
@@ -170,6 +189,7 @@ export async function tambahDataUjian({
         id_guru,
         nama_guru,
         pin_admin,
+        sheet_respon_url: sheet_respon_url || sheetUrl || "",
       }),
     });
     return await res.json();
@@ -191,6 +211,8 @@ export async function editDataUjian({
   id_guru,
   nama_guru,
   pin_admin,
+  sheet_respon_url,
+  sheetUrl,
 }) {
   try {
     const res = await fetch("/api/guru/asesmen/ujian", {
@@ -209,6 +231,12 @@ export async function editDataUjian({
         id_guru,
         nama_guru,
         pin_admin,
+        sheet_respon_url:
+          sheet_respon_url !== undefined
+            ? sheet_respon_url
+            : sheetUrl !== undefined
+              ? sheetUrl
+              : "",
       }),
     });
     return await res.json();
@@ -243,5 +271,71 @@ export async function hapusDataUjian({
     return await res.json();
   } catch (err) {
     return { status: "error", message: err.message };
+  }
+}
+
+/** Sembunyikan / munculkan sesi ujian dari siswa (kolom H sheet UJIAN). tampil: true = terlihat */
+export async function aturTampilSesiUjian({
+  rowIndex,
+  kelas,
+  mapel,
+  tampil,
+  id_guru,
+  nama_guru,
+  pin_admin,
+}) {
+  try {
+    const res = await fetch("/api/guru/asesmen/ujian", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guru_set_tampil_ujian",
+        rowIndex,
+        kelas,
+        mapel,
+        tampil: tampil ? "true" : "false",
+        id_guru,
+        nama_guru,
+        pin_admin,
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    return { status: "error", message: err.message };
+  }
+}
+
+// =====================================================
+// 3. AMBIL REKAP NILAI DARI GOOGLE SHEETS RESPON
+// =====================================================
+export async function fetchRekapNilaiUjian({
+  kelas,
+  mapel,
+  refresh = false,
+} = {}) {
+  // Batas waktu 28 dtk agar layar tidak menggantung bila server/Google lambat
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 28000);
+  try {
+    const params = new URLSearchParams();
+    if (kelas) params.append("kelas", kelas);
+    if (mapel) params.append("mapel", mapel);
+    if (refresh) params.append("refresh", "true");
+
+    const res = await fetch(`/api/exam/rekap-nilai?${params.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    // Respon berisi: status, data/responses (array), diagnostics (penyebab bila nilai kosong)
+    return json;
+  } catch (err) {
+    const pesan =
+      err?.name === "AbortError"
+        ? "Pengambilan nilai terlalu lama (timeout). Coba tekan Refresh."
+        : err.message;
+    return { status: "error", message: pesan, data: [], responses: [] };
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -9,25 +9,84 @@ import {
   hapusPesanUjian,
   hapusAkunSiswaAsesmen,
   fetchDaftarUjian,
+  aturTampilSesiUjian,
   tambahDataUjian,
   editDataUjian,
   hapusDataUjian,
+  fetchRekapNilaiUjian,
 } from "@/services/guruAsesmenService";
+import {
+  evaluasiNilaiSiswa,
+  deteksiJoki,
+  kunciSiswaAsesmen,
+} from "@/lib/auditAsesmenHelper";
+import PanelLaporanJoki, {
+  BadgeJoki,
+} from "@/app/magang/guru/PanelLaporanJoki";
+import ModalPrintRekapUjian from "@/app/magang/guru/ModalPrintRekapUjian";
 
 // Generator palet warna dinamis per kelas
 const PALET_KELAS = [
-  { border: "border-l-emerald-500", bg: "bg-emerald-50/40", badge: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-  { border: "border-l-sky-500", bg: "bg-sky-50/40", badge: "bg-sky-100 text-sky-800 border-sky-300" },
-  { border: "border-l-amber-500", bg: "bg-amber-50/40", badge: "bg-amber-100 text-amber-900 border-amber-300" },
-  { border: "border-l-fuchsia-500", bg: "bg-fuchsia-50/40", badge: "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300" },
-  { border: "border-l-indigo-500", bg: "bg-indigo-50/40", badge: "bg-indigo-100 text-indigo-800 border-indigo-300" },
-  { border: "border-l-rose-500", bg: "bg-rose-50/40", badge: "bg-rose-100 text-rose-800 border-rose-300" },
-  { border: "border-l-teal-500", bg: "bg-teal-50/40", badge: "bg-teal-100 text-teal-800 border-teal-300" },
-  { border: "border-l-violet-500", bg: "bg-violet-50/40", badge: "bg-violet-100 text-violet-800 border-violet-300" },
-  { border: "border-l-orange-500", bg: "bg-orange-50/40", badge: "bg-orange-100 text-orange-900 border-orange-300" },
-  { border: "border-l-lime-500", bg: "bg-lime-50/40", badge: "bg-lime-100 text-lime-800 border-lime-300" },
-  { border: "border-l-cyan-500", bg: "bg-cyan-50/40", badge: "bg-cyan-100 text-cyan-800 border-cyan-300" },
-  { border: "border-l-pink-500", bg: "bg-pink-50/40", badge: "bg-pink-100 text-pink-800 border-pink-300" },
+  {
+    border: "border-l-emerald-500",
+    bg: "bg-emerald-50/40",
+    badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  },
+  {
+    border: "border-l-sky-500",
+    bg: "bg-sky-50/40",
+    badge: "bg-sky-100 text-sky-800 border-sky-300",
+  },
+  {
+    border: "border-l-amber-500",
+    bg: "bg-amber-50/40",
+    badge: "bg-amber-100 text-amber-900 border-amber-300",
+  },
+  {
+    border: "border-l-fuchsia-500",
+    bg: "bg-fuchsia-50/40",
+    badge: "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300",
+  },
+  {
+    border: "border-l-indigo-500",
+    bg: "bg-indigo-50/40",
+    badge: "bg-indigo-100 text-indigo-800 border-indigo-300",
+  },
+  {
+    border: "border-l-rose-500",
+    bg: "bg-rose-50/40",
+    badge: "bg-rose-100 text-rose-800 border-rose-300",
+  },
+  {
+    border: "border-l-teal-500",
+    bg: "bg-teal-50/40",
+    badge: "bg-teal-100 text-teal-800 border-teal-300",
+  },
+  {
+    border: "border-l-violet-500",
+    bg: "bg-violet-50/40",
+    badge: "bg-violet-100 text-violet-800 border-violet-300",
+  },
+  {
+    border: "border-l-orange-500",
+    bg: "bg-orange-50/40",
+    badge: "bg-orange-100 text-orange-900 border-orange-300",
+  },
+  {
+    border: "border-l-lime-500",
+    bg: "bg-lime-50/40",
+    badge: "bg-lime-100 text-lime-800 border-lime-300",
+  },
+  {
+    border: "border-l-cyan-500",
+    bg: "bg-cyan-50/40",
+    badge: "bg-cyan-100 text-cyan-800 border-cyan-300",
+  },
+  {
+    border: "border-l-pink-500",
+    bg: "bg-pink-50/40",
+    badge: "bg-pink-100 text-pink-800 border-pink-300",
+  },
 ];
 
 function getWarnaKelas(namaKelas) {
@@ -41,6 +100,9 @@ function getWarnaKelas(namaKelas) {
   return PALET_KELAS[idx];
 }
 
+const GOOGLE_BOT_EMAIL =
+  "portal-bot@even-continuity-321209.iam.gserviceaccount.com";
+
 export default function ModalPantauAsesmenKelas({
   isOpen,
   onClose,
@@ -50,6 +112,11 @@ export default function ModalPantauAsesmenKelas({
 }) {
   const [siswaList, setSiswaList] = useState([]);
   const [daftarUjian, setDaftarUjian] = useState([]);
+  const [responList, setResponList] = useState([]);
+  const [loadingRekap, setLoadingRekap] = useState(false);
+  const [rekapError, setRekapError] = useState("");
+  const [rekapDiag, setRekapDiag] = useState(null);
+  const [showPrintRekapModal, setShowPrintRekapModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [suksesMsg, setSuksesMsg] = useState("");
@@ -73,6 +140,7 @@ export default function ModalPantauAsesmenKelas({
     token: "",
     link: "",
     kodeKirim: "",
+    sheet_respon_url: "",
   });
 
   // Modal input pesan custom
@@ -80,31 +148,68 @@ export default function ModalPantauAsesmenKelas({
   const [pesanInput, setPesanInput] = useState("");
   const [targetSiswaPesan, setTargetSiswaPesan] = useState(null); // null = sekelas
 
-  const muatData = useCallback(async () => {
-    if (!isOpen) return;
-    setLoading(true);
-    setErrorMsg("");
-    try {
-      const [resSiswa, resUjian] = await Promise.all([
-        fetchSemuaSiswaAsesmen(),
-        fetchDaftarUjian(),
-      ]);
-
-      if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
-        setSiswaList(resSiswa.data);
-      } else {
-        setErrorMsg(resSiswa.message || "Gagal memuat database siswa");
+  // Nilai ujian dimuat terpisah agar daftar siswa langsung tampil walau Google Sheets lambat.
+  const muatRekap = useCallback(
+    async (forceRefresh = false) => {
+      if (!isOpen) return;
+      setLoadingRekap(true);
+      setRekapError("");
+      try {
+        const resRekap = await fetchRekapNilaiUjian({
+          kelas: kelasTarget,
+          mapel: namaMapel,
+          refresh: forceRefresh === true,
+        });
+        if (resRekap && resRekap.status === "success") {
+          const list = resRekap.data || resRekap.responses || [];
+          if (Array.isArray(list)) setResponList(list);
+          setRekapDiag(resRekap.diagnostics || null);
+        } else {
+          // Gagal: data nilai yang sudah tampil TIDAK dikosongkan, tampilkan alasannya
+          setRekapError(
+            resRekap?.message || "Gagal memuat nilai dari Google Sheets",
+          );
+        }
+      } catch (err) {
+        setRekapError("Gagal memuat nilai: " + err.message);
+      } finally {
+        setLoadingRekap(false);
       }
+    },
+    [isOpen, kelasTarget, namaMapel],
+  );
 
-      if (resUjian.status === "success" && Array.isArray(resUjian.data)) {
-        setDaftarUjian(resUjian.data);
+  // forceRefresh = true hanya dari tombol Refresh. Aksi lain (reset, pesan, dll) memakai cache server
+  // sehingga kuota Google Sheets tidak habis.
+  const muatData = useCallback(
+    async (forceRefresh = false) => {
+      if (!isOpen) return;
+      setLoading(true);
+      setErrorMsg("");
+      try {
+        const [resSiswa, resUjian] = await Promise.all([
+          fetchSemuaSiswaAsesmen(),
+          fetchDaftarUjian(),
+        ]);
+
+        if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
+          setSiswaList(resSiswa.data);
+        } else {
+          setErrorMsg(resSiswa.message || "Gagal memuat database siswa");
+        }
+
+        if (resUjian.status === "success" && Array.isArray(resUjian.data)) {
+          setDaftarUjian(resUjian.data);
+        }
+      } catch (err) {
+        setErrorMsg("Koneksi gagal: " + err.message);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setErrorMsg("Koneksi gagal: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [isOpen]);
+      muatRekap(forceRefresh);
+    },
+    [isOpen, muatRekap],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -161,6 +266,22 @@ export default function ModalPantauAsesmenKelas({
     });
   }, [siswaList, kelasTarget]);
 
+  // Deteksi joki memakai SEMUA siswa (pelaku bisa dari kelas lain) dan hanya mapel yang dipantau
+  const deteksi = useMemo(
+    () => deteksiJoki(siswaList, responList, namaMapel),
+    [siswaList, responList, namaMapel],
+  );
+
+  // Kasus yang melibatkan siswa kelas ini (sebagai pemilik nama di form maupun pelaku)
+  const kasusKelas = useMemo(() => {
+    const kunciKelas = new Set(siswaKelas.map((s) => kunciSiswaAsesmen(s)));
+    return deteksi.kasus.filter(
+      (k) =>
+        kunciKelas.has(k.korban.key) ||
+        (k.pelaku && kunciKelas.has(k.pelaku.key)),
+    );
+  }, [deteksi, siswaKelas]);
+
   // Filter dan Sort Siswa Berdasarkan Nama, ID, Pelanggaran, dan Urutan
   const siswaFiltered = useMemo(() => {
     let result = [...siswaKelas];
@@ -168,16 +289,14 @@ export default function ModalPantauAsesmenKelas({
     // Filter Nama Siswa
     if (searchNama.trim()) {
       const q = searchNama.toLowerCase();
-      result = result.filter((s) =>
-        (s.nama || "").toLowerCase().includes(q)
-      );
+      result = result.filter((s) => (s.nama || "").toLowerCase().includes(q));
     }
 
     // Filter ID Siswa
     if (searchId.trim()) {
       const q = searchId.toLowerCase();
       result = result.filter((s) =>
-        (s.id_siswa || "").toLowerCase().includes(q)
+        (s.id_siswa || "").toLowerCase().includes(q),
       );
     }
 
@@ -205,6 +324,8 @@ export default function ModalPantauAsesmenKelas({
     let adaPelanggaran = 0;
     let totalPelanggaran = 0;
     let adaPengaduan = 0;
+    let sudahUjian = 0;
+    const adaJoki = kasusKelas.length;
 
     siswaKelas.forEach((s) => {
       if (s.pelanggaran > 0) {
@@ -212,10 +333,54 @@ export default function ModalPantauAsesmenKelas({
         totalPelanggaran += s.pelanggaran;
       }
       if (s.pengaduan) adaPengaduan++;
+      const evalRes = evaluasiNilaiSiswa(
+        s,
+        responList,
+        namaMapel,
+        siswaKelas,
+        deteksi.responTidakSah,
+      );
+      if (evalRes.sudahUjian) sudahUjian++;
     });
 
-    return { total, adaPelanggaran, totalPelanggaran, adaPengaduan };
-  }, [siswaKelas]);
+    return {
+      total,
+      adaPelanggaran,
+      totalPelanggaran,
+      adaPengaduan,
+      sudahUjian,
+      adaJoki,
+    };
+  }, [siswaKelas, responList, namaMapel, deteksi, kasusKelas]);
+
+  // Penyebab nilai kosong yang relevan untuk kelas & mapel ini (agar guru tahu apa yang harus diperbaiki)
+  const peringatanNilai = useMemo(() => {
+    const out = [];
+    const kT = (kelasTarget || "").toString().trim().toUpperCase();
+    const cocokSesi = (label) =>
+      String(label || "")
+        .toUpperCase()
+        .includes(kT);
+
+    if (
+      sesiUjianAktif &&
+      !String(sesiUjianAktif.sheet_respon_url || "").trim()
+    ) {
+      out.push(
+        "Sesi ini belum diisi URL Spreadsheet respon. Klik Edit Token/Link lalu isi URL Spreadsheet respon agar nilai bisa dibaca.",
+      );
+    }
+    if (rekapDiag) {
+      (rekapDiag.gagalBaca || []).forEach((g) => {
+        if (cocokSesi(g.sesi)) out.push(`${g.sesi}: ${g.alasan}`);
+      });
+      (rekapDiag.peringatan || []).forEach((g) => {
+        if (cocokSesi(g.sesi)) out.push(`${g.sesi}: ${g.pesan}`);
+      });
+      if (rekapDiag.ujianError) out.push(rekapDiag.ujianError);
+    }
+    return Array.from(new Set(out)).slice(0, 5);
+  }, [rekapDiag, sesiUjianAktif, kelasTarget]);
 
   // Buka Form Buat Ujian Baru untuk Kelas & Mapel ini
   const handleOpenBuatUjian = () => {
@@ -229,6 +394,7 @@ export default function ModalPantauAsesmenKelas({
       token: "",
       link: "",
       kodeKirim: "",
+      sheet_respon_url: "",
     });
     setShowFormUjian(true);
   };
@@ -246,6 +412,7 @@ export default function ModalPantauAsesmenKelas({
       token: sesiUjianAktif.token || "",
       link: sesiUjianAktif.link || "",
       kodeKirim: sesiUjianAktif.kodeKirim || "",
+      sheet_respon_url: sesiUjianAktif.sheet_respon_url || "",
     });
     setShowFormUjian(true);
   };
@@ -290,12 +457,48 @@ export default function ModalPantauAsesmenKelas({
     }
   };
 
+  // Sembunyikan / munculkan sesi ujian ini dari siswa (tombol mata)
+  const handleToggleTampilSesi = async () => {
+    if (!sesiUjianAktif) return;
+    const tampilBaru = sesiUjianAktif.tampil === false;
+    setActionLoading(true);
+    setErrorMsg("");
+    try {
+      let pin = "";
+      try {
+        pin = sessionStorage.getItem("pin_admin_asesmen") || "";
+      } catch (_) {}
+      const res = await aturTampilSesiUjian({
+        rowIndex: sesiUjianAktif.rowIndex,
+        kelas: sesiUjianAktif.kls,
+        mapel: sesiUjianAktif.mpl,
+        tampil: tampilBaru,
+        id_guru: user?.id || "",
+        nama_guru: user?.nama || "Guru",
+        pin_admin: pin,
+      });
+      if (res.status === "success") {
+        setSuksesMsg(
+          res.message ||
+            (tampilBaru ? "Sesi dimunculkan" : "Sesi disembunyikan"),
+        );
+        muatData();
+      } else {
+        setErrorMsg(res.message || "Gagal mengubah tampilan sesi");
+      }
+    } catch (err) {
+      setErrorMsg("Error: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Hapus Sesi Ujian
   const handleHapusSesiUjian = async () => {
     if (!sesiUjianAktif) return;
     if (
       !confirm(
-        `Hapus sesi ujian ${sesiUjianAktif.kls} - ${sesiUjianAktif.mpl}?\nSiswa tidak akan dapat masuk menggunakan token ini lagi.`
+        `Hapus sesi ujian ${sesiUjianAktif.kls} - ${sesiUjianAktif.mpl}?\nSiswa tidak akan dapat masuk menggunakan token ini lagi.`,
       )
     )
       return;
@@ -326,7 +529,7 @@ export default function ModalPantauAsesmenKelas({
   const handleResetPelanggaranSiswa = async (siswa) => {
     if (
       !confirm(
-        `Reset pelanggaran untuk ${siswa.nama || siswa.id_siswa} menjadi 0?`
+        `Reset pelanggaran untuk ${siswa.nama || siswa.id_siswa} menjadi 0?`,
       )
     )
       return;
@@ -356,7 +559,7 @@ export default function ModalPantauAsesmenKelas({
   const handleResetDeviceSiswa = async (siswa) => {
     if (
       !confirm(
-        `Reset sesi perangkat untuk ${siswa.nama || siswa.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`
+        `Reset sesi perangkat untuk ${siswa.nama || siswa.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`,
       )
     )
       return;
@@ -370,7 +573,9 @@ export default function ModalPantauAsesmenKelas({
         id_guru: user?.id || "",
       });
       if (res.status === "success") {
-        setSuksesMsg(`Perangkat ${siswa.nama} berhasil direset! Siswa dapat login di HP baru.`);
+        setSuksesMsg(
+          `Perangkat ${siswa.nama} berhasil direset! Siswa dapat login di HP baru.`,
+        );
         muatData();
       } else {
         setErrorMsg(res.message || "Gagal mereset perangkat");
@@ -386,7 +591,7 @@ export default function ModalPantauAsesmenKelas({
   const handleResetPelanggaranSekelas = async () => {
     if (
       !confirm(
-        `Yakin ingin mereset SEMUA pelanggaran siswa kelas ${kelasTarget} menjadi 0?`
+        `Yakin ingin mereset SEMUA pelanggaran siswa kelas ${kelasTarget} menjadi 0?`,
       )
     )
       return;
@@ -398,7 +603,9 @@ export default function ModalPantauAsesmenKelas({
         id_guru: user?.id || "",
       });
       if (res.status === "success") {
-        setSuksesMsg(res.message || "Semua pelanggaran kelas berhasil direset!");
+        setSuksesMsg(
+          res.message || "Semua pelanggaran kelas berhasil direset!",
+        );
         muatData();
       } else {
         setErrorMsg(res.message || "Gagal mereset");
@@ -413,7 +620,7 @@ export default function ModalPantauAsesmenKelas({
   // Aksi Hapus Total Baris Siswa dari Spreadsheet
   const handleHapusAkunSiswa = async (siswa) => {
     const konfirmasi = confirm(
-      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nApakah Anda yakin ingin menghapus seluruh baris data siswa "${siswa.nama}" (ID: ${siswa.id_siswa})?\n\n- Seluruh baris nama dan data siswa akan DIHAPUS TOTAL dari spreadsheet database.\n- Tindakan ini berlaku permanen untuk siswa kelas ${kelasTarget}.`
+      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nApakah Anda yakin ingin menghapus seluruh baris data siswa "${siswa.nama}" (ID: ${siswa.id_siswa})?\n\n- Seluruh baris nama dan data siswa akan DIHAPUS TOTAL dari spreadsheet database.\n- Tindakan ini berlaku permanen untuk siswa kelas ${kelasTarget}.`,
     );
     if (!konfirmasi) return;
 
@@ -424,11 +631,11 @@ export default function ModalPantauAsesmenKelas({
         siswa.id_siswa,
         "",
         siswa.nama,
-        kelasTarget
+        kelasTarget,
       );
       if (res.status === "success") {
         setSuksesMsg(
-          `Baris data siswa "${siswa.nama}" berhasil dihapus total dari database!`
+          `Baris data siswa "${siswa.nama}" berhasil dihapus total dari database!`,
         );
         muatData();
       } else {
@@ -444,7 +651,7 @@ export default function ModalPantauAsesmenKelas({
   // Aksi Cepat: UJIAN DI RESET
   const handleResetUjianSekelas = async () => {
     const konfirmasi = confirm(
-      `⚠️ PERINGATAN KERAS:\n\nApakah Anda yakin ingin mengirim pesan "UJIAN DI RESET" ke seluruh siswa kelas ${kelasTarget}?\n\nSemua siswa kelas ini yang sedang membuka ujian di web atau HP akan OTOMATIS KELUAR dari halaman ujian dan diarahkan kembali ke form login/nama!`
+      `⚠️ PERINGATAN KERAS:\n\nApakah Anda yakin ingin mengirim pesan "UJIAN DI RESET" ke seluruh siswa kelas ${kelasTarget}?\n\nSemua siswa kelas ini yang sedang membuka ujian di web atau HP akan OTOMATIS KELUAR dari halaman ujian dan diarahkan kembali ke form login/nama!`,
     );
     if (!konfirmasi) return;
 
@@ -457,7 +664,7 @@ export default function ModalPantauAsesmenKelas({
       });
       if (res.status === "success") {
         setSuksesMsg(
-          `Perintah UJIAN DI RESET berhasil dikirim ke kelas ${kelasTarget}!`
+          `Perintah UJIAN DI RESET berhasil dikirim ke kelas ${kelasTarget}!`,
         );
         muatData();
       } else {
@@ -474,7 +681,7 @@ export default function ModalPantauAsesmenKelas({
   const handleHapusPesanSekelas = async () => {
     if (
       !confirm(
-        `Bersihkan pesan ujian untuk semua siswa di kelas ${kelasTarget}?`
+        `Bersihkan pesan ujian untuk semua siswa di kelas ${kelasTarget}?`,
       )
     )
       return;
@@ -545,7 +752,9 @@ export default function ModalPantauAsesmenKelas({
                 <h3 className="text-sm sm:text-lg font-black tracking-tight text-white leading-tight">
                   Pantau Asesmen & Ujian
                 </h3>
-                <span className={`rounded-lg px-2 py-0.5 text-[10px] sm:text-xs font-black border ${warnaKelasObj.badge}`}>
+                <span
+                  className={`rounded-lg px-2 py-0.5 text-[10px] sm:text-xs font-black border ${warnaKelasObj.badge}`}
+                >
                   {kelasTarget || "KELAS"}
                 </span>
                 {namaMapel && (
@@ -555,7 +764,8 @@ export default function ModalPantauAsesmenKelas({
                 )}
               </div>
               <p className="hidden sm:block text-xs text-blue-200">
-                SMKN 1 Teluk Kuantan • Status Ujian & Monitoring Pelanggaran Siswa
+                SMKN 1 Teluk Kuantan • Status Ujian & Monitoring Pelanggaran
+                Siswa
               </p>
             </div>
           </div>
@@ -591,6 +801,20 @@ export default function ModalPantauAsesmenKelas({
           </div>
         )}
 
+        {(rekapError || peringatanNilai.length > 0) && (
+          <div className="bg-amber-50 border-b border-amber-200 px-5 py-2 text-[11px] font-semibold text-amber-900 space-y-0.5">
+            {rekapError && <div>⚠️ {rekapError}</div>}
+            {peringatanNilai.map((t, i) => (
+              <div key={i}>ℹ️ {t}</div>
+            ))}
+          </div>
+        )}
+        {loadingRekap && !loading && (
+          <div className="bg-sky-50 border-b border-sky-200 px-5 py-1.5 text-[11px] font-bold text-sky-800">
+            ⏳ Memuat nilai dari Google Sheets...
+          </div>
+        )}
+
         {/* ========================================================= */}
         {/* KARTU STATUS SESI UJIAN AKTIF KELAS & MAPEL INI           */}
         {/* ========================================================= */}
@@ -600,9 +824,32 @@ export default function ModalPantauAsesmenKelas({
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="text-[11px] sm:text-xs font-black uppercase text-amber-950 flex items-center gap-1">
                   <span>📑</span>
-                  <span className="hidden sm:inline">Sesi Ujian Sheet UJIAN:</span>
+                  <span className="hidden sm:inline">
+                    Sesi Ujian Sheet UJIAN:
+                  </span>
                   <span className="sm:hidden">Sesi:</span>
                 </span>
+                {sesiUjianAktif && (
+                  <button
+                    type="button"
+                    onClick={handleToggleTampilSesi}
+                    disabled={actionLoading}
+                    className={`rounded-lg px-2 py-0.5 text-[11px] font-black cursor-pointer active:scale-95 disabled:opacity-50 ${
+                      sesiUjianAktif.tampil === false
+                        ? "bg-slate-700 text-white"
+                        : "bg-sky-600 text-white"
+                    }`}
+                    title={
+                      sesiUjianAktif.tampil === false
+                        ? "Sesi disembunyikan dari siswa - klik untuk memunculkan"
+                        : "Sesi tampil untuk siswa - klik untuk menyembunyikan"
+                    }
+                  >
+                    {sesiUjianAktif.tampil === false
+                      ? "🙈 Tersembunyi"
+                      : "👁 Tampil"}
+                  </button>
+                )}
                 {sesiUjianAktif ? (
                   <span className="rounded-full bg-emerald-600 text-white px-2 py-0.5 text-[9px] sm:text-[10px] font-black">
                     ✓ TERDAFTAR (#{sesiUjianAktif.rowIndex || "-"})
@@ -653,7 +900,8 @@ export default function ModalPantauAsesmenKelas({
                 </div>
               ) : (
                 <p className="mt-1 text-[11px] sm:text-xs text-amber-900 font-medium">
-                  Belum ada sesi ujian di sheet UJIAN untuk kelas <b>{kelasTarget}</b> mapel <b>{namaMapel}</b>.
+                  Belum ada sesi ujian di sheet UJIAN untuk kelas{" "}
+                  <b>{kelasTarget}</b> mapel <b>{namaMapel}</b>.
                 </p>
               )}
             </div>
@@ -689,7 +937,9 @@ export default function ModalPantauAsesmenKelas({
                   className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-2.5 py-1 sm:px-3.5 sm:py-1.5 text-[11px] sm:text-xs font-black shadow-xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
                 >
                   <span>➕</span>
-                  <span className="hidden sm:inline">Buat Sesi Ujian untuk Kelas Ini</span>
+                  <span className="hidden sm:inline">
+                    Buat Sesi Ujian untuk Kelas Ini
+                  </span>
                   <span className="sm:hidden">Buat Sesi</span>
                 </button>
               )}
@@ -763,6 +1013,61 @@ export default function ModalPantauAsesmenKelas({
                 </div>
               </div>
 
+              {/* KOTAK EMAIL BOT UNTUK SHARE GOOGLE SHEETS */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2.5 space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[9px] font-bold text-blue-900 uppercase block">
+                      🤖 Email Bot Asesmen (Share Spreadsheet Respon)
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-blue-950 select-all break-all">
+                      {GOOGLE_BOT_EMAIL}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        typeof navigator !== "undefined" &&
+                        navigator.clipboard
+                      ) {
+                        navigator.clipboard.writeText(GOOGLE_BOT_EMAIL);
+                        alert("Email bot berhasil disalin ke clipboard!");
+                      }
+                    }}
+                    className="px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold shrink-0 transition shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>📋</span>
+                    <span>Salin Email</span>
+                  </button>
+                </div>
+                <p className="text-[9px] text-blue-700 leading-tight">
+                  * Buka Google Sheet respon ujian &gt; Klik{" "}
+                  <b>Bagikan (Share)</b> &gt; Berikan akses{" "}
+                  <b>Viewer (Pelihat)</b> ke email bot di atas &gt; Salin link
+                  spreadsheet lalu tempel di bawah.
+                </p>
+              </div>
+
+              {/* URL SPREADSHEET RESPON */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">
+                  URL Spreadsheet Respon Form
+                </label>
+                <input
+                  type="url"
+                  value={formUjian.sheet_respon_url}
+                  onChange={(e) =>
+                    setFormUjian({
+                      ...formUjian,
+                      sheet_respon_url: e.target.value,
+                    })
+                  }
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-mono text-slate-800 outline-none focus:border-amber-500"
+                />
+              </div>
+
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="submit"
@@ -772,8 +1077,8 @@ export default function ModalPantauAsesmenKelas({
                   {actionLoading
                     ? "Menyimpan..."
                     : isEditUjian
-                    ? "💾 Simpan Perubahan"
-                    : "💾 Simpan Sesi Ujian ke Sheet UJIAN"}
+                      ? "💾 Simpan Perubahan"
+                      : "💾 Simpan Sesi Ujian ke Sheet UJIAN"}
                 </button>
                 <button
                   type="button"
@@ -789,13 +1094,21 @@ export default function ModalPantauAsesmenKelas({
 
         {/* STATISTIK & AKSI CEPAT KELAS */}
         <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3 space-y-2 sm:space-y-2.5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 sm:gap-2.5">
             <div className="rounded-xl border border-slate-200 bg-white p-2 sm:p-2.5 shadow-2xs">
               <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase block truncate">
                 Total Siswa
               </span>
               <span className="text-base sm:text-lg font-black text-slate-800">
                 {stats.total}
+              </span>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 sm:p-2.5 shadow-2xs">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase block truncate">
+                Sudah Ujian
+              </span>
+              <span className="text-base sm:text-lg font-black text-emerald-800">
+                {stats.sudahUjian} / {stats.total}
               </span>
             </div>
             <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-2 sm:p-2.5 shadow-2xs">
@@ -814,6 +1127,18 @@ export default function ModalPantauAsesmenKelas({
                 {stats.totalPelanggaran}
               </span>
             </div>
+            <div
+              className={`rounded-xl border p-2 sm:p-2.5 shadow-2xs ${stats.adaJoki > 0 ? "border-rose-400 bg-rose-100" : "border-slate-200 bg-white"}`}
+            >
+              <span className="text-[9px] sm:text-[10px] font-bold text-rose-700 uppercase block truncate">
+                Terdeteksi Joki
+              </span>
+              <span
+                className={`text-base sm:text-lg font-black ${stats.adaJoki > 0 ? "text-rose-700" : "text-slate-400"}`}
+              >
+                {stats.adaJoki}
+              </span>
+            </div>
             <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2 sm:p-2.5 shadow-2xs">
               <span className="text-[9px] sm:text-[10px] font-bold text-blue-700 uppercase block truncate">
                 Pengaduan
@@ -827,13 +1152,23 @@ export default function ModalPantauAsesmenKelas({
           {/* TOMBOL AKSI CEPAT KELAS (PADAT & IKON PADA MOBILE) */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-0.5">
             <button
-              onClick={muatData}
-              disabled={loading || actionLoading}
+              onClick={() => muatData(true)}
+              disabled={loading || loadingRekap || actionLoading}
               className="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
-              title="Refresh Data Siswa"
+              title="Refresh Data Siswa & Respon Ujian"
             >
-              <span>🔄</span>
+              <span className={loadingRekap ? "animate-spin" : ""}>🔄</span>
               <span className="hidden sm:inline">Refresh</span>
+            </button>
+
+            <button
+              onClick={() => setShowPrintRekapModal(true)}
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+              title="Cetak / Unduh Rekap Nilai PDF Siswa"
+            >
+              <span>📄</span>
+              <span className="hidden sm:inline">Rekap Nilai PDF</span>
+              <span className="sm:hidden">Rekap PDF</span>
             </button>
 
             <button
@@ -936,11 +1271,15 @@ export default function ModalPantauAsesmenKelas({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                onClick={() =>
+                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                }
                 className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-all cursor-pointer"
                 title="Ganti urutan data"
               >
-                <span>Urutan: {sortOrder === "asc" ? "⬆️ No. Awal" : "⬇️ No. Akhir"}</span>
+                <span>
+                  Urutan: {sortOrder === "asc" ? "⬆️ No. Awal" : "⬇️ No. Akhir"}
+                </span>
               </button>
             </div>
           </div>
@@ -948,7 +1287,8 @@ export default function ModalPantauAsesmenKelas({
           {/* Info Hasil Filter */}
           <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium px-1">
             <span>
-              Menampilkan <b>{siswaFiltered.length}</b> dari <b>{siswaKelas.length}</b> siswa di kelas {kelasTarget}
+              Menampilkan <b>{siswaFiltered.length}</b> dari{" "}
+              <b>{siswaKelas.length}</b> siswa di kelas {kelasTarget}
             </span>
             {(searchNama || searchId || filterPelanggaran !== "SEMUA") && (
               <button
@@ -968,6 +1308,13 @@ export default function ModalPantauAsesmenKelas({
 
         {/* TABEL SISWA PADAT (COMPACT) DENGAN PEWARNAAN KELAS OTOMATIS */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+          <PanelLaporanJoki
+            kasus={kasusKelas}
+            catatan={deteksi.catatan}
+            logTersedia={deteksi.logTersedia}
+            judul={[kelasTarget, namaMapel].filter(Boolean).join(" - ")}
+            className="mb-3"
+          />
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
               <span className="text-3xl animate-spin">⏳</span>
@@ -991,6 +1338,7 @@ export default function ModalPantauAsesmenKelas({
                     <th className="px-2.5 py-2.5">Nama Siswa</th>
                     <th className="px-2.5 py-2.5 text-center">Kelas</th>
                     <th className="px-2.5 py-2.5">ID Siswa</th>
+                    <th className="px-2.5 py-2.5 text-center">Nilai Ujian</th>
                     <th className="px-2.5 py-2.5 text-center">Pelanggaran</th>
                     <th className="px-2.5 py-2.5">Pesan Aktif</th>
                     <th className="px-2.5 py-2.5">Pengaduan Siswa</th>
@@ -1014,7 +1362,13 @@ export default function ModalPantauAsesmenKelas({
                         </td>
                         <td className="px-2.5 py-2 font-bold text-slate-900">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span>{s.nama || <span className="text-rose-500 italic">(Dihapus/Kosong)</span>}</span>
+                            <span>
+                              {s.nama || (
+                                <span className="text-rose-500 italic">
+                                  (Dihapus/Kosong)
+                                </span>
+                              )}
+                            </span>
                             {s.status_sesi === "AKTIF" && s.device_id && (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300"
@@ -1043,6 +1397,38 @@ export default function ModalPantauAsesmenKelas({
                         <td className="px-2.5 py-2 font-mono text-[11px] text-slate-700 font-semibold">
                           {s.id_siswa || "-"}
                         </td>
+                        <td className="px-2.5 py-2 text-center whitespace-nowrap">
+                          {(() => {
+                            const jk = deteksi.perSiswa.get(
+                              kunciSiswaAsesmen(s),
+                            );
+                            if (jk && jk.pelaku.length > 0) {
+                              return <BadgeJoki info={jk} />;
+                            }
+                            const evalRes = evaluasiNilaiSiswa(
+                              s,
+                              responList,
+                              namaMapel,
+                              siswaKelas,
+                              deteksi.responTidakSah,
+                            );
+                            if (evalRes.sudahUjian) {
+                              return (
+                                <span
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono shadow-2xs"
+                                  title={`Respon Pertama: ${evalRes.timestamp || "-"}`}
+                                >
+                                  {evalRes.nilai}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="text-slate-400 font-mono text-[11px] italic">
+                                -
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="px-2.5 py-2 text-center">
                           {isMelanggar ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-0.5 text-[11px] font-black text-white shadow-sm animate-pulse">
@@ -1063,7 +1449,9 @@ export default function ModalPantauAsesmenKelas({
                               💬 {s.pesan}
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-[10px]">-</span>
+                            <span className="text-slate-400 text-[10px]">
+                              -
+                            </span>
                           )}
                         </td>
                         <td className="px-2.5 py-2">
@@ -1075,7 +1463,9 @@ export default function ModalPantauAsesmenKelas({
                               📢 {s.pengaduan}
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-[10px]">-</span>
+                            <span className="text-slate-400 text-[10px]">
+                              -
+                            </span>
                           )}
                         </td>
                         <td className="px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-center">
@@ -1143,7 +1533,8 @@ export default function ModalPantauAsesmenKelas({
         {/* FOOTER MODAL */}
         <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3">
           <p className="text-[11px] text-slate-500">
-            * Menghapus akun siswa akan mempertahankan ID siswa di database, dan mewajibkan siswa mengisi Nama & Kelas kembali saat masuk ujian.
+            * Menghapus akun siswa akan mempertahankan ID siswa di database, dan
+            mewajibkan siswa mengisi Nama & Kelas kembali saat masuk ujian.
           </p>
           <button
             onClick={onClose}
@@ -1247,7 +1638,9 @@ export default function ModalPantauAsesmenKelas({
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setPesanInput("Fokus pada soal ujian Anda!")}
+                      onClick={() =>
+                        setPesanInput("Fokus pada soal ujian Anda!")
+                      }
                       className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
                     >
                       Fokus pada soal
@@ -1261,7 +1654,11 @@ export default function ModalPantauAsesmenKelas({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPesanInput("Periksa kembali jawaban Anda sebelum submit.")}
+                      onClick={() =>
+                        setPesanInput(
+                          "Periksa kembali jawaban Anda sebelum submit.",
+                        )
+                      }
                       className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
                     >
                       Periksa jawaban
@@ -1290,6 +1687,18 @@ export default function ModalPantauAsesmenKelas({
           </div>
         </div>
       )}
+
+      {/* MODAL CETAK REKAP NILAI PDF */}
+      <ModalPrintRekapUjian
+        isOpen={showPrintRekapModal}
+        onClose={() => setShowPrintRekapModal(false)}
+        kelas={kelasTarget}
+        mapel={namaMapel}
+        daftarSiswa={siswaKelas}
+        semuaSiswa={siswaList}
+        responList={responList}
+        user={user}
+      />
     </div>
   );
 }

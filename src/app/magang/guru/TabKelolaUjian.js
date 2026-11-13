@@ -6,6 +6,7 @@ import {
   tambahDataUjian,
   editDataUjian,
   hapusDataUjian,
+  aturTampilSesiUjian,
   fetchSemuaSiswaAsesmen,
   resetPelanggaranSiswa,
   resetDeviceSiswa,
@@ -13,22 +14,83 @@ import {
   hapusPesanUjian,
   hapusAkunSiswaAsesmen,
   verifyPinAdminAsesmen,
+  fetchRekapNilaiUjian,
 } from "@/services/guruAsesmenService";
+import { getGuru } from "@/app/magang/lib/api";
+import {
+  evaluasiNilaiSiswa,
+  deteksiJoki,
+  kunciSiswaAsesmen,
+} from "@/lib/auditAsesmenHelper";
+import PanelLaporanJoki, { BadgeJoki } from "./PanelLaporanJoki";
+import ModalPrintRekapUjian from "./ModalPrintRekapUjian";
+
+// Alamat Email Bot Service Account untuk dibagikan (Viewer) pada Google Sheet Respon
+const GOOGLE_BOT_EMAIL =
+  "portal-bot@even-continuity-321209.iam.gserviceaccount.com";
 
 // Palet warna kelas konsisten (Otomatis membedakan baris tiap kelas)
 const PALET_WARNA_KELAS = [
-  { bg: "bg-sky-50/70 hover:bg-sky-100/90", border: "border-l-sky-500", badge: "bg-sky-100 text-sky-900 border-sky-300" },
-  { bg: "bg-emerald-50/70 hover:bg-emerald-100/90", border: "border-l-emerald-500", badge: "bg-emerald-100 text-emerald-900 border-emerald-300" },
-  { bg: "bg-amber-50/70 hover:bg-amber-100/90", border: "border-l-amber-500", badge: "bg-amber-100 text-amber-900 border-amber-300" },
-  { bg: "bg-purple-50/70 hover:bg-purple-100/90", border: "border-l-purple-500", badge: "bg-purple-100 text-purple-900 border-purple-300" },
-  { bg: "bg-teal-50/70 hover:bg-teal-100/90", border: "border-l-teal-500", badge: "bg-teal-100 text-teal-900 border-teal-300" },
-  { bg: "bg-indigo-50/70 hover:bg-indigo-100/90", border: "border-l-indigo-500", badge: "bg-indigo-100 text-indigo-900 border-indigo-300" },
-  { bg: "bg-orange-50/70 hover:bg-orange-100/90", border: "border-l-orange-500", badge: "bg-orange-100 text-orange-900 border-orange-300" },
-  { bg: "bg-cyan-50/70 hover:bg-cyan-100/90", border: "border-l-cyan-500", badge: "bg-cyan-100 text-cyan-900 border-cyan-300" },
-  { bg: "bg-lime-50/70 hover:bg-lime-100/90", border: "border-l-lime-500", badge: "bg-lime-100 text-lime-900 border-lime-300" },
-  { bg: "bg-fuchsia-50/70 hover:bg-fuchsia-100/90", border: "border-l-fuchsia-500", badge: "bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300" },
-  { bg: "bg-rose-50/60 hover:bg-rose-100/80", border: "border-l-rose-500", badge: "bg-rose-100 text-rose-900 border-rose-300" },
-  { bg: "bg-slate-50/70 hover:bg-slate-100/90", border: "border-l-slate-500", badge: "bg-slate-100 text-slate-900 border-slate-300" },
+  {
+    bg: "bg-sky-50/70 hover:bg-sky-100/90",
+    border: "border-l-sky-500",
+    badge: "bg-sky-100 text-sky-900 border-sky-300",
+  },
+  {
+    bg: "bg-emerald-50/70 hover:bg-emerald-100/90",
+    border: "border-l-emerald-500",
+    badge: "bg-emerald-100 text-emerald-900 border-emerald-300",
+  },
+  {
+    bg: "bg-amber-50/70 hover:bg-amber-100/90",
+    border: "border-l-amber-500",
+    badge: "bg-amber-100 text-amber-900 border-amber-300",
+  },
+  {
+    bg: "bg-purple-50/70 hover:bg-purple-100/90",
+    border: "border-l-purple-500",
+    badge: "bg-purple-100 text-purple-900 border-purple-300",
+  },
+  {
+    bg: "bg-teal-50/70 hover:bg-teal-100/90",
+    border: "border-l-teal-500",
+    badge: "bg-teal-100 text-teal-900 border-teal-300",
+  },
+  {
+    bg: "bg-indigo-50/70 hover:bg-indigo-100/90",
+    border: "border-l-indigo-500",
+    badge: "bg-indigo-100 text-indigo-900 border-indigo-300",
+  },
+  {
+    bg: "bg-orange-50/70 hover:bg-orange-100/90",
+    border: "border-l-orange-500",
+    badge: "bg-orange-100 text-orange-900 border-orange-300",
+  },
+  {
+    bg: "bg-cyan-50/70 hover:bg-cyan-100/90",
+    border: "border-l-cyan-500",
+    badge: "bg-cyan-100 text-cyan-900 border-cyan-300",
+  },
+  {
+    bg: "bg-lime-50/70 hover:bg-lime-100/90",
+    border: "border-l-lime-500",
+    badge: "bg-lime-100 text-lime-900 border-lime-300",
+  },
+  {
+    bg: "bg-fuchsia-50/70 hover:bg-fuchsia-100/90",
+    border: "border-l-fuchsia-500",
+    badge: "bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300",
+  },
+  {
+    bg: "bg-rose-50/60 hover:bg-rose-100/80",
+    border: "border-l-rose-500",
+    badge: "bg-rose-100 text-rose-900 border-rose-300",
+  },
+  {
+    bg: "bg-slate-50/70 hover:bg-slate-100/90",
+    border: "border-l-slate-500",
+    badge: "bg-slate-100 text-slate-900 border-slate-300",
+  },
 ];
 
 function getWarnaKelas(namaKelas) {
@@ -42,7 +104,11 @@ function getWarnaKelas(namaKelas) {
   return PALET_WARNA_KELAS[index];
 }
 
-export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) {
+export default function TabKelolaUjian({
+  user,
+  daftarMapelGuru = [],
+  onClose,
+}) {
   // Mode Admin Asesmen (Super Admin Ujian)
   const [isAdminAsesmen, setIsAdminAsesmen] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -74,16 +140,21 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   // Filter Sheet UJIAN
   const [filterUjianKelas, setFilterUjianKelas] = useState("SEMUA");
   const [filterUjianMapel, setFilterUjianMapel] = useState("");
+  const [filterUjianTampil, setFilterUjianTampil] = useState("SEMUA"); // SEMUA | TAMPIL | HIDE
 
   // Form Tambah Ujian Terpisah
   const [modalTambahOpen, setModalTambahOpen] = useState(false);
   const [selectedMapelOption, setSelectedMapelOption] = useState("");
+  const [daftarSemuaGuru, setDaftarSemuaGuru] = useState([]);
   const [formTambah, setFormTambah] = useState({
     kelas: "",
     mapel: "",
     token: "",
     link: "",
     kodeKirim: "",
+    sheet_respon_url: "",
+    id_guru: "",
+    nama_guru: "",
   });
 
   // Form Edit Ujian Terpisah
@@ -98,6 +169,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     link: "",
     kodeKirim: "",
     guru: "",
+    sheet_respon_url: "",
+    id_guru: "",
+    nama_guru: "",
   });
 
   // State Database Siswa
@@ -106,11 +180,14 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
   // Filter Multi-Kriteria Database Siswa
   const [filterKelas, setFilterKelas] = useState("SEMUA");
+  const [filterMapelSiswa, setFilterMapelSiswa] = useState("SEMUA");
   const [filterNamaSiswa, setFilterNamaSiswa] = useState("");
   const [filterIdSiswa, setFilterIdSiswa] = useState("");
   const [filterPelanggaran, setFilterPelanggaran] = useState("SEMUA"); // "SEMUA" | "MELANGGAR" | "BERSIH" | "TERBANYAK"
   const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
-  
+  const [responList, setResponList] = useState([]);
+  const [showPrintRekapModal, setShowPrintRekapModal] = useState(false);
+
   // Pagination untuk ribuan siswa
   const [pageSize, setPageSize] = useState(100);
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,18 +200,28 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   // Modal Kirim Pesan Massal
   const [showPesanModal, setShowPesanModal] = useState(false);
   const [pesanInput, setPesanInput] = useState("");
-  const [targetPesan, setTargetPesan] = useState({ tipe: "kelas", kelas: "SEMUA", nama: "" });
+  const [targetPesan, setTargetPesan] = useState({
+    tipe: "kelas",
+    kelas: "SEMUA",
+    nama: "",
+  });
 
   // 1. Muat Data Sheet UJIAN
   const loadUjian = useCallback(async () => {
     setLoadingUjian(true);
     setErrorMsg("");
     try {
-      const res = await fetchDaftarUjian();
+      const [res, resG] = await Promise.all([
+        fetchDaftarUjian(),
+        getGuru().catch(() => null),
+      ]);
       if (res.status === "success" && Array.isArray(res.data)) {
         setDaftarUjian(res.data);
       } else {
         setErrorMsg(res.message || "Gagal memuat sheet UJIAN");
+      }
+      if (resG && Array.isArray(resG.data)) {
+        setDaftarSemuaGuru(resG.data);
       }
     } catch (e) {
       setErrorMsg("Koneksi gagal: " + e.message);
@@ -143,16 +230,27 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     }
   }, []);
 
-  // 2. Muat Database Siswa
+  // 2. Muat Database Siswa & Rekap Respon Ujian
   const loadSiswa = useCallback(async () => {
     setLoadingSiswa(true);
     setErrorMsg("");
     try {
-      const res = await fetchSemuaSiswaAsesmen();
-      if (res.status === "success" && Array.isArray(res.data)) {
-        setDaftarSiswa(res.data);
+      const [resSiswa, resRekap] = await Promise.all([
+        fetchSemuaSiswaAsesmen(),
+        fetchRekapNilaiUjian({ refresh: false }),
+      ]);
+      if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
+        setDaftarSiswa(resSiswa.data);
       } else {
-        setErrorMsg(res.message || "Gagal memuat data database siswa");
+        setErrorMsg(resSiswa.message || "Gagal memuat data database siswa");
+      }
+      // Jika pengambilan nilai gagal, data nilai yang sudah tampil tidak dikosongkan
+      if (
+        resRekap &&
+        resRekap.status === "success" &&
+        Array.isArray(resRekap.data || resRekap.responses)
+      ) {
+        setResponList(resRekap.data || resRekap.responses || []);
       }
     } catch (e) {
       setErrorMsg("Koneksi gagal: " + e.message);
@@ -175,8 +273,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     return daftarMapelGuru
       .filter((m) => m && (m.kelas || m.namaMapel))
       .map((m) => ({
-        kelas: String(m.kelas || "").trim().toUpperCase(),
-        namaMapel: String(m.namaMapel || "").trim().toUpperCase(),
+        kelas: String(m.kelas || "")
+          .trim()
+          .toUpperCase(),
+        namaMapel: String(m.namaMapel || "")
+          .trim()
+          .toUpperCase(),
         idMapel: m.idMapel,
       }));
   }, [daftarMapelGuru]);
@@ -197,7 +299,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
         } catch {}
         setShowModalPin(false);
         setInputPin("");
-        setSuksesMsg("Selamat datang, Admin Asesmen! Anda memiliki akses penuh.");
+        setSuksesMsg(
+          "Selamat datang, Admin Asesmen! Anda memiliki akses penuh.",
+        );
       } else {
         setPinError(res.message || "Kode khusus salah!");
       }
@@ -236,7 +340,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
       return false;
     },
-    [isAdminAsesmen, user]
+    [isAdminAsesmen, user],
   );
 
   // List Unik Kelas dari data siswa & data ujian
@@ -269,6 +373,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
       if (!matchKls) return false;
 
+      if (filterUjianTampil === "TAMPIL" && u.tampil === false) return false;
+      if (filterUjianTampil === "HIDE" && u.tampil !== false) return false;
+
       if (!filterUjianMapel.trim()) return true;
       const q = filterUjianMapel.toLowerCase();
       return (
@@ -276,7 +383,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
         (u.token || "").toLowerCase().includes(q)
       );
     });
-  }, [daftarUjian, filterUjianKelas, filterUjianMapel]);
+  }, [daftarUjian, filterUjianKelas, filterUjianMapel, filterUjianTampil]);
 
   // 2. FILTER MULTI-KRITERIA DATABASE SISWA
   const filteredSiswa = useMemo(() => {
@@ -316,7 +423,33 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     }
 
     return result;
-  }, [daftarSiswa, filterKelas, filterNamaSiswa, filterIdSiswa, filterPelanggaran, sortOrder]);
+  }, [
+    daftarSiswa,
+    filterKelas,
+    filterNamaSiswa,
+    filterIdSiswa,
+    filterPelanggaran,
+    sortOrder,
+  ]);
+
+  // Deteksi joki: semua siswa & respon, mapel mengikuti filter mapel
+  const deteksi = useMemo(
+    () =>
+      deteksiJoki(
+        daftarSiswa,
+        responList,
+        filterMapelSiswa !== "SEMUA" ? filterMapelSiswa : "",
+      ),
+    [daftarSiswa, responList, filterMapelSiswa],
+  );
+
+  // Hanya kasus yang melibatkan siswa pada hasil filter saat ini
+  const kasusTampil = useMemo(() => {
+    const kunci = new Set(filteredSiswa.map((s) => kunciSiswaAsesmen(s)));
+    return deteksi.kasus.filter(
+      (k) => kunci.has(k.korban.key) || (k.pelaku && kunci.has(k.pelaku.key)),
+    );
+  }, [deteksi, filteredSiswa]);
 
   // Statistik Keseluruhan
   const statsSiswa = useMemo(() => {
@@ -354,7 +487,13 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
       setCurrentPage(1);
     }, 0);
     return () => clearTimeout(timer);
-  }, [filterKelas, filterNamaSiswa, filterIdSiswa, filterPelanggaran, pageSize]);
+  }, [
+    filterKelas,
+    filterNamaSiswa,
+    filterIdSiswa,
+    filterPelanggaran,
+    pageSize,
+  ]);
 
   // --- 1. AKSI TAMBAH UJIAN (APPEND BARU) ---
   const handleOpenTambahUjian = () => {
@@ -365,6 +504,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
       token: "",
       link: "",
       kodeKirim: "",
+      sheet_respon_url: "",
+      id_guru: user?.id || "",
+      nama_guru: user?.nama || "Guru",
     });
     setModalTambahOpen(true);
   };
@@ -380,8 +522,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     try {
       const res = await tambahDataUjian({
         ...formTambah,
-        id_guru: user?.id || "",
-        nama_guru: user?.nama || "Guru",
+        id_guru: formTambah.id_guru || user?.id || "",
+        nama_guru: formTambah.nama_guru || user?.nama || "Guru",
+        sheet_respon_url: formTambah.sheet_respon_url || "",
         pin_admin: pinAdminAsesmen,
       });
 
@@ -403,7 +546,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   const handleOpenEditUjian = (item, idx) => {
     if (!canManageUjian(item)) {
       alert(
-        `Akses Ditolak!\nUjian ini dibuat oleh: ${item.guru || "Guru Lain"}.\n\nAnda hanya dapat mengedit ujian buatan Anda sendiri, kecuali memasukkan Kode Admin Asesmen (4321).`
+        `Akses Ditolak!\nUjian ini dibuat oleh: ${item.guru || "Guru Lain"}.\n\nAnda hanya dapat mengedit ujian buatan Anda sendiri, kecuali memasukkan Kode Admin Asesmen.`,
       );
       return;
     }
@@ -419,6 +562,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
       link: item.link || "",
       kodeKirim: item.kodeKirim || "",
       guru: item.guru || "",
+      sheet_respon_url: item.sheet_respon_url || "",
+      id_guru: user?.id || "",
+      nama_guru: item.guru || user?.nama || "Guru",
     });
     setModalEditOpen(true);
   };
@@ -434,13 +580,16 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     try {
       const res = await editDataUjian({
         ...formEdit,
-        id_guru: user?.id || "",
-        nama_guru: user?.nama || "Guru",
+        id_guru: formEdit.id_guru || user?.id || "",
+        nama_guru: formEdit.nama_guru || user?.nama || "Guru",
+        sheet_respon_url: formEdit.sheet_respon_url || "",
         pin_admin: pinAdminAsesmen,
       });
 
       if (res.status === "success") {
-        setSuksesMsg(res.message || `Baris ${formEdit.rowIndex} berhasil diperbarui!`);
+        setSuksesMsg(
+          res.message || `Baris ${formEdit.rowIndex} berhasil diperbarui!`,
+        );
         setModalEditOpen(false);
         loadUjian();
       } else {
@@ -453,11 +602,82 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     }
   };
 
+  // --- 2b. SEMBUNYIKAN / MUNCULKAN SESI UJIAN DARI SISWA ---
+  const kirimTampil = async (item, idx, tampil) => {
+    return aturTampilSesiUjian({
+      rowIndex: item.rowIndex || idx + 2,
+      kelas: item.kls,
+      mapel: item.mpl,
+      tampil,
+      id_guru: user?.id || "",
+      nama_guru: user?.nama || "Guru",
+      pin_admin: pinAdminAsesmen,
+    });
+  };
+
+  const handleToggleTampil = async (item, idx) => {
+    if (!canManageUjian(item)) return;
+    const tampilBaru = item.tampil === false; // yang tersembunyi -> dimunculkan
+    setActionLoading(true);
+    try {
+      const res = await kirimTampil(item, idx, tampilBaru);
+      if (res.status === "success") {
+        setSuksesMsg(
+          res.message ||
+            (tampilBaru ? "Sesi dimunculkan" : "Sesi disembunyikan"),
+        );
+        loadUjian();
+      } else {
+        setErrorMsg(res.message || "Gagal mengubah tampilan sesi");
+      }
+    } catch (err) {
+      setErrorMsg("Error: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Massal: semua sesi hasil filter (mis. sembunyikan semua, lalu munculkan sesuai jadwal hari ini)
+  const handleTampilMassal = async (tampilBaru) => {
+    const target = filteredUjian.filter(
+      (u) => canManageUjian(u) && (u.tampil !== false) !== tampilBaru,
+    );
+    if (target.length === 0) {
+      alert("Tidak ada sesi yang perlu diubah pada hasil filter ini.");
+      return;
+    }
+    if (
+      !confirm(
+        `${tampilBaru ? "Munculkan" : "Sembunyikan"} ${target.length} sesi ujian (hasil filter saat ini) ${tampilBaru ? "untuk" : "dari"} siswa?`,
+      )
+    )
+      return;
+    setActionLoading(true);
+    let gagal = 0;
+    try {
+      for (const u of target) {
+        const idx = daftarUjian.indexOf(u);
+        const res = await kirimTampil(u, idx, tampilBaru);
+        if (res.status !== "success") gagal++;
+      }
+      if (gagal) setErrorMsg(`${gagal} sesi gagal diubah.`);
+      else
+        setSuksesMsg(
+          `${target.length} sesi berhasil ${tampilBaru ? "dimunculkan" : "disembunyikan"}.`,
+        );
+      loadUjian();
+    } catch (err) {
+      setErrorMsg("Error: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // --- 3. AKSI HAPUS UJIAN ---
   const handleHapusUjian = async (item, idx) => {
     if (!canManageUjian(item)) {
       alert(
-        `Akses Ditolak!\nUjian ini dibuat oleh: ${item.guru || "Guru Lain"}.\n\nHanya pembuat ujian atau Admin Asesmen yang dapat menghapusnya.`
+        `Akses Ditolak!\nUjian ini dibuat oleh: ${item.guru || "Guru Lain"}.\n\nHanya pembuat ujian atau Admin Asesmen yang dapat menghapusnya.`,
       );
       return;
     }
@@ -465,7 +685,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
     const rowExact = item.rowIndex || idx + 2;
     if (
       !confirm(
-        `Hapus ujian baris ke-${rowExact} (${item.kls} - ${item.mpl})?\n\nTindakan ini akan menghapus baris dari sheet UJIAN!`
+        `Hapus ujian baris ke-${rowExact} (${item.kls} - ${item.mpl})?\n\nTindakan ini akan menghapus baris dari sheet UJIAN!`,
       )
     )
       return;
@@ -526,7 +746,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
         : `SELURUH SISWA KELAS ${filterKelas}`;
     if (
       !confirm(
-        `Apakah Anda yakin ingin mereset SEMUA pelanggaran untuk ${scopeLabel} menjadi 0?`
+        `Apakah Anda yakin ingin mereset SEMUA pelanggaran untuk ${scopeLabel} menjadi 0?`,
       )
     )
       return;
@@ -555,7 +775,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
   const handleResetDeviceSiswa = async (s) => {
     if (
       !confirm(
-        `Reset sesi perangkat untuk ${s.nama || s.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`
+        `Reset sesi perangkat untuk ${s.nama || s.id_siswa}?\nSiswa akan diizinkan login di HP/perangkat baru.`,
       )
     )
       return;
@@ -570,7 +790,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
         pin_admin: pinAdminAsesmen,
       });
       if (res.status === "success") {
-        setSuksesMsg(`Perangkat ${s.nama} berhasil direset! Siswa dapat login di HP baru.`);
+        setSuksesMsg(
+          `Perangkat ${s.nama} berhasil direset! Siswa dapat login di HP baru.`,
+        );
         loadSiswa();
       } else {
         setErrorMsg(res.message || "Gagal mereset perangkat");
@@ -584,7 +806,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
   const handleHapusAkunSiswa = async (s) => {
     const konfirmasi = confirm(
-      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nNama: ${s.nama}\nKelas: ${s.kelas}\nID Siswa: ${s.id_siswa}\n\nSeluruh baris siswa ini akan DIHAPUS TOTAL dari spreadsheet database.\n\nLanjutkan?`
+      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nNama: ${s.nama}\nKelas: ${s.kelas}\nID Siswa: ${s.id_siswa}\n\nSeluruh baris siswa ini akan DIHAPUS TOTAL dari spreadsheet database.\n\nLanjutkan?`,
     );
     if (!konfirmasi) return;
 
@@ -594,10 +816,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
         s.id_siswa,
         pinAdminAsesmen,
         s.nama,
-        s.kelas
+        s.kelas,
       );
       if (res.status === "success") {
-        setSuksesMsg(`Baris siswa ${s.nama} (${s.id_siswa}) berhasil dihapus total!`);
+        setSuksesMsg(
+          `Baris siswa ${s.nama} (${s.id_siswa}) berhasil dihapus total!`,
+        );
         loadSiswa();
       } else {
         setErrorMsg(res.message || "Gagal menghapus baris siswa");
@@ -661,7 +885,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               Sistem Asesmen & Ujian
             </h2>
             <p className="text-[10px] sm:text-xs text-blue-200 mt-0.5 hidden sm:block">
-              Tampilan responsif & padat untuk ribuan peserta ujian dengan pewarnaan kelas otomatis.
+              Tampilan responsif & padat untuk ribuan peserta ujian dengan
+              pewarnaan kelas otomatis.
             </p>
           </div>
 
@@ -677,8 +902,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 title="Masuk sebagai Admin Asesmen"
               >
                 <span>🔑</span>
-                <span className="hidden sm:inline">Masuk Admin (4321)</span>
-                <span className="sm:hidden">Admin (4321)</span>
+                <span className="hidden sm:inline">Masuk Admin Asesmen</span>
+                <span className="sm:hidden">Admin Asesmen</span>
               </button>
             ) : (
               <button
@@ -725,8 +950,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
             }`}
           >
             <span>📑</span>
-            <span className="hidden sm:inline">Sheet UJIAN ({filteredUjian.length} Sesi)</span>
-            <span className="sm:hidden">Sesi Ujian ({filteredUjian.length})</span>
+            <span className="hidden sm:inline">
+              Sheet UJIAN ({filteredUjian.length} Sesi)
+            </span>
+            <span className="sm:hidden">
+              Sesi Ujian ({filteredUjian.length})
+            </span>
           </button>
 
           <button
@@ -738,8 +967,12 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
             }`}
           >
             <span>🛡️</span>
-            <span className="hidden sm:inline">Monitoring Database Siswa ({filteredSiswa.length} Siswa)</span>
-            <span className="sm:hidden">Monitoring Siswa ({filteredSiswa.length})</span>
+            <span className="hidden sm:inline">
+              Monitoring Database Siswa ({filteredSiswa.length} Siswa)
+            </span>
+            <span className="sm:hidden">
+              Monitoring Siswa ({filteredSiswa.length})
+            </span>
           </button>
         </div>
       </div>
@@ -748,13 +981,23 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
       {suksesMsg && (
         <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-bold text-emerald-800 flex items-center justify-between shadow-sm">
           <span>✅ {suksesMsg}</span>
-          <button onClick={() => setSuksesMsg("")} className="text-emerald-700 font-bold px-2">✕</button>
+          <button
+            onClick={() => setSuksesMsg("")}
+            className="text-emerald-700 font-bold px-2"
+          >
+            ✕
+          </button>
         </div>
       )}
       {errorMsg && (
         <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-800 flex items-center justify-between shadow-sm">
           <span>⚠️ {errorMsg}</span>
-          <button onClick={() => setErrorMsg("")} className="text-rose-700 font-bold px-2">✕</button>
+          <button
+            onClick={() => setErrorMsg("")}
+            className="text-rose-700 font-bold px-2"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -767,17 +1010,23 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
           <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-black text-slate-700 uppercase">Filter Ujian:</span>
-                
+                <span className="text-xs font-black text-slate-700 uppercase">
+                  Filter Ujian:
+                </span>
+
                 {/* FILTER KELAS */}
                 <select
                   value={filterUjianKelas}
                   onChange={(e) => setFilterUjianKelas(e.target.value)}
                   className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
                 >
-                  <option value="SEMUA">-- Semua Kelas ({daftarUjian.length}) --</option>
+                  <option value="SEMUA">
+                    -- Semua Kelas ({daftarUjian.length}) --
+                  </option>
                   {uniqueKelasList.map((k) => (
-                    <option key={k} value={k}>Kelas {k}</option>
+                    <option key={k} value={k}>
+                      Kelas {k}
+                    </option>
                   ))}
                 </select>
 
@@ -790,11 +1039,25 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-800 outline-none focus:border-amber-500 w-44"
                 />
 
-                {(filterUjianKelas !== "SEMUA" || filterUjianMapel) && (
+                <select
+                  value={filterUjianTampil}
+                  onChange={(e) => setFilterUjianTampil(e.target.value)}
+                  className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
+                  title="Filter berdasarkan status tampil ke siswa"
+                >
+                  <option value="SEMUA">Semua status</option>
+                  <option value="TAMPIL">👁 Tampil</option>
+                  <option value="HIDE">🙈 Disembunyikan</option>
+                </select>
+
+                {(filterUjianKelas !== "SEMUA" ||
+                  filterUjianMapel ||
+                  filterUjianTampil !== "SEMUA") && (
                   <button
                     onClick={() => {
                       setFilterUjianKelas("SEMUA");
                       setFilterUjianMapel("");
+                      setFilterUjianTampil("SEMUA");
                     }}
                     className="text-[11px] text-rose-600 hover:underline font-bold px-1"
                   >
@@ -803,14 +1066,34 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 )}
               </div>
 
-              <button
-                onClick={handleOpenTambahUjian}
-                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
-              >
-                <span>➕</span>
-                <span className="hidden sm:inline">Tambah Sesi Ujian Baru</span>
-                <span className="sm:hidden">Tambah Sesi</span>
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => handleTampilMassal(false)}
+                  disabled={actionLoading}
+                  className="rounded-xl bg-slate-700 hover:bg-slate-800 text-white px-2.5 py-1.5 text-[11px] font-black cursor-pointer disabled:opacity-50"
+                  title="Sembunyikan semua sesi hasil filter dari siswa"
+                >
+                  🙈 Sembunyikan semua
+                </button>
+                <button
+                  onClick={() => handleTampilMassal(true)}
+                  disabled={actionLoading}
+                  className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-2.5 py-1.5 text-[11px] font-black cursor-pointer disabled:opacity-50"
+                  title="Munculkan semua sesi hasil filter untuk siswa"
+                >
+                  👁 Munculkan semua
+                </button>
+                <button
+                  onClick={handleOpenTambahUjian}
+                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <span>➕</span>
+                  <span className="hidden sm:inline">
+                    Tambah Sesi Ujian Baru
+                  </span>
+                  <span className="sm:hidden">Tambah Sesi</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -823,7 +1106,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
           ) : filteredUjian.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-400 gap-2">
               <span className="text-3xl">📭</span>
-              <p className="text-xs font-bold">Tidak ada sesi ujian yang cocok dengan filter.</p>
+              <p className="text-xs font-bold">
+                Tidak ada sesi ujian yang cocok dengan filter.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -849,15 +1134,25 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     return (
                       <tr
                         key={idx}
-                        className={`transition-colors ${warna.bg} ${warna.border} border-l-4`}
+                        className={`transition-colors ${warna.bg} ${warna.border} border-l-4 ${item.tampil === false ? "opacity-55" : ""}`}
                       >
                         <td className="px-3 py-2 text-center font-bold text-slate-400">
                           #{rowNumber}
                         </td>
                         <td className="px-3 py-2 font-black">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${warna.badge}`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-black border ${warna.badge}`}
+                          >
                             {item.kls || "-"}
                           </span>
+                          {item.tampil === false && (
+                            <span
+                              className="ml-1 rounded bg-slate-700 text-white px-1.5 py-0.5 text-[9px] font-black"
+                              title="Tidak terlihat/tidak bisa dibuka siswa"
+                            >
+                              🙈 DISEMBUNYIKAN
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 font-bold text-slate-900">
                           {item.mpl || "-"}
@@ -887,7 +1182,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                         </td>
                         <td className="px-3 py-2 text-[10px] text-slate-600">
                           {item.guru ? (
-                            <span className="truncate block max-w-[130px]" title={item.guru}>
+                            <span
+                              className="truncate block max-w-[130px]"
+                              title={item.guru}
+                            >
                               👤 {item.guru}
                             </span>
                           ) : (
@@ -897,6 +1195,22 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                         <td className="px-3 py-2 text-center">
                           {canManage ? (
                             <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleToggleTampil(item, idx)}
+                                disabled={actionLoading}
+                                className={`rounded-lg px-1.5 py-1 sm:px-2 text-[10px] font-bold transition-all shadow-2xs cursor-pointer ${
+                                  item.tampil === false
+                                    ? "bg-slate-300 hover:bg-slate-400 text-slate-800"
+                                    : "bg-sky-600 hover:bg-sky-700 text-white"
+                                }`}
+                                title={
+                                  item.tampil === false
+                                    ? "Sesi tersembunyi - klik untuk memunculkan ke siswa"
+                                    : "Sesi tampil - klik untuk menyembunyikan dari siswa"
+                                }
+                              >
+                                {item.tampil === false ? "🙈" : "👁"}
+                              </button>
                               <button
                                 onClick={() => handleOpenEditUjian(item, idx)}
                                 disabled={actionLoading}
@@ -947,7 +1261,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 Total Siswa (Hasil Filter)
               </span>
               <span className="text-xl font-black text-slate-800">
-                {statsSiswa.total} <span className="text-xs font-normal text-slate-400">/ {daftarSiswa.length}</span>
+                {statsSiswa.total}{" "}
+                <span className="text-xs font-normal text-slate-400">
+                  / {daftarSiswa.length}
+                </span>
               </span>
             </div>
             <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-3 shadow-xs">
@@ -987,6 +1304,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 <button
                   onClick={() => {
                     setFilterKelas("SEMUA");
+                    setFilterMapelSiswa("SEMUA");
                     setFilterNamaSiswa("");
                     setFilterIdSiswa("");
                     setFilterPelanggaran("SEMUA");
@@ -998,7 +1316,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5">
               {/* 1. FILTER KELAS */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
@@ -1009,9 +1327,34 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   onChange={(e) => setFilterKelas(e.target.value)}
                   className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
-                  <option value="SEMUA">-- Semua Kelas ({daftarSiswa.length}) --</option>
+                  <option value="SEMUA">
+                    -- Semua Kelas ({daftarSiswa.length}) --
+                  </option>
                   {uniqueKelasList.map((k) => (
-                    <option key={k} value={k}>Kelas {k}</option>
+                    <option key={k} value={k}>
+                      Kelas {k}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* FILTER MAPEL UJIAN */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                  Mapel Ujian
+                </label>
+                <select
+                  value={filterMapelSiswa}
+                  onChange={(e) => setFilterMapelSiswa(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                >
+                  <option value="SEMUA">
+                    -- Semua Mapel ({uniqueUjianMapelList.length}) --
+                  </option>
+                  {uniqueUjianMapelList.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1057,7 +1400,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   <option value="SEMUA">Semua Status</option>
                   <option value="MELANGGAR">⚠️ Melanggar Saja (&gt; 0)</option>
                   <option value="BERSIH">✓ Bersih (0 Pelanggaran)</option>
-                  <option value="TERBANYAK">🔥 Urut Pelanggaran Terbanyak</option>
+                  <option value="TERBANYAK">
+                    🔥 Urut Pelanggaran Terbanyak
+                  </option>
                 </select>
               </div>
 
@@ -1078,7 +1423,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     <option value={9999}>Semua Ribuan</option>
                   </select>
                   <button
-                    onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                    onClick={() =>
+                      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                    }
                     className="rounded-xl border border-slate-300 px-2 py-1.5 text-xs font-bold bg-slate-50 hover:bg-slate-100 shrink-0"
                     title="Ubah urutan"
                   >
@@ -1097,19 +1444,35 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
 
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
+                  onClick={() => setShowPrintRekapModal(true)}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                  title="Cetak Rekap Nilai Siswa ke Dokumen PDF"
+                >
+                  <span>📄</span>
+                  <span className="hidden sm:inline">Rekap Nilai PDF</span>
+                  <span className="sm:hidden">Rekap PDF</span>
+                </button>
+
+                <button
                   onClick={handleResetPelanggaranMassal}
                   disabled={actionLoading || statsSiswa.totalPelanggaran === 0}
                   className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-black transition-all shadow-2xs active:scale-95 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
                   title="Reset Pelanggaran Siswa Terfilter"
                 >
                   <span>0️⃣</span>
-                  <span className="hidden sm:inline">Reset Pelanggaran Terfilter</span>
+                  <span className="hidden sm:inline">
+                    Reset Pelanggaran Terfilter
+                  </span>
                   <span className="sm:hidden">Reset 0</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    setTargetPesan({ tipe: "kelas", kelas: filterKelas, nama: "" });
+                    setTargetPesan({
+                      tipe: "kelas",
+                      kelas: filterKelas,
+                      nama: "",
+                    });
                     setShowPesanModal(true);
                   }}
                   disabled={actionLoading}
@@ -1117,13 +1480,19 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   title={`Broadcast Pesan (${filterKelas})`}
                 >
                   <span>💬</span>
-                  <span className="hidden sm:inline">Broadcast Pesan ({filterKelas})</span>
+                  <span className="hidden sm:inline">
+                    Broadcast Pesan ({filterKelas})
+                  </span>
                   <span className="sm:hidden">Pesan</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    setTargetPesan({ tipe: "kelas", kelas: filterKelas, nama: "" });
+                    setTargetPesan({
+                      tipe: "kelas",
+                      kelas: filterKelas,
+                      nama: "",
+                    });
                     setPesanInput("UJIAN DI RESET");
                     setShowPesanModal(true);
                   }}
@@ -1132,23 +1501,39 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   title={`Reset Ujian Siswa (${filterKelas})`}
                 >
                   <span>⚠️</span>
-                  <span className="hidden sm:inline">Reset Ujian ({filterKelas})</span>
+                  <span className="hidden sm:inline">
+                    Reset Ujian ({filterKelas})
+                  </span>
                   <span className="sm:hidden">Reset Ujian</span>
                 </button>
               </div>
             </div>
           </div>
 
+          <PanelLaporanJoki
+            kasus={kasusTampil}
+            catatan={deteksi.catatan}
+            logTersedia={deteksi.logTersedia}
+            judul={[
+              filterKelas !== "SEMUA" ? filterKelas : "Semua Kelas",
+              filterMapelSiswa !== "SEMUA" ? filterMapelSiswa : "Semua Mapel",
+            ].join(" - ")}
+          />
+
           {/* TABEL DATABASE SISWA (RESPONSIF, PADAT & WARNA OTOMATIS PER KELAS) */}
           {loadingSiswa ? (
             <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200 text-slate-400 gap-2">
               <span className="text-3xl animate-spin">⏳</span>
-              <p className="text-xs font-bold">Memuat database siswa asesmen...</p>
+              <p className="text-xs font-bold">
+                Memuat database siswa asesmen...
+              </p>
             </div>
           ) : filteredSiswa.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200 text-slate-400 gap-2">
               <span className="text-3xl">📋</span>
-              <p className="text-xs font-bold">Tidak ada siswa yang sesuai dengan filter.</p>
+              <p className="text-xs font-bold">
+                Tidak ada siswa yang sesuai dengan filter.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -1160,6 +1545,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                       <th className="px-2.5 py-2">Nama Siswa</th>
                       <th className="px-2.5 py-2">Kelas</th>
                       <th className="px-2.5 py-2">ID Siswa</th>
+                      <th className="px-2.5 py-2 text-center">Nilai Ujian</th>
                       <th className="px-2.5 py-2 text-center">Pelanggaran</th>
                       <th className="px-2.5 py-2">Pesan Aktif</th>
                       <th className="px-2.5 py-2">Pengaduan</th>
@@ -1176,7 +1562,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                         <tr
                           key={s.id_siswa || idx}
                           className={`transition-colors border-l-4 ${warna.border} ${warna.bg} ${
-                            isMelanggar ? "!bg-rose-100/90 ring-1 ring-rose-400" : ""
+                            isMelanggar
+                              ? "!bg-rose-100/90 ring-1 ring-rose-400"
+                              : ""
                           }`}
                         >
                           <td className="px-2.5 py-1.5 text-center font-bold text-slate-500">
@@ -1204,12 +1592,68 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                             </div>
                           </td>
                           <td className="px-2.5 py-1.5 font-black whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${warna.badge}`}>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-black border ${warna.badge}`}
+                            >
                               {s.kelas || "-"}
                             </span>
                           </td>
                           <td className="px-2.5 py-1.5 font-mono text-[11px] text-slate-700">
                             {s.id_siswa || "-"}
+                          </td>
+                          <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                            {(() => {
+                              const evalRes = evaluasiNilaiSiswa(
+                                s,
+                                responList,
+                                filterMapelSiswa !== "SEMUA"
+                                  ? filterMapelSiswa
+                                  : "",
+                                filteredSiswa,
+                                deteksi.responTidakSah,
+                              );
+                              const jk = deteksi.perSiswa.get(
+                                kunciSiswaAsesmen(s),
+                              );
+                              if (jk && jk.pelaku.length > 0) {
+                                return <BadgeJoki info={jk} />;
+                              }
+                              // Filter mapel "SEMUA" & siswa punya respon di beberapa mapel: jangan tampilkan
+                              // satu nilai saja (menyesatkan), tampilkan jumlah mapel + rincian di tooltip.
+                              if (
+                                evalRes.sudahUjian &&
+                                evalRes.banyakMapel &&
+                                filterMapelSiswa === "SEMUA"
+                              ) {
+                                return (
+                                  <span
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs cursor-help"
+                                    title={evalRes.perMapel
+                                      .map(
+                                        (m) => `${m.mapel || "-"}: ${m.nilai}`,
+                                      )
+                                      .join("\n")}
+                                  >
+                                    {evalRes.perMapel.length} mapel
+                                  </span>
+                                );
+                              }
+                              if (evalRes.sudahUjian) {
+                                return (
+                                  <span
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono shadow-2xs"
+                                    title={`Respon Pertama: ${evalRes.timestamp || "-"}`}
+                                  >
+                                    {evalRes.nilai}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-slate-400 font-mono text-[11px] italic">
+                                  -
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
                             {isMelanggar ? (
@@ -1231,7 +1675,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                 💬 {s.pesan}
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">-</span>
+                              <span className="text-slate-400 text-[10px]">
+                                -
+                              </span>
                             )}
                           </td>
                           <td className="px-2.5 py-1.5">
@@ -1243,7 +1689,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                 📢 {s.pengaduan}
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">-</span>
+                              <span className="text-slate-400 text-[10px]">
+                                -
+                              </span>
                             )}
                           </td>
                           <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
@@ -1256,7 +1704,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                 title="Reset kunci perangkat siswa ini agar bisa login di HP baru"
                               >
                                 <span>📱</span>
-                                <span className="hidden sm:inline">Reset HP</span>
+                                <span className="hidden sm:inline">
+                                  Reset HP
+                                </span>
                               </button>
 
                               <button
@@ -1291,7 +1741,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                                   title="Hapus total baris siswa dari spreadsheet database"
                                 >
                                   <span>🗑️</span>
-                                  <span className="hidden sm:inline">Hapus</span>
+                                  <span className="hidden sm:inline">
+                                    Hapus
+                                  </span>
                                 </button>
                               )}
                             </div>
@@ -1307,7 +1759,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               {pageSize < 9999 && totalPages > 1 && (
                 <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200 text-xs">
                   <span className="text-slate-500 font-medium">
-                    Halaman <b>{currentPage}</b> dari <b>{totalPages}</b> (Total {filteredSiswa.length} Siswa)
+                    Halaman <b>{currentPage}</b> dari <b>{totalPages}</b> (Total{" "}
+                    {filteredSiswa.length} Siswa)
                   </span>
                   <div className="flex items-center gap-1">
                     <button
@@ -1317,9 +1770,13 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     >
                       ◀ Sebelumnya
                     </button>
-                    <span className="px-2 font-bold text-slate-700">{currentPage}</span>
+                    <span className="px-2 font-bold text-slate-700">
+                      {currentPage}
+                    </span>
                     <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
                       disabled={currentPage === totalPages}
                       className="px-2.5 py-1 rounded-lg border text-xs font-bold disabled:opacity-40 hover:bg-slate-50"
                     >
@@ -1365,7 +1822,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               {!isAdminAsesmen ? (
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                    Pilih Kelas & Mapel Anda <span className="text-rose-500">*</span>
+                    Pilih Kelas & Mapel Anda{" "}
+                    <span className="text-rose-500">*</span>
                   </label>
                   {opsiMapelGuru.length > 0 ? (
                     <select
@@ -1391,7 +1849,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                       className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500 bg-white"
                       required
                     >
-                      <option value="">-- Pilih dari Mapel yang Anda Ajar --</option>
+                      <option value="">
+                        -- Pilih dari Mapel yang Anda Ajar --
+                      </option>
                       {opsiMapelGuru.map((op, i) => (
                         <option key={i} value={`${op.kelas}||${op.namaMapel}`}>
                           📌 Kelas {op.kelas} — {op.namaMapel}
@@ -1400,11 +1860,13 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     </select>
                   ) : (
                     <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                      ⚠️ Anda belum memiliki daftar mapel yang dibuat. Buat mapel terlebih dahulu di portal Guru Mapel.
+                      ⚠️ Anda belum memiliki daftar mapel yang dibuat. Buat
+                      mapel terlebih dahulu di portal Guru Mapel.
                     </p>
                   )}
                   <p className="text-[10px] text-slate-400 mt-1">
-                    * Terkunci otomatis sesuai kelas & mata pelajaran yang Anda ajar.
+                    * Terkunci otomatis sesuai kelas & mata pelajaran yang Anda
+                    ajar.
                   </p>
                 </div>
               ) : null}
@@ -1420,7 +1882,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     value={formTambah.kelas}
                     readOnly={!isAdminAsesmen}
                     onChange={(e) =>
-                      setFormTambah({ ...formTambah, kelas: e.target.value.toUpperCase() })
+                      setFormTambah({
+                        ...formTambah,
+                        kelas: e.target.value.toUpperCase(),
+                      })
                     }
                     placeholder="Pilih dari dropdown di atas"
                     className={`w-full rounded-xl border p-2.5 text-xs font-bold outline-none ${
@@ -1440,7 +1905,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     value={formTambah.mapel}
                     readOnly={!isAdminAsesmen}
                     onChange={(e) =>
-                      setFormTambah({ ...formTambah, mapel: e.target.value.toUpperCase() })
+                      setFormTambah({
+                        ...formTambah,
+                        mapel: e.target.value.toUpperCase(),
+                      })
                     }
                     placeholder="Pilih dari dropdown di atas"
                     className={`w-full rounded-xl border p-2.5 text-xs font-bold outline-none ${
@@ -1477,7 +1945,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     type="text"
                     value={formTambah.kodeKirim}
                     onChange={(e) =>
-                      setFormTambah({ ...formTambah, kodeKirim: e.target.value })
+                      setFormTambah({
+                        ...formTambah,
+                        kodeKirim: e.target.value,
+                      })
                     }
                     placeholder="Contoh: 8888"
                     className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold font-mono text-amber-800 outline-none focus:border-blue-500"
@@ -1500,10 +1971,119 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 />
               </div>
 
+              {/* KOTAK EMAIL BOT SERVICE ACCOUNT */}
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold text-blue-900 uppercase block">
+                      🤖 Email Bot Asesmen (Bagikan Akses Spreadsheet)
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-mono font-bold text-blue-950 select-all break-all">
+                      {GOOGLE_BOT_EMAIL}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        typeof navigator !== "undefined" &&
+                        navigator.clipboard
+                      ) {
+                        navigator.clipboard.writeText(GOOGLE_BOT_EMAIL);
+                        alert("Email bot berhasil disalin ke clipboard!");
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shrink-0 transition shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>📋</span>
+                    <span>Salin Email</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-blue-700 leading-relaxed">
+                  * Buka Google Sheet respon ujian &gt; Klik{" "}
+                  <b>Bagikan (Share)</b> &gt; Berikan akses <b>Viewer</b> ke
+                  email bot di atas &gt; Salin link spreadsheet-nya lalu tempel
+                  di bawah.
+                </p>
+              </div>
+
+              {/* URL SPREADSHEET RESPON GOOGLE FORM */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  URL Spreadsheet Respon Form
+                </label>
+                <input
+                  type="url"
+                  value={formTambah.sheet_respon_url}
+                  onChange={(e) =>
+                    setFormTambah({
+                      ...formTambah,
+                      sheet_respon_url: e.target.value,
+                    })
+                  }
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono text-slate-800 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* PILIHAN GURU PENGAMPU UJIAN */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Guru Pengampu Ujian <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={formTambah.nama_guru}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const foundG = daftarSemuaGuru.find(
+                      (g) =>
+                        (g.NAMA_GURU || g.nama || "").trim().toLowerCase() ===
+                        val.trim().toLowerCase(),
+                    );
+                    setFormTambah({
+                      ...formTambah,
+                      nama_guru: val,
+                      id_guru: foundG?.ID_GURU || foundG?.id || "",
+                    });
+                  }}
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value={user?.nama || "Guru"}>
+                    👤 {user?.nama || "Guru"} (Anda Sendiri)
+                  </option>
+                  {daftarSemuaGuru
+                    .filter((g) => {
+                      const n = (g.NAMA_GURU || g.nama || "").trim();
+                      return (
+                        n &&
+                        n.toLowerCase() !==
+                          (user?.nama || "").trim().toLowerCase()
+                      );
+                    })
+                    .map((g, idx) => {
+                      const nama = g.NAMA_GURU || g.nama;
+                      const idG = g.ID_GURU || g.id;
+                      return (
+                        <option key={idx} value={nama}>
+                          {nama} {idG ? `[${idG}]` : ""}
+                        </option>
+                      );
+                    })}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  * Tentukan guru pengampu sesi ujian ini agar tidak selalu
+                  otomatis atas nama admin.
+                </p>
+              </div>
+
               <div className="flex items-center gap-2 pt-3 border-t">
                 <button
                   type="submit"
-                  disabled={actionLoading || (!isAdminAsesmen && (!formTambah.kelas || !formTambah.mapel))}
+                  disabled={
+                    actionLoading ||
+                    (!isAdminAsesmen &&
+                      (!formTambah.kelas || !formTambah.mapel))
+                  }
                   className="flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white text-xs font-black py-2.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
                 >
                   {actionLoading ? "Menyimpan..." : "➕ Simpan ke Sheet UJIAN"}
@@ -1534,7 +2114,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   <span>Edit Ujian: Baris #{formEdit.rowIndex}</span>
                 </h3>
                 <p className="text-[11px] text-amber-800">
-                  Data pada baris <b>#{formEdit.rowIndex}</b> akan diperbarui di spreadsheet (tidak menambah baris baru).
+                  Data pada baris <b>#{formEdit.rowIndex}</b> akan diperbarui di
+                  spreadsheet (tidak menambah baris baru).
                 </p>
               </div>
               <button
@@ -1555,7 +2136,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     type="text"
                     value={formEdit.kelas}
                     onChange={(e) =>
-                      setFormEdit({ ...formEdit, kelas: e.target.value.toUpperCase() })
+                      setFormEdit({
+                        ...formEdit,
+                        kelas: e.target.value.toUpperCase(),
+                      })
                     }
                     placeholder="Contoh: X TJKT 1"
                     className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
@@ -1570,7 +2154,10 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     type="text"
                     value={formEdit.mapel}
                     onChange={(e) =>
-                      setFormEdit({ ...formEdit, mapel: e.target.value.toUpperCase() })
+                      setFormEdit({
+                        ...formEdit,
+                        mapel: e.target.value.toUpperCase(),
+                      })
                     }
                     placeholder="Contoh: K5-PKPJ"
                     className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
@@ -1625,13 +2212,116 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 />
               </div>
 
+              {/* KOTAK EMAIL BOT SERVICE ACCOUNT */}
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold text-blue-900 uppercase block">
+                      🤖 Email Bot Asesmen (Bagikan Akses Spreadsheet)
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-mono font-bold text-blue-950 select-all break-all">
+                      {GOOGLE_BOT_EMAIL}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        typeof navigator !== "undefined" &&
+                        navigator.clipboard
+                      ) {
+                        navigator.clipboard.writeText(GOOGLE_BOT_EMAIL);
+                        alert("Email bot berhasil disalin ke clipboard!");
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shrink-0 transition shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>📋</span>
+                    <span>Salin Email</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-blue-700 leading-relaxed">
+                  * Buka Google Sheet respon ujian &gt; Klik{" "}
+                  <b>Bagikan (Share)</b> &gt; Berikan akses <b>Viewer</b> ke
+                  email bot di atas &gt; Salin link spreadsheet-nya lalu tempel
+                  di bawah.
+                </p>
+              </div>
+
+              {/* URL SPREADSHEET RESPON GOOGLE FORM */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  URL Spreadsheet Respon Form
+                </label>
+                <input
+                  type="url"
+                  value={formEdit.sheet_respon_url}
+                  onChange={(e) =>
+                    setFormEdit({
+                      ...formEdit,
+                      sheet_respon_url: e.target.value,
+                    })
+                  }
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono text-slate-800 outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* PILIHAN GURU PENGAMPU UJIAN */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Guru Pengampu Ujian
+                </label>
+                <select
+                  value={formEdit.nama_guru}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const foundG = daftarSemuaGuru.find(
+                      (g) =>
+                        (g.NAMA_GURU || g.nama || "").trim().toLowerCase() ===
+                        val.trim().toLowerCase(),
+                    );
+                    setFormEdit({
+                      ...formEdit,
+                      nama_guru: val,
+                      id_guru: foundG?.ID_GURU || foundG?.id || "",
+                    });
+                  }}
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 bg-white"
+                >
+                  <option value={formEdit.guru || user?.nama || "Guru"}>
+                    👤 {formEdit.guru || user?.nama || "Guru"}
+                  </option>
+                  {daftarSemuaGuru
+                    .filter((g) => {
+                      const n = (g.NAMA_GURU || g.nama || "").trim();
+                      return (
+                        n &&
+                        n.toLowerCase() !==
+                          (formEdit.guru || "").trim().toLowerCase()
+                      );
+                    })
+                    .map((g, idx) => {
+                      const nama = g.NAMA_GURU || g.nama;
+                      const idG = g.ID_GURU || g.id;
+                      return (
+                        <option key={idx} value={nama}>
+                          {nama} {idG ? `[${idG}]` : ""}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
               <div className="flex items-center gap-2 pt-3 border-t">
                 <button
                   type="submit"
                   disabled={actionLoading}
                   className="flex-1 rounded-xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-700 hover:to-orange-800 text-white text-xs font-black py-2.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
                 >
-                  {actionLoading ? "Menyimpan Perubahan..." : `💾 Simpan Perubahan Baris #${formEdit.rowIndex}`}
+                  {actionLoading
+                    ? "Menyimpan Perubahan..."
+                    : `💾 Simpan Perubahan Baris #${formEdit.rowIndex}`}
                 </button>
                 <button
                   type="button"
@@ -1647,7 +2337,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
       )}
 
       {/* ======================================================== */}
-      {/* MODAL 3: INPUT KODE KHUSUS ADMIN ASESMEN (PIN: 4321)     */}
+      {/* MODAL 3: INPUT KODE KHUSUS ADMIN ASESMEN                  */}
       {/* ======================================================== */}
       {showModalPin && (
         <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-fadeIn">
@@ -1659,7 +2349,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               Kode Khusus Admin Asesmen
             </h4>
             <p className="text-xs text-slate-500 mt-1 mb-4">
-              Masukkan kode khusus pengelola ujian untuk membuka izin penuh mengedit & menghapus seluruh sesi ujian.
+              Masukkan kode khusus pengelola ujian untuk membuka izin penuh
+              mengedit & menghapus seluruh sesi ujian.
             </p>
 
             {pinError && (
@@ -1676,7 +2367,7 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                 maxLength={8}
                 value={inputPin}
                 onChange={(e) => setInputPin(e.target.value)}
-                placeholder="Masukkan Kode (Contoh: 4321)"
+                placeholder="Masukkan Kode Admin Asesmen"
                 className="w-full text-center tracking-widest text-lg font-black rounded-xl border border-slate-300 py-3 text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                 autoFocus
                 required
@@ -1716,8 +2407,8 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
               {targetPesan.tipe === "siswa"
                 ? `Penerima: ${targetPesan.nama} (${targetPesan.kelas})`
                 : targetPesan.kelas === "SEMUA"
-                ? "Penerima: SELURUH SISWA DI SEMUA KELAS"
-                : `Penerima: SEMUA SISWA KELAS ${targetPesan.kelas}`}
+                  ? "Penerima: SELURUH SISWA DI SEMUA KELAS"
+                  : `Penerima: SEMUA SISWA KELAS ${targetPesan.kelas}`}
             </p>
 
             <form onSubmit={handleKirimPesanSubmit} className="space-y-3">
@@ -1800,7 +2491,9 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setPesanInput("Fokus pada soal ujian Anda!")}
+                      onClick={() =>
+                        setPesanInput("Fokus pada soal ujian Anda!")
+                      }
                       className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
                     >
                       Fokus pada soal
@@ -1814,7 +2507,11 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPesanInput("Periksa kembali jawaban Anda sebelum submit.")}
+                      onClick={() =>
+                        setPesanInput(
+                          "Periksa kembali jawaban Anda sebelum submit.",
+                        )
+                      }
                       className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md text-slate-700 font-semibold cursor-pointer"
                     >
                       Periksa jawaban
@@ -1843,6 +2540,18 @@ export default function TabKelolaUjian({ user, daftarMapelGuru = [], onClose }) 
           </div>
         </div>
       )}
+
+      {/* MODAL PRINT REKAP NILAI PDF */}
+      <ModalPrintRekapUjian
+        isOpen={showPrintRekapModal}
+        onClose={() => setShowPrintRekapModal(false)}
+        kelas={filterKelas !== "SEMUA" ? filterKelas : "Semua Kelas"}
+        mapel={filterMapelSiswa !== "SEMUA" ? filterMapelSiswa : "Semua Mapel"}
+        daftarSiswa={filteredSiswa}
+        semuaSiswa={daftarSiswa}
+        responList={responList}
+        user={user}
+      />
     </div>
   );
 }
