@@ -356,7 +356,7 @@ export default function ExamPage() {
           if (savedKelas.startsWith("XII")) detectedJenjang = "XII";
           else if (savedKelas.startsWith("XI")) detectedJenjang = "XI";
           else if (savedKelas.startsWith("X")) detectedJenjang = "X";
-          if (detectedJenjang) setJenjang(detectedJenjang);
+          if (detectedJenjang) setJenjang((prev) => prev || detectedJenjang);
 
           const match = data.find((item) => {
             if (!item?.kls) return false;
@@ -367,7 +367,7 @@ export default function ExamPage() {
               sheetKls.startsWith(savedKelas)
             );
           });
-          if (match) setSelectedKelas(match.kls);
+          if (match) setSelectedKelas((prev) => prev || match.kls);
         }
 
         setTokenMessage(
@@ -427,7 +427,7 @@ export default function ExamPage() {
             if (savedKelas.startsWith("XII")) detectedJenjang = "XII";
             else if (savedKelas.startsWith("XI")) detectedJenjang = "XI";
             else if (savedKelas.startsWith("X")) detectedJenjang = "X";
-            if (detectedJenjang) setJenjang(detectedJenjang);
+            if (detectedJenjang) setJenjang((prev) => prev || detectedJenjang);
 
             const match = data.find((item) => {
               if (!item?.kls) return false;
@@ -438,7 +438,7 @@ export default function ExamPage() {
                 sheetKls.startsWith(savedKelas)
               );
             });
-            if (match) setSelectedKelas(match.kls);
+            if (match) setSelectedKelas((prev) => prev || match.kls);
           }
         }
       } catch (err) {
@@ -671,9 +671,7 @@ export default function ExamPage() {
         localStorage.setItem("kodeKirim", result.kodeKirim || "");
         localStorage.setItem("selectedMapel", selectedMapel);
         localStorage.setItem("selectedKelas", selectedKelas);
-        if (selectedKelas) {
-          localStorage.setItem("kelas", selectedKelas);
-        }
+        // "kelas" akun siswa TIDAK ditimpa agar cek pesan/pelanggaran tetap cocok dengan data akun
 
         // Langsung menuju ujian
         try {
@@ -799,19 +797,27 @@ export default function ExamPage() {
                     }
                     className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-5 py-3 font-bold text-slate-700 transition cursor-pointer"
                   >
-                    {installStepsVisible ? "Sembunyikan Panduan" : "📖 Panduan Pasang Aplikasi (HP / Laptop)"}
+                    {installStepsVisible
+                      ? "Sembunyikan Panduan"
+                      : "📖 Panduan Pasang Aplikasi (HP / Laptop)"}
                   </button>
 
                   {installStepsVisible && (
                     <ol className="mt-4 space-y-2.5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-xs sm:text-sm text-slate-700">
                       <li>
-                        <b>Di Smartphone (Chrome):</b> Buka menu titik tiga <b>(⋮)</b> di pojok kanan atas browser &gt; Pilih <b>Install app</b> atau <b>Tambahkan ke layar utama</b>.
+                        <b>Di Smartphone (Chrome):</b> Buka menu titik tiga{" "}
+                        <b>(⋮)</b> di pojok kanan atas browser &gt; Pilih{" "}
+                        <b>Install app</b> atau <b>Tambahkan ke layar utama</b>.
                       </li>
                       <li>
-                        <b>Di Komputer / Laptop:</b> Klik ikon <b>Install</b> di bilah alamat browser kanan atas atau menu titik tiga <b>(⋮)</b> &gt; <b>Install Portal Sekolah</b>.
+                        <b>Di Komputer / Laptop:</b> Klik ikon <b>Install</b> di
+                        bilah alamat browser kanan atas atau menu titik tiga{" "}
+                        <b>(⋮)</b> &gt; <b>Install Portal Sekolah</b>.
                       </li>
                       <li>
-                        <b>Setelah Terpasang:</b> Tutup tab browser ini, lalu buka aplikasi dari <b>ikon Portal Sekolah</b> di layar depan perangkat Anda.
+                        <b>Setelah Terpasang:</b> Tutup tab browser ini, lalu
+                        buka aplikasi dari <b>ikon Portal Sekolah</b> di layar
+                        depan perangkat Anda.
                       </li>
                     </ol>
                   )}
