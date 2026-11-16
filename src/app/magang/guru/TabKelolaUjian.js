@@ -917,7 +917,7 @@ export default function TabKelolaUjian({
 
   const handleHapusAkunSiswa = async (s) => {
     const konfirmasi = confirm(
-      `⚠️ HAPUS TOTAL BARIS SISWA:\n\nNama: ${s.nama}\nKelas: ${s.kelas}\nID Siswa: ${s.id_siswa}\n\nSeluruh baris siswa ini akan DIHAPUS TOTAL dari spreadsheet database.\n\nLanjutkan?`,
+      `⚠️ RESET / HAPUS AKUN SISWA:\n\nNama: ${s.nama || "(Kosong)"}\nKelas: ${s.kelas || "-"}\nID Siswa: ${s.id_siswa}\n\nData nama, kelas, pesan, sesi, dan kunci perangkat akan dikosongkan, namun ID Siswa (${s.id_siswa}) tetap dipertahankan di database agar siswa dapat mendaftar ulang.\n\nLanjutkan?`,
     );
     if (!konfirmasi) return;
 
@@ -931,11 +931,11 @@ export default function TabKelolaUjian({
       );
       if (res.status === "success") {
         setSuksesMsg(
-          `Baris siswa ${s.nama} (${s.id_siswa}) berhasil dihapus total!`,
+          `Akun siswa ${s.nama || s.id_siswa} berhasil direset! ID tetap tersimpan di database.`,
         );
         loadSiswa();
       } else {
-        setErrorMsg(res.message || "Gagal menghapus baris siswa");
+        setErrorMsg(res.message || "Gagal mereset akun siswa");
       }
     } catch (err) {
       setErrorMsg("Error: " + err.message);
@@ -1692,7 +1692,13 @@ export default function TabKelolaUjian({
                           </td>
                           <td className="px-2.5 py-1.5 font-bold text-slate-900 leading-tight">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span>{s.nama || "-"}</span>
+                              <span>
+                                {s.nama || (
+                                  <span className="text-rose-500 italic font-normal">
+                                    (Dihapus/Kosong)
+                                  </span>
+                                )}
+                              </span>
                               {s.status_sesi === "AKTIF" && s.device_id && (
                                 <span
                                   className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800 border border-teal-300"

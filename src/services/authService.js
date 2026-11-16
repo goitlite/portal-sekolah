@@ -13,6 +13,7 @@ export async function registerStudent(data) {
     formData.append("kelas", data.kelas);
     formData.append("wa_siswa", data.wa_siswa || data.id_siswa || "");
     formData.append("wa_ortu", data.wa_ortu || "-");
+    formData.append("source", "portal");
 
     const response = await fetch(BASE_URL, {
       method: "POST",
@@ -171,6 +172,7 @@ export async function kunciSesiUjian({ nama, kelas, idSiswa, mapel, deviceId }) 
     formData.append("id_siswa", idSiswa || "");
     formData.append("mapel", mapel || "");
     formData.append("device_id", deviceId || "");
+    formData.append("source", "portal");
 
     const response = await fetch(BASE_URL, {
       method: "POST",

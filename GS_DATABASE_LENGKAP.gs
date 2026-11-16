@@ -202,6 +202,12 @@ function handleKunciSesiUjian(params) {
     }
 
     if (rowIndex !== -1) {
+      if (!data[rowIndex - 1][0] && params.nama) {
+        sheet.getRange(rowIndex, 1).setValue(params.nama.trim().toUpperCase());
+      }
+      if (!data[rowIndex - 1][1] && params.kelas) {
+        sheet.getRange(rowIndex, 2).setValue(params.kelas.trim().toUpperCase());
+      }
       if (deviceId) sheet.getRange(rowIndex, 9).setValue(deviceId);
       if (mapel) sheet.getRange(rowIndex, 10).setValue(mapel);
       sheet.getRange(rowIndex, 11).setValue("AKTIF");
@@ -211,22 +217,35 @@ function handleKunciSesiUjian(params) {
       return responseJSON({ status: "success", message: "Sesi perangkat berhasil dikunci" });
     }
 
-    sheet.appendRow([
-      params.nama ? params.nama.trim().toUpperCase() : "-",
-      params.kelas ? params.kelas.trim().toUpperCase() : "-",
-      idSiswa || "-",
-      "-",
-      "",
-      new Date(),
-      "",
-      "0",
-      deviceId,
-      mapel,
-      "AKTIF"
-    ]);
-    catatLogSesi(ss, params.nama, params.kelas, idSiswa, mapel, deviceId);
+    // ===============================================================
+    // PENGECUALIAN UNTUK PORTAL:
+    // Jika siswa masuk lewat Portal (isPortal), otomatis izinkan masuk
+    // dan buatkan baris baru jika akun baru saja dihapus / belum ada di sheet.
+    // ===============================================================
+    const isPortal = (params.source === "portal" || params.portal === "true");
+    if (isPortal) {
+      sheet.appendRow([
+        params.nama ? params.nama.trim().toUpperCase() : "-",
+        params.kelas ? params.kelas.trim().toUpperCase() : "-",
+        idSiswa || "-",
+        "-",
+        "",
+        new Date(),
+        "",
+        "0",
+        deviceId,
+        mapel,
+        "AKTIF"
+      ]);
+      catatLogSesi(ss, params.nama, params.kelas, idSiswa, mapel, deviceId);
+      return responseJSON({ status: "success", message: "Sesi perangkat portal berhasil dibuat dan dikunci" });
+    }
 
-    return responseJSON({ status: "success", message: "Sesi perangkat baru dibuat dan dikunci" });
+    // UNTUK ANDROID NATIVE: Tolak jika ID tidak terdaftar di database
+    return responseJSON({
+      status: "error",
+      message: "AKSES DITOLAK!\n\nIdentitas siswa (" + (params.nama || idSiswa) + ") tidak terdaftar di database sekolah.\nSilahkan registrasi dengan ID resmi Anda terlebih dahulu."
+    });
   } catch (err) {
     return responseJSON({ status: "error", message: err.toString() });
   }
@@ -317,13 +336,14 @@ function handleGetPelanggaran(params) {
 }
 
 // =====================================================
-// 3. REGISTER SISWA
+// 3. REGISTER SISWA (KUNCI ID MUTLAK UNTUK ANDROID NATIVE)
 // =====================================================
 function handleRegister(params) {
-  const nama = (params.nama || "").trim();
+  const nama = (params.nama || params.nama_siswa || "").trim();
   const kelas = (params.kelas || "").trim();
-  const idSiswa = (params.wa_siswa || params.id_siswa || "").trim();
+  const idSiswa = (params.wa_siswa || params.id_siswa || params.id || params.nisn || "").trim();
   const wa_ortu = (params.wa_ortu || "-").trim();
+  const isPortal = (params.source === "portal" || params.portal === "true");
 
   if (!nama || !kelas || !idSiswa) {
     return responseJSON({ status: "ERROR", message: "Field tidak lengkap" });
@@ -334,39 +354,76 @@ function handleRegister(params) {
   const data = sheet.getDataRange().getValues();
 
   let row = -1;
+
+  // 1. CARI BERDASARKAN ID DI KOLOM C (KOLOM 3) - MUTLAK!
   for (let i = 1; i < data.length; i++) {
     let idSheet = (data[i][2] || "").toString().trim();
-    let namaSheet = (data[i][0] || "").toString().trim().toLowerCase();
-    let kelasSheet = (data[i][1] || "").toString().trim().toLowerCase();
-
-    if ((idSheet && idSheet === idSiswa) ||
-        (namaSheet === nama.toLowerCase() && kelasSheet === kelas.toLowerCase())) {
+    if (idSheet && (idSheet === idSiswa || (!isNaN(idSheet) && !isNaN(idSiswa) && Number(idSheet) === Number(idSiswa)))) {
       row = i;
       break;
     }
   }
 
-  if (row !== -1) {
-    sheet.getRange(row + 1, 1).setValue(nama.toUpperCase());
-    sheet.getRange(row + 1, 2).setValue(kelas.toUpperCase());
-    sheet.getRange(row + 1, 3).setValue(idSiswa);
-    sheet.getRange(row + 1, 4).setValue(wa_ortu);
-    sheet.getRange(row + 1, 6).setValue(new Date());
-    return responseJSON({ status: "SUCCESS", message: "Registrasi berhasil" });
+  // 2. Fallback khusus portal: jika masuk dari portal, cek kecocokan nama + kelas
+  if (row === -1 && isPortal) {
+    for (let i = 1; i < data.length; i++) {
+      let rNama = (data[i][0] || "").toString().trim().toLowerCase();
+      let rKelas = (data[i][1] || "").toString().trim().toLowerCase();
+      if (rNama === nama.toLowerCase() && (!kelas || rKelas === kelas.toLowerCase())) {
+        row = i;
+        break;
+      }
+    }
   }
 
-  sheet.appendRow([
-    nama.toUpperCase(),
-    kelas.toUpperCase(),
-    idSiswa,
-    wa_ortu,
-    "",
-    new Date(),
-    "",
-    "0"
-  ]);
+  // JIKA TIDAK DITEMUKAN:
+  if (row === -1) {
+    // PENGECUALIAN UNTUK PORTAL:
+    // Portal otomatis membuat baris baru agar siswa portal selalu otomatis masuk
+    if (isPortal) {
+      sheet.appendRow([
+        nama.toUpperCase(),
+        kelas.toUpperCase(),
+        idSiswa,
+        wa_ortu,
+        "",
+        new Date(),
+        "",
+        "0"
+      ]);
+      return responseJSON({
+        status: "SUCCESS",
+        Status: "SUCCESS",
+        message: "Registrasi portal berhasil",
+        nama: nama.toUpperCase(),
+        kelas: kelas.toUpperCase(),
+        id_siswa: idSiswa
+      });
+    }
 
-  return responseJSON({ status: "SUCCESS", message: "Registrasi berhasil" });
+    // UNTUK ANDROID NATIVE: ID WAJIB SUDAH ADA DI SPREADSHEET DATABASE!
+    // JIKA TIDAK DITEMUKAN: DITOLAK KERAS! DILARANG appendRow!
+    return responseJSON({
+      status: "ERROR",
+      message: "REGISTRASI DITOLAK!\n\nID Siswa (" + idSiswa + ") tidak terdaftar di database sekolah.\nSilahkan pastikan ID benar atau hubungi Admin/Guru."
+    });
+  }
+
+  // JIKA DITEMUKAN: Update baris ID tersebut dengan data pendaftar
+  sheet.getRange(row + 1, 1).setValue(nama.toUpperCase());
+  sheet.getRange(row + 1, 2).setValue(kelas.toUpperCase());
+  sheet.getRange(row + 1, 3).setValue(idSiswa);
+  sheet.getRange(row + 1, 4).setValue(wa_ortu);
+  sheet.getRange(row + 1, 6).setValue(new Date());
+
+  return responseJSON({
+    status: "SUCCESS",
+    Status: "SUCCESS",
+    message: "Registrasi berhasil",
+    nama: nama.toUpperCase(),
+    kelas: kelas.toUpperCase(),
+    id_siswa: idSiswa
+  });
 }
 
 // =====================================================
@@ -448,15 +505,15 @@ function handleCekPesan(params) {
 }
 
 // =====================================================
-// 6. HAPUS AKUN
+// 6. HAPUS AKUN (KHUSUS ANDROID NATIVE & GURU: MENYISAKAN HANYA ID)
 // =====================================================
 function handleHapusAkun(params) {
-  const idSiswa = (params.id_siswa || params.wa_siswa || "").trim();
-  const nama = (params.nama || "").trim().toLowerCase();
+  const idSiswa = (params.id_siswa || params.wa_siswa || params.id || params.nisn || "").trim();
+  const nama = (params.nama || params.nama_siswa || "").trim().toLowerCase();
   const kelas = (params.kelas || "").trim().toLowerCase();
 
   if (!idSiswa && !nama) {
-    return responseJSON({ status: "error", message: "Identitas siswa tidak lengkap" });
+    return responseJSON({ status: "error", Status: "ERROR", message: "Identitas siswa tidak lengkap" });
   }
 
   try {
@@ -464,31 +521,62 @@ function handleHapusAkun(params) {
     const sheet = ss.getSheetByName(SHEET_NAME);
     const data = sheet.getDataRange().getValues();
     let row = -1;
+    let targetId = "";
 
     for (let i = 1; i < data.length; i++) {
       let rNama = String(data[i][0] || "").trim().toLowerCase();
       let rKelas = String(data[i][1] || "").trim().toLowerCase();
       let idSheet = String(data[i][2] || "").trim();
 
-      if ((idSiswa && idSiswa !== "-" && idSheet === idSiswa) ||
-          (nama && kelas && rNama === nama && rKelas === kelas)) {
+      const idCocok = idSiswa && idSiswa !== "-" && (idSheet === idSiswa || (!isNaN(idSheet) && !isNaN(idSiswa) && Number(idSheet) === Number(idSiswa)));
+      const namaCocok = nama && rNama === nama && (!kelas || rKelas === kelas);
+
+      // Utamakan pencocokan ID
+      if (idCocok || (namaCocok && !idSiswa)) {
         row = i;
+        targetId = idSheet || idSiswa;
         break;
       }
     }
 
     if (row === -1) {
-      return responseJSON({ status: "error", message: "Data baris siswa tidak ditemukan" });
+      return responseJSON({ status: "error", Status: "ERROR", message: "Data baris siswa tidak ditemukan di database" });
     }
 
-    sheet.deleteRow(row + 1);
+    // ===============================================================
+    // ATURAN MUTLAK ANDROID NATIVE:
+    // DILARANG MENGHAPUS TOTAL BARIS (DILARANG deleteRow)!
+    // KOSONGKAN SELURUH DATA ATAS NAMA SISWA INI, TETAPI HANYA MENYISAKAN ID DI KOLOM C!
+    // ===============================================================
+    const totalKolom = Math.max(14, sheet.getLastColumn());
+
+    // 1. Kosongkan Kolom A (Nama) dan Kolom B (Kelas)
+    sheet.getRange(row + 1, 1, 1, 2).setValues([["", ""]]);
+
+    // 2. Pastikan Kolom C tetap berisi targetId (HANYA ID YANG BERTAHAN!)
+    if (targetId) {
+      sheet.getRange(row + 1, 3).setValue(targetId);
+    }
+
+    // 3. Kosongkan Kolom D (4) sampai kolom terakhir (N / Kolom 14 dst)
+    if (totalKolom >= 4) {
+      const kosong = [];
+      for (let c = 4; c <= totalKolom; c++) {
+        kosong.push("");
+      }
+      sheet.getRange(row + 1, 4, 1, kosong.length).setValues([kosong]);
+    }
+
+    SpreadsheetApp.flush();
 
     return responseJSON({
       status: "success",
-      message: "Baris data siswa (" + (params.nama || idSiswa) + ") berhasil dihapus total dari spreadsheet!"
+      Status: "SUCCESS",
+      message: "Akun siswa (" + (params.nama || idSiswa) + ") berhasil direset! Nama & data dihapus total, hanya ID (" + targetId + ") yang tetap dipertahankan di database.",
+      id_siswa: targetId
     });
   } catch (err) {
-    return responseJSON({ status: "error", message: err.toString() });
+    return responseJSON({ status: "error", Status: "ERROR", message: err.toString() });
   }
 }
 
