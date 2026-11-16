@@ -7,8 +7,8 @@
 import React, { useState } from "react";
 
 const LABEL_TINGKAT = {
-  terdeteksi: "Terdeteksi Joki",
-  mungkin: "Dugaan Joki (perlu verifikasi)",
+  terdeteksi: "Dugaan berbasis waktu (perlu verifikasi)",
+  mungkin: "Dugaan berbasis waktu (perlu verifikasi)",
 };
 
 export function labelTingkat(tingkat) {
@@ -17,7 +17,8 @@ export function labelTingkat(tingkat) {
 
 /** Teks pelaku untuk tabel/PDF/laporan */
 export function teksPelaku(kasus) {
-  if (kasus.pelaku) return `${kasus.pelaku.nama} (${kasus.pelaku.kelas})`;
+  if (kasus.pelaku)
+    return `Kandidat: ${kasus.pelaku.nama} (${kasus.pelaku.kelas})`;
   if (kasus.kandidat && kasus.kandidat.length > 0) {
     return `Belum pasti. Kandidat akun: ${kasus.kandidat.map((k) => k.nama).join(", ")}`;
   }
@@ -28,14 +29,14 @@ export function teksPelaku(kasus) {
 export function teksLaporanJoki(kasusList = [], { judul = "" } = {}) {
   if (!kasusList.length) return "";
   const baris = [
-    `LAPORAN DUGAAN JOKI ASESMEN${judul ? " - " + judul : ""}`,
+    `LAPORAN INDIKASI JOKI ASESMEN${judul ? " - " + judul : ""}`,
     "SMKN 1 Teluk Kuantan",
     "",
   ];
   kasusList.forEach((k, i) => {
     baris.push(`${i + 1}. [${labelTingkat(k.tingkat)}] Mapel: ${k.mapel}`);
     baris.push(`   Nama di Google Form: ${k.korban.nama} (${k.korban.kelas})`);
-    baris.push(`   Dikerjakan oleh akun: ${teksPelaku(k)}`);
+    baris.push(`   Kandidat akun portal dari log: ${teksPelaku(k)}`);
     baris.push(
       `   Waktu form: ${k.waktuRespon || "-"} | Nilai form: ${k.nilai}`,
     );
@@ -53,19 +54,18 @@ export function BadgeJoki({ info }) {
     return (
       <div className="flex flex-col items-center gap-0.5">
         <span
-          className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-600 text-white"
+          className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300"
           title={pelaku.alasan}
         >
-          🚨{" "}
-          {pelaku.tingkat === "terdeteksi" ? "Terdeteksi Joki" : "Dugaan Joki"}
+          ⚠️ Dugaan waktu
         </span>
         <span
-          className="text-[9px] text-rose-800 font-bold truncate max-w-[140px]"
-          title={`Mengisi form a.n. ${pelaku.korban.nama}`}
+          className="text-[9px] text-amber-900 font-bold truncate max-w-[140px]"
+          title={`Indikasi mengisi form a.n. ${pelaku.korban.nama} berdasarkan log waktu`}
         >
-          Mengisi a.n. {pelaku.korban.nama}
+          Indikasi a.n. {pelaku.korban.nama}
         </span>
-        <span className="text-[9px] text-rose-600 font-black">
+        <span className="text-[9px] text-amber-800 font-black">
           {pelaku.mapel} • Nilai form: {pelaku.nilai}
         </span>
       </div>
@@ -96,7 +96,7 @@ export default function PanelLaporanJoki({
 
   return (
     <div
-      className={`rounded-2xl border border-rose-300 bg-rose-50/70 ${className}`}
+      className={`rounded-2xl border border-amber-300 bg-amber-50/70 ${className}`}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <button
@@ -104,11 +104,11 @@ export default function PanelLaporanJoki({
           onClick={() => setTerbuka((v) => !v)}
           className="flex items-center gap-2 text-left cursor-pointer"
         >
-          <span className="text-base">🚨</span>
-          <span className="text-xs sm:text-sm font-black text-rose-900">
-            Laporan Dugaan Joki{judul ? ` - ${judul}` : ""}
+          <span className="text-base">⚠️</span>
+          <span className="text-xs sm:text-sm font-black text-amber-950">
+            Indikasi Joki - perlu verifikasi{judul ? ` - ${judul}` : ""}
           </span>
-          <span className="rounded-full bg-rose-600 text-white px-2 py-0.5 text-[10px] font-black">
+          <span className="rounded-full bg-amber-200 text-amber-950 px-2 py-0.5 text-[10px] font-black">
             {kasus.length} kasus
           </span>
           <span className="text-[10px] text-rose-700">
@@ -119,7 +119,7 @@ export default function PanelLaporanJoki({
           <button
             type="button"
             onClick={salin}
-            className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 text-[10px] font-black cursor-pointer active:scale-95"
+            className="rounded-lg bg-amber-700 hover:bg-amber-800 text-white px-2.5 py-1 text-[10px] font-black cursor-pointer active:scale-95"
             title="Salin laporan untuk dikirim ke guru admin (mis. lewat WhatsApp)"
           >
             {tersalin ? "✓ Tersalin" : "📋 Salin Laporan"}
@@ -136,7 +136,7 @@ export default function PanelLaporanJoki({
                   <tr>
                     <th className="px-2 py-1.5">Mapel</th>
                     <th className="px-2 py-1.5">Nama di Google Form</th>
-                    <th className="px-2 py-1.5">Dikerjakan oleh akun</th>
+                    <th className="px-2 py-1.5">Kandidat akun dari log</th>
                     <th className="px-2 py-1.5">Waktu form</th>
                     <th className="px-2 py-1.5 text-center">Nilai form</th>
                     <th className="px-2 py-1.5">Status</th>
@@ -165,11 +165,7 @@ export default function PanelLaporanJoki({
                       </td>
                       <td className="px-2 py-1.5">
                         <span
-                          className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-black ${
-                            k.tingkat === "terdeteksi"
-                              ? "bg-rose-600 text-white"
-                              : "bg-amber-100 text-amber-900 border border-amber-300"
-                          }`}
+                          className="inline-block rounded px-1.5 py-0.5 text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300"
                           title={k.alasan}
                         >
                           {labelTingkat(k.tingkat)}
@@ -184,11 +180,11 @@ export default function PanelLaporanJoki({
 
           {kasus.length > 0 && (
             <p className="text-[10px] text-rose-900/80 leading-snug">
-              Dasar deteksi: nama di Google Form dipilih dari data sekolah,
-              sehingga satu respon pasti milik satu siswa. Respon a.n. siswa
-              tersebut dihitung <b>tidak sah</b> karena akunnya tidak tercatat
-              membuka ujian mapel itu. Nilai form ditampilkan hanya sebagai
-              bahan pertimbangan guru; keputusan akhir tetap pada guru/admin.
+              Dasar indikasi: waktu respon tidak memiliki catatan sesi yang
+              cocok. Kandidat akun diperkirakan dari kedekatan waktu log, bukan
+              identitas pengirim yang terverifikasi. Log yang gagal tersimpan
+              dapat memengaruhi hasil; guru/admin perlu memeriksa sebelum
+              mengambil keputusan.
             </p>
           )}
 

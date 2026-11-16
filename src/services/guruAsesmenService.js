@@ -339,3 +339,21 @@ export async function fetchRekapNilaiUjian({
     clearTimeout(timer);
   }
 }
+
+export async function sinkronkanAuditFormDatabase({ kelas, mapel, siswa = [] }) {
+  try {
+    const res = await fetch("/api/guru/asesmen/database", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guru_sync_form_audit",
+        kelas,
+        mapel,
+        payload: JSON.stringify({ siswa }),
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    return { status: "error", message: err.message };
+  }
+}

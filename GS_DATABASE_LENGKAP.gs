@@ -1,0 +1,912 @@
+// =====================================================
+// SMKN 1 TELUK KUANTAN - EXAM SYSTEM BACKEND (DATABASE GS)
+// VERSI TERINTEGRASI: SINKRONISASI AUDIT GOOGLE FORM (KOLOM L, M, N)
+// Struktur Kolom Sheet database:
+// A=nama, B=kelas, C=id_siswa, D=wa, E=isi_pengaduan, F=waktu_update, G=pesan, H=Banyak Pelanggaran
+// I=device_id, J=mapel_aktif, K=status_sesi
+// L=Nama Form Dropdown, M=Nilai Form, N=Ket Nilai
+// =====================================================
+
+const SPREADSHEET_ID = "1O7mZWHny3f-MJa5WpejEKDL29VgFmUlyofabyZ5Iy2o";
+const SHEET_NAME = "database";
+
+// KUNCI RAHASIA AKSES GURU (Wajib cocok dengan GURU_KEY di Next.js .env.local)
+const GURU_KEY = "SMKN1TELKU_GURU_ASESMEN_SECURE_2026";
+
+const LOG_SHEET_NAME = "LOG_SESI";
+const LOG_HEADER = ["waktu", "id_siswa", "nama", "kelas", "mapel", "device_id"];
+const LOG_MAX_PER_SISWA = 60;
+const LOG_DEDUPE_MS = 2 * 60 * 1000;
+
+function ambilSheetLog(ss, buatJikaTidakAda) {
+  let log = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!log && buatJikaTidakAda) {
+    log = ss.insertSheet(LOG_SHEET_NAME);
+    log.appendRow(LOG_HEADER);
+    log.setFrozenRows(1);
+    PropertiesService.getScriptProperties().setProperty("LOG_SESI_MULAI", new Date().toISOString());
+  }
+  return log;
+}
+
+function catatLogSesi(ss, nama, kelas, idSiswa, mapel, deviceId) {
+  try {
+    const mapelStr = String(mapel || "").trim();
+    if (!mapelStr) return;
+    const log = ambilSheetLog(ss, true);
+    const idK = idSiswa && String(idSiswa).trim() !== "-" ? String(idSiswa).trim() : "";
+    const namaK = String(nama || "").trim().toLowerCase();
+    const devK = String(deviceId || "").trim();
+    const nowMs = Date.now();
+    const last = log.getLastRow();
+
+    if (last > 1) {
+      const start = Math.max(2, last - 299);
+      const rows = log.getRange(start, 1, last - start + 1, 6).getValues();
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const rId = String(rows[i][1] || "").trim();
+        const rNama = String(rows[i][2] || "").trim().toLowerCase();
+        const sama = idK ? rId === idK : (namaK && rNama === namaK);
+        if (
+          sama &&
+          String(rows[i][4] || "").trim().toLowerCase() === mapelStr.toLowerCase() &&
+          String(rows[i][5] || "").trim() === devK
+        ) {
+          const logMs =
+            rows[i][0] instanceof Date
+              ? rows[i][0].getTime()
+              : new Date(rows[i][0]).getTime();
+          if (logMs > 0 && nowMs >= logMs && nowMs - logMs < LOG_DEDUPE_MS) {
+            return;
+          }
+        }
+      }
+    }
+    log.appendRow([new Date(), idK || "-", String(nama || "").trim(), String(kelas || "").trim(), mapelStr, devK]);
+  } catch (e) {}
+}
+
+function bacaLogSesi(ss) {
+  try {
+    const log = ambilSheetLog(ss, true);
+    const last = log.getLastRow();
+    const peta = {};
+    if (last > 1) {
+      const rows = log.getRange(2, 1, last - 1, 6).getValues();
+      rows.forEach(function (r) {
+        const id = String(r[1] || "").trim();
+        const nama = String(r[2] || "").trim().toLowerCase();
+        const kelas = String(r[3] || "").trim().toLowerCase();
+        const kunci = id && id !== "-" ? "id:" + id : "nk:" + nama + "|" + kelas;
+        const waktu = r[0] instanceof Date ? r[0].toISOString() : String(r[0] || "");
+        if (!peta[kunci]) peta[kunci] = [];
+        peta[kunci].push({ mapel: String(r[4] || "").trim(), waktu: waktu, device: String(r[5] || "").trim() });
+      });
+      Object.keys(peta).forEach(function (k) {
+        if (peta[k].length > LOG_MAX_PER_SISWA) peta[k] = peta[k].slice(-LOG_MAX_PER_SISWA);
+      });
+    }
+    return peta;
+  } catch (e) {
+    return null;
+  }
+}
+
+// =====================================================
+// MAIN ROUTER
+// =====================================================
+function doGet(e) { return doPost(e); }
+
+function doPost(e) {
+  try {
+    const params = e.parameter || {};
+    const action = (params.action || "").trim();
+
+    if (action === "register") {
+      return handleRegister(params);
+    } 
+    else if (action === "pengaduan") {
+      return handlePengaduan(params);
+    }
+    else if (action === "cek_pesan") {
+      return handleCekPesan(params);
+    }
+    else if (action === "hapus_akun") {
+      return handleHapusAkun(params);
+    }
+    else if (action === "catat_pelanggaran") {
+      return handleCatatPelanggaran(params);
+    }
+    else if (action === "get_pelanggaran") {
+      return handleGetPelanggaran(params);
+    }
+    else if (action === "kunci_sesi_ujian") {
+      return handleKunciSesiUjian(params);
+    }
+    // --- AUDIT FORM: data respon dibaca portal dari sheet_respon_url ---
+    else if (action === "guru_sync_form_audit") {
+      return handleGuruSyncFormAudit(params);
+    }
+    // --- AKSI GURU LAINNYA ---
+    else if (action === "guru_get_semua_siswa") {
+      return handleGuruGetSemuaSiswa(params);
+    }
+    else if (action === "guru_reset_pelanggaran") {
+      return handleGuruResetPelanggaran(params);
+    }
+    else if (action === "guru_reset_device") {
+      return handleGuruResetDevice(params);
+    }
+    else if (action === "guru_kirim_pesan") {
+      return handleGuruKirimPesan(params);
+    }
+    else if (action === "guru_hapus_pesan") {
+      return handleGuruHapusPesan(params);
+    }
+    else if (action === "guru_hapus_akun") {
+      return handleGuruHapusAkun(params);
+    }
+    else {
+      return responseJSON({ status: "error", message: "Action tidak dikenal: " + action });
+    }
+  } catch (error) {
+    return responseJSON({ status: "error", message: error.toString() });
+  }
+}
+
+function verifikasiGuruKey(params) {
+  const key = (params.guru_key || "").trim();
+  return key === GURU_KEY;
+}
+
+// =====================================================
+// 0. KUNCI SESI PERANGKAT UJIAN (1 NAMA 1 HP - ANTI JOKI)
+// =====================================================
+function handleKunciSesiUjian(params) {
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+  const idSiswa = (params.id_siswa || "").trim();
+  const mapel = (params.mapel || "").trim();
+  const deviceId = (params.device_id || "").trim();
+
+  if (!nama && !idSiswa) {
+    return responseJSON({ status: "error", message: "Identitas siswa tidak lengkap" });
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toLowerCase();
+      let rId = String(data[i][2] || "").trim();
+
+      if ((idSiswa && idSiswa !== "-" && rId === idSiswa) ||
+          (nama && kelas && rNama === nama && rKelas === kelas)) {
+        rowIndex = i + 1;
+
+        let existingDevId = String(data[i][8] || "").trim();
+        let statusSesi    = String(data[i][10] || "").trim().toUpperCase();
+
+        if (statusSesi === "AKTIF" && existingDevId && deviceId && existingDevId !== deviceId) {
+          return responseJSON({
+            status: "error",
+            message: "AKSES DITOLAK!\n\nNama (" + (data[i][0] || nama) + ") sudah terdaftar aktif ujian di perangkat lain.\n\nMinta Guru/Admin untuk mereset kunci HP Anda."
+          });
+        }
+        break;
+      }
+    }
+
+    if (rowIndex !== -1) {
+      if (deviceId) sheet.getRange(rowIndex, 9).setValue(deviceId);
+      if (mapel) sheet.getRange(rowIndex, 10).setValue(mapel);
+      sheet.getRange(rowIndex, 11).setValue("AKTIF");
+      sheet.getRange(rowIndex, 6).setValue(new Date());
+      catatLogSesi(ss, data[rowIndex - 1][0] || params.nama, data[rowIndex - 1][1] || params.kelas,
+                   data[rowIndex - 1][2] || idSiswa, mapel, deviceId);
+      return responseJSON({ status: "success", message: "Sesi perangkat berhasil dikunci" });
+    }
+
+    sheet.appendRow([
+      params.nama ? params.nama.trim().toUpperCase() : "-",
+      params.kelas ? params.kelas.trim().toUpperCase() : "-",
+      idSiswa || "-",
+      "-",
+      "",
+      new Date(),
+      "",
+      "0",
+      deviceId,
+      mapel,
+      "AKTIF"
+    ]);
+    catatLogSesi(ss, params.nama, params.kelas, idSiswa, mapel, deviceId);
+
+    return responseJSON({ status: "success", message: "Sesi perangkat baru dibuat dan dikunci" });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 1. CATAT PELANGGARAN
+// =====================================================
+function handleCatatPelanggaran(params) {
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+  const idSiswa = (params.id_siswa || "").trim();
+  const pelanggaran = String(params.pelanggaran || "0").trim();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let updated = false;
+
+    for (let i = 1; i < data.length; i++) {
+      let rowNama = String(data[i][0] || "").trim().toLowerCase();
+      let rowKelas = String(data[i][1] || "").trim().toLowerCase();
+      let rowId = String(data[i][2] || "").trim();
+
+      if ((idSiswa && idSiswa !== "-" && rowId === idSiswa) ||
+          (nama && kelas && rowNama === nama && rowKelas === kelas)) {
+        sheet.getRange(i + 1, 8).setValue(pelanggaran);
+        sheet.getRange(i + 1, 6).setValue(new Date());
+        updated = true;
+        break;
+      }
+    }
+
+    if (!updated && (nama || idSiswa)) {
+      sheet.appendRow([
+        params.nama ? params.nama.trim().toUpperCase() : "-",
+        params.kelas ? params.kelas.trim().toUpperCase() : "-",
+        idSiswa || "-",
+        "-",
+        "",
+        new Date(),
+        "",
+        pelanggaran
+      ]);
+      updated = true;
+    }
+
+    return responseJSON({
+      status: "success",
+      message: updated ? "Pelanggaran berhasil dicatat" : "Data siswa tidak ditemukan"
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 2. GET PELANGGARAN
+// =====================================================
+function handleGetPelanggaran(params) {
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+  const idSiswa = (params.id_siswa || "").trim();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let jmlPelanggaran = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      let rowNama = String(data[i][0] || "").trim().toLowerCase();
+      let rowKelas = String(data[i][1] || "").trim().toLowerCase();
+      let rowId = String(data[i][2] || "").trim();
+
+      if ((idSiswa && idSiswa !== "-" && rowId === idSiswa) ||
+          (nama && kelas && rowNama === nama && rowKelas === kelas)) {
+        jmlPelanggaran = parseInt(data[i][7]) || 0;
+        break;
+      }
+    }
+
+    return responseJSON({ status: "success", pelanggaran: jmlPelanggaran });
+  } catch (err) {
+    return responseJSON({ status: "success", pelanggaran: 0 });
+  }
+}
+
+// =====================================================
+// 3. REGISTER SISWA
+// =====================================================
+function handleRegister(params) {
+  const nama = (params.nama || "").trim();
+  const kelas = (params.kelas || "").trim();
+  const idSiswa = (params.wa_siswa || params.id_siswa || "").trim();
+  const wa_ortu = (params.wa_ortu || "-").trim();
+
+  if (!nama || !kelas || !idSiswa) {
+    return responseJSON({ status: "ERROR", message: "Field tidak lengkap" });
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+
+  let row = -1;
+  for (let i = 1; i < data.length; i++) {
+    let idSheet = (data[i][2] || "").toString().trim();
+    let namaSheet = (data[i][0] || "").toString().trim().toLowerCase();
+    let kelasSheet = (data[i][1] || "").toString().trim().toLowerCase();
+
+    if ((idSheet && idSheet === idSiswa) ||
+        (namaSheet === nama.toLowerCase() && kelasSheet === kelas.toLowerCase())) {
+      row = i;
+      break;
+    }
+  }
+
+  if (row !== -1) {
+    sheet.getRange(row + 1, 1).setValue(nama.toUpperCase());
+    sheet.getRange(row + 1, 2).setValue(kelas.toUpperCase());
+    sheet.getRange(row + 1, 3).setValue(idSiswa);
+    sheet.getRange(row + 1, 4).setValue(wa_ortu);
+    sheet.getRange(row + 1, 6).setValue(new Date());
+    return responseJSON({ status: "SUCCESS", message: "Registrasi berhasil" });
+  }
+
+  sheet.appendRow([
+    nama.toUpperCase(),
+    kelas.toUpperCase(),
+    idSiswa,
+    wa_ortu,
+    "",
+    new Date(),
+    "",
+    "0"
+  ]);
+
+  return responseJSON({ status: "SUCCESS", message: "Registrasi berhasil" });
+}
+
+// =====================================================
+// 4. PENGADUAN
+// =====================================================
+function handlePengaduan(params) {
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+  const isi = (params.isi_pengaduan || "").trim();
+
+  if (!nama || !kelas || !isi) {
+    return responseJSON({ status: "error", message: "Nama, kelas, atau isi kosong" });
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    let namaSheet = (data[i][0] || "").toString().trim().toLowerCase();
+    let kelasSheet = (data[i][1] || "").toString().trim().toLowerCase();
+
+    if (namaSheet === nama && kelasSheet === kelas) {
+      let lastTime = data[i][5] ? new Date(data[i][5]) : null;
+      let now = new Date();
+
+      if (lastTime) {
+        let diff = (now - lastTime) / (1000 * 60);
+        if (diff < 3) {
+          let sisaDetik = Math.ceil((3 - diff) * 60);
+          return responseJSON({ status: "error", message: "Tunggu " + sisaDetik + " detik lagi" });
+        }
+      }
+
+      sheet.getRange(i + 1, 5).setValue(isi);
+      sheet.getRange(i + 1, 6).setValue(new Date());
+
+      return responseJSON({ status: "success", message: "Pengaduan berhasil dikirim" });
+    }
+  }
+
+  sheet.appendRow([nama.toUpperCase(), kelas.toUpperCase(), "-", "-", isi, new Date(), "", "0"]);
+  return responseJSON({ status: "success", message: "Pengaduan tersimpan" });
+}
+
+// =====================================================
+// 5. CEK PESAN UJIAN
+// =====================================================
+function handleCekPesan(params) {
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+
+  if (!nama || !kelas) {
+    return responseJSON({ status: "success", pesan: "", pelanggaran: 0 });
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+
+    let pesanExact = "", pesanLain = "", maxPel = 0;
+    for (let i = 1; i < data.length; i++) {
+      let namaSheet = (data[i][0] || "").toString().trim().toLowerCase();
+      if (namaSheet !== nama) continue;
+      let kelasSheet = (data[i][1] || "").toString().trim().toLowerCase();
+      let p = (data[i][6] || "").toString().trim();
+      let v = parseInt(data[i][7]) || 0;
+      if (v > maxPel) maxPel = v;
+      if (p) {
+        if (kelasSheet === kelas) { if (!pesanExact) pesanExact = p; }
+        else if (!pesanLain) pesanLain = p;
+      }
+    }
+    return responseJSON({ status: "success", pesan: pesanExact || pesanLain, pelanggaran: maxPel });
+  } catch (error) {
+    return responseJSON({ status: "success", pesan: "", pelanggaran: 0 });
+  }
+}
+
+// =====================================================
+// 6. HAPUS AKUN
+// =====================================================
+function handleHapusAkun(params) {
+  const idSiswa = (params.id_siswa || params.wa_siswa || "").trim();
+  const nama = (params.nama || "").trim().toLowerCase();
+  const kelas = (params.kelas || "").trim().toLowerCase();
+
+  if (!idSiswa && !nama) {
+    return responseJSON({ status: "error", message: "Identitas siswa tidak lengkap" });
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let row = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toLowerCase();
+      let idSheet = String(data[i][2] || "").trim();
+
+      if ((idSiswa && idSiswa !== "-" && idSheet === idSiswa) ||
+          (nama && kelas && rNama === nama && rKelas === kelas)) {
+        row = i;
+        break;
+      }
+    }
+
+    if (row === -1) {
+      return responseJSON({ status: "error", message: "Data baris siswa tidak ditemukan" });
+    }
+
+    sheet.deleteRow(row + 1);
+
+    return responseJSON({
+      status: "success",
+      message: "Baris data siswa (" + (params.nama || idSiswa) + ") berhasil dihapus total dari spreadsheet!"
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 7. GURU/ADMIN: AMBIL SEMUA SISWA + KOLOM L, M, N (BARU)
+// =====================================================
+function handleGuruGetSemuaSiswa(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak (kunci tidak valid)" });
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    const result = [];
+    const logPeta = bacaLogSesi(ss);
+    const logMulai = PropertiesService.getScriptProperties().getProperty("LOG_SESI_MULAI") || "";
+
+    for (let i = 1; i < data.length; i++) {
+      const nama = String(data[i][0] || "").trim();
+      const kelas = String(data[i][1] || "").trim();
+      const idSiswa = String(data[i][2] || "").trim();
+      const wa = String(data[i][3] || "").trim();
+      const pengaduan = String(data[i][4] || "").trim();
+      const waktuUpdate = data[i][5] ? String(data[i][5]) : "";
+      const pesan = String(data[i][6] || "").trim();
+      const pelanggaran = parseInt(data[i][7]) || 0;
+      const deviceId = String(data[i][8] || "").trim();     // Kolom I
+      const mapelAktif = String(data[i][9] || "").trim();   // Kolom J
+      const statusSesi = String(data[i][10] || "").trim();  // Kolom K
+
+      // ✨ MEMBACA KOLOM L, M, N TANPA MERUSAK STRUKTUR LAMA
+      const namaFormDropdown = String(data[i][11] || "").trim(); // Kolom L (12)
+      const nilaiForm        = String(data[i][12] || "").trim(); // Kolom M (13)
+      const ketNilai         = String(data[i][13] || "").trim(); // Kolom N (14)
+
+      if (nama || kelas || idSiswa) {
+        const item = {
+          nama,
+          kelas,
+          id_siswa: idSiswa,
+          wa,
+          pengaduan,
+          waktu_update: waktuUpdate,
+          pesan,
+          pelanggaran,
+          device_id: deviceId,
+          mapel_aktif: mapelAktif,
+          status_sesi: statusSesi,
+          nama_form_dropdown: namaFormDropdown,
+          nilai_form: nilaiForm,
+          ket_nilai: ketNilai,
+          rowIndex: i + 1
+        };
+        if (logPeta) {
+          const kunci = idSiswa && idSiswa !== "-" ? "id:" + idSiswa : "nk:" + nama.toLowerCase() + "|" + kelas.toLowerCase();
+          item.riwayat_sesi = logPeta[kunci] || [];
+          item.log_mulai = logMulai;
+        }
+        result.push(item);
+      }
+    }
+
+    return responseJSON({ status: "success", data: result });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString(), data: [] });
+  }
+}
+
+// =====================================================
+// 7a. SINKRONKAN RINGKASAN AUDIT GOOGLE FORM KE KOLOM L, M, N
+// =====================================================
+function handleGuruSyncFormAudit(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const kelasTarget = String(params.kelas || "").trim().toLowerCase();
+  const mapelTarget = String(params.mapel || "").trim();
+  let payload;
+  try {
+    payload = JSON.parse(params.payload || "{}");
+  } catch (err) {
+    return responseJSON({
+      status: "error",
+      message: "Payload audit Form tidak valid: " + err.toString(),
+    });
+  }
+
+  const siswa = payload && Array.isArray(payload.siswa) ? payload.siswa : null;
+  if (!kelasTarget || !mapelTarget || !siswa || siswa.length > 500) {
+    return responseJSON({
+      status: "error",
+      message: "Kelas, mapel, atau daftar siswa audit tidak valid",
+    });
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) throw new Error("Sheet database tidak ditemukan");
+
+    const maxColumns = sheet.getMaxColumns();
+    if (maxColumns < 14) {
+      sheet.insertColumnsAfter(maxColumns, 14 - maxColumns);
+    }
+
+    const header = ["Nama Form Dropdown", "Nilai Form", "Ket Nilai"];
+    const currentHeader = sheet.getRange(1, 12, 1, 3).getValues()[0];
+    if (header.some(function (value, i) {
+      return currentHeader[i] !== value;
+    })) {
+      sheet.getRange(1, 12, 1, 3).setValues([header]);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const updates = [];
+    const tidakDitemukan = [];
+    const barisTerpakai = new Set();
+
+    siswa.forEach(function (item) {
+      if (!item || typeof item !== "object") {
+        tidakDitemukan.push("(baris payload tidak valid)");
+        return;
+      }
+
+      const idSiswa = String(item.id_siswa || "").trim();
+      const nama = String(item.nama || "").trim().toLowerCase();
+      const kelas = String(item.kelas || "").trim().toLowerCase();
+      if (
+        (kelasTarget !== "semua" && kelas !== kelasTarget) ||
+        (!idSiswa && !nama)
+      ) {
+        tidakDitemukan.push(idSiswa || nama || "(identitas kosong)");
+        return;
+      }
+
+      const cocok = [];
+      for (let i = 1; i < data.length; i++) {
+        const rowId = String(data[i][2] || "").trim();
+        const rowNama = String(data[i][0] || "").trim().toLowerCase();
+        const rowKelas = String(data[i][1] || "").trim().toLowerCase();
+        const match = idSiswa && idSiswa !== "-"
+          ? rowId === idSiswa && rowKelas === kelas
+          : rowNama === nama && rowKelas === kelas;
+        if (match) cocok.push(i + 1);
+      }
+
+      if (cocok.length !== 1 || barisTerpakai.has(cocok[0])) {
+        tidakDitemukan.push(
+          idSiswa || (nama + " (" + kelas + ")") +
+            (cocok.length > 1 || barisTerpakai.has(cocok[0])
+              ? " (data ganda)"
+              : ""),
+        );
+        return;
+      }
+
+      barisTerpakai.add(cocok[0]);
+      updates.push({
+        row: cocok[0],
+        values: [
+          String(item.nama_form_dropdown || ""),
+          String(item.nilai_form || ""),
+          String(item.ket_nilai || ("BELUM UJIAN | " + mapelTarget)),
+        ],
+      });
+    });
+
+    updates.sort(function (a, b) {
+      return a.row - b.row;
+    });
+    let start = 0;
+    while (start < updates.length) {
+      let end = start + 1;
+      while (
+        end < updates.length &&
+        updates[end].row === updates[end - 1].row + 1
+      ) {
+        end++;
+      }
+      const values = updates.slice(start, end).map(function (update) {
+        return update.values;
+      });
+      sheet.getRange(updates[start].row, 12, values.length, 3).setValues(values);
+      start = end;
+    }
+
+    SpreadsheetApp.flush();
+    return responseJSON({
+      status: "success",
+      message: "Ringkasan audit Form berhasil disinkronkan",
+      updated: updates.length,
+      tidakDitemukan: tidakDitemukan,
+      mapel: mapelTarget,
+      catatan: "Kolom L-N adalah ringkasan kelas/mapel terakhir yang disinkronkan.",
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
+// =====================================================
+// 8. GURU/ADMIN: RESET PELANGGARAN
+// =====================================================
+function handleGuruResetPelanggaran(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const idSiswa = (params.id_siswa || "").trim();
+  const kelas = (params.kelas || "").trim().toUpperCase();
+  const nama = (params.nama || "").trim().toLowerCase();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let count = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toUpperCase();
+      let rId = String(data[i][2] || "").trim();
+
+      let match = false;
+      if (idSiswa && idSiswa !== "-" && rId === idSiswa) {
+        match = true;
+      } else if (nama && kelas && rNama === nama && rKelas === kelas) {
+        match = true;
+      } else if (!idSiswa && !nama && kelas && (kelas === "SEMUA" || rKelas === kelas)) {
+        match = true;
+      }
+
+      if (match) {
+        sheet.getRange(i + 1, 8).setValue("0");
+        sheet.getRange(i + 1, 6).setValue(new Date());
+        count++;
+        if (idSiswa || (nama && kelas)) break;
+      }
+    }
+
+    return responseJSON({
+      status: "success",
+      message: "Berhasil mereset " + count + " pelanggaran siswa",
+      count: count
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 9. GURU/ADMIN: RESET KUNCI PERANGKAT HP
+// =====================================================
+function handleGuruResetDevice(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const idSiswa = (params.id_siswa || "").trim();
+  const kelas = (params.kelas || "").trim().toUpperCase();
+  const nama = (params.nama || "").trim().toLowerCase();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let updated = false;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toUpperCase();
+      let rId = String(data[i][2] || "").trim();
+
+      let match = false;
+      if (idSiswa && idSiswa !== "-" && rId === idSiswa) {
+        match = true;
+      } else if (nama && kelas && rNama === nama && rKelas === kelas) {
+        match = true;
+      }
+
+      if (match) {
+        sheet.getRange(i + 1, 9).setValue("");
+        sheet.getRange(i + 1, 10).setValue("");
+        sheet.getRange(i + 1, 11).setValue("RESET");
+        sheet.getRange(i + 1, 6).setValue(new Date());
+        updated = true;
+        break;
+      }
+    }
+
+    return responseJSON({
+      status: updated ? "success" : "error",
+      message: updated
+        ? "Perangkat siswa (" + (params.nama || idSiswa) + ") berhasil direset. Siswa dapat login dari HP baru."
+        : "Data siswa tidak ditemukan."
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 10. GURU/ADMIN: KIRIM PESAN
+// =====================================================
+function handleGuruKirimPesan(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const kelas = (params.kelas || "").trim().toUpperCase();
+  const nama = (params.nama || "").trim().toLowerCase();
+  const pesan = (params.pesan || "").trim();
+
+  if (!pesan) {
+    return responseJSON({ status: "error", message: "Isi pesan tidak boleh kosong" });
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let count = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toUpperCase();
+
+      let match = false;
+      if (nama && rNama === nama && (!kelas || rKelas === kelas)) {
+        match = true;
+      } else if (!nama && kelas && (kelas === "SEMUA" || rKelas === kelas)) {
+        match = true;
+      }
+
+      if (match) {
+        sheet.getRange(i + 1, 7).setValue(pesan);
+        sheet.getRange(i + 1, 6).setValue(new Date());
+        count++;
+      }
+    }
+
+    return responseJSON({
+      status: "success",
+      message: "Pesan terkirim ke " + count + " siswa",
+      count: count
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 11. GURU/ADMIN: HAPUS PESAN
+// =====================================================
+function handleGuruHapusPesan(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const kelas = (params.kelas || "").trim().toUpperCase();
+  const nama = (params.nama || "").trim().toLowerCase();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    let count = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      let rNama = String(data[i][0] || "").trim().toLowerCase();
+      let rKelas = String(data[i][1] || "").trim().toUpperCase();
+
+      let match = false;
+      if (nama && rNama === nama && (!kelas || rKelas === kelas)) {
+        match = true;
+      } else if (!nama && kelas && (kelas === "SEMUA" || rKelas === kelas)) {
+        match = true;
+      }
+
+      if (match) {
+        sheet.getRange(i + 1, 7).setValue("");
+        sheet.getRange(i + 1, 6).setValue(new Date());
+        count++;
+      }
+    }
+
+    return responseJSON({
+      status: "success",
+      message: "Pesan dibersihkan untuk " + count + " siswa",
+      count: count
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  }
+}
+
+// =====================================================
+// 12. GURU/ADMIN: HAPUS TOTAL BARIS SISWA
+// =====================================================
+function handleGuruHapusAkun(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+  return handleHapusAkun(params);
+}
+
+// =====================================================
+// RESPONSE JSON HELPER
+// =====================================================
+function responseJSON(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}

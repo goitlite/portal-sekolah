@@ -14,11 +14,13 @@ import {
   editDataUjian,
   hapusDataUjian,
   fetchRekapNilaiUjian,
+  sinkronkanAuditFormDatabase,
 } from "@/services/guruAsesmenService";
 import {
   evaluasiNilaiSiswa,
   deteksiJoki,
   kunciSiswaAsesmen,
+  buatPayloadSinkronAuditForm,
 } from "@/lib/auditAsesmenHelper";
 import PanelLaporanJoki, {
   BadgeJoki,
@@ -116,6 +118,7 @@ export default function ModalPantauAsesmenKelas({
   const [loadingRekap, setLoadingRekap] = useState(false);
   const [rekapError, setRekapError] = useState("");
   const [rekapDiag, setRekapDiag] = useState(null);
+  const [auditSyncNotice, setAuditSyncNotice] = useState("");
   const [showPrintRekapModal, setShowPrintRekapModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -150,10 +153,11 @@ export default function ModalPantauAsesmenKelas({
 
   // Nilai ujian dimuat terpisah agar daftar siswa langsung tampil walau Google Sheets lambat.
   const muatRekap = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false, siswaUntukAudit = [], syncAudit = false) => {
       if (!isOpen) return;
       setLoadingRekap(true);
       setRekapError("");
+      if (syncAudit) setAuditSyncNotice("");
       try {
         const resRekap = await fetchRekapNilaiUjian({
           kelas: kelasTarget,
@@ -164,6 +168,95 @@ export default function ModalPantauAsesmenKelas({
           const list = resRekap.data || resRekap.responses || [];
           if (Array.isArray(list)) setResponList(list);
           setRekapDiag(resRekap.diagnostics || null);
+
+          if (syncAudit && siswaUntukAudit.length > 0) {
+            const diagnostics = resRekap.diagnostics || {};
+            const targetClass = (kelasTarget || "").trim().toLowerCase();
+            const targetSubject = (namaMapel || "").trim().toLowerCase();
+            const targetSesiTidakSiap = [
+              ...(diagnostics.gagalBaca || []).map((item) => item.sesi || ""),
+              ...(diagnostics.tanpaLink || []).map(
+                (item) => `${item.kelas || ""} ${item.mapel || ""}`,
+              ),
+              ...(diagnostics.linkTidakValid || []).map(
+                (item) => `${item.kelas || ""} ${item.mapel || ""}`,
+              ),
+            ].some((label) => {
+              const normalized = label.toLowerCase();
+              return (
+                normalized.includes(targetClass) &&
+                normalized.includes(targetSubject)
+              );
+            });
+            const namaFormTidakTerdeteksi = (
+              diagnostics.peringatan || []
+            ).some((item) =>
+              String(item.pesan || "")
+                .toLowerCase()
+                .includes('kolom "nama" tidak ditemukan'),
+            );
+            const rekapSiapDisinkronkan =
+              (diagnostics.sheetDibaca || 0) > 0 &&
+              !diagnostics.ujianError &&
+              !targetSesiTidakSiap &&
+              !namaFormTidakTerdeteksi;
+
+            if (!rekapSiapDisinkronkan) {
+              setAuditSyncNotice(
+                "Sinkronisasi dibatalkan agar data lama tidak tertimpa: sheet respon belum berhasil dibaca lengkap.",
+              );
+              return;
+            }
+
+            const hasilDeteksi = deteksiJoki(
+              siswaUntukAudit,
+              Array.isArray(list) ? list : [],
+              namaMapel,
+            );
+            const kelasNorm = (kelasTarget || "").trim().toLowerCase();
+            const siswaKelasAudit = siswaUntukAudit.filter(
+              (s) => (s.kelas || "").trim().toLowerCase() === kelasNorm,
+            );
+            const siswaAudit = buatPayloadSinkronAuditForm(
+              siswaKelasAudit,
+              Array.isArray(list) ? list : [],
+              namaMapel,
+              hasilDeteksi,
+            );
+            const hasilSinkron = await sinkronkanAuditFormDatabase({
+              kelas: kelasTarget,
+              mapel: namaMapel,
+              siswa: siswaAudit,
+            });
+
+            if (hasilSinkron?.status === "success") {
+              const tidakDitemukan = Array.isArray(
+                hasilSinkron.tidakDitemukan,
+              )
+                ? hasilSinkron.tidakDitemukan.length
+                : 0;
+              setAuditSyncNotice(
+                `Audit Form tersinkron untuk ${hasilSinkron.updated || 0} siswa (${namaMapel}); ${tidakDitemukan} data siswa tidak cocok. Status menunjukkan data respon dan indikasi log, bukan identitas pengirim terverifikasi.`,
+              );
+              const terbaru = await fetchSemuaSiswaAsesmen();
+              if (terbaru?.status === "success" && Array.isArray(terbaru.data)) {
+                setSiswaList(terbaru.data);
+              } else {
+                setAuditSyncNotice(
+                  (current) =>
+                    `${current} Gagal memuat ulang nilai database setelah sinkronisasi.`,
+                );
+              }
+            } else {
+              setAuditSyncNotice(
+                `Gagal menyinkronkan Audit Form: ${hasilSinkron?.message || "respons server tidak valid"}`,
+              );
+            }
+          } else if (syncAudit) {
+            setAuditSyncNotice(
+              "Audit Form tidak disinkronkan karena data siswa belum tersedia.",
+            );
+          }
         } else {
           // Gagal: data nilai yang sudah tampil TIDAK dikosongkan, tampilkan alasannya
           setRekapError(
@@ -182,10 +275,11 @@ export default function ModalPantauAsesmenKelas({
   // forceRefresh = true hanya dari tombol Refresh. Aksi lain (reset, pesan, dll) memakai cache server
   // sehingga kuota Google Sheets tidak habis.
   const muatData = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false, syncAudit = false) => {
       if (!isOpen) return;
       setLoading(true);
       setErrorMsg("");
+      let siswaUntukAudit = [];
       try {
         const [resSiswa, resUjian] = await Promise.all([
           fetchSemuaSiswaAsesmen(),
@@ -194,6 +288,7 @@ export default function ModalPantauAsesmenKelas({
 
         if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
           setSiswaList(resSiswa.data);
+          siswaUntukAudit = resSiswa.data;
         } else {
           setErrorMsg(resSiswa.message || "Gagal memuat database siswa");
         }
@@ -206,7 +301,7 @@ export default function ModalPantauAsesmenKelas({
       } finally {
         setLoading(false);
       }
-      muatRekap(forceRefresh);
+      await muatRekap(forceRefresh, siswaUntukAudit, syncAudit);
     },
     [isOpen, muatRekap],
   );
@@ -214,10 +309,11 @@ export default function ModalPantauAsesmenKelas({
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
-        muatData();
+        muatData(false, true);
         setPesanInput("");
         setSuksesMsg("");
         setErrorMsg("");
+        setAuditSyncNotice("");
         setShowFormUjian(false);
         setSearchNama("");
         setSearchId("");
@@ -801,9 +897,10 @@ export default function ModalPantauAsesmenKelas({
           </div>
         )}
 
-        {(rekapError || peringatanNilai.length > 0) && (
+        {(rekapError || auditSyncNotice || peringatanNilai.length > 0) && (
           <div className="bg-amber-50 border-b border-amber-200 px-5 py-2 text-[11px] font-semibold text-amber-900 space-y-0.5">
             {rekapError && <div>⚠️ {rekapError}</div>}
+            {auditSyncNotice && <div>ℹ️ {auditSyncNotice}</div>}
             {peringatanNilai.map((t, i) => (
               <div key={i}>ℹ️ {t}</div>
             ))}
@@ -1128,13 +1225,13 @@ export default function ModalPantauAsesmenKelas({
               </span>
             </div>
             <div
-              className={`rounded-xl border p-2 sm:p-2.5 shadow-2xs ${stats.adaJoki > 0 ? "border-rose-400 bg-rose-100" : "border-slate-200 bg-white"}`}
+              className={`rounded-xl border p-2 sm:p-2.5 shadow-2xs ${stats.adaJoki > 0 ? "border-amber-400 bg-amber-100" : "border-slate-200 bg-white"}`}
             >
-              <span className="text-[9px] sm:text-[10px] font-bold text-rose-700 uppercase block truncate">
-                Terdeteksi Joki
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase block truncate">
+                Indikasi Log
               </span>
               <span
-                className={`text-base sm:text-lg font-black ${stats.adaJoki > 0 ? "text-rose-700" : "text-slate-400"}`}
+                className={`text-base sm:text-lg font-black ${stats.adaJoki > 0 ? "text-amber-800" : "text-slate-400"}`}
               >
                 {stats.adaJoki}
               </span>
@@ -1152,7 +1249,7 @@ export default function ModalPantauAsesmenKelas({
           {/* TOMBOL AKSI CEPAT KELAS (PADAT & IKON PADA MOBILE) */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-0.5">
             <button
-              onClick={() => muatData(true)}
+              onClick={() => muatData(true, true)}
               disabled={loading || loadingRekap || actionLoading}
               className="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
               title="Refresh Data Siswa & Respon Ujian"

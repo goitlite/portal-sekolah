@@ -181,7 +181,7 @@ export function isMapelCocok(mapelA, mapelB) {
 // WAKTU & NILAI
 // ------------------------------------------------------------------
 /**
- * Parse timestamp (DD/MM/YYYY HH:mm:ss atau ISO) ke millisecond
+ * Parse timestamp Form lokal (DD/MM atau MM/DD, zona Sheet UTC+7) atau ISO ke millisecond
  */
 export function parseTimestampMs(ts) {
   if (!ts) return 0;
@@ -193,13 +193,16 @@ export function parseTimestampMs(ts) {
     /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[\sT]+(\d{1,2})[:.](\d{1,2})(?:[:.](\d{1,2}))?)?/,
   );
   if (matchIndo) {
-    const day = parseInt(matchIndo[1], 10);
-    const month = parseInt(matchIndo[2], 10) - 1;
+    const first = parseInt(matchIndo[1], 10);
+    const second = parseInt(matchIndo[2], 10);
+    const day = first > 12 ? first : second > 12 ? second : first;
+    const month = first > 12 ? second : second > 12 ? first : second;
     const year = parseInt(matchIndo[3], 10);
     const hour = matchIndo[4] ? parseInt(matchIndo[4], 10) : 0;
     const min = matchIndo[5] ? parseInt(matchIndo[5], 10) : 0;
     const sec = matchIndo[6] ? parseInt(matchIndo[6], 10) : 0;
-    return new Date(year, month, day, hour, min, sec).getTime();
+    if (month < 1 || month > 12 || day < 1 || day > 31) return 0;
+    return Date.UTC(year, month - 1, day, hour, min, sec) - 7 * 3600 * 1000;
   }
 
   const parsed = Date.parse(str);
@@ -398,20 +401,12 @@ export function evaluasiNilaiSiswa(
 }
 
 // ------------------------------------------------------------------
-// DETEKSI JOKI (akun portal mengerjakan Google Form atas nama siswa lain)
+// INDIKASI JOKI BERDASARKAN LOG SESI
 // ------------------------------------------------------------------
-// Prinsip: nama di Google Form berupa dropdown dari data sekolah = nama di akun portal, sehingga
-// satu respon form PASTI milik satu siswa. Respon a.n. siswa Y yang masuk, padahal akun Y tidak
-// tercatat membuka ujian mapel itu di portal, berarti diisi oleh akun lain.
-//
-// Bukti "akun membuka ujian mapel M" diambil dari `riwayat_sesi` (log LOG_SESI di GAS database, dicatat
-// saat siswa menekan Mulai Ujian). Tanpa log, hanya akun yang BELUM PERNAH membuka ujian apa pun yang
-// dicurigai, dan tingkatnya selalu "mungkin".
-//
-// Tingkat: "terdeteksi" = log ada dan sebagian besar siswa lain pada mapel itu tercatat; "mungkin" = bukti
-// kurang kuat (log belum lengkap, mis. sebagian siswa memakai aplikasi yang tidak mencatat log).
+// Google Form tidak mencatat akun portal pengirim. Karena itu pencocokan nama dan waktu
+// hanya menghasilkan indikasi untuk ditinjau guru, bukan bukti identitas atau pelanggaran.
 
-const JENDELA_SESI_MS = 6 * 3600 * 1000; // sesi masuk s.d. respon masih dianggap satu ujian
+const JENDELA_SESI_MS = 6 * 3600 * 1000;
 const TOLERANSI_JAM_MS = 10 * 60 * 1000;
 
 const ringkasSiswa = (s) => ({
@@ -453,7 +448,7 @@ export function deteksiJoki(
   hasil.logTersedia = logTersedia;
   if (!logTersedia) {
     hasil.catatan.push(
-      "Log riwayat masuk ujian belum tersedia (perbarui GAS database). Deteksi terbatas: hanya akun yang belum pernah membuka ujian.",
+      "Log riwayat masuk ujian belum tersedia (perbarui GAS database); indikasi berbasis waktu tidak dapat dibuat.",
     );
   }
   let logMulaiMs = 0;
@@ -473,7 +468,7 @@ export function deteksiJoki(
   const siap = siapkanRespon(responList);
   const adaFilter = !isMapelSemua(targetMapel);
 
-  // Spreadsheet yang dipakai beberapa mapel: respon tidak bisa dipastikan milik mapel yang mana -> dilewati
+  // Spreadsheet bersama tetap diproses per sesi mapel, tetapi mapel hasilnya ambigu.
   const mapelPerSumber = new Map();
   siap.forEach((p) => {
     const sm = p.r?.sumber;
@@ -487,7 +482,7 @@ export function deteksiJoki(
   });
   if (sumberBersama.size > 0) {
     hasil.catatan.push(
-      "Ada Spreadsheet respon yang dipakai beberapa mapel; respon itu dilewati dari deteksi joki. Gunakan 1 Spreadsheet per sesi.",
+      "Ada Spreadsheet respon yang dipakai beberapa mapel; indikasi waktu tetap dihitung per konfigurasi sesi, tetapi mapel respon harus diverifikasi guru.",
     );
   }
 
@@ -495,7 +490,6 @@ export function deteksiJoki(
   const kelompok = new Map(); // kunci mapel -> { disp, items }
   siap.forEach((p) => {
     if (adaFilter && !isMapelCocok(p.r.mapel, targetMapel)) return;
-    if (p.r?.sumber && sumberBersama.has(p.r.sumber)) return;
     if (logTersedia && logMulaiMs && (!p.ts || p.ts < logMulaiMs)) {
       dilewatiLama++; // respon sebelum log aktif: tidak ada bukti pembanding
       return;
@@ -554,113 +548,209 @@ export function deteksiJoki(
         .filter((e) => isMapelCocok(e?.mapel, grup.disp))
         .map((e) => ({ ...e, ms: parseTimestampMs(e?.waktu) }));
 
-    // 2. Pemilik respon yang akunnya tidak tercatat membuka ujian mapel ini
-    const mencurigakan = [];
-    let total = 0;
-    let bersesi = 0;
-    pemilik.forEach((v) => {
-      total++;
-      let curiga = false;
-      if (logTersedia) {
-        if (sesiUntuk(v.s).length > 0) bersesi++;
-        else curiga = true;
-      } else {
-        const st = String(v.s?.status_sesi || "").trim();
-        const ma = String(v.s?.mapel_aktif || "").trim();
-        if (!st && !ma) curiga = true;
-        else bersesi++;
-      }
-      if (curiga) mencurigakan.push(v);
-    });
-    if (mencurigakan.length === 0) continue;
+    const sesiTerdekatUntukRespon = (s, p) => {
+      if (!p.ts) return null;
+      return (
+        sesiUntuk(s)
+          .filter(
+            (e) =>
+              e.ms > 0 &&
+              e.ms <= p.ts + TOLERANSI_JAM_MS &&
+              p.ts - e.ms <= JENDELA_SESI_MS,
+          )
+          .sort((a, b) => Math.abs(p.ts - a.ms) - Math.abs(p.ts - b.ms))[0] ||
+        null
+      );
+    };
 
-    const andal = logTersedia && total >= 3 && bersesi / total >= 0.5;
-    const tingkat = andal ? "terdeteksi" : "mungkin";
+    const punyaSesiAktifSesuai = (s) =>
+      normText(s?.status_sesi) === "aktif" &&
+      !!String(s?.mapel_aktif || "").trim() &&
+      isMapelCocok(s?.mapel_aktif, grup.disp);
 
-    // 3. Kandidat pelaku: akun yang membuka ujian mapel ini tetapi tidak punya respon atas namanya sendiri
-    const kunciBerespon = new Set(pemilik.keys());
-    const kandidatPelaku = [];
-    if (logTersedia) {
-      daftarSiswa.forEach((x) => {
-        if (kunciBerespon.has(kunciSiswa(x))) return;
-        const waktu = sesiUntuk(x)
-          .map((e) => e.ms)
-          .filter(Boolean);
-        if (waktu.length === 0) return;
-        kandidatPelaku.push({ s: x, ms: Math.min(...waktu) });
+    const kandidatSesiUntukRespon = (p, pemilikKey) => {
+      const calonMap = new Map();
+      if (!logTersedia) return [];
+
+      daftarSiswa.forEach((calonSiswa) => {
+        const key = kunciSiswa(calonSiswa);
+        if (key === pemilikKey) return;
+        const sesiTerdekat = sesiTerdekatUntukRespon(calonSiswa, p);
+        if (!sesiTerdekat) return;
+        calonMap.set(key, {
+          s: calonSiswa,
+          deltaMs: Math.abs(p.ts - sesiTerdekat.ms),
+        });
       });
+
+      return Array.from(calonMap.values()).sort(
+        (a, b) => a.deltaMs - b.deltaMs,
+      );
+    };
+
+    const responTanpaWaktu = [];
+    const mencurigakan = [];
+    pemilik.forEach((v) => {
+      v.items.forEach((p) => {
+        if (!p.ts) {
+          responTanpaWaktu.push(p);
+          return;
+        }
+
+        const sesiPemilik = sesiTerdekatUntukRespon(v.s, p);
+        const calonSesi = kandidatSesiUntukRespon(p, kunciSiswa(v.s));
+        if (!sesiPemilik) {
+          const sesiAktif = punyaSesiAktifSesuai(v.s);
+          const calonSangatDekat = sesiAktif
+            ? calonSesi.filter(
+                (calon) => calon.deltaMs <= TOLERANSI_JAM_MS,
+              )
+            : calonSesi;
+          if (sesiAktif && calonSangatDekat.length === 0) return;
+          mencurigakan.push({
+            s: v.s,
+            p,
+            calonSesi: calonSangatDekat,
+            alasanKecurigaan: sesiAktif
+              ? `Status sesi mapel akun ${v.s.nama || "-"} aktif, tetapi tidak ada timestamp yang cocok; ada log akun lain dalam toleransi waktu.`
+              : `Respon atas nama ${v.s.nama || "-"} tidak memiliki log sesi yang cocok.`,
+          });
+          return;
+        }
+
+        const calonLebihDekat = calonSesi.filter(
+          (calon) =>
+            calon.deltaMs + TOLERANSI_JAM_MS <
+            Math.abs(p.ts - sesiPemilik.ms),
+        );
+        if (calonLebihDekat.length > 0) {
+          mencurigakan.push({
+            s: v.s,
+            p,
+            calonSesi: calonLebihDekat,
+            alasanKecurigaan: `Log sesi akun pemilik (${v.s.nama || "-"}) cocok, tetapi ada log akun lain yang lebih dekat dengan waktu respon.`,
+          });
+        }
+      });
+    });
+
+    if (responTanpaWaktu.length > 0) {
+      hasil.catatan.push(
+        `${responTanpaWaktu.length} respon tidak diperiksa karena timestamp tidak tersedia.`,
+      );
     }
 
-    mencurigakan.sort((a, b) => urutkanTerawal(a.items[0], b.items[0]));
-    const dipakai = new Set();
+    mencurigakan.sort((a, b) => urutkanTerawal(a.p, b.p));
 
-    mencurigakan.forEach((v) => {
-      const p = v.items[0];
-      let pelaku = null;
-      let kandidat = [];
-      if (logTersedia && p.ts) {
-        let calon = kandidatPelaku.filter(
-          (c) =>
-            !dipakai.has(kunciSiswa(c.s)) &&
-            c.ms <= p.ts + TOLERANSI_JAM_MS &&
-            p.ts - c.ms <= JENDELA_SESI_MS,
-        );
-        // Bila kandidat lebih dari satu: sesi sebuah akun "milik" respon terdekat setelah sesi itu dibuka.
-        // Akun yang sesinya lebih dekat ke respon LAIN (mis. sudah dipakai mengerjakan form lain) dikeluarkan.
-        if (calon.length > 1) {
-          const tsSemua = items
-            .map((it) => it.ts)
-            .filter(Boolean)
-            .sort((a, b) => a - b);
-          const sesiTerdekat = (c) => {
-            const semuaMs = sesiUntuk(c.s)
-              .map((e) => e.ms)
-              .filter(Boolean);
-            return semuaMs.some((ms) => {
-              const next = tsSemua.find((t) => t >= ms - TOLERANSI_JAM_MS);
-              return next === p.ts;
-            });
+    mencurigakan.forEach(
+      ({ s: siswaRespon, p, calonSesi, alasanKecurigaan }) => {
+        const korban = ringkasSiswa(siswaRespon);
+        const calon = calonSesi || [];
+        const kandidat = calon.slice(0, 5).map((c) => ringkasSiswa(c.s));
+        const pelaku = calon.length === 1 ? ringkasSiswa(calon[0].s) : null;
+        const tingkat = "mungkin";
+        const mapelLabel = grup.disp || "-";
+        const nilaiInfo = (() => {
+          const n = parseNilai(p.r.nilai);
+          return {
+            nilai: p.r.nilai || "-",
+            nilaiAngka: n.angka,
+            nilai100: n.skala100,
           };
-          const sempit = calon.filter(sesiTerdekat);
-          if (sempit.length >= 1) calon = sempit;
-        }
-        kandidat = calon.slice(0, 5).map((c) => ringkasSiswa(c.s));
-        // Pelaku hanya disebut bila satu-satunya akun yang cocok (hindari menuduh akun yang belum selesai)
-        if (calon.length === 1) {
-          pelaku = ringkasSiswa(calon[0].s);
-          dipakai.add(pelaku.key);
-        }
-      }
-
-      const korban = ringkasSiswa(v.s);
-      const mapelLabel = grup.disp || "-";
-      const nilaiInfo = (() => {
-        const n = parseNilai(p.r.nilai);
-        return {
-          nilai: p.r.nilai || "-",
-          nilaiAngka: n.angka,
-          nilai100: n.skala100,
+        })();
+        const alasanPelaku = pelaku
+          ? `Log sesi akun ${pelaku.nama} berdekatan dengan waktu respon.`
+          : kandidat.length > 0
+            ? "Ada beberapa akun dengan waktu sesi yang cocok; kandidat belum dapat dipastikan."
+            : "Tidak ada kandidat sesi yang cocok; log waktu tidak cukup untuk mengidentifikasi akun.";
+        const kasus = {
+          id: `${mk}|${korban.key}|${p.r.rowOrder || p.order}`,
+          mapel: mapelLabel,
+          tingkat,
+          korban,
+          pelaku,
+          kandidat: pelaku ? [] : kandidat,
+          waktuRespon: p.r.timestamp || "",
+          ...nilaiInfo,
+          raw: p.r,
+          alasan: `${alasanKecurigaan} ${alasanPelaku} Ini indikasi berbasis waktu, bukan bukti langsung.${p.r?.sumber && sumberBersama.has(p.r.sumber) ? " Spreadsheet respon dipakai beberapa mapel; mapel perlu diverifikasi." : ""}`,
         };
-      })();
-      const kasus = {
-        id: `${mk}|${korban.key}`,
-        mapel: mapelLabel,
-        tingkat,
-        korban,
-        pelaku,
-        kandidat: pelaku ? [] : kandidat,
-        waktuRespon: p.r.timestamp || "",
-        ...nilaiInfo,
-        alasan: logTersedia
-          ? `Respon a.n. ${korban.nama} masuk, tetapi akun ${korban.nama} tidak tercatat membuka ujian ${mapelLabel} di portal.`
-          : `Respon a.n. ${korban.nama} masuk, tetapi akun ${korban.nama} belum pernah membuka sesi ujian di portal.`,
-      };
-      hasil.kasus.push(kasus);
-      v.items.forEach((it) => hasil.responTidakSah.add(it.r));
-      tandai(korban.key, "korban", kasus);
-      if (pelaku) tandai(pelaku.key, "pelaku", kasus);
-    });
+        hasil.kasus.push(kasus);
+        tandai(korban.key, "korban", kasus);
+        if (pelaku) tandai(pelaku.key, "pelaku", kasus);
+      },
+    );
   }
 
   return hasil;
+}
+
+export function buatPayloadSinkronAuditForm(
+  daftarSiswa = [],
+  responList = [],
+  targetMapel = "",
+  deteksi = null,
+) {
+  if (!Array.isArray(daftarSiswa) || !Array.isArray(responList)) return [];
+
+  const kasusPerRespon = new Map(
+    (Array.isArray(deteksi?.kasus) ? deteksi.kasus : [])
+      .filter((kasus) => kasus?.raw)
+      .map((kasus) => [kasus.raw, kasus]),
+  );
+
+  return daftarSiswa.map((siswa) => {
+    const cocok = cariResponSiswa(
+      siswa,
+      responList,
+      targetMapel,
+      daftarSiswa,
+    );
+    const pertama = cocok[0]?.r || null;
+    const kasusIndikasi =
+      cocok.map((item) => kasusPerRespon.get(item.r)).find(Boolean) || null;
+    const mapel = kasusIndikasi?.mapel || targetMapel || pertama?.mapel || "-";
+    const kandidatWaktu = kasusIndikasi?.pelaku?.nama
+      ? `kandidat waktu: ${kasusIndikasi.pelaku.nama}`
+      : kasusIndikasi?.kandidat?.length
+        ? `kandidat waktu: ${kasusIndikasi.kandidat
+            .slice(0, 3)
+            .map((kandidat) => kandidat.nama)
+            .join(", ")}`
+        : "";
+    const catatanMapelAmbigu =
+      kasusIndikasi?.alasan?.includes("mapel perlu diverifikasi")
+        ? "mapel perlu diverifikasi (sheet bersama)"
+        : "";
+    const ketNilai = pertama
+      ? [
+          kasusIndikasi ? "INDIKASI LOG - PERLU VERIFIKASI" : "TEREKAM",
+          mapel,
+          kasusIndikasi?.waktuRespon
+            ? `respon terindikasi: ${kasusIndikasi.waktuRespon}`
+            : "",
+          kandidatWaktu,
+          catatanMapelAmbigu,
+          "pengirim tidak terverifikasi",
+          cocok.length > 1
+            ? `${cocok.length} respon; audit mencakup semua respon; nilai yang ditampilkan respon pertama`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" | ")
+      : `BELUM UJIAN | ${mapel}`;
+
+    return {
+      id_siswa: siswa?.id_siswa || "",
+      nama: siswa?.nama || "",
+      kelas: siswa?.kelas || "",
+      nama_form_dropdown: pertama?.nama || pertama?.namaForm || "",
+      nilai_form: pertama?.nilai || "",
+      ket_nilai: ketNilai,
+      jumlah_respon: cocok.length,
+      waktu_respon: kasusIndikasi?.waktuRespon || pertama?.timestamp || "",
+      sumber_respon: pertama?.sumber || "",
+      baris_respon: pertama?.rowOrder || "",
+    };
+  });
 }

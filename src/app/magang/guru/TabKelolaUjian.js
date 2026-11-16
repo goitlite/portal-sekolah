@@ -15,12 +15,14 @@ import {
   hapusAkunSiswaAsesmen,
   verifyPinAdminAsesmen,
   fetchRekapNilaiUjian,
+  sinkronkanAuditFormDatabase,
 } from "@/services/guruAsesmenService";
 import { getGuru } from "@/app/magang/lib/api";
 import {
   evaluasiNilaiSiswa,
   deteksiJoki,
   kunciSiswaAsesmen,
+  buatPayloadSinkronAuditForm,
 } from "@/lib/auditAsesmenHelper";
 import PanelLaporanJoki, { BadgeJoki } from "./PanelLaporanJoki";
 import ModalPrintRekapUjian from "./ModalPrintRekapUjian";
@@ -196,6 +198,7 @@ export default function TabKelolaUjian({
   const [actionLoading, setActionLoading] = useState(false);
   const [suksesMsg, setSuksesMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [auditSyncNotice, setAuditSyncNotice] = useState("");
 
   // Modal Kirim Pesan Massal
   const [showPesanModal, setShowPesanModal] = useState(false);
@@ -231,13 +234,15 @@ export default function TabKelolaUjian({
   }, []);
 
   // 2. Muat Database Siswa & Rekap Respon Ujian
-  const loadSiswa = useCallback(async () => {
+  const loadSiswa = useCallback(async (forceRefresh = false) => {
     setLoadingSiswa(true);
     setErrorMsg("");
+    setAuditSyncNotice("");
+    let dataAudit = null;
     try {
       const [resSiswa, resRekap] = await Promise.all([
         fetchSemuaSiswaAsesmen(),
-        fetchRekapNilaiUjian({ refresh: false }),
+        fetchRekapNilaiUjian({ refresh: forceRefresh }),
       ]);
       if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
         setDaftarSiswa(resSiswa.data);
@@ -250,10 +255,116 @@ export default function TabKelolaUjian({
         resRekap.status === "success" &&
         Array.isArray(resRekap.data || resRekap.responses)
       ) {
-        setResponList(resRekap.data || resRekap.responses || []);
+        const responses = resRekap.data || resRekap.responses || [];
+        setResponList(responses);
+        if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
+          dataAudit = {
+            siswa: resSiswa.data,
+            responses,
+            diagnostics: resRekap.diagnostics || {},
+          };
+        }
       }
     } catch (e) {
       setErrorMsg("Koneksi gagal: " + e.message);
+    } finally {
+      setLoadingSiswa(false);
+    }
+
+    if (!dataAudit) {
+      setAuditSyncNotice(
+        "Audit L-N belum disinkronkan: data siswa atau sheet respon gagal dimuat.",
+      );
+      return;
+    }
+
+    const diagnostics = dataAudit.diagnostics;
+    const namaFormTidakTerdeteksi = (diagnostics.peringatan || []).some(
+      (item) =>
+        String(item.pesan || "")
+          .toLowerCase()
+          .includes('kolom "nama" tidak ditemukan'),
+    );
+    if (
+      !(diagnostics.sheetDibaca > 0) ||
+      diagnostics.ujianError ||
+      (diagnostics.gagalBaca || []).length > 0 ||
+      namaFormTidakTerdeteksi
+    ) {
+      setAuditSyncNotice(
+        "Audit L-N tidak disinkronkan karena ada sheet respon yang belum berhasil dibaca lengkap.",
+      );
+      return;
+    }
+
+    const semuaSumberLengkap =
+      (diagnostics.tanpaLink || []).length === 0 &&
+      (diagnostics.linkTidakValid || []).length === 0;
+    const hasilDeteksi = deteksiJoki(dataAudit.siswa, dataAudit.responses);
+    const semuaAudit = buatPayloadSinkronAuditForm(
+      dataAudit.siswa,
+      dataAudit.responses,
+      "",
+      hasilDeteksi,
+    );
+    const siswaUntukSinkron = semuaSumberLengkap
+      ? semuaAudit.map((item) =>
+          item.jumlah_respon === 0
+            ? { ...item, ket_nilai: "BELUM UJIAN | Semua Mapel" }
+            : item,
+        )
+      : semuaAudit.filter((item) => item.jumlah_respon > 0);
+    const siswaValid = siswaUntukSinkron.filter((siswa) =>
+      String(siswa.kelas || "").trim(),
+    );
+
+    if (siswaValid.length === 0) {
+      setAuditSyncNotice(
+        "Tidak ada respon siswa yang dapat dipetakan ke kelas untuk sinkronisasi L-N.",
+      );
+      return;
+    }
+
+    setLoadingSiswa(true);
+    setAuditSyncNotice("Sedang menyinkronkan ringkasan respon ke kolom L-N...");
+    let updated = 0;
+    let tidakDitemukan = 0;
+    const gagal = [];
+    try {
+      for (let start = 0; start < siswaValid.length; start += 500) {
+        const hasil = await sinkronkanAuditFormDatabase({
+          kelas: "SEMUA",
+          mapel: "Semua Mapel",
+          siswa: siswaValid.slice(start, start + 500),
+        });
+        if (hasil?.status !== "success") {
+          gagal.push(hasil?.message || "respons server tidak valid");
+          continue;
+        }
+        updated += hasil.updated || 0;
+        tidakDitemukan += Array.isArray(hasil.tidakDitemukan)
+          ? hasil.tidakDitemukan.length
+          : 0;
+      }
+
+      if (gagal.length > 0) {
+        setAuditSyncNotice(
+          `Audit L-N diperbarui untuk ${updated} siswa; sebagian batch gagal: ${gagal.slice(0, 3).join("; ")}`,
+        );
+        return;
+      }
+
+      setAuditSyncNotice(
+        `Audit L-N diperbarui untuk ${updated} siswa; ${tidakDitemukan} data tidak cocok. Untuk semua mapel ditampilkan respon pertama yang tercatat; identitas pengirim tidak terverifikasi.`,
+      );
+      const terbaru = await fetchSemuaSiswaAsesmen();
+      if (terbaru?.status === "success" && Array.isArray(terbaru.data)) {
+        setDaftarSiswa(terbaru.data);
+      }
+    } catch (e) {
+      setAuditSyncNotice(
+        `Sinkronisasi audit L-N gagal: ${e?.message || "kesalahan tidak diketahui"}`,
+      );
     } finally {
       setLoadingSiswa(false);
     }
@@ -918,7 +1029,7 @@ export default function TabKelolaUjian({
             <button
               onClick={() => {
                 loadUjian();
-                loadSiswa();
+                loadSiswa(true);
               }}
               disabled={loadingUjian || loadingSiswa || actionLoading}
               className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold backdrop-blur-xs border border-white/20 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
@@ -998,6 +1109,15 @@ export default function TabKelolaUjian({
           >
             ✕
           </button>
+        </div>
+      )}
+      {auditSyncNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs font-semibold text-amber-900 shadow-sm"
+        >
+          {auditSyncNotice}
         </div>
       )}
 
