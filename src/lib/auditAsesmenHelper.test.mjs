@@ -73,7 +73,7 @@ test("keeps an account with its own response as a time-based candidate", () => {
   assert.match(auditBudi.ket_nilai, /^INDIKASI LOG - PERLU VERIFIKASI/);
 });
 
-test("flags a closer alternate session even when the form-name owner has a session", () => {
+test("does not flag a closer late login when the form-name owner has a valid session", () => {
   const siswa = [
     {
       nama: "Dianto Maha",
@@ -104,14 +104,112 @@ test("flags a closer alternate session even when the form-name owner has a sessi
   ];
 
   const result = deteksiJoki(siswa, responses, "PKPJ 2026");
-  const kasusDianto = result.kasus.find(
-    (kasus) => kasus.korban.nama === "Dianto Maha",
+  assert.equal(result.kasus.length, 0);
+});
+
+test("reports a shared device as a supporting signal when both accounts have valid sessions", () => {
+  const siswa = [
+    {
+      nama: "Dianto Maha",
+      kelas: "XI TKJ 1",
+      id_siswa: "dianto-id",
+      riwayat_sesi: [
+        {
+          mapel: "PKPJ 2026",
+          waktu: "2026-11-14T07:30:00+07:00",
+          device: "shared-device",
+        },
+      ],
+    },
+    {
+      nama: "Bella Julianti",
+      kelas: "XI TKJ 1",
+      id_siswa: "bella-id",
+      riwayat_sesi: [
+        {
+          mapel: "PKPJ 2026",
+          waktu: "2026-11-14T08:15:00+07:00",
+          device: "shared-device",
+        },
+        {
+          mapel: "PKPJ 2026",
+          waktu: "2026-11-14T08:19:00+07:00",
+          device: "another-device",
+        },
+      ],
+    },
+  ];
+  const responses = [
+    {
+      nama: "Dianto Maha",
+      kelas: "XI TKJ 1",
+      mapel: "PKPJ 2026",
+      nilai: "90",
+      timestamp: "2026-11-14T08:20:00+07:00",
+    },
+  ];
+
+  const result = deteksiJoki(siswa, responses, "PKPJ 2026");
+  const [auditDianto] = buatPayloadSinkronAuditForm(
+    siswa,
+    responses,
+    "PKPJ 2026",
+    result,
+  );
+  const [kasus] = result.kasus;
+
+  assert.ok(kasus);
+  assert.equal(kasus.pelaku.nama, "Bella Julianti");
+  assert.equal(kasus.jenisIndikasi, "perangkat_sama");
+  assert.match(kasus.alasan, /device_id yang sama/);
+  assert.match(auditDianto.ket_nilai, /indikasi device_id sama/);
+});
+
+test("applies the two-hour boundary inclusively and excludes older sessions", () => {
+  const pemilik = {
+    nama: "Dianto Maha",
+    kelas: "XI TKJ 1",
+    id_siswa: "dianto-id",
+    riwayat_sesi: [
+      { mapel: "PKPJ 2026", waktu: "2026-11-14T06:20:00+07:00" },
+    ],
+  };
+  const kandidat = {
+    nama: "Bella Julianti",
+    kelas: "XI TKJ 1",
+    id_siswa: "bella-id",
+    riwayat_sesi: [
+      { mapel: "PKPJ 2026", waktu: "2026-11-14T08:15:00+07:00" },
+    ],
+  };
+  const responses = [
+    {
+      nama: "Dianto Maha",
+      kelas: "XI TKJ 1",
+      mapel: "PKPJ 2026",
+      nilai: "90",
+      timestamp: "2026-11-14T08:20:00+07:00",
+    },
+  ];
+
+  assert.equal(
+    deteksiJoki([pemilik, kandidat], responses, "PKPJ 2026").kasus.length,
+    0,
+  );
+  const diLuarBatas = {
+    ...pemilik,
+    riwayat_sesi: [
+      { mapel: "PKPJ 2026", waktu: "2026-11-14T06:19:59+07:00" },
+    ],
+  };
+  const hasil = deteksiJoki(
+    [diLuarBatas, kandidat],
+    responses,
+    "PKPJ 2026",
   );
 
-  assert.ok(kasusDianto);
-  assert.equal(kasusDianto.pelaku.nama, "Bella Julianti");
-  assert.equal(kasusDianto.tingkat, "mungkin");
-  assert.match(kasusDianto.alasan, /lebih dekat/);
+  assert.equal(hasil.kasus.length, 1);
+  assert.equal(hasil.kasus[0].pelaku.nama, "Bella Julianti");
 });
 
 test("uses active session metadata when the session log entry is missing", () => {

@@ -406,7 +406,7 @@ export function evaluasiNilaiSiswa(
 // Google Form tidak mencatat akun portal pengirim. Karena itu pencocokan nama dan waktu
 // hanya menghasilkan indikasi untuk ditinjau guru, bukan bukti identitas atau pelanggaran.
 
-const JENDELA_SESI_MS = 6 * 3600 * 1000;
+const JENDELA_SESI_MS = 2 * 3600 * 1000;
 const TOLERANSI_JAM_MS = 10 * 60 * 1000;
 
 const ringkasSiswa = (s) => ({
@@ -548,20 +548,20 @@ export function deteksiJoki(
         .filter((e) => isMapelCocok(e?.mapel, grup.disp))
         .map((e) => ({ ...e, ms: parseTimestampMs(e?.waktu) }));
 
-    const sesiTerdekatUntukRespon = (s, p) => {
-      if (!p.ts) return null;
-      return (
-        sesiUntuk(s)
-          .filter(
-            (e) =>
-              e.ms > 0 &&
-              e.ms <= p.ts + TOLERANSI_JAM_MS &&
-              p.ts - e.ms <= JENDELA_SESI_MS,
-          )
-          .sort((a, b) => Math.abs(p.ts - a.ms) - Math.abs(p.ts - b.ms))[0] ||
-        null
-      );
+    const sesiCocokUntukRespon = (s, p) => {
+      if (!p.ts) return [];
+      return sesiUntuk(s)
+        .filter(
+          (e) =>
+            e.ms > 0 &&
+            e.ms <= p.ts + TOLERANSI_JAM_MS &&
+            p.ts - e.ms <= JENDELA_SESI_MS,
+        )
+        .sort((a, b) => Math.abs(p.ts - a.ms) - Math.abs(p.ts - b.ms));
     };
+
+    const sesiTerdekatUntukRespon = (s, p) =>
+      sesiCocokUntukRespon(s, p)[0] || null;
 
     const punyaSesiAktifSesuai = (s) =>
       normText(s?.status_sesi) === "aktif" &&
@@ -575,10 +575,13 @@ export function deteksiJoki(
       daftarSiswa.forEach((calonSiswa) => {
         const key = kunciSiswa(calonSiswa);
         if (key === pemilikKey) return;
-        const sesiTerdekat = sesiTerdekatUntukRespon(calonSiswa, p);
+        const sesiCocok = sesiCocokUntukRespon(calonSiswa, p);
+        const sesiTerdekat = sesiCocok[0];
         if (!sesiTerdekat) return;
         calonMap.set(key, {
           s: calonSiswa,
+          sesi: sesiTerdekat,
+          sesiCocok,
           deltaMs: Math.abs(p.ts - sesiTerdekat.ms),
         });
       });
@@ -618,17 +621,22 @@ export function deteksiJoki(
           return;
         }
 
-        const calonLebihDekat = calonSesi.filter(
-          (calon) =>
-            calon.deltaMs + TOLERANSI_JAM_MS <
-            Math.abs(p.ts - sesiPemilik.ms),
-        );
-        if (calonLebihDekat.length > 0) {
+        const devicePemilik = String(sesiPemilik.device || "").trim();
+        const calonPerangkatSama = devicePemilik
+          ? calonSesi.filter((calon) =>
+              calon.sesiCocok.some(
+                (sesi) => String(sesi.device || "").trim() === devicePemilik,
+              ),
+            )
+          : [];
+
+        if (calonPerangkatSama.length > 0) {
           mencurigakan.push({
             s: v.s,
             p,
-            calonSesi: calonLebihDekat,
-            alasanKecurigaan: `Log sesi akun pemilik (${v.s.nama || "-"}) cocok, tetapi ada log akun lain yang lebih dekat dengan waktu respon.`,
+            calonSesi: calonPerangkatSama,
+            alasanKecurigaan: `Sesi akun pemilik cocok, tetapi akun lain tercatat menggunakan device_id yang sama (${devicePemilik}) pada sesi mapel ini.`,
+            jenisIndikasi: "perangkat_sama",
           });
         }
       });
@@ -643,7 +651,7 @@ export function deteksiJoki(
     mencurigakan.sort((a, b) => urutkanTerawal(a.p, b.p));
 
     mencurigakan.forEach(
-      ({ s: siswaRespon, p, calonSesi, alasanKecurigaan }) => {
+      ({ s: siswaRespon, p, calonSesi, alasanKecurigaan, jenisIndikasi }) => {
         const korban = ringkasSiswa(siswaRespon);
         const calon = calonSesi || [];
         const kandidat = calon.slice(0, 5).map((c) => ringkasSiswa(c.s));
@@ -673,7 +681,8 @@ export function deteksiJoki(
           waktuRespon: p.r.timestamp || "",
           ...nilaiInfo,
           raw: p.r,
-          alasan: `${alasanKecurigaan} ${alasanPelaku} Ini indikasi berbasis waktu, bukan bukti langsung.${p.r?.sumber && sumberBersama.has(p.r.sumber) ? " Spreadsheet respon dipakai beberapa mapel; mapel perlu diverifikasi." : ""}`,
+          jenisIndikasi: jenisIndikasi || "waktu",
+          alasan: `${alasanKecurigaan} ${alasanPelaku} Ini indikasi untuk verifikasi, bukan bukti identitas pengirim.${p.r?.sumber && sumberBersama.has(p.r.sumber) ? " Spreadsheet respon dipakai beberapa mapel; mapel perlu diverifikasi." : ""}`,
         };
         hasil.kasus.push(kasus);
         tandai(korban.key, "korban", kasus);
@@ -722,6 +731,10 @@ export function buatPayloadSinkronAuditForm(
       kasusIndikasi?.alasan?.includes("mapel perlu diverifikasi")
         ? "mapel perlu diverifikasi (sheet bersama)"
         : "";
+    const catatanPerangkatSama =
+      kasusIndikasi?.jenisIndikasi === "perangkat_sama"
+        ? "indikasi device_id sama"
+        : "";
     const ketNilai = pertama
       ? [
           kasusIndikasi ? "INDIKASI LOG - PERLU VERIFIKASI" : "TEREKAM",
@@ -731,6 +744,7 @@ export function buatPayloadSinkronAuditForm(
             : "",
           kandidatWaktu,
           catatanMapelAmbigu,
+          catatanPerangkatSama,
           "pengirim tidak terverifikasi",
           cocok.length > 1
             ? `${cocok.length} respon; audit mencakup semua respon; nilai yang ditampilkan respon pertama`
