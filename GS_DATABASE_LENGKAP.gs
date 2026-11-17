@@ -9,6 +9,7 @@
 
 const SPREADSHEET_ID = "1O7mZWHny3f-MJa5WpejEKDL29VgFmUlyofabyZ5Iy2o";
 const SHEET_NAME = "database";
+const PORTAL_AUTH_URL = "https://script.google.com/macros/s/AKfycbwL6gJ9rVKps7EmqKO0o928iwbFlqk-xQDY4za0PcIPh0f-kkRTyu5XCavvZ-9bsZA/exec";
 
 // KUNCI RAHASIA AKSES GURU (Wajib cocok dengan GURU_KEY di Next.js .env.local)
 const GURU_KEY = "SMKN1TELKU_GURU_ASESMEN_SECURE_2026";
@@ -123,6 +124,9 @@ function doPost(e) {
     else if (action === "kunci_sesi_ujian") {
       return handleKunciSesiUjian(params);
     }
+    else if (action === "android_kunci_sesi_ujian") {
+      return handleAndroidKunciSesiUjian(params);
+    }
     // --- AUDIT FORM: data respon dibaca portal dari sheet_respon_url ---
     else if (action === "guru_sync_form_audit") {
       return handleGuruSyncFormAudit(params);
@@ -162,18 +166,134 @@ function verifikasiGuruKey(params) {
 // =====================================================
 // 0. KUNCI SESI PERANGKAT UJIAN (1 NAMA 1 HP - ANTI JOKI)
 // =====================================================
+function handleAndroidKunciSesiUjian(params) {
+  const portalToken = String(params.portal_token || "").trim();
+  const requestedId = String(params.id_siswa || "").trim();
+  const deviceId = String(params.device_id || "").trim();
+  const mapel = String(params.mapel || "").trim();
+
+  if (!portalToken || !requestedId || !deviceId || !mapel) {
+    return responseJSON({
+      status: "error",
+      code: "INVALID_REQUEST",
+      message: "Sesi, ID siswa, perangkat, atau mata pelajaran tidak lengkap."
+    });
+  }
+
+  let portalSession;
+  try {
+    const response = UrlFetchApp.fetch(PORTAL_AUTH_URL, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({
+        action: "validateSession",
+        token: portalToken
+      }),
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      return responseJSON({
+        status: "error",
+        code: "AUTH_HTTP_ERROR",
+        message: "Portal tidak dapat memverifikasi sesi (HTTP " + response.getResponseCode() + ")."
+      });
+    }
+
+    let result = JSON.parse(response.getContentText());
+    if (
+      !result.success &&
+      /^Action tidak dikenali:\s*validateSession$/i.test(String(result.message || "").trim())
+    ) {
+      const loginResponse = UrlFetchApp.fetch(PORTAL_AUTH_URL, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          action: "login",
+          params: { id: requestedId }
+        }),
+        muteHttpExceptions: true
+      });
+
+      if (loginResponse.getResponseCode() !== 200) {
+        return responseJSON({
+          status: "error",
+          code: "AUTH_HTTP_ERROR",
+          message: "Portal tidak dapat memverifikasi akun (HTTP " + loginResponse.getResponseCode() + ")."
+        });
+      }
+      result = JSON.parse(loginResponse.getContentText());
+    }
+
+    if (!result.success || !result.data) {
+      return responseJSON({
+        status: "error",
+        code: result.tokenExpired ? "AUTH_EXPIRED" : "AUTH_INVALID",
+        message: result.message || "Sesi Portal tidak valid. Silakan login kembali."
+      });
+    }
+    portalSession = result.data;
+  } catch (err) {
+    Logger.log("Gagal memverifikasi sesi Portal untuk kunci Android: " + (err && err.stack ? err.stack : err));
+    return responseJSON({
+      status: "error",
+      code: "AUTH_UNAVAILABLE",
+      message: "Tidak dapat memverifikasi sesi Portal. Periksa koneksi lalu coba lagi."
+    });
+  }
+
+  const sessionId = String(portalSession.id || "").trim();
+  if (portalSession.role !== "siswa" || sessionId !== requestedId) {
+    return responseJSON({
+      status: "error",
+      code: "AUTH_INVALID",
+      message: "Sesi Portal tidak cocok dengan akun siswa ini."
+    });
+  }
+
+  const rawNama = String(portalSession.nama || "").trim();
+  const namaMatch = rawNama.match(/^(.*?)\s*\[([^\]]+)\]\s*$/);
+  const nama = namaMatch ? namaMatch[1].trim() : rawNama;
+  const kelas = String(portalSession.kelas || (namaMatch ? namaMatch[2] : "")).trim();
+  if (!nama || !kelas) {
+    return responseJSON({
+      status: "error",
+      code: "PROFILE_INCOMPLETE",
+      message: "Nama atau kelas belum terdaftar dengan lengkap. Hubungi guru."
+    });
+  }
+
+  return handleKunciSesiUjian({
+    id_siswa: sessionId,
+    nama: nama,
+    kelas: kelas,
+    mapel: mapel,
+    device_id: deviceId,
+    require_id_match: true,
+    source: "portal"
+  });
+}
+
 function handleKunciSesiUjian(params) {
   const nama = (params.nama || "").trim().toLowerCase();
   const kelas = (params.kelas || "").trim().toLowerCase();
   const idSiswa = (params.id_siswa || "").trim();
   const mapel = (params.mapel || "").trim();
   const deviceId = (params.device_id || "").trim();
+  const requireIdMatch = params.require_id_match === true ||
+    String(params.require_id_match || "").trim().toLowerCase() === "true";
 
-  if (!nama && !idSiswa) {
-    return responseJSON({ status: "error", message: "Identitas siswa tidak lengkap" });
+  if ((!nama && !idSiswa) || (requireIdMatch && !idSiswa) || !deviceId || !mapel) {
+    return responseJSON({
+      status: "error",
+      code: "INVALID_REQUEST",
+      message: "Identitas siswa, perangkat, atau mata pelajaran tidak lengkap."
+    });
   }
 
+  const scriptLock = LockService.getScriptLock();
   try {
+    scriptLock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_NAME);
     const data = sheet.getDataRange().getValues();
@@ -184,8 +304,9 @@ function handleKunciSesiUjian(params) {
       let rKelas = String(data[i][1] || "").trim().toLowerCase();
       let rId = String(data[i][2] || "").trim();
 
-      if ((idSiswa && idSiswa !== "-" && rId === idSiswa) ||
-          (nama && kelas && rNama === nama && rKelas === kelas)) {
+      const matchesId = idSiswa && idSiswa !== "-" && rId === idSiswa;
+      const matchesLegacyIdentity = !requireIdMatch && nama && kelas && rNama === nama && rKelas === kelas;
+      if (matchesId || matchesLegacyIdentity) {
         rowIndex = i + 1;
 
         let existingDevId = String(data[i][8] || "").trim();
@@ -248,6 +369,8 @@ function handleKunciSesiUjian(params) {
     });
   } catch (err) {
     return responseJSON({ status: "error", message: err.toString() });
+  } finally {
+    if (scriptLock.hasLock()) scriptLock.releaseLock();
   }
 }
 
@@ -846,7 +969,9 @@ function handleGuruResetDevice(params) {
   const kelas = (params.kelas || "").trim().toUpperCase();
   const nama = (params.nama || "").trim().toLowerCase();
 
+  const scriptLock = LockService.getScriptLock();
   try {
+    scriptLock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_NAME);
     const data = sheet.getDataRange().getValues();
@@ -882,6 +1007,8 @@ function handleGuruResetDevice(params) {
     });
   } catch (err) {
     return responseJSON({ status: "error", message: err.toString() });
+  } finally {
+    if (scriptLock.hasLock()) scriptLock.releaseLock();
   }
 }
 

@@ -181,11 +181,10 @@ export async function kunciSesiUjian({ nama, kelas, idSiswa, mapel, deviceId }) 
 
     return await response.json();
   } catch (error) {
-    // Jika offline/gagal koneksi, izinkan lanjut agar tidak memblokir siswa saat koneksi lambat
     console.warn("Gagal menghubungi server kunci sesi:", error);
     return {
-      status: "success",
-      message: "Koneksi offline, sesi lokal digunakan",
+      status: "error",
+      message: "Tidak dapat memverifikasi perangkat. Periksa koneksi lalu coba lagi.",
     };
   }
 }

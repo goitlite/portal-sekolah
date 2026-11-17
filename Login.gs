@@ -4,6 +4,32 @@
  */
 
 /**
+ * Ambil identitas siswa yang dipakai oleh aplikasi Portal dan Android.
+ * Nama lama yang menyertakan [kelas] tetap dipertahankan untuk kompatibilitas.
+ */
+function getSiswaProfileById_(id) {
+  const siswa = findDataByColumn(SHEETS.SISWA, COLUMNS.SISWA.ID, id);
+  if (!siswa) return null;
+
+  const nama = String(siswa[COLUMNS.SISWA.NAMA] || '').trim();
+  const kelasColumn = COLUMNS.SISWA.KELAS;
+  let kelas = kelasColumn ? String(siswa[kelasColumn] || '').trim() : '';
+  const kelasDalamNama = nama.match(/\[([^\]]+)\]\s*$/);
+  if (!kelas && kelasDalamNama) {
+    kelas = kelasDalamNama[1].trim();
+  }
+
+  return {
+    id: siswa[COLUMNS.SISWA.ID],
+    nama: nama,
+    kelas: kelas,
+    namaGuru: siswa[COLUMNS.SISWA.NAMA_GURU],
+    idGuru: siswa[COLUMNS.SISWA.ID_GURU],
+    tempatMagang: siswa[COLUMNS.SISWA.TEMPAT_MAGANG]
+  };
+}
+
+/**
  * Login dengan ID
  * Pengecekan urutan: Admin -> Kepsek -> Guru -> Siswa
  * @param {string} id - ID yang digunakan untuk login
@@ -70,15 +96,16 @@ function loginById(id) {
         nama: guru[COLUMNS.ADMIN_GURU.NAMA_GURU]
       };
     } else {
-      const siswa = findDataByColumn(SHEETS.SISWA, COLUMNS.SISWA.ID, cleanId);
+      const siswa = getSiswaProfileById_(cleanId);
       if (siswa) {
         userData = {
           role: 'siswa',
-          id: siswa[COLUMNS.SISWA.ID],
-          nama: siswa[COLUMNS.SISWA.NAMA],
-          namaGuru: siswa[COLUMNS.SISWA.NAMA_GURU],
-          idGuru: siswa[COLUMNS.SISWA.ID_GURU],
-          tempatMagang: siswa[COLUMNS.SISWA.TEMPAT_MAGANG]
+          id: siswa.id,
+          nama: siswa.nama,
+          kelas: siswa.kelas,
+          namaGuru: siswa.namaGuru,
+          idGuru: siswa.idGuru,
+          tempatMagang: siswa.tempatMagang
         };
       }
     }
@@ -115,6 +142,7 @@ function loginById(id) {
     id: userData.id,
     role: userData.role,
     nama: userData.nama,
+    kelas: userData.kelas || '',
     loginAt: new Date().getTime()
   };
 

@@ -647,11 +647,11 @@ export default function ExamPage() {
             deviceId: devId,
           });
 
-          if (lockRes && lockRes.status === "error") {
+          if (!lockRes || lockRes.status !== "success") {
             setLoadingToken(false);
             setTokenMessage(
-              lockRes.message ||
-                "Akses ditolak: Akun Anda sedang aktif ujian di perangkat lain.",
+              (lockRes && lockRes.message) ||
+                "Perangkat tidak dapat diverifikasi. Periksa koneksi atau hubungi guru.",
             );
             setTokenModal(true);
 
@@ -662,6 +662,16 @@ export default function ExamPage() {
           }
         } catch (errLock) {
           console.warn("Gagal validasi kunci sesi:", errLock);
+          setLoadingToken(false);
+          setTokenMessage(
+            "Perangkat tidak dapat diverifikasi. Periksa koneksi atau hubungi guru.",
+          );
+          setTokenModal(true);
+
+          setTimeout(() => {
+            enterFullscreen();
+          }, 300);
+          return;
         }
 
         setExamLink(result.link);

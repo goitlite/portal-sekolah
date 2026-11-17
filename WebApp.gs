@@ -202,6 +202,30 @@ function doPost(e) {
     else if (action === 'adminLogin') {
       response = adminLogin(params.pin);
     }
+    else if (action === 'validateSession') {
+      var sessionProfile = {
+        id: sessionUser.id,
+        role: sessionUser.role,
+        nama: sessionUser.nama,
+        kelas: sessionUser.kelas || ''
+      };
+      if (sessionUser.role === 'siswa') {
+        var currentStudent = getSiswaProfileById_(sessionUser.id);
+        if (!currentStudent) {
+          response = errorResponse('Akun siswa tidak ditemukan atau sudah tidak aktif.');
+        } else {
+          sessionProfile = {
+            id: currentStudent.id,
+            role: 'siswa',
+            nama: currentStudent.nama,
+            kelas: currentStudent.kelas
+          };
+          response = successResponse('Sesi valid', sessionProfile);
+        }
+      } else {
+        response = successResponse('Sesi valid', sessionProfile);
+      }
+    }
 
     // ============================================
     // SUPER ADMIN
