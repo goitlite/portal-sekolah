@@ -5,6 +5,7 @@
 // A=nama, B=kelas, C=id_siswa, D=wa, E=isi_pengaduan, F=waktu_update, G=pesan, H=Banyak Pelanggaran
 // I=device_id, J=mapel_aktif, K=status_sesi
 // L=Nama Form Dropdown, M=Nilai Form, N=Ket Nilai
+// Sheet KONFIG_KUNCI_HP mengatur cakupan global/sesi/siswa; tanpa aturan, kunci HP nonaktif.
 // =====================================================
 
 const SPREADSHEET_ID = "1O7mZWHny3f-MJa5WpejEKDL29VgFmUlyofabyZ5Iy2o";
@@ -18,6 +19,137 @@ const LOG_SHEET_NAME = "LOG_SESI";
 const LOG_HEADER = ["waktu", "id_siswa", "nama", "kelas", "mapel", "device_id"];
 const LOG_MAX_PER_SISWA = 60;
 const LOG_DEDUPE_MS = 2 * 60 * 1000;
+const HP_LOCK_CONFIG_SHEET = "KONFIG_KUNCI_HP";
+const HP_LOCK_CONFIG_HEADER = ["scope", "kelas", "mapel", "id_siswa", "aktif", "waktu_update", "diubah_oleh"];
+
+function normalisasiKunciHp_(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function ambilKonfigurasiKunciHp_(ss, buatJikaTidakAda) {
+  let sheet = ss.getSheetByName(HP_LOCK_CONFIG_SHEET);
+  if (!sheet && buatJikaTidakAda) {
+    sheet = ss.insertSheet(HP_LOCK_CONFIG_SHEET);
+    sheet.getRange(1, 1, 1, HP_LOCK_CONFIG_HEADER.length).setValues([HP_LOCK_CONFIG_HEADER]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function bacaKebijakanKunciHp_(ss) {
+  const sheet = ambilKonfigurasiKunciHp_(ss, false);
+  const policy = { global: false, sessions: [], students: [] };
+  if (!sheet || sheet.getLastRow() < 2) return policy;
+
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, HP_LOCK_CONFIG_HEADER.length).getValues();
+  values.forEach(function (row) {
+    if (row[4] !== true && String(row[4] || "").trim().toLowerCase() !== "true") return;
+    const scope = String(row[0] || "").trim().toLowerCase();
+    if (scope === "global") {
+      policy.global = true;
+    } else if (scope === "session") {
+      const kelas = normalisasiKunciHp_(row[1]);
+      const mapel = normalisasiKunciHp_(row[2]);
+      if (kelas && mapel) policy.sessions.push({ kelas: kelas, mapel: mapel });
+    } else if (scope === "student") {
+      const idSiswa = String(row[3] || "").trim();
+      if (idSiswa) policy.students.push(idSiswa);
+    }
+  });
+  return policy;
+}
+
+function kunciHpDiwajibkan_(policy, params) {
+  if (policy.global) return true;
+  const idSiswa = String(params.id_siswa || "").trim();
+  if (idSiswa && policy.students.indexOf(idSiswa) !== -1) return true;
+
+  const kelas = normalisasiKunciHp_(params.kelas);
+  const mapel = normalisasiKunciHp_(params.mapel);
+  return policy.sessions.some(function (session) {
+    return session.kelas === kelas && session.mapel === mapel;
+  });
+}
+
+function simpanAturanKunciHp_(ss, scope, params, aktif, diubahOleh) {
+  const sheet = ambilKonfigurasiKunciHp_(ss, true);
+  const kelas = scope === "session" ? normalisasiKunciHp_(params.kelas) : "";
+  const mapel = scope === "session" ? normalisasiKunciHp_(params.mapel) : "";
+  const idSiswa = scope === "student" ? String(params.id_siswa || "").trim() : "";
+  const last = sheet.getLastRow();
+  const rows = last > 1
+    ? sheet.getRange(2, 1, last - 1, HP_LOCK_CONFIG_HEADER.length).getValues()
+    : [];
+  let targetRow = -1;
+
+  for (let i = 0; i < rows.length; i++) {
+    const sameScope = String(rows[i][0] || "").trim().toLowerCase() === scope;
+    const sameTarget = scope === "global"
+      ? true
+      : scope === "session"
+        ? normalisasiKunciHp_(rows[i][1]) === kelas && normalisasiKunciHp_(rows[i][2]) === mapel
+        : String(rows[i][3] || "").trim() === idSiswa;
+    if (sameScope && sameTarget) {
+      targetRow = i + 2;
+      break;
+    }
+  }
+
+  const row = [scope, kelas, mapel, idSiswa, aktif === true, new Date(), String(diubahOleh || "").trim()];
+  if (targetRow === -1) {
+    sheet.appendRow(row);
+  } else {
+    sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
+  }
+}
+
+function hapusIkatanPerangkatHp_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  const bindings = sheet.getRange(2, 9, lastRow - 1, 3).getValues();
+  let cleared = 0;
+  bindings.forEach(function (row) {
+    const hasBinding = String(row[0] || "").trim() || String(row[1] || "").trim() ||
+      String(row[2] || "").trim().toUpperCase() === "AKTIF";
+    if (hasBinding) {
+      row[0] = "";
+      row[1] = "";
+      row[2] = "RESET";
+      cleared++;
+    }
+  });
+  if (cleared) sheet.getRange(2, 9, bindings.length, 3).setValues(bindings);
+  return cleared;
+}
+
+function hapusIkatanYangTidakDiperlukan_(sheet, policy) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  const data = sheet.getDataRange().getValues();
+  const bindings = data.slice(1).map(function (row) {
+    return [row[8] || "", row[9] || "", row[10] || ""];
+  });
+  let cleared = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const hasBinding = String(data[i][8] || "").trim() ||
+      String(data[i][9] || "").trim() ||
+      String(data[i][10] || "").trim().toUpperCase() === "AKTIF";
+    if (!hasBinding || kunciHpDiwajibkan_(policy, {
+      id_siswa: data[i][2],
+      kelas: data[i][1],
+      mapel: data[i][9]
+    })) continue;
+
+    bindings[i - 1] = ["", "", "RESET"];
+    cleared++;
+  }
+
+  if (cleared) sheet.getRange(2, 9, bindings.length, 3).setValues(bindings);
+  return cleared;
+}
 
 function ambilSheetLog(ss, buatJikaTidakAda) {
   let log = ss.getSheetByName(LOG_SHEET_NAME);
@@ -140,6 +272,9 @@ function doPost(e) {
     }
     else if (action === "guru_reset_device") {
       return handleGuruResetDevice(params);
+    }
+    else if (action === "guru_kunci_hp_set") {
+      return handleGuruSetKunciHp(params);
     }
     else if (action === "guru_kirim_pesan") {
       return handleGuruKirimPesan(params);
@@ -283,21 +418,43 @@ function handleKunciSesiUjian(params) {
   const requireIdMatch = params.require_id_match === true ||
     String(params.require_id_match || "").trim().toLowerCase() === "true";
 
-  if ((!nama && !idSiswa) || (requireIdMatch && !idSiswa) || !deviceId || !mapel) {
+  if ((!nama && !idSiswa) || (requireIdMatch && !idSiswa) || !mapel) {
     return responseJSON({
       status: "error",
       code: "INVALID_REQUEST",
-      message: "Identitas siswa, perangkat, atau mata pelajaran tidak lengkap."
+      message: "Identitas siswa atau mata pelajaran tidak lengkap."
     });
   }
 
   const scriptLock = LockService.getScriptLock();
   try {
-    scriptLock.waitLock(10000);
+    try {
+      scriptLock.waitLock(10000);
+    } catch (lockError) {
+      return responseJSON({
+        status: "error",
+        code: "SERVER_BUSY",
+        message: "Server sibuk, coba lagi."
+      });
+    }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_NAME);
+    const policy = bacaKebijakanKunciHp_(ss);
+    const kunciDiwajibkan = kunciHpDiwajibkan_(policy, {
+      id_siswa: idSiswa,
+      kelas: kelas,
+      mapel: mapel
+    });
     const data = sheet.getDataRange().getValues();
     let rowIndex = -1;
+
+    if (kunciDiwajibkan && !deviceId) {
+      return responseJSON({
+        status: "error",
+        code: "INVALID_REQUEST",
+        message: "Identitas perangkat tidak tersedia untuk sesi yang mewajibkan kunci HP."
+      });
+    }
 
     for (let i = 1; i < data.length; i++) {
       let rNama = String(data[i][0] || "").trim().toLowerCase();
@@ -312,7 +469,8 @@ function handleKunciSesiUjian(params) {
         let existingDevId = String(data[i][8] || "").trim();
         let statusSesi    = String(data[i][10] || "").trim().toUpperCase();
 
-        if (statusSesi === "AKTIF" && existingDevId && deviceId && existingDevId !== deviceId) {
+        if (kunciDiwajibkan && statusSesi === "AKTIF" && existingDevId &&
+            deviceId && existingDevId !== deviceId) {
           return responseJSON({
             status: "error",
             message: "AKSES DITOLAK!\n\nNama (" + (data[i][0] || nama) + ") sudah terdaftar aktif ujian di perangkat lain.\n\nMinta Guru/Admin untuk mereset kunci HP Anda."
@@ -320,6 +478,62 @@ function handleKunciSesiUjian(params) {
         }
         break;
       }
+    }
+
+    if (!kunciDiwajibkan) {
+      const isPortal = (params.source === "portal" || params.portal === "true");
+      if (rowIndex === -1 && !isPortal) {
+        return responseJSON({
+          status: "error",
+          message: "Identitas siswa tidak terdaftar di database sekolah."
+        });
+      }
+
+      if (rowIndex !== -1) {
+        if (!data[rowIndex - 1][0] && params.nama) {
+          sheet.getRange(rowIndex, 1).setValue(params.nama.trim().toUpperCase());
+        }
+        if (!data[rowIndex - 1][1] && params.kelas) {
+          sheet.getRange(rowIndex, 2).setValue(params.kelas.trim().toUpperCase());
+        }
+        const existingLockStillRequired = kunciHpDiwajibkan_(policy, {
+          id_siswa: data[rowIndex - 1][2],
+          kelas: data[rowIndex - 1][1],
+          mapel: data[rowIndex - 1][9]
+        });
+        if (!existingLockStillRequired) {
+          sheet.getRange(rowIndex, 9, 1, 3).setValues([["", "", "NONAKTIF"]]);
+        }
+        sheet.getRange(rowIndex, 6).setValue(new Date());
+      } else {
+        sheet.appendRow([
+          params.nama ? params.nama.trim().toUpperCase() : "-",
+          params.kelas ? params.kelas.trim().toUpperCase() : "-",
+          idSiswa || "-",
+          "-",
+          "",
+          new Date(),
+          "",
+          "0",
+          "",
+          "",
+          "NONAKTIF"
+        ]);
+      }
+
+      catatLogSesi(
+        ss,
+        rowIndex !== -1 ? data[rowIndex - 1][0] || params.nama : params.nama,
+        rowIndex !== -1 ? data[rowIndex - 1][1] || params.kelas : params.kelas,
+        rowIndex !== -1 ? data[rowIndex - 1][2] || idSiswa : idSiswa,
+        mapel,
+        ""
+      );
+      return responseJSON({
+        status: "success",
+        lock_required: false,
+        message: "Kunci HP tidak aktif untuk sesi ini; waktu mulai tetap dicatat."
+      });
     }
 
     if (rowIndex !== -1) {
@@ -716,6 +930,7 @@ function handleGuruGetSemuaSiswa(params) {
     const sheet = ss.getSheetByName(SHEET_NAME);
     const data = sheet.getDataRange().getValues();
     const result = [];
+    const lockPolicy = bacaKebijakanKunciHp_(ss);
     const logPeta = bacaLogSesi(ss);
     const logMulai = PropertiesService.getScriptProperties().getProperty("LOG_SESI_MULAI") || "";
 
@@ -764,7 +979,11 @@ function handleGuruGetSemuaSiswa(params) {
       }
     }
 
-    return responseJSON({ status: "success", data: result });
+    return responseJSON({
+      status: "success",
+      data: result,
+      lock_hp: lockPolicy
+    });
   } catch (err) {
     return responseJSON({ status: "error", message: err.toString(), data: [] });
   }
@@ -1004,6 +1223,75 @@ function handleGuruResetDevice(params) {
       message: updated
         ? "Perangkat siswa (" + (params.nama || idSiswa) + ") berhasil direset. Siswa dapat login dari HP baru."
         : "Data siswa tidak ditemukan."
+    });
+  } catch (err) {
+    return responseJSON({ status: "error", message: err.toString() });
+  } finally {
+    if (scriptLock.hasLock()) scriptLock.releaseLock();
+  }
+}
+
+// =====================================================
+// 9a. GURU/ADMIN: ATUR KEBIJAKAN KUNCI HP
+// =====================================================
+function handleGuruSetKunciHp(params) {
+  if (!verifikasiGuruKey(params)) {
+    return responseJSON({ status: "error", message: "Akses ditolak" });
+  }
+
+  const scope = String(params.scope || "").trim().toLowerCase();
+  const aktif = params.enabled === true ||
+    String(params.enabled || "").trim().toLowerCase() === "true";
+  const kelas = String(params.kelas || "").trim();
+  const mapel = String(params.mapel || "").trim();
+  const idSiswa = String(params.id_siswa || "").trim();
+  if (scope !== "all" && scope !== "global" && scope !== "session" && scope !== "student") {
+    return responseJSON({ status: "error", message: "Cakupan kebijakan kunci HP tidak valid." });
+  }
+  if (scope === "all" && aktif) {
+    return responseJSON({ status: "error", message: "Cakupan semua hanya digunakan untuk mematikan kunci HP." });
+  }
+  if (scope === "session" && (!normalisasiKunciHp_(kelas) || !normalisasiKunciHp_(mapel))) {
+    return responseJSON({ status: "error", message: "Kelas dan mata pelajaran wajib dipilih." });
+  }
+  if (scope === "student" && !idSiswa) {
+    return responseJSON({ status: "error", message: "ID siswa wajib diisi." });
+  }
+
+  const scriptLock = LockService.getScriptLock();
+  try {
+    scriptLock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const configSheet = ambilKonfigurasiKunciHp_(ss, true);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    let cleared = 0;
+
+    if (scope === "all") {
+      if (configSheet.getLastRow() > 1) {
+        configSheet.getRange(2, 1, configSheet.getLastRow() - 1, HP_LOCK_CONFIG_HEADER.length).clearContent();
+      }
+      cleared = hapusIkatanPerangkatHp_(sheet);
+    } else {
+      simpanAturanKunciHp_(ss, scope, {
+        kelas: kelas,
+        mapel: mapel,
+        id_siswa: idSiswa
+      }, aktif, params.id_guru || "");
+
+      if (!aktif) {
+        const policy = bacaKebijakanKunciHp_(ss);
+        cleared = hapusIkatanYangTidakDiperlukan_(sheet, policy);
+      }
+    }
+
+    SpreadsheetApp.flush();
+    return responseJSON({
+      status: "success",
+      message: scope === "all"
+        ? "Kunci HP dimatikan untuk semua cakupan; " + cleared + " ikatan perangkat aktif dihapus."
+        : "Kebijakan kunci HP berhasil diperbarui.",
+      cleared: cleared,
+      lock_hp: bacaKebijakanKunciHp_(ss)
     });
   } catch (err) {
     return responseJSON({ status: "error", message: err.toString() });

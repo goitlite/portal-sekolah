@@ -11,6 +11,7 @@ const GS_DATABASE_URL =
   "https://script.google.com/macros/s/AKfycbw9dkz277yVbLu8WWSDFdZwUqMbERbnyBOIxuBDalQshowNYIk78ygGC4Nvyk870FVT/exec";
 
 const GURU_KEY = process.env.GURU_KEY || "SMKN1TELKU_GURU_ASESMEN_SECURE_2026";
+const PIN_ADMIN_ASESMEN = process.env.PIN_ADMIN_ASESMEN || "4321";
 
 export async function POST(request) {
   try {
@@ -21,6 +22,21 @@ export async function POST(request) {
       return NextResponse.json(
         { status: "error", message: "Action wajib diisi" },
         { status: 400 }
+      );
+    }
+
+    const lockScope = String(body.scope || "").trim().toLowerCase();
+    if (
+      action === "guru_kunci_hp_set" &&
+      (lockScope === "global" || lockScope === "all") &&
+      String(body.pin_admin || "").trim() !== String(PIN_ADMIN_ASESMEN).trim()
+    ) {
+      return NextResponse.json(
+        {
+          status: "error",
+          message: "Mode Admin Asesmen diperlukan untuk mengubah kunci HP global.",
+        },
+        { status: 401 }
       );
     }
 

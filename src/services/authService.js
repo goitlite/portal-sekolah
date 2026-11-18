@@ -164,28 +164,72 @@ export async function getPelanggaran(nama, kelas, idSiswa) {
 // KUNCI SESI PERANGKAT UJIAN (1 NAMA 1 HP - ANTI JOKI)
 // ===================================================
 export async function kunciSesiUjian({ nama, kelas, idSiswa, mapel, deviceId }) {
-  try {
-    const formData = new URLSearchParams();
-    formData.append("action", "kunci_sesi_ujian");
-    formData.append("nama", nama || "");
-    formData.append("kelas", kelas || "");
-    formData.append("id_siswa", idSiswa || "");
-    formData.append("mapel", mapel || "");
-    formData.append("device_id", deviceId || "");
-    formData.append("source", "portal");
+  const formData = new URLSearchParams();
+  formData.append("action", "kunci_sesi_ujian");
+  formData.append("nama", nama || "");
+  formData.append("kelas", kelas || "");
+  formData.append("id_siswa", idSiswa || "");
+  formData.append("mapel", mapel || "");
+  formData.append("device_id", deviceId || "");
+  formData.append("source", "portal");
 
-    const response = await fetch(BASE_URL, {
-      method: "POST",
-      body: formData,
-    });
+  const attempts = 2;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(BASE_URL, {
+        method: "POST",
+        body: new URLSearchParams(formData),
+        signal: controller.signal,
+      });
 
-    return await response.json();
-  } catch (error) {
-    console.warn("Gagal menghubungi server kunci sesi:", error);
-    return {
-      status: "error",
-      message: "Tidak dapat memverifikasi perangkat. Periksa koneksi lalu coba lagi.",
-    };
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt < attempts - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 600 + Math.random() * 400),
+          );
+          continue;
+        }
+        return {
+          status: "error",
+          code: "SERVER_BUSY",
+          message: "Server sibuk, coba lagi.",
+        };
+      }
+
+      const result = await response.json();
+      if (result?.code === "SERVER_BUSY" && attempt < attempts - 1) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 600 + Math.random() * 400),
+        );
+        continue;
+      }
+      if (result?.code === "SERVER_BUSY") {
+        return { ...result, message: "Server sibuk, coba lagi." };
+      }
+      return result;
+    } catch (error) {
+      if (attempt === attempts - 1) {
+        console.warn("Gagal menghubungi server pencatatan sesi:", error);
+        return {
+          status: "error",
+          code: "SERVER_BUSY",
+          message: "Server sibuk, coba lagi.",
+        };
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, 600 + Math.random() * 400),
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  return {
+    status: "error",
+    code: "SERVER_BUSY",
+    message: "Server sibuk, coba lagi.",
+  };
 }
 

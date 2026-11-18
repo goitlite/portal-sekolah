@@ -337,6 +337,14 @@ export default function DashboardSiswa() {
   const [petugasWaliData, setPetugasWaliData] = useState(null);
   const [statistikKelas, setStatistikKelas] = useState(null);
   const [loadingStatistikKelas, setLoadingStatistikKelas] = useState(false);
+  const nilaiAsesmenSectionRef = useRef(null);
+  const nilaiAsesmenRequestRef = useRef(false);
+  const nilaiAsesmenLoadedRef = useRef(false);
+  const [nilaiAsesmen, setNilaiAsesmen] = useState({
+    status: "idle",
+    hasil: [],
+    error: "",
+  });
 
   // Filter kelas untuk Petugas Presensi (bisa dibuka/tutup dengan toggle di atas file)
   const availableClassesOwnOnly = useMemo(() => {
@@ -1000,6 +1008,85 @@ export default function DashboardSiswa() {
     [router, CACHE_KEY, loadDataKelasSiswa],
   );
 
+  const namaAsliNilaiAsesmen = String(user?.nama || "").trim();
+  const namaDenganKelasNilaiAsesmen = namaAsliNilaiAsesmen.match(
+    /(.+?)\s*\[(.*?)\]/,
+  );
+  const namaNilaiAsesmen = namaDenganKelasNilaiAsesmen
+    ? namaDenganKelasNilaiAsesmen[1].trim()
+    : namaAsliNilaiAsesmen;
+  const kelasNilaiAsesmen = namaDenganKelasNilaiAsesmen
+    ? namaDenganKelasNilaiAsesmen[2].trim()
+    : String(user?.kelas || statistikKelas?.namaKelas || "").trim();
+
+  const muatNilaiAsesmen = useCallback(
+    async (force = false) => {
+      if (
+        nilaiAsesmenRequestRef.current ||
+        (nilaiAsesmenLoadedRef.current && !force)
+      ) {
+        return;
+      }
+
+      if (!namaNilaiAsesmen || !kelasNilaiAsesmen) {
+        setNilaiAsesmen({
+          status: "error",
+          hasil: [],
+          error: "Data nama atau kelas belum lengkap. Hubungi guru.",
+        });
+        return;
+      }
+
+      nilaiAsesmenRequestRef.current = true;
+      setNilaiAsesmen((current) => ({
+        ...current,
+        status: "loading",
+        error: "",
+      }));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      try {
+        const query = new URLSearchParams({
+          nama: namaNilaiAsesmen,
+          kelas: kelasNilaiAsesmen,
+        });
+        const response = await fetch(
+          `/api/exam/nilai-saya?${query.toString()}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const data = await response.json();
+        if (!response.ok || data?.status !== "success") {
+          throw new Error(data?.message || "Gagal memuat nilai asesmen.");
+        }
+
+        nilaiAsesmenLoadedRef.current = true;
+        if (isMountedRef.current) {
+          setNilaiAsesmen({
+            status: "loaded",
+            hasil: Array.isArray(data.hasil) ? data.hasil : [],
+            error: "",
+          });
+        }
+      } catch (error) {
+        if (isMountedRef.current) {
+          setNilaiAsesmen({
+            status: "error",
+            hasil: [],
+            error:
+              error?.name === "AbortError"
+                ? "Server asesmen lambat merespons. Coba lagi."
+                : error?.message || "Gagal memuat nilai asesmen.",
+          });
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        nilaiAsesmenRequestRef.current = false;
+      }
+    },
+    [namaNilaiAsesmen, kelasNilaiAsesmen],
+  );
+
   const hasLoadedDashboardRef = useRef(false);
 
   useEffect(() => {
@@ -1023,6 +1110,25 @@ export default function DashboardSiswa() {
       isMountedRef.current = false;
     };
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const section = nilaiAsesmenSectionRef.current;
+    if (!user?.id || !section) return;
+
+    if (typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          muatNilaiAsesmen();
+        }
+      },
+      { rootMargin: "160px 0px" },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [user?.id, muatNilaiAsesmen]);
 
   // Listener otomatis status Online/Offline & Auto-update saat koneksi internet kembali
   useEffect(() => {
@@ -1649,6 +1755,14 @@ export default function DashboardSiswa() {
                 onClick={handleBukaAsesmen}
               />
             </div>
+            <a
+              href="/asesmen%20v2.apk"
+              download="Asesmen-SMKN1-v2.apk"
+              className="flex min-h-9 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-2 text-center text-[10px] font-extrabold text-indigo-900 transition-colors hover:from-blue-100 hover:to-indigo-100 active:scale-[0.99] sm:text-xs"
+            >
+              <span aria-hidden="true">📥</span>
+              <span>Unduh Aplikasi Asesmen Android (APK v2)</span>
+            </a>
           </div>
 
           {/* KELOMPOK 3: PROFIL & STATUS SISWA */}
@@ -1685,6 +1799,110 @@ export default function DashboardSiswa() {
             </div>
           </div>
         </div>
+
+        <section
+          ref={nilaiAsesmenSectionRef}
+          aria-labelledby="nilai-asesmen-heading"
+          className="scroll-mt-20 rounded-xl border border-purple-200 bg-gradient-to-br from-white via-purple-50 to-rose-50 p-2.5 shadow-sm sm:rounded-2xl sm:p-4"
+        >
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h3
+                id="nilai-asesmen-heading"
+                className="truncate text-xs font-black text-purple-950 sm:text-sm"
+              >
+                📝 Nilai Asesmen Saya
+              </h3>
+              <p className="text-[9px] font-medium text-slate-500 sm:text-[10px]">
+                Nilai per mata pelajaran
+              </p>
+            </div>
+            {nilaiAsesmen.status === "loaded" && (
+              <button
+                type="button"
+                onClick={() => muatNilaiAsesmen(true)}
+                className="shrink-0 rounded-lg border border-purple-200 bg-white px-2 py-1 text-[9px] font-bold text-purple-800 transition-colors hover:bg-purple-100 disabled:opacity-50 sm:text-[10px]"
+              >
+                Muat ulang
+              </button>
+            )}
+          </div>
+
+          {nilaiAsesmen.status === "idle" && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-2 py-1.5">
+              <p className="text-[10px] text-slate-500">
+                Nilai dimuat otomatis saat bagian ini terlihat.
+              </p>
+              <button
+                type="button"
+                onClick={() => muatNilaiAsesmen()}
+                className="rounded-md bg-purple-700 px-2 py-1 text-[9px] font-bold text-white hover:bg-purple-800 sm:text-[10px]"
+              >
+                Muat sekarang
+              </button>
+            </div>
+          )}
+
+          {nilaiAsesmen.status === "loading" && (
+            <div
+              aria-live="polite"
+              className="grid grid-cols-2 gap-1.5 min-[375px]:grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 sm:gap-2"
+            >
+              {Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={index}
+                  className="animate-pulse rounded-lg border border-purple-100 bg-white p-2"
+                >
+                  <div className="h-1.5 w-3/4 rounded bg-slate-200" />
+                  <div className="mt-1.5 h-5 w-1/2 rounded bg-purple-100" />
+                </div>
+              ))}
+              <span className="sr-only">Memuat nilai asesmen...</span>
+            </div>
+          )}
+
+          {nilaiAsesmen.status === "error" && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2"
+            >
+              <p className="text-[10px] font-medium text-rose-800">
+                {nilaiAsesmen.error}
+              </p>
+              <button
+                type="button"
+                onClick={() => muatNilaiAsesmen(true)}
+                className="rounded-md bg-rose-700 px-2.5 py-1 text-[9px] font-bold text-white hover:bg-rose-800 sm:text-[10px]"
+              >
+                Coba lagi
+              </button>
+            </div>
+          )}
+
+          {nilaiAsesmen.status === "loaded" &&
+            (nilaiAsesmen.hasil.length > 0 ? (
+              <div className="grid grid-cols-2 gap-1.5 min-[375px]:grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 sm:gap-2">
+                {nilaiAsesmen.hasil.map((item, index) => (
+                  <div
+                    key={`${item.mapel || "mapel"}-${index}`}
+                    className="min-w-0 rounded-lg border border-purple-100 bg-white p-2 shadow-sm"
+                    title={item.mapel || "Asesmen"}
+                  >
+                    <p className="line-clamp-2 min-h-6 text-[9px] font-bold leading-tight text-slate-600 sm:text-[10px]">
+                      {item.mapel || "Asesmen"}
+                    </p>
+                    <p className="mt-0.5 truncate text-base font-black leading-tight text-purple-800 sm:text-lg">
+                      {item.nilai || "-"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg bg-white/80 px-2.5 py-2 text-[10px] text-slate-600">
+                Belum ada nilai asesmen yang tercatat untuk akun ini.
+              </p>
+            ))}
+        </section>
 
         {/* ============================================================ */}
         {/* BANNER SPOTLIGHT: PETUGAS PRESENSI KELAS (JIKA DITUNJUK) */}

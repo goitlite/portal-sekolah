@@ -35,6 +35,7 @@ export default function ExamPage() {
   const [pwaGateMessage, setPwaGateMessage] = useState("");
   const [installStepsVisible, setInstallStepsVisible] = useState(false);
   const [showAdminPinForm, setShowAdminPinForm] = useState(false);
+  const [androidPwaVerifying, setAndroidPwaVerifying] = useState(false);
 
   useEffect(() => {
     function syncInstallPrompt() {
@@ -55,12 +56,40 @@ export default function ExamPage() {
       const isIOS =
         /iPad|iPhone|iPod/i.test(ua) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(ua);
+      const isNativeAndroidExamApp = /SMKN1TK-EXAM-APP/i.test(ua);
+
+      if (isIOS) {
+        setPwaGateMode("allowed");
+        return;
+      }
+
+      if (isNativeAndroidExamApp) {
+        setPwaGateMode("allowed");
+        return;
+      }
+
+      if (isAndroid) {
+        if (
+          sessionStorage.getItem("examPwaAccess") === "android-pwa-pin" ||
+          sessionStorage.getItem("examPwaAccess") === "testing-pin" ||
+          localStorage.getItem("examPwaPinAuthorized") === "true"
+        ) {
+          setPwaGateMode("allowed");
+          return;
+        }
+
+        sessionStorage.removeItem("examPwaAccess");
+        setPwaGateMode("android-app-required");
+        return;
+      }
+
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        navigator.standalone === true;
       const pwaSessionGatePassed =
         sessionStorage.getItem("examPwaAccess") === "standalone" ||
         sessionStorage.getItem("examPwaAccess") === "testing-pin";
-
-      // Jangan minta deteksi ulang saat route kembali ke /exam dalam sesi PWA yang sudah lolos.
-      // Otorisasi PIN perangkat juga disimpan tanpa menyimpan PIN mentah.
       if (
         pwaSessionGatePassed ||
         localStorage.getItem("examPwaPinAuthorized") === "true"
@@ -69,17 +98,6 @@ export default function ExamPage() {
         return;
       }
 
-      // Dukungan khusus iPhone / iPad
-      if (isIOS) {
-        setPwaGateMode("allowed");
-        return;
-      }
-
-      // Baik Android maupun Desktop (termasuk Chrome Mode Desktop):
-      // Wajib periksa apakah aplikasi dibuka dalam mode Standalone PWA terinstal
-      const standalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        navigator.standalone === true;
       setPwaGateMode(standalone ? "standalone-check" : "browser");
     }, 0);
 
@@ -152,6 +170,43 @@ export default function ExamPage() {
     sessionStorage.setItem("examPwaAccess", "testing-pin");
     localStorage.setItem("examPwaPinAuthorized", "true");
     setPwaGateMode("allowed");
+  }
+
+  async function continueWithAndroidPwa(event) {
+    event.preventDefault();
+    const pin = pwaPin.trim();
+    if (!pin) {
+      setPwaGateMessage("Masukkan password akses PWA.");
+      return;
+    }
+
+    setAndroidPwaVerifying(true);
+    setPwaGateMessage("");
+    try {
+      const response = await fetch("/api/exam/verify-android-pwa-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.status !== "success") {
+        setPwaGateMessage(
+          result?.message || "Password akses PWA tidak sesuai.",
+        );
+        return;
+      }
+
+      void enterFullscreen();
+      sessionStorage.setItem("examPwaAccess", "android-pwa-pin");
+      localStorage.setItem("examPwaPinAuthorized", "true");
+      setPwaGateMode("allowed");
+    } catch {
+      setPwaGateMessage(
+        "Tidak dapat memverifikasi password. Periksa koneksi lalu coba lagi.",
+      );
+    } finally {
+      setAndroidPwaVerifying(false);
+    }
   }
 
   // =========================
@@ -626,7 +681,7 @@ export default function ExamPage() {
       // TOKEN BENAR
       if (result.status === "success") {
         // ==========================================
-        // KUNCI SESI PERANGKAT (1 NAMA 1 HP - ANTI JOKI)
+        // Server menerapkan kebijakan kunci HP dan tetap mencatat waktu mulai sesi.
         // ==========================================
         try {
           let devId = localStorage.getItem("exam_device_id");
@@ -651,7 +706,7 @@ export default function ExamPage() {
             setLoadingToken(false);
             setTokenMessage(
               (lockRes && lockRes.message) ||
-                "Perangkat tidak dapat diverifikasi. Periksa koneksi atau hubungi guru.",
+                "Sesi ujian tidak dapat disiapkan. Periksa koneksi atau hubungi guru.",
             );
             setTokenModal(true);
 
@@ -661,10 +716,10 @@ export default function ExamPage() {
             return;
           }
         } catch (errLock) {
-          console.warn("Gagal validasi kunci sesi:", errLock);
+          console.warn("Gagal mencatat sesi ujian:", errLock);
           setLoadingToken(false);
           setTokenMessage(
-            "Perangkat tidak dapat diverifikasi. Periksa koneksi atau hubungi guru.",
+            "Sesi ujian tidak dapat disiapkan. Periksa koneksi atau hubungi guru.",
           );
           setTokenModal(true);
 
@@ -751,6 +806,8 @@ export default function ExamPage() {
   if (pwaGateMode !== "allowed") {
     const isCheckingPwa = pwaGateMode === "checking";
     const isStandaloneGate = pwaGateMode === "standalone-check";
+    const isAndroidAppRequired = pwaGateMode === "android-app-required";
+    const isAndroidGate = isAndroidAppRequired;
     return (
       <main className="min-h-screen bg-gradient-to-br from-yellow-300 via-amber-200 to-white text-slate-800 flex items-center justify-center p-4 sm:p-6">
         <section className="w-full max-w-lg rounded-3xl border border-amber-200/90 bg-white/95 backdrop-blur-xl p-6 shadow-2xl sm:p-8">
@@ -763,6 +820,127 @@ export default function ExamPage() {
               <p className="text-sm font-semibold text-slate-600">
                 Memeriksa mode aplikasi…
               </p>
+            </div>
+          ) : isAndroidGate ? (
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-blue-200 bg-blue-50 text-4xl shadow-md">
+                📱
+              </div>
+              <h1 className="mt-4 text-2xl font-black text-slate-900">
+                Gunakan Aplikasi Asesmen Android
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Pilihan utama adalah aplikasi native. Anda juga dapat memilih
+                akses web PWA dengan password atau bantuan khusus pengawas.
+              </p>
+
+              <a
+                href="/asesmen%20v2.apk"
+                download="Asesmen-SMKN1-v2.apk"
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 font-black text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99]"
+              >
+                📥 Unduh Aplikasi Android (APK v2)
+              </a>
+
+              <form
+                className="mt-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 text-left"
+                onSubmit={continueWithAndroidPwa}
+              >
+                <label
+                  htmlFor="android-pwa-access-password"
+                  className="block text-xs font-bold text-indigo-950 sm:text-sm"
+                >
+                  Pilihan 2 — Lanjutkan lewat web PWA
+                </label>
+                <input
+                  id="android-pwa-access-password"
+                  type="password"
+                  value={pwaPin}
+                  onChange={(event) => setPwaPin(event.target.value)}
+                  placeholder="Password akses PWA"
+                  autoComplete="off"
+                  inputMode="numeric"
+                  maxLength={32}
+                  required
+                  className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-3 text-center font-mono text-lg font-bold tracking-[0.3em] text-slate-900 outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={androidPwaVerifying}
+                  className="w-full rounded-xl bg-indigo-700 px-4 py-3 text-sm font-black text-white transition hover:bg-indigo-800 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {androidPwaVerifying
+                    ? "Memeriksa password..."
+                    : "Lanjutkan lewat PWA"}
+                </button>
+              </form>
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                {!showAdminPinForm ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminPinForm(true);
+                      setPwaGateMessage("");
+                    }}
+                    className="py-1 text-[11px] font-semibold text-slate-500 transition hover:text-slate-700"
+                  >
+                    Pilihan 3 — Bantuan Khusus Pengawas
+                  </button>
+                ) : (
+                  <form
+                    className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-left"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      continueFromPwaGate();
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        🔒 Akses Pengawas
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAdminPinForm(false);
+                          setPwaPin("");
+                          setPwaGateMessage("");
+                        }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
+                      >
+                        ✕ Tutup
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        id="android-pwa-supervisor-pin"
+                        type="password"
+                        value={pwaPin}
+                        onChange={(event) => setPwaPin(event.target.value)}
+                        placeholder="PIN Pengawas"
+                        autoComplete="off"
+                        className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-mono font-bold tracking-widest text-slate-900 outline-none focus:border-blue-600"
+                        autoFocus
+                      />
+                      <button
+                        type="submit"
+                        className="shrink-0 rounded-xl bg-slate-800 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-900"
+                      >
+                        Buka
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {pwaGateMessage && (
+                <p
+                  role="status"
+                  className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-sm font-semibold text-amber-800"
+                >
+                  {pwaGateMessage}
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -1301,7 +1479,7 @@ export default function ExamPage() {
                     {loadingToken ? (
                       <>
                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                        <span>Memverifikasi...</span>
+                        <span>Menyiapkan sesi...</span>
                       </>
                     ) : (
                       <>

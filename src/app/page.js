@@ -662,8 +662,8 @@ function HomeContent() {
                 </button>
                 {/* GANTI TOMBOL DOWNLOAD GOOGLE DRIVE ANDA DENGAN INI */}
                 <a
-                  href="/asesmen.apk" // Mengarah langsung ke file di folder public
-                  download="Asesmen-SMKN1.apk" // Memaksa browser langsung mendownload
+                  href="/asesmen%20v2.apk"
+                  download="Asesmen-SMKN1-v2.apk"
                   onClick={() => setShowApkModal(false)}
                   className="w-2/3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs text-center shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                 >

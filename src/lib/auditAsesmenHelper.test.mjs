@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   buatPayloadSinkronAuditForm,
   deteksiJoki,
+  evaluasiRentangSesiUjian,
+  mulaiTerlambatDariPembanding,
   parseTimestampMs,
 } from "./auditAsesmenHelper.js";
 
@@ -15,6 +17,73 @@ test("parses Indonesian and US-formatted dates as the same UTC+7 timestamp", () 
   assert.equal(
     formTime - parseTimestampMs("2026-11-14T16:45:41.000Z"),
     205000,
+  );
+});
+
+test("uses the latest matching start session before submit for the duration", () => {
+  const siswa = {
+    riwayat_sesi: [
+      { mapel: "Matematika", waktu: "2026-11-18T00:00:00.000Z" },
+      { mapel: "Bahasa Indonesia", waktu: "2026-11-18T00:20:00.000Z" },
+      { mapel: "Matematika", waktu: "2026-11-18T00:30:00.000Z" },
+      { mapel: "Matematika", waktu: "2026-11-18T01:10:00.000Z" },
+    ],
+  };
+
+  const result = evaluasiRentangSesiUjian(
+    siswa,
+    "Matematika",
+    "2026-11-18T01:00:00.000Z",
+  );
+
+  assert.equal(result.waktuMulai.waktu, "2026-11-18T00:30:00.000Z");
+  assert.equal(result.durasiMenit, 30);
+});
+
+test("flags a start more than 30 minutes after the class and subject baseline", () => {
+  const siswa = {
+    riwayat_sesi: [
+      { mapel: "Matematika", waktu: "2026-11-18T01:00:00.000Z" },
+    ],
+  };
+
+  const rentang = evaluasiRentangSesiUjian(
+    siswa,
+    "Matematika",
+    "2026-11-18T02:00:00.000Z",
+  );
+  assert.equal(rentang.durasiMenit, 60);
+  assert.equal(
+    mulaiTerlambatDariPembanding(
+      rentang.waktuMulaiMs,
+      parseTimestampMs("2026-11-18T00:29:59.000Z"),
+    ),
+    true,
+  );
+  assert.equal(
+    mulaiTerlambatDariPembanding(
+      rentang.waktuMulaiMs,
+      parseTimestampMs("2026-11-18T00:30:00.000Z"),
+    ),
+    false,
+  );
+  assert.equal(
+    mulaiTerlambatDariPembanding(
+      rentang.waktuMulaiMs,
+      rentang.waktuMulaiMs,
+    ),
+    false,
+  );
+
+  const tanpaMulai = evaluasiRentangSesiUjian(
+    { riwayat_sesi: [] },
+    "Matematika",
+    "2026-11-18T01:00:00.000Z",
+  );
+  assert.equal(tanpaMulai.waktuMulai, null);
+  assert.equal(
+    mulaiTerlambatDariPembanding(tanpaMulai.waktuMulaiMs, 1),
+    false,
   );
 });
 

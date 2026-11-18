@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   fetchDaftarUjian,
   tambahDataUjian,
@@ -8,6 +8,7 @@ import {
   hapusDataUjian,
   aturTampilSesiUjian,
   fetchSemuaSiswaAsesmen,
+  aturKebijakanKunciHp,
   resetPelanggaranSiswa,
   resetDeviceSiswa,
   kirimPesanUjian,
@@ -106,6 +107,13 @@ function getWarnaKelas(namaKelas) {
   return PALET_WARNA_KELAS[index];
 }
 
+function normalisasiKunciHpUi(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
 export default function TabKelolaUjian({
   user,
   daftarMapelGuru = [],
@@ -178,7 +186,16 @@ export default function TabKelolaUjian({
 
   // State Database Siswa
   const [daftarSiswa, setDaftarSiswa] = useState([]);
+  const [hpLockPolicy, setHpLockPolicy] = useState({
+    global: false,
+    sessions: [],
+    students: [],
+  });
   const [loadingSiswa, setLoadingSiswa] = useState(false);
+  const [loadingRekap, setLoadingRekap] = useState(false);
+  const [initialLoadProgress, setInitialLoadProgress] = useState(0);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const initialLoadStepsRef = useRef(new Set());
 
   // Filter Multi-Kriteria Database Siswa
   const [filterKelas, setFilterKelas] = useState("SEMUA");
@@ -209,6 +226,15 @@ export default function TabKelolaUjian({
     nama: "",
   });
 
+  const completeInitialLoadStep = useCallback((step) => {
+    const steps = initialLoadStepsRef.current;
+    if (steps.has(step)) return;
+
+    steps.add(step);
+    setInitialLoadProgress(Math.round((steps.size / 3) * 100));
+    if (steps.size === 3) setInitialLoadComplete(true);
+  }, []);
+
   // 1. Muat Data Sheet UJIAN
   const loadUjian = useCallback(async () => {
     setLoadingUjian(true);
@@ -230,25 +256,44 @@ export default function TabKelolaUjian({
       setErrorMsg("Koneksi gagal: " + e.message);
     } finally {
       setLoadingUjian(false);
+      completeInitialLoadStep("ujian");
     }
-  }, []);
+  }, [completeInitialLoadStep]);
 
   // 2. Muat Database Siswa & Rekap Respon Ujian
-  const loadSiswa = useCallback(async (forceRefresh = false) => {
+  const loadSiswa = useCallback(async (forceRefresh = false, syncAudit = false) => {
     setLoadingSiswa(true);
-    setErrorMsg("");
-    setAuditSyncNotice("");
+    setLoadingRekap(true);
+    if (syncAudit) setAuditSyncNotice("");
     let dataAudit = null;
     try {
-      const [resSiswa, resRekap] = await Promise.all([
-        fetchSemuaSiswaAsesmen(),
-        fetchRekapNilaiUjian({ refresh: forceRefresh }),
-      ]);
+      const rekapPromise = fetchRekapNilaiUjian({
+        refresh: forceRefresh,
+      });
+      const resSiswa = await fetchSemuaSiswaAsesmen();
+      completeInitialLoadStep("siswa");
       if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
         setDaftarSiswa(resSiswa.data);
+        setHpLockPolicy(
+          resSiswa.lock_hp || { global: false, sessions: [], students: [] },
+        );
       } else {
         setErrorMsg(resSiswa.message || "Gagal memuat data database siswa");
+        await rekapPromise;
+        completeInitialLoadStep("rekap");
+        if (syncAudit) {
+          setAuditSyncNotice(
+            "Audit L-N belum disinkronkan: data siswa gagal dimuat.",
+          );
+        }
+        return;
       }
+
+      setLoadingSiswa(false);
+      setErrorMsg("");
+
+      const resRekap = await rekapPromise;
+      completeInitialLoadStep("rekap");
       // Jika pengambilan nilai gagal, data nilai yang sudah tampil tidak dikosongkan
       if (
         resRekap &&
@@ -264,17 +309,28 @@ export default function TabKelolaUjian({
             diagnostics: resRekap.diagnostics || {},
           };
         }
+      } else {
+        setErrorMsg(
+          resRekap?.message || "Gagal memuat rekap nilai dari sheet respon.",
+        );
+        if (syncAudit) {
+          setAuditSyncNotice(
+            "Audit L-N belum disinkronkan: sheet respon gagal dimuat.",
+          );
+        }
       }
     } catch (e) {
       setErrorMsg("Koneksi gagal: " + e.message);
     } finally {
       setLoadingSiswa(false);
+      setLoadingRekap(false);
+      completeInitialLoadStep("siswa");
+      completeInitialLoadStep("rekap");
     }
 
+    if (!syncAudit) return;
+
     if (!dataAudit) {
-      setAuditSyncNotice(
-        "Audit L-N belum disinkronkan: data siswa atau sheet respon gagal dimuat.",
-      );
       return;
     }
 
@@ -325,7 +381,7 @@ export default function TabKelolaUjian({
       return;
     }
 
-    setLoadingSiswa(true);
+    setLoadingRekap(true);
     setAuditSyncNotice("Sedang menyinkronkan ringkasan respon ke kolom L-N...");
     let updated = 0;
     let tidakDitemukan = 0;
@@ -366,9 +422,9 @@ export default function TabKelolaUjian({
         `Sinkronisasi audit L-N gagal: ${e?.message || "kesalahan tidak diketahui"}`,
       );
     } finally {
-      setLoadingSiswa(false);
+      setLoadingRekap(false);
     }
-  }, []);
+  }, [completeInitialLoadStep]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -542,6 +598,14 @@ export default function TabKelolaUjian({
     filterPelanggaran,
     sortOrder,
   ]);
+
+  const kunciSesiAktif = (hpLockPolicy.sessions || []).some(
+    (session) =>
+      normalisasiKunciHpUi(session.kelas) ===
+        normalisasiKunciHpUi(filterKelas) &&
+      normalisasiKunciHpUi(session.mapel) ===
+        normalisasiKunciHpUi(filterMapelSiswa),
+  );
 
   // Deteksi joki: semua siswa & respon, mapel mengikuti filter mapel
   const deteksi = useMemo(
@@ -915,6 +979,77 @@ export default function TabKelolaUjian({
     }
   };
 
+  const handleAturKunciHp = async (scope, enabled, siswa) => {
+    const pinAdmin = pinAdminAsesmen || "";
+    if ((scope === "global" || scope === "all") && !pinAdmin) {
+      setErrorMsg(
+        "Aktifkan Mode Admin Asesmen untuk mengubah kebijakan kunci HP global.",
+      );
+      return;
+    }
+
+    if (
+      scope === "session" &&
+      (filterKelas === "SEMUA" || filterMapelSiswa === "SEMUA")
+    ) {
+      setErrorMsg("Pilih satu kelas dan satu mapel untuk mengatur kunci sesi.");
+      return;
+    }
+
+    const confirmation =
+      scope === "all"
+        ? "Matikan kunci HP untuk semua ujian, hapus semua ikatan perangkat aktif, dan hapus aturan kelas/siswa? Riwayat sesi tetap disimpan."
+        : scope === "global"
+          ? "Aktifkan kunci HP untuk semua siswa dan semua sesi ujian?"
+          : scope === "session"
+            ? `${enabled ? "Aktifkan" : "Nonaktifkan"} kunci HP untuk ${filterKelas} - ${filterMapelSiswa}?`
+            : `${enabled ? "Aktifkan" : "Nonaktifkan"} kunci HP untuk ${siswa?.nama || siswa?.id_siswa}?`;
+    if (!confirm(confirmation)) return;
+
+    setActionLoading(true);
+    setErrorMsg("");
+    try {
+      const res = await aturKebijakanKunciHp({
+        scope,
+        enabled,
+        kelas: scope === "session" ? filterKelas : "",
+        mapel: scope === "session" ? filterMapelSiswa : "",
+        id_siswa: scope === "student" ? siswa?.id_siswa : "",
+        id_guru: user?.id || "",
+        pin_admin: pinAdmin,
+      });
+      if (res.status !== "success") {
+        setErrorMsg(res.message || "Gagal mengubah kebijakan kunci HP.");
+        return;
+      }
+
+      setHpLockPolicy(
+        res.lock_hp || { global: false, sessions: [], students: [] },
+      );
+      setSuksesMsg(res.message || "Kebijakan kunci HP berhasil diperbarui.");
+
+      const latest = await fetchSemuaSiswaAsesmen();
+      if (latest.status === "success" && Array.isArray(latest.data)) {
+        setDaftarSiswa(latest.data);
+        setHpLockPolicy(
+          latest.lock_hp || res.lock_hp || {
+            global: false,
+            sessions: [],
+            students: [],
+          },
+        );
+      } else {
+        setErrorMsg(
+          latest.message || "Kebijakan tersimpan, tetapi data siswa gagal dimuat ulang.",
+        );
+      }
+    } catch (err) {
+      setErrorMsg("Gagal mengubah kebijakan kunci HP: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleHapusAkunSiswa = async (s) => {
     const konfirmasi = confirm(
       `⚠️ RESET / HAPUS AKUN SISWA:\n\nNama: ${s.nama || "(Kosong)"}\nKelas: ${s.kelas || "-"}\nID Siswa: ${s.id_siswa}\n\nData nama, kelas, pesan, sesi, dan kunci perangkat akan dikosongkan, namun ID Siswa (${s.id_siswa}) tetap dipertahankan di database agar siswa dapat mendaftar ulang.\n\nLanjutkan?`,
@@ -1029,14 +1164,18 @@ export default function TabKelolaUjian({
             <button
               onClick={() => {
                 loadUjian();
-                loadSiswa(true);
+                loadSiswa(true, true);
               }}
-              disabled={loadingUjian || loadingSiswa || actionLoading}
+              disabled={
+                loadingUjian || loadingSiswa || loadingRekap || actionLoading
+              }
               className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold backdrop-blur-xs border border-white/20 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
               title="Refresh Data"
             >
-              <span>🔄</span>
-              <span className="hidden sm:inline">Refresh</span>
+              <span className={loadingRekap ? "animate-spin" : ""}>🔄</span>
+              <span className="hidden sm:inline">
+                {loadingRekap ? "Memuat..." : "Refresh"}
+              </span>
             </button>
 
             {onClose && (
@@ -1087,6 +1226,36 @@ export default function TabKelolaUjian({
           </button>
         </div>
       </div>
+
+      {!initialLoadComplete && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 shadow-sm">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <p className="text-xs font-bold text-blue-900">
+              Memuat data Pantauan Admin
+            </p>
+            <span className="text-xs font-black tabular-nums text-blue-800">
+              {initialLoadProgress}%
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Progres tahap pemuatan Pantauan Admin"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={initialLoadProgress}
+            className="h-2 overflow-hidden rounded-full bg-blue-100"
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-[width] duration-300 ease-out"
+              style={{ width: `${initialLoadProgress}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[10px] text-blue-700">
+            Progres berdasarkan tahap: sesi ujian, database siswa, dan rekap
+            nilai; bukan persentase unduhan jaringan.
+          </p>
+        </div>
+      )}
 
       {/* ALERT STATUS */}
       {suksesMsg && (
@@ -1215,6 +1384,7 @@ export default function TabKelolaUjian({
                 </button>
               </div>
             </div>
+
           </div>
 
           {/* TABEL SESI UJIAN (PADAT & RESPONSIF) */}
@@ -1628,6 +1798,66 @@ export default function TabKelolaUjian({
                 </button>
               </div>
             </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase text-slate-700">
+                    🔐 Kendali Kunci HP
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Global: {hpLockPolicy.global ? "Aktif" : "Nonaktif"} ·
+                    Aturan mapel: {hpLockPolicy.sessions.length} · Siswa:{" "}
+                    {hpLockPolicy.students.length}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleAturKunciHp("global", true)}
+                    disabled={actionLoading || hpLockPolicy.global}
+                    className="min-h-8 rounded-lg bg-rose-600 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-rose-700 disabled:opacity-50 sm:text-[11px]"
+                    title="Aktifkan kunci HP untuk semua siswa dan ujian"
+                  >
+                    {hpLockPolicy.global ? "🔒 Global Aktif" : "🔒 Kunci Global"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAturKunciHp("all", false)}
+                    disabled={actionLoading}
+                    className="min-h-8 rounded-lg bg-slate-700 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-slate-800 disabled:opacity-50 sm:text-[11px]"
+                    title="Matikan semua aturan dan hapus ikatan HP aktif"
+                  >
+                    🔓 Matikan & Hapus
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAturKunciHp("session", !kunciSesiAktif)}
+                    disabled={
+                      actionLoading ||
+                      hpLockPolicy.global ||
+                      filterKelas === "SEMUA" ||
+                      filterMapelSiswa === "SEMUA"
+                    }
+                    className="col-span-2 min-h-8 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:col-span-1 sm:text-[11px]"
+                    title={
+                      filterKelas === "SEMUA" || filterMapelSiswa === "SEMUA"
+                        ? "Pilih satu kelas dan satu mapel pada filter"
+                        : `Atur kunci HP untuk ${filterKelas} - ${filterMapelSiswa}`
+                    }
+                  >
+                    {hpLockPolicy.global
+                      ? "🔒 Aktif Global"
+                      : kunciSesiAktif
+                        ? `🔒 ${filterKelas} · ${filterMapelSiswa}`
+                        : filterKelas === "SEMUA" ||
+                            filterMapelSiswa === "SEMUA"
+                          ? "Pilih Kelas + Mapel"
+                          : `🔓 Kunci ${filterKelas} · ${filterMapelSiswa}`}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <PanelLaporanJoki
@@ -1677,10 +1907,25 @@ export default function TabKelolaUjian({
                       const nomorUrut = (currentPage - 1) * pageSize + idx + 1;
                       const warna = getWarnaKelas(s.kelas);
                       const isMelanggar = s.pelanggaran > 0;
+                      const kunciIndividuAktif = (
+                        hpLockPolicy.students || []
+                      ).some(
+                        (id) =>
+                          String(id).trim() ===
+                          String(s.id_siswa || "").trim(),
+                      );
+                      const kunciLebihLuasAktif =
+                        hpLockPolicy.global || kunciSesiAktif;
+                      const rowKey = [
+                        s.id_siswa || "tanpa-id",
+                        s.kelas || "tanpa-kelas",
+                        s.nama || "tanpa-nama",
+                        idx,
+                      ].join("-");
 
                       return (
                         <tr
-                          key={s.id_siswa || idx}
+                          key={rowKey}
                           className={`transition-colors border-l-4 ${warna.border} ${warna.bg} ${
                             isMelanggar
                               ? "!bg-rose-100/90 ring-1 ring-rose-400"
@@ -1820,8 +2065,8 @@ export default function TabKelolaUjian({
                               </span>
                             )}
                           </td>
-                          <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
+                          <td className="min-w-[150px] px-2 py-1.5 text-center">
+                            <div className="mx-auto flex max-w-[190px] flex-wrap items-center justify-center gap-1 sm:max-w-none">
                               {/* Reset Perangkat HP */}
                               <button
                                 onClick={() => handleResetDeviceSiswa(s)}
@@ -1832,6 +2077,40 @@ export default function TabKelolaUjian({
                                 <span>📱</span>
                                 <span className="hidden sm:inline">
                                   Reset HP
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAturKunciHp(
+                                    "student",
+                                    !kunciIndividuAktif,
+                                    s,
+                                  )
+                                }
+                                disabled={
+                                  actionLoading ||
+                                  !s.id_siswa ||
+                                  s.id_siswa === "-" ||
+                                  (kunciLebihLuasAktif && !kunciIndividuAktif)
+                                }
+                                className={`rounded px-1.5 py-0.5 sm:px-2 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-0.5 cursor-pointer disabled:opacity-40 ${
+                                  kunciIndividuAktif
+                                    ? "bg-indigo-700 hover:bg-indigo-800 text-white"
+                                    : "bg-indigo-100 hover:bg-indigo-200 text-indigo-900"
+                                }`}
+                                title={
+                                  kunciLebihLuasAktif && !kunciIndividuAktif
+                                    ? "Kunci sudah aktif melalui kebijakan global/mapel"
+                                    : kunciIndividuAktif
+                                      ? "Nonaktifkan kunci khusus siswa ini"
+                                      : "Aktifkan kunci HP khusus untuk siswa ini"
+                                }
+                              >
+                                <span>🔐</span>
+                                <span className="hidden sm:inline">
+                                  {kunciIndividuAktif ? "Kunci ON" : "Kunci"}
                                 </span>
                               </button>
 

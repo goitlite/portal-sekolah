@@ -12,8 +12,44 @@ import {
   isMapelSemua,
   deteksiJoki,
   kunciSiswaAsesmen,
+  evaluasiRentangSesiUjian,
+  mulaiTerlambatDariPembanding,
+  normText,
 } from "@/lib/auditAsesmenHelper";
 import PanelLaporanJoki, { labelTingkat, teksPelaku } from "./PanelLaporanJoki";
+
+function formatWaktuJakarta(timestampMs) {
+  if (!timestampMs) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(timestampMs));
+}
+
+function buatLabelRentangWaktu(respon, rentang, tampilkanMapel) {
+  const awal = rentang.waktuMulaiMs
+    ? formatWaktuJakarta(rentang.waktuMulaiMs)
+    : "Mulai tidak tercatat";
+  const akhir = formatWaktuJakarta(rentang.waktuSubmitMs);
+  const durasi =
+    rentang.durasiMenit === null
+      ? ""
+      : ` (${rentang.durasiMenit} menit)`;
+  const tandaTerlambat = rentang.terlambatMulai
+    ? "\n! terlambat mulai"
+    : "";
+  const prefixMapel =
+    tampilkanMapel && respon.mapel ? `${respon.mapel}: ` : "";
+
+  return {
+    text: `${prefixMapel}${awal} -> Submit ${akhir}${durasi}${tandaTerlambat}`,
+    terlambatMulai: rentang.terlambatMulai,
+  };
+}
 
 // Pemanggil autoTable yang aman lintas versi & bundler
 const runAutoTable = (doc, options) => {
@@ -68,7 +104,7 @@ export default function ModalPrintRekapUjian({
   const rekapEvaluasi = useMemo(() => {
     if (!daftarSiswa || daftarSiswa.length === 0) return [];
 
-    return daftarSiswa.map((siswa, idx) => {
+    const dataAwal = daftarSiswa.map((siswa, idx) => {
       const res = evaluasiNilaiSiswa(
         siswa,
         responList,
@@ -76,6 +112,57 @@ export default function ModalPrintRekapUjian({
         daftarSiswa,
         deteksi.responTidakSah,
       );
+      const responUntukWaktu = semuaMapel
+        ? res.perMapel
+        : res.sudahUjian
+          ? [
+              {
+                mapel: res.raw?.mapel || mapel,
+                timestamp: res.timestamp,
+              },
+            ]
+          : [];
+      const rentangWaktu = responUntukWaktu.map((respon) => ({
+        respon,
+        rentang: evaluasiRentangSesiUjian(
+          siswa,
+          respon.mapel,
+          respon.timestamp,
+        ),
+      }));
+      return { siswa, idx, res, rentangWaktu };
+    });
+
+    const mulaiAwalPerKelasMapel = new Map();
+    dataAwal.forEach(({ siswa, rentangWaktu }) => {
+      rentangWaktu.forEach(({ respon, rentang }) => {
+        if (!rentang.waktuMulaiMs) return;
+        const key = `${normText(siswa.kelas)}|${normText(respon.mapel)}`;
+        const current = mulaiAwalPerKelasMapel.get(key) || 0;
+        if (!current || rentang.waktuMulaiMs < current) {
+          mulaiAwalPerKelasMapel.set(key, rentang.waktuMulaiMs);
+        }
+      });
+    });
+
+    return dataAwal.map(({ siswa, idx, res, rentangWaktu }) => {
+      const rentangDenganLabel = rentangWaktu.map(({ respon, rentang }) => {
+        const key = `${normText(siswa.kelas)}|${normText(respon.mapel)}`;
+        const waktuMulaiPembandingMs =
+          mulaiAwalPerKelasMapel.get(key) || 0;
+        const rentangFinal = {
+          ...rentang,
+          terlambatMulai: mulaiTerlambatDariPembanding(
+            rentang.waktuMulaiMs,
+            waktuMulaiPembandingMs,
+          ),
+        };
+        return buatLabelRentangWaktu(
+          respon,
+          rentangFinal,
+          semuaMapel && res.perMapel.length > 1,
+        );
+      });
       const jk = deteksi.perSiswa.get(kunciSiswaAsesmen(siswa));
       const jokiPelaku = jk && jk.pelaku.length > 0 ? jk.pelaku[0] : null;
       let status = res.sudahUjian ? "Sudah Ujian" : "Belum Ujian";
@@ -111,7 +198,11 @@ export default function ModalPrintRekapUjian({
         sudahUjian: res.sudahUjian,
         status,
         joki: jokiPelaku ? "pelaku" : null,
-        waktuSubmit: res.timestamp || "-",
+        waktuMulaiSubmit:
+          rentangDenganLabel.map((item) => item.text).join("\n") || "-",
+        terlambatMulai: rentangDenganLabel.some(
+          (item) => item.terlambatMulai,
+        ),
       };
     });
   }, [daftarSiswa, responList, mapel, kelas, semuaMapel, semuaKelas, deteksi]);
@@ -220,7 +311,7 @@ export default function ModalPrintRekapUjian({
           s.pelanggaran > 0 ? `${s.pelanggaran}x` : "0",
           s.nilai,
           s.status,
-          s.waktuSubmit,
+          s.waktuMulaiSubmit,
         ];
         if (kolomKelas) baris.splice(3, 0, s.kelas);
         return baris;
@@ -235,7 +326,7 @@ export default function ModalPrintRekapUjian({
         "Pelanggaran",
         "Nilai",
         "Status",
-        "Waktu Submit",
+        "Mulai - Submit",
       ];
       if (kolomKelas) headTabel.splice(3, 0, "Kelas");
 
@@ -258,23 +349,23 @@ export default function ModalPrintRekapUjian({
         },
         columnStyles: kolomKelas
           ? {
-              0: { halign: "center", cellWidth: 9 },
-              1: { halign: "center", cellWidth: 22 },
-              2: { halign: "left" },
-              3: { halign: "center", cellWidth: 22 },
-              4: { halign: "center", cellWidth: 18 },
-              5: { halign: "center", cellWidth: 24, fontStyle: "bold" },
-              6: { halign: "center", cellWidth: 20 },
-              7: { halign: "center", cellWidth: 28 },
+              0: { halign: "center", cellWidth: 8 },
+              1: { halign: "center", cellWidth: 19 },
+              2: { halign: "left", cellWidth: 34 },
+              3: { halign: "center", cellWidth: 16 },
+              4: { halign: "center", cellWidth: 17 },
+              5: { halign: "center", cellWidth: 16, fontStyle: "bold" },
+              6: { halign: "center", cellWidth: 23 },
+              7: { halign: "center", cellWidth: 49, fontSize: 7 },
             }
           : {
-              0: { halign: "center", cellWidth: 10 },
-              1: { halign: "center", cellWidth: 24 },
-              2: { halign: "left" },
-              3: { halign: "center", cellWidth: 22 },
-              4: { halign: "center", cellWidth: 20, fontStyle: "bold" },
-              5: { halign: "center", cellWidth: 26 },
-              6: { halign: "center", cellWidth: 32 },
+              0: { halign: "center", cellWidth: 9 },
+              1: { halign: "center", cellWidth: 22 },
+              2: { halign: "left", cellWidth: 38 },
+              3: { halign: "center", cellWidth: 18 },
+              4: { halign: "center", cellWidth: 17, fontStyle: "bold" },
+              5: { halign: "center", cellWidth: 24 },
+              6: { halign: "center", cellWidth: 48, fontSize: 7 },
             },
         didParseCell: function (data) {
           if (data.section === "body") {
@@ -306,13 +397,37 @@ export default function ModalPrintRekapUjian({
                 data.cell.styles.textColor = [148, 163, 184]; // slate-400
               }
             }
+            const kolomRentangWaktu = kolomKelas ? 7 : 6;
+            if (data.column.index === kolomRentangWaktu) {
+              const val = String(data.cell.raw);
+              if (val.includes("! terlambat mulai")) {
+                data.cell.styles.textColor = [190, 18, 60];
+                data.cell.styles.fontStyle = "bold";
+              }
+            }
           }
         },
       });
 
+      let posisiSetelahTabel = doc.lastAutoTable?.finalY || 180;
+      if (posisiSetelahTabel + 12 > 280) {
+        doc.addPage();
+        posisiSetelahTabel = 20;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(71, 85, 105);
+      doc.text(
+        "Keterangan: ! terlambat mulai = waktu mulai lebih dari 30 menit setelah siswa pertama tercatat di kelas/mapel; indikator untuk ditinjau, bukan bukti pelanggaran.",
+        14,
+        posisiSetelahTabel + 5,
+        { maxWidth: pageWidth - 28 },
+      );
+      let posisiAkhirLaporan = posisiSetelahTabel + 10;
+
       // LAPORAN DUGAAN JOKI (hanya jika ada kasus)
       if (kasusCetak.length > 0) {
-        let jy = (doc.lastAutoTable?.finalY || 180) + 10;
+        let jy = posisiAkhirLaporan + 5;
         if (jy + 30 > 280) {
           doc.addPage();
           jy = 20;
@@ -369,10 +484,11 @@ export default function ModalPrintRekapUjian({
             6: { halign: "center", cellWidth: 26 },
           },
         });
+        posisiAkhirLaporan = doc.lastAutoTable?.finalY || jy;
       }
 
       // BLOK TANDA TANGAN DI BAWAH TABEL
-      const finalY = (doc.lastAutoTable?.finalY || 180) + 12;
+      const finalY = posisiAkhirLaporan + 12;
       let ttdY = finalY;
 
       // Jika ruang tidak cukup (blok tanda tangan butuh ~40 mm), pindah ke halaman baru dan mulai dari atas
@@ -499,7 +615,7 @@ export default function ModalPrintRekapUjian({
                 <th className="px-3 py-2 text-center">Pelanggaran</th>
                 <th className="px-3 py-2 text-center">Nilai Ujian</th>
                 <th className="px-3 py-2 text-center">Status</th>
-                <th className="px-3 py-2 text-center">Waktu Respon</th>
+                <th className="px-3 py-2 text-center">Mulai - Submit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -564,14 +680,31 @@ export default function ModalPrintRekapUjian({
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-center text-slate-500 text-[11px] font-mono">
-                      {s.waktuSubmit}
+                    <td
+                      className={`whitespace-pre-line px-3 py-2.5 text-center text-[11px] font-mono ${
+                        s.terlambatMulai
+                          ? "font-bold text-rose-700"
+                          : "text-slate-500"
+                      }`}
+                      title={
+                        s.terlambatMulai
+                          ? "Lebih dari 30 menit; indikator untuk ditinjau, bukan bukti pelanggaran."
+                          : ""
+                      }
+                    >
+                      {s.waktuMulaiSubmit}
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          <p className="mt-2 text-[10px] text-slate-500">
+            Keterangan: <b className="text-rose-700">! terlambat mulai</b>{" "}
+            berarti waktu mulai lebih dari 30 menit setelah siswa pertama
+            tercatat di kelas/mapel; indikator untuk ditinjau, bukan bukti
+            pelanggaran.
+          </p>
         </div>
 
         {/* FOOTER AKSI */}

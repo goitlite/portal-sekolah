@@ -400,6 +400,64 @@ export function evaluasiNilaiSiswa(
   };
 }
 
+export function evaluasiRentangSesiUjian(
+  siswa,
+  mapel,
+  waktuSubmit,
+) {
+  const submitMs = parseTimestampMs(waktuSubmit);
+  if (!submitMs || !String(mapel || "").trim()) {
+    return {
+      waktuMulai: null,
+      waktuMulaiMs: 0,
+      waktuSubmitMs: submitMs,
+      durasiMenit: null,
+    };
+  }
+
+  const sesiMulai = (Array.isArray(siswa?.riwayat_sesi) ? siswa.riwayat_sesi : [])
+    .map((sesi) => ({
+      sesi,
+      waktuMs: parseTimestampMs(sesi?.waktu),
+    }))
+    .filter(
+      ({ sesi, waktuMs }) =>
+        waktuMs > 0 &&
+        waktuMs <= submitMs &&
+        isMapelCocok(sesi?.mapel, mapel),
+    )
+    .sort((a, b) => b.waktuMs - a.waktuMs)[0];
+
+  if (!sesiMulai) {
+    return {
+      waktuMulai: null,
+      waktuMulaiMs: 0,
+      waktuSubmitMs: submitMs,
+      durasiMenit: null,
+    };
+  }
+
+  const durasiMs = submitMs - sesiMulai.waktuMs;
+  return {
+    waktuMulai: sesiMulai.sesi,
+    waktuMulaiMs: sesiMulai.waktuMs,
+    waktuSubmitMs: submitMs,
+    durasiMenit: Math.ceil(durasiMs / 60000),
+  };
+}
+
+export function mulaiTerlambatDariPembanding(
+  waktuMulaiMs,
+  waktuMulaiPembandingMs,
+  batasMenit = 30,
+) {
+  return (
+    waktuMulaiMs > 0 &&
+    waktuMulaiPembandingMs > 0 &&
+    waktuMulaiMs - waktuMulaiPembandingMs > batasMenit * 60000
+  );
+}
+
 // ------------------------------------------------------------------
 // INDIKASI JOKI BERDASARKAN LOG SESI
 // ------------------------------------------------------------------

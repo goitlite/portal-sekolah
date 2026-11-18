@@ -34,6 +34,36 @@ export async function fetchSemuaSiswaAsesmen() {
   }
 }
 
+export async function aturKebijakanKunciHp({
+  scope,
+  enabled,
+  kelas,
+  mapel,
+  id_siswa,
+  id_guru,
+  pin_admin,
+}) {
+  try {
+    const res = await fetch("/api/guru/asesmen/database", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guru_kunci_hp_set",
+        scope,
+        enabled,
+        kelas,
+        mapel,
+        id_siswa,
+        id_guru,
+        pin_admin,
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    return { status: "error", message: err.message };
+  }
+}
+
 export async function resetPelanggaranSiswa({
   id_siswa,
   nama,

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   fetchSemuaSiswaAsesmen,
+  aturKebijakanKunciHp,
   resetPelanggaranSiswa,
   resetDeviceSiswa,
   kirimPesanUjian,
@@ -102,6 +103,13 @@ function getWarnaKelas(namaKelas) {
   return PALET_KELAS[idx];
 }
 
+function normalisasiKunciHpUi(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
 const GOOGLE_BOT_EMAIL =
   "portal-bot@even-continuity-321209.iam.gserviceaccount.com";
 
@@ -113,6 +121,11 @@ export default function ModalPantauAsesmenKelas({
   user,
 }) {
   const [siswaList, setSiswaList] = useState([]);
+  const [hpLockPolicy, setHpLockPolicy] = useState({
+    global: false,
+    sessions: [],
+    students: [],
+  });
   const [daftarUjian, setDaftarUjian] = useState([]);
   const [responList, setResponList] = useState([]);
   const [loadingRekap, setLoadingRekap] = useState(false);
@@ -288,6 +301,9 @@ export default function ModalPantauAsesmenKelas({
 
         if (resSiswa.status === "success" && Array.isArray(resSiswa.data)) {
           setSiswaList(resSiswa.data);
+          setHpLockPolicy(
+            resSiswa.lock_hp || { global: false, sessions: [], students: [] },
+          );
           siswaUntukAudit = resSiswa.data;
         } else {
           setErrorMsg(resSiswa.message || "Gagal memuat database siswa");
@@ -351,6 +367,14 @@ export default function ModalPantauAsesmenKelas({
 
     return found || null;
   }, [daftarUjian, kelasTarget, namaMapel]);
+
+  const kunciSesiAktif = (hpLockPolicy.sessions || []).some(
+    (session) =>
+      normalisasiKunciHpUi(session.kelas) ===
+        normalisasiKunciHpUi(kelasTarget) &&
+      normalisasiKunciHpUi(session.mapel) ===
+        normalisasiKunciHpUi(namaMapel),
+  );
 
   // Filter siswa yang sesuai kelas target
   const siswaKelas = useMemo(() => {
@@ -678,6 +702,63 @@ export default function ModalPantauAsesmenKelas({
       }
     } catch (e) {
       setErrorMsg("Error: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAturKunciHp = async (scope, enabled, siswa) => {
+    let pinAdmin = "";
+    if (scope === "global" || scope === "all") {
+      try {
+        pinAdmin = sessionStorage.getItem("pin_admin_asesmen") || "";
+      } catch (_) {}
+      if (!pinAdmin) {
+        setErrorMsg(
+          "Aktifkan Mode Admin Asesmen untuk mengubah kebijakan kunci HP global.",
+        );
+        return;
+      }
+    }
+
+    let confirmation = "";
+    if (scope === "all") {
+      confirmation =
+        "Matikan kunci HP untuk semua ujian dan hapus semua ikatan perangkat aktif serta aturan kelas/siswa? Riwayat sesi tetap disimpan.";
+    } else if (scope === "global") {
+      confirmation =
+        "Aktifkan kunci HP untuk semua siswa dan semua sesi ujian?";
+    } else if (scope === "session") {
+      confirmation = `${enabled ? "Aktifkan" : "Nonaktifkan"} kunci HP untuk kelas ${kelasTarget}, mapel ${namaMapel}?`;
+    } else if (scope === "student") {
+      confirmation = `${enabled ? "Aktifkan" : "Nonaktifkan"} kunci HP untuk ${siswa?.nama || siswa?.id_siswa}?`;
+    }
+
+    if (confirmation && !confirm(confirmation)) return;
+    setActionLoading(true);
+    setErrorMsg("");
+    try {
+      const res = await aturKebijakanKunciHp({
+        scope,
+        enabled,
+        kelas: scope === "session" ? kelasTarget : "",
+        mapel: scope === "session" ? namaMapel : "",
+        id_siswa: scope === "student" ? siswa?.id_siswa : "",
+        id_guru: user?.id || "",
+        pin_admin: pinAdmin,
+      });
+      if (res.status !== "success") {
+        setErrorMsg(res.message || "Gagal mengubah kebijakan kunci HP");
+        return;
+      }
+
+      setHpLockPolicy(
+        res.lock_hp || { global: false, sessions: [], students: [] },
+      );
+      setSuksesMsg(res.message || "Kebijakan kunci HP berhasil diperbarui.");
+      await muatData(false, false);
+    } catch (err) {
+      setErrorMsg("Gagal mengubah kebijakan kunci HP: " + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -1246,6 +1327,62 @@ export default function ModalPantauAsesmenKelas({
             </div>
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-white/80 p-2 sm:flex sm:items-center sm:justify-between sm:gap-3">
+            <div className="mb-2 min-w-0 sm:mb-0">
+              <p className="text-[10px] font-black uppercase text-slate-700">
+                🔐 Kunci HP
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {hpLockPolicy.global
+                  ? "Aktif global"
+                  : kunciSesiAktif
+                    ? "Aktif untuk mapel ini"
+                    : "Nonaktif untuk mapel ini"}{" "}
+                · {hpLockPolicy.students.length} aturan siswa
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end">
+              <button
+                type="button"
+                onClick={() => handleAturKunciHp("global", true)}
+                disabled={actionLoading || hpLockPolicy.global}
+                className="min-h-8 rounded-lg bg-rose-600 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-rose-700 disabled:opacity-50 sm:text-[11px]"
+                title="Aktifkan kunci HP untuk semua siswa dan ujian"
+              >
+                {hpLockPolicy.global ? "🔒 Global Aktif" : "🔒 Kunci Global"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAturKunciHp("all", false)}
+                disabled={actionLoading}
+                className="min-h-8 rounded-lg bg-slate-700 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-slate-800 disabled:opacity-50 sm:text-[11px]"
+                title="Matikan semua aturan dan hapus ikatan HP aktif"
+              >
+                🔓 Matikan & Hapus
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAturKunciHp("session", !kunciSesiAktif)
+                }
+                disabled={
+                  actionLoading ||
+                  hpLockPolicy.global ||
+                  !kelasTarget ||
+                  !namaMapel
+                }
+                className="col-span-2 min-h-8 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:col-span-1 sm:text-[11px]"
+                title={`Atur kunci HP untuk ${kelasTarget} - ${namaMapel}`}
+              >
+                {hpLockPolicy.global
+                  ? "🔒 Aktif Global"
+                  : kunciSesiAktif
+                    ? "🔒 Kunci Mapel Aktif"
+                    : "🔓 Kunci Mapel"}
+              </button>
+            </div>
+          </div>
+
           {/* TOMBOL AKSI CEPAT KELAS (PADAT & IKON PADA MOBILE) */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-0.5">
             <button
@@ -1439,12 +1576,17 @@ export default function ModalPantauAsesmenKelas({
                     <th className="px-2.5 py-2.5 text-center">Pelanggaran</th>
                     <th className="px-2.5 py-2.5">Pesan Aktif</th>
                     <th className="px-2.5 py-2.5">Pengaduan Siswa</th>
-                    <th className="px-2.5 py-2.5 text-center w-40">Aksi</th>
+                    <th className="px-2.5 py-2.5 text-center w-44 sm:w-56">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {siswaFiltered.map((s, idx) => {
                     const isMelanggar = (s.pelanggaran || 0) > 0;
+                    const kunciIndividuAktif = (hpLockPolicy.students || []).some(
+                      (id) => String(id).trim() === String(s.id_siswa || "").trim(),
+                    );
+                    const kunciLebihLuasAktif =
+                      hpLockPolicy.global || kunciSesiAktif;
                     return (
                       <tr
                         key={s.id_siswa || idx}
@@ -1565,8 +1707,8 @@ export default function ModalPantauAsesmenKelas({
                             </span>
                           )}
                         </td>
-                        <td className="px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                        <td className="min-w-[170px] px-1.5 py-1.5 text-center sm:px-2.5 sm:py-2">
+                          <div className="mx-auto flex max-w-[220px] flex-wrap items-center justify-center gap-1 sm:max-w-none">
                             {/* Reset Perangkat HP */}
                             <button
                               type="button"
@@ -1577,6 +1719,40 @@ export default function ModalPantauAsesmenKelas({
                             >
                               <span>📱</span>
                               <span className="hidden sm:inline">Reset HP</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAturKunciHp(
+                                  "student",
+                                  !kunciIndividuAktif,
+                                  s,
+                                )
+                              }
+                              disabled={
+                                actionLoading ||
+                                !s.id_siswa ||
+                                s.id_siswa === "-" ||
+                                (kunciLebihLuasAktif && !kunciIndividuAktif)
+                              }
+                              className={`rounded-lg px-1.5 py-1 sm:px-2 sm:py-1 text-[10px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-2xs flex items-center gap-0.5 ${
+                                kunciIndividuAktif
+                                  ? "bg-indigo-700 hover:bg-indigo-800 text-white"
+                                  : "bg-indigo-100 hover:bg-indigo-200 text-indigo-900"
+                              }`}
+                              title={
+                                kunciLebihLuasAktif && !kunciIndividuAktif
+                                  ? "Kunci sudah aktif melalui kebijakan sesi/global"
+                                  : kunciIndividuAktif
+                                    ? "Nonaktifkan kunci khusus siswa ini"
+                                    : "Aktifkan kunci HP khusus untuk siswa ini"
+                              }
+                            >
+                              <span>🔐</span>
+                              <span className="hidden sm:inline">
+                                {kunciIndividuAktif ? "Kunci ON" : "Kunci"}
+                              </span>
                             </button>
 
                             {/* Reset 0 */}
