@@ -70,17 +70,26 @@ export default function ExamPage() {
       }
 
       if (isAndroid) {
-        if (
-          sessionStorage.getItem("examPwaAccess") === "android-pwa-pin" ||
+        const standalone =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          navigator.standalone === true;
+        const supervisorAuthorized =
           sessionStorage.getItem("examPwaAccess") === "testing-pin" ||
-          localStorage.getItem("examPwaPinAuthorized") === "true"
-        ) {
+          localStorage.getItem("examPwaPinAuthorized") === "true";
+        const androidPwaAuthorized =
+          standalone &&
+          (sessionStorage.getItem("examPwaAccess") === "android-pwa-pin" ||
+            localStorage.getItem("examAndroidPwaPinAuthorized") === "true");
+
+        if (supervisorAuthorized || androidPwaAuthorized) {
           setPwaGateMode("allowed");
           return;
         }
 
         sessionStorage.removeItem("examPwaAccess");
-        setPwaGateMode("android-app-required");
+        setPwaGateMode(
+          standalone ? "android-pwa-pin" : "android-app-required",
+        );
         return;
       }
 
@@ -198,7 +207,7 @@ export default function ExamPage() {
 
       void enterFullscreen();
       sessionStorage.setItem("examPwaAccess", "android-pwa-pin");
-      localStorage.setItem("examPwaPinAuthorized", "true");
+      localStorage.setItem("examAndroidPwaPinAuthorized", "true");
       setPwaGateMode("allowed");
     } catch {
       setPwaGateMessage(
@@ -807,7 +816,8 @@ export default function ExamPage() {
     const isCheckingPwa = pwaGateMode === "checking";
     const isStandaloneGate = pwaGateMode === "standalone-check";
     const isAndroidAppRequired = pwaGateMode === "android-app-required";
-    const isAndroidGate = isAndroidAppRequired;
+    const isAndroidPwaGate = pwaGateMode === "android-pwa-pin";
+    const isAndroidGate = isAndroidAppRequired || isAndroidPwaGate;
     return (
       <main className="min-h-screen bg-gradient-to-br from-yellow-300 via-amber-200 to-white text-slate-800 flex items-center justify-center p-4 sm:p-6">
         <section className="w-full max-w-lg rounded-3xl border border-amber-200/90 bg-white/95 backdrop-blur-xl p-6 shadow-2xl sm:p-8">
@@ -830,8 +840,9 @@ export default function ExamPage() {
                 Gunakan Aplikasi Asesmen Android
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Pilihan utama adalah aplikasi native. Anda juga dapat memilih
-                akses web PWA dengan password atau bantuan khusus pengawas.
+                {isAndroidPwaGate
+                  ? "PWA terpasang terdeteksi. Pilih aplikasi native untuk ujian yang disarankan, atau masukkan password untuk melanjutkan melalui PWA."
+                  : "Pilihan utama adalah aplikasi native. Untuk memakai web PWA, instal terlebih dahulu lalu buka dari ikon layar utama. Akses pengawas tetap tersedia."}
               </p>
 
               <a
@@ -842,38 +853,76 @@ export default function ExamPage() {
                 📥 Unduh Aplikasi Android (APK v2)
               </a>
 
-              <form
-                className="mt-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 text-left"
-                onSubmit={continueWithAndroidPwa}
-              >
-                <label
-                  htmlFor="android-pwa-access-password"
-                  className="block text-xs font-bold text-indigo-950 sm:text-sm"
+              {isAndroidPwaGate ? (
+                <form
+                  className="mt-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 text-left"
+                  onSubmit={continueWithAndroidPwa}
                 >
-                  Pilihan 2 — Lanjutkan lewat web PWA
-                </label>
-                <input
-                  id="android-pwa-access-password"
-                  type="password"
-                  value={pwaPin}
-                  onChange={(event) => setPwaPin(event.target.value)}
-                  placeholder="Password akses PWA"
-                  autoComplete="off"
-                  inputMode="numeric"
-                  maxLength={32}
-                  required
-                  className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-3 text-center font-mono text-lg font-bold tracking-[0.3em] text-slate-900 outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="submit"
-                  disabled={androidPwaVerifying}
-                  className="w-full rounded-xl bg-indigo-700 px-4 py-3 text-sm font-black text-white transition hover:bg-indigo-800 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {androidPwaVerifying
-                    ? "Memeriksa password..."
-                    : "Lanjutkan lewat PWA"}
-                </button>
-              </form>
+                  <label
+                    htmlFor="android-pwa-access-password"
+                    className="block text-xs font-bold text-indigo-950 sm:text-sm"
+                  >
+                    Pilihan 2 — Lanjutkan lewat web PWA
+                  </label>
+                  <input
+                    id="android-pwa-access-password"
+                    type="password"
+                    value={pwaPin}
+                    onChange={(event) => setPwaPin(event.target.value)}
+                    placeholder="Password akses PWA"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    maxLength={32}
+                    required
+                    className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-3 text-center font-mono text-lg font-bold tracking-[0.3em] text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={androidPwaVerifying}
+                    className="w-full rounded-xl bg-indigo-700 px-4 py-3 text-sm font-black text-white transition hover:bg-indigo-800 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {androidPwaVerifying
+                      ? "Memeriksa password..."
+                      : "Lanjutkan lewat PWA"}
+                  </button>
+                </form>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {installPromptEvent && (
+                    <button
+                      type="button"
+                      onClick={installPwaFromExamGate}
+                      className="w-full rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 font-bold text-indigo-900 transition hover:bg-indigo-100"
+                    >
+                      Pilihan 2 — Pasang web PWA
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInstallStepsVisible((visible) => !visible)
+                    }
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    {installStepsVisible
+                      ? "Sembunyikan panduan PWA"
+                      : "Pilihan 2 — Panduan instal PWA"}
+                  </button>
+                  {installStepsVisible && (
+                    <ol className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left text-xs text-slate-700 sm:text-sm">
+                      <li>
+                        Buka menu titik tiga Chrome lalu pilih{" "}
+                        <b>Install app</b> atau{" "}
+                        <b>Tambahkan ke layar utama</b>.
+                      </li>
+                      <li>
+                        Tutup tab browser dan buka Portal dari ikon layar
+                        utama. Kolom password PWA akan tampil di sana.
+                      </li>
+                    </ol>
+                  )}
+                </div>
+              )}
 
               <div className="mt-5 border-t border-slate-100 pt-4">
                 {!showAdminPinForm ? (
