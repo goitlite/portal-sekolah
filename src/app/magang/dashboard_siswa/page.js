@@ -1758,7 +1758,7 @@ export default function DashboardSiswa() {
             <a
               href="/asesmen%20v2.apk"
               download="Asesmen-SMKN1-v2.apk"
-              className="flex min-h-9 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-2 text-center text-[10px] font-extrabold text-indigo-900 transition-colors hover:from-blue-100 hover:to-indigo-100 active:scale-[0.99] sm:text-xs"
+              className="flex min-h-9 items-center justify-center gap-2 rounded-xl border border-blue-300/70 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 px-3 py-2 text-center text-[10px] font-extrabold text-white shadow-md shadow-indigo-200/60 transition hover:from-blue-700 hover:via-indigo-700 hover:to-indigo-800 active:scale-[0.99] sm:text-xs"
             >
               <span aria-hidden="true">📥</span>
               <span>Unduh Aplikasi Asesmen Android (APK v2)</span>
@@ -1803,17 +1803,17 @@ export default function DashboardSiswa() {
         <section
           ref={nilaiAsesmenSectionRef}
           aria-labelledby="nilai-asesmen-heading"
-          className="scroll-mt-20 rounded-xl border border-purple-200 bg-gradient-to-br from-white via-purple-50 to-rose-50 p-2.5 shadow-sm sm:rounded-2xl sm:p-4"
+          className="scroll-mt-20 rounded-xl border border-fuchsia-300/70 bg-gradient-to-br from-purple-600 via-fuchsia-600 to-pink-600 p-2.5 shadow-md shadow-purple-500/20 sm:rounded-2xl sm:p-4"
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h3
                 id="nilai-asesmen-heading"
-                className="truncate text-xs font-black text-purple-950 sm:text-sm"
+                className="truncate text-xs font-black text-white sm:text-sm"
               >
                 📝 Nilai Asesmen Saya
               </h3>
-              <p className="text-[9px] font-medium text-slate-500 sm:text-[10px]">
+              <p className="text-[9px] font-medium text-fuchsia-100 sm:text-[10px]">
                 Nilai per mata pelajaran
               </p>
             </div>
@@ -1829,8 +1829,8 @@ export default function DashboardSiswa() {
           </div>
 
           {nilaiAsesmen.status === "idle" && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-2 py-1.5">
-              <p className="text-[10px] text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5">
+              <p className="text-[10px] text-white">
                 Nilai dimuat otomatis saat bagian ini terlihat.
               </p>
               <button
@@ -1851,10 +1851,10 @@ export default function DashboardSiswa() {
               {Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={index}
-                  className="animate-pulse rounded-lg border border-purple-100 bg-white p-2"
+                  className="animate-pulse rounded-lg border border-white/25 bg-white/15 p-2"
                 >
-                  <div className="h-1.5 w-3/4 rounded bg-slate-200" />
-                  <div className="mt-1.5 h-5 w-1/2 rounded bg-purple-100" />
+                  <div className="h-1.5 w-3/4 rounded bg-white/40" />
+                  <div className="mt-1.5 h-5 w-1/2 rounded bg-white/30" />
                 </div>
               ))}
               <span className="sr-only">Memuat nilai asesmen...</span>
@@ -1885,20 +1885,20 @@ export default function DashboardSiswa() {
                 {nilaiAsesmen.hasil.map((item, index) => (
                   <div
                     key={`${item.mapel || "mapel"}-${index}`}
-                    className="min-w-0 rounded-lg border border-purple-100 bg-white p-2 shadow-sm"
+                    className="min-w-0 rounded-lg border border-white/25 bg-gradient-to-br from-purple-700 via-fuchsia-700 to-pink-700 p-2 shadow-sm"
                     title={item.mapel || "Asesmen"}
                   >
-                    <p className="line-clamp-2 min-h-6 text-[9px] font-bold leading-tight text-slate-600 sm:text-[10px]">
+                    <p className="line-clamp-2 min-h-6 text-[9px] font-bold leading-tight text-fuchsia-100 sm:text-[10px]">
                       {item.mapel || "Asesmen"}
                     </p>
-                    <p className="mt-0.5 truncate text-base font-black leading-tight text-purple-800 sm:text-lg">
+                    <p className="mt-0.5 truncate text-base font-black leading-tight text-white sm:text-lg">
                       {item.nilai || "-"}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="rounded-lg bg-white/80 px-2.5 py-2 text-[10px] text-slate-600">
+              <p className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-2 text-[10px] text-white">
                 Belum ada nilai asesmen yang tercatat untuk akun ini.
               </p>
             ))}
