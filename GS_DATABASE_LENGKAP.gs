@@ -162,7 +162,7 @@ function ambilSheetLog(ss, buatJikaTidakAda) {
   return log;
 }
 
-function catatLogSesi(ss, nama, kelas, idSiswa, mapel, deviceId) {
+function catatLogSesi(ss, nama, kelas, idSiswa, mapel, deviceId, waktuKhusus) {
   try {
     const mapelStr = String(mapel || "").trim();
     if (!mapelStr) return;
@@ -170,7 +170,8 @@ function catatLogSesi(ss, nama, kelas, idSiswa, mapel, deviceId) {
     const idK = idSiswa && String(idSiswa).trim() !== "-" ? String(idSiswa).trim() : "";
     const namaK = String(nama || "").trim().toLowerCase();
     const devK = String(deviceId || "").trim();
-    const nowMs = Date.now();
+    const waktuFinal = (waktuKhusus instanceof Date && !isNaN(waktuKhusus.getTime())) ? waktuKhusus : new Date();
+    const nowMs = waktuFinal.getTime();
     const last = log.getLastRow();
 
     if (last > 1) {
@@ -189,13 +190,13 @@ function catatLogSesi(ss, nama, kelas, idSiswa, mapel, deviceId) {
             rows[i][0] instanceof Date
               ? rows[i][0].getTime()
               : new Date(rows[i][0]).getTime();
-          if (logMs > 0 && nowMs >= logMs && nowMs - logMs < LOG_DEDUPE_MS) {
+          if (logMs > 0 && Math.abs(nowMs - logMs) < LOG_DEDUPE_MS) {
             return;
           }
         }
       }
     }
-    log.appendRow([new Date(), idK || "-", String(nama || "").trim(), String(kelas || "").trim(), mapelStr, devK]);
+    log.appendRow([waktuFinal, idK || "-", String(nama || "").trim(), String(kelas || "").trim(), mapelStr, devK]);
   } catch (e) {}
 }
 
@@ -439,6 +440,12 @@ function handleKunciSesiUjian(params) {
     }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_NAME);
+    const clientTimeMs = Number(params.client_time);
+    // Toleransi waktu client maksimal 5 menit (300.000 ms) dari waktu server. Jika jam HP ngaco/beda zona, gunakan waktu server Google.
+    const selisihWaktu = (!isNaN(clientTimeMs) && clientTimeMs > 0) ? Math.abs(Date.now() - clientTimeMs) : Infinity;
+    const waktuMulaiSesi = (selisihWaktu < 300000)
+      ? new Date(clientTimeMs)
+      : new Date();
     const policy = bacaKebijakanKunciHp_(ss);
     const kunciDiwajibkan = kunciHpDiwajibkan_(policy, {
       id_siswa: idSiswa,
@@ -473,6 +480,7 @@ function handleKunciSesiUjian(params) {
             deviceId && existingDevId !== deviceId) {
           return responseJSON({
             status: "error",
+            code: "DEVICE_REJECTED",
             message: "AKSES DITOLAK!\n\nNama (" + (data[i][0] || nama) + ") sudah terdaftar aktif ujian di perangkat lain.\n\nMinta Guru/Admin untuk mereset kunci HP Anda."
           });
         }
@@ -504,7 +512,7 @@ function handleKunciSesiUjian(params) {
         if (!existingLockStillRequired) {
           sheet.getRange(rowIndex, 9, 1, 3).setValues([["", "", "NONAKTIF"]]);
         }
-        sheet.getRange(rowIndex, 6).setValue(new Date());
+        sheet.getRange(rowIndex, 6).setValue(waktuMulaiSesi);
       } else {
         sheet.appendRow([
           params.nama ? params.nama.trim().toUpperCase() : "-",
@@ -512,7 +520,7 @@ function handleKunciSesiUjian(params) {
           idSiswa || "-",
           "-",
           "",
-          new Date(),
+          waktuMulaiSesi,
           "",
           "0",
           "",
@@ -527,7 +535,8 @@ function handleKunciSesiUjian(params) {
         rowIndex !== -1 ? data[rowIndex - 1][1] || params.kelas : params.kelas,
         rowIndex !== -1 ? data[rowIndex - 1][2] || idSiswa : idSiswa,
         mapel,
-        ""
+        "",
+        waktuMulaiSesi
       );
       return responseJSON({
         status: "success",
@@ -546,9 +555,9 @@ function handleKunciSesiUjian(params) {
       if (deviceId) sheet.getRange(rowIndex, 9).setValue(deviceId);
       if (mapel) sheet.getRange(rowIndex, 10).setValue(mapel);
       sheet.getRange(rowIndex, 11).setValue("AKTIF");
-      sheet.getRange(rowIndex, 6).setValue(new Date());
+      sheet.getRange(rowIndex, 6).setValue(waktuMulaiSesi);
       catatLogSesi(ss, data[rowIndex - 1][0] || params.nama, data[rowIndex - 1][1] || params.kelas,
-                   data[rowIndex - 1][2] || idSiswa, mapel, deviceId);
+                   data[rowIndex - 1][2] || idSiswa, mapel, deviceId, waktuMulaiSesi);
       return responseJSON({ status: "success", message: "Sesi perangkat berhasil dikunci" });
     }
 
@@ -565,14 +574,14 @@ function handleKunciSesiUjian(params) {
         idSiswa || "-",
         "-",
         "",
-        new Date(),
+        waktuMulaiSesi,
         "",
         "0",
         deviceId,
         mapel,
         "AKTIF"
       ]);
-      catatLogSesi(ss, params.nama, params.kelas, idSiswa, mapel, deviceId);
+      catatLogSesi(ss, params.nama, params.kelas, idSiswa, mapel, deviceId, waktuMulaiSesi);
       return responseJSON({ status: "success", message: "Sesi perangkat portal berhasil dibuat dan dikunci" });
     }
 
