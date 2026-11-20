@@ -560,7 +560,50 @@ export default function StartExamPage() {
         return;
       }
 
-      setExamLink(savedLink);
+      // Ganti placeholder manual terlebih dahulu (cepat, tidak butuh jaringan)
+      let finalExamLink = savedLink;
+      if (finalExamLink) {
+        if (savedId) {
+          finalExamLink = finalExamLink.replace(/(\[ID\]|%5BID%5D)/gi, encodeURIComponent(savedId));
+        }
+        if (savedNama) {
+          finalExamLink = finalExamLink.replace(/(\[NAMA\]|%5BNAMA%5D)/gi, encodeURIComponent(savedNama));
+        }
+        if (savedKelas) {
+          finalExamLink = finalExamLink.replace(/(\[KELAS\]|%5BKELAS%5D)/gi, encodeURIComponent(savedKelas));
+        }
+      }
+
+      // Jika link masih merupakan Google Form polos (belum ada entry. prefill),
+      // coba resolve otomatis via API — berlaku di semua platform (Android/iPhone/PC)
+      if (
+        finalExamLink &&
+        finalExamLink.includes("docs.google.com/forms") &&
+        !finalExamLink.includes("entry.")
+      ) {
+        try {
+          const resForm = await fetch("/api/exam/resolve-form", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              link: finalExamLink,
+              nama: savedNama || "",
+              kelas: savedKelas || "",
+              idSiswa: savedId || "",
+            }),
+          });
+          if (resForm.ok) {
+            const dataForm = await resForm.json();
+            if (dataForm?.success && dataForm?.url) {
+              finalExamLink = dataForm.url;
+            }
+          }
+        } catch (_) {
+          // Jaringan gagal — gunakan link yang sudah diproses sebelumnya
+        }
+      }
+
+      setExamLink(finalExamLink);
       setNama(savedNama);
       setKelas(savedKelas || "");
       if (savedId) setIdSiswa(savedId);

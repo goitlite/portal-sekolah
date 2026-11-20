@@ -738,10 +738,46 @@ export default function ExamPage() {
           return;
         }
 
-        setExamLink(result.link);
+        let processedLink = result.link || "";
+        if (processedLink) {
+          const currentId = idSiswa || localStorage.getItem("id_siswa") || "";
+          const currentNama = nama || localStorage.getItem("nama") || "";
+          // Prioritaskan KELAS RESMI dari profil siswa (bukan kategori dropdown filter kelas)
+          const currentKelas = kelas || localStorage.getItem("kelas") || selectedKelas || "";
+
+          // Deteksi otomatis kolom Nama, Kelas, ID dari Google Form (bahkan jika link biasa polos)
+          try {
+            const resForm = await fetch("/api/exam/resolve-form", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                link: processedLink,
+                nama: currentNama,
+                kelas: currentKelas,
+                idSiswa: currentId,
+              }),
+            });
+            const dataForm = await resForm.json();
+            if (dataForm?.success && dataForm?.url) {
+              processedLink = dataForm.url;
+            }
+          } catch (e) {
+            if (currentId) {
+              processedLink = processedLink.replace(/(\[ID\]|%5BID%5D)/gi, encodeURIComponent(currentId));
+            }
+            if (currentNama) {
+              processedLink = processedLink.replace(/(\[NAMA\]|%5BNAMA%5D)/gi, encodeURIComponent(currentNama));
+            }
+            if (currentKelas) {
+              processedLink = processedLink.replace(/(\[KELAS\]|%5BKELAS%5D)/gi, encodeURIComponent(currentKelas));
+            }
+          }
+        }
+
+        setExamLink(processedLink);
 
         // SIMPAN LINK, KODE KIRIM, MAPEL & KELAS KE LOCALSTORAGE
-        localStorage.setItem("examLink", result.link);
+        localStorage.setItem("examLink", processedLink);
         localStorage.setItem("kodeKirim", result.kodeKirim || "");
         localStorage.setItem("selectedMapel", selectedMapel);
         localStorage.setItem("selectedKelas", selectedKelas);
