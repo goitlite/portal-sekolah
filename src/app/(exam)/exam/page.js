@@ -882,11 +882,11 @@ export default function ExamPage() {
               </p>
 
               <a
-                href="/asesmen%20v2.apk"
-                download="Asesmen-SMKN1-v2.apk"
+                href="/Asesmen%20v8.apk"
+                download="Asesmen-SMKN1-v8.apk"
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 font-black text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99]"
               >
-                📥 Unduh Aplikasi Android (APK v2)
+                📥 Unduh Aplikasi Android (APK v8)
               </a>
 
               {isAndroidPwaGate ? (
